@@ -218,7 +218,7 @@ export async function handleProductsTools(ctx: McpExecutorContext) {
         ...scope, products: objectArray(args.products, 'products') as unknown as CreateProductInput[], actor,
         publication: { published: false },
       })
-      return { products: await hydrateProductMedia(organization.db, organization.organizationId, products) }
+      return { products }
     }
     case 'reconcile_products':
       return {

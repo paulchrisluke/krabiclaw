@@ -114,13 +114,10 @@ const openWorldEffects = {
   publish_post: 'Can send the requested caption and media to the public audience of an explicitly selected Facebook Page or Instagram account. Website-only publication remains within the selected site.',
   delete_channel_post: 'Removes a public Facebook Page post through Meta and updates its local publication receipt.',
   save_media_attachment: 'Downloads the host-supplied file URL and stores the attachment at a public Cloudflare media URL.',
-}
-
-const boundedProviderEffects = {
-  list_channel_posts: 'Reads posts only from the explicitly selected connected Facebook Page or Instagram account; it does not search arbitrary accounts or the public web.',
-  get_channel_post: 'Reads a post belonging to the explicitly selected connected Facebook Page or Instagram account; it does not query arbitrary accounts or the public web.',
-  reconcile_post_publication: 'Reads the connected provider for an existing publication receipt and updates that receipt within the selected workspace; it does not publish or query arbitrary accounts.',
-  delete_media_asset: 'Deletes only the selected workspace asset, its placements and unshared backing storage in the configured media account.',
+  list_channel_posts: 'Reads posts from Meta for the explicitly selected connected Facebook Page or Instagram account only.',
+  get_channel_post: 'Reads one post from Meta belonging to the explicitly selected connected Facebook Page or Instagram account.',
+  reconcile_post_publication: 'Reads Meta for an existing publication and updates its receipt in the selected workspace; it does not publish.',
+  delete_media_asset: 'Deletes the stored file from the Cloudflare media account when no other asset references it.',
 }
 
 function justifications(tool) {
@@ -134,7 +131,7 @@ function justifications(tool) {
     read_only_justification: effect,
     open_world_justification: annotations.openWorldHint
       ? openWorldEffects[tool.name]
-      : boundedProviderEffects[tool.name] ?? `${effect} Its scope is the authenticated KrabiClaw workspace, not arbitrary external entities or the public web.`,
+      : `${effect} Its scope is the authenticated KrabiClaw workspace, not arbitrary external entities or the public web.`,
     destructive_justification: annotations.destructiveHint
       ? `${effect} Existing state is deleted, replaced or overwritten rather than only appended.`
       : `${effect} Existing content is not deleted or overwritten.`,

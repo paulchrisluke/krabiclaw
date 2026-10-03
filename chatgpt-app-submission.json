@@ -215,12 +215,12 @@
     "delete_media_asset": {
       "annotations": {
         "readOnlyHint": false,
-        "openWorldHint": false,
+        "openWorldHint": true,
         "destructiveHint": true
       },
       "justifications": {
         "read_only_justification": "Removes an asset and its placements, and deletes backing Cloudflare storage when no other asset references it.",
-        "open_world_justification": "Deletes only the selected workspace asset, its placements and unshared backing storage in the configured media account.",
+        "open_world_justification": "Deletes the stored file from the Cloudflare media account when no other asset references it.",
         "destructive_justification": "Removes an asset and its placements, and deletes backing Cloudflare storage when no other asset references it. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
@@ -335,12 +335,12 @@
     "get_channel_post": {
       "annotations": {
         "readOnlyHint": true,
-        "openWorldHint": false,
+        "openWorldHint": true,
         "destructiveHint": false
       },
       "justifications": {
         "read_only_justification": "Reads one live post belonging to the explicitly selected connected channel.",
-        "open_world_justification": "Reads a post belonging to the explicitly selected connected Facebook Page or Instagram account; it does not query arbitrary accounts or the public web.",
+        "open_world_justification": "Reads one post from Meta belonging to the explicitly selected connected Facebook Page or Instagram account.",
         "destructive_justification": "Reads one live post belonging to the explicitly selected connected channel. Existing content is not deleted or overwritten."
       }
     },
@@ -527,12 +527,12 @@
     "list_channel_posts": {
       "annotations": {
         "readOnlyHint": true,
-        "openWorldHint": false,
+        "openWorldHint": true,
         "destructiveHint": false
       },
       "justifications": {
         "read_only_justification": "Reads live posts from the explicitly selected connected channel; it does not create website content.",
-        "open_world_justification": "Reads posts only from the explicitly selected connected Facebook Page or Instagram account; it does not search arbitrary accounts or the public web.",
+        "open_world_justification": "Reads posts from Meta for the explicitly selected connected Facebook Page or Instagram account only.",
         "destructive_justification": "Reads live posts from the explicitly selected connected channel; it does not create website content. Existing content is not deleted or overwritten."
       }
     },
@@ -779,12 +779,12 @@
     "reconcile_post_publication": {
       "annotations": {
         "readOnlyHint": false,
-        "openWorldHint": false,
+        "openWorldHint": true,
         "destructiveHint": true
       },
       "justifications": {
         "read_only_justification": "Reads Facebook or Instagram to record the proven outcome of one publication; it never publishes.",
-        "open_world_justification": "Reads the connected provider for an existing publication receipt and updates that receipt within the selected workspace; it does not publish or query arbitrary accounts.",
+        "open_world_justification": "Reads Meta for an existing publication and updates its receipt in the selected workspace; it does not publish.",
         "destructive_justification": "Reads Facebook or Instagram to record the proven outcome of one publication; it never publishes. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },

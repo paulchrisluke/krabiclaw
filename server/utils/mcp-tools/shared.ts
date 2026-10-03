@@ -861,7 +861,8 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   create_site_page: W,
   delete_blog_post: D,
   delete_content_block: D,
-  delete_media_asset: D,
+  // Deletes the stored file from the Cloudflare media account.
+  delete_media_asset: { ...D, openWorldHint: true },
   delete_post: D,
   delete_product: D,
   delete_resource_localization: D,
@@ -887,9 +888,9 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   list_posts: R,
   get_social_connections: R,
   // Reads Meta, and records what the read proves about one publication.
-  reconcile_post_publication: D,
-  list_channel_posts: R,
-  get_channel_post: R,
+  reconcile_post_publication: { ...D, openWorldHint: true },
+  list_channel_posts: { ...R, openWorldHint: true },
+  get_channel_post: { ...R, openWorldHint: true },
   delete_channel_post: { ...D, openWorldHint: true },
   list_organization_locales: R,
   list_organization_qa: R,

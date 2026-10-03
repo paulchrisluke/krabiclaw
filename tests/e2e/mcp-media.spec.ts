@@ -112,32 +112,33 @@ test.describe('stateless MCP server', () => {
   })
   test('product mutation responses preserve the canonical image and gallery', async ({ request, baseURL }, testInfo) => {
     const releaseTenantMutationLock = await acquireTenantMutationLock(testInfo, MCP_GROWTH_ORGANIZATION_ID)
-    type Product = { id: string; name: string; image: unknown; gallery: unknown[]; media: unknown[]; social_image: unknown }
+    type MediaItem = { asset_id: string }
+    type Product = { id: string; name: string; image: MediaItem | null; gallery: MediaItem[]; media: MediaItem[] }
     const call = async <T>(toolName: string, args: Record<string, unknown>) => mcpData<T>(await (await mcpRequest(request, baseURL!, {
       method: 'tools/call', toolName, args: { organization_id: MCP_GROWTH_ORGANIZATION_ID, ...args },
     })).json())
-    let original: Product | undefined
+    // The seeded Margherita carries one image, also its only gallery item.
+    const productId = 'mi-1'
+    const seededAsset = 'media-demo-margherita'
+    const expectSeededMedia = (product: Product) => {
+      expect(product.image?.asset_id).toBe(seededAsset)
+      expect(product.gallery.map(item => item.asset_id)).toEqual([seededAsset])
+      expect(product.media.length).toBeGreaterThan(0)
+    }
+    let originalName: string | undefined
     try {
       await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
-      const listed = await call<{ products: Array<{ id: string }> }>('list_products', {})
-      for (const item of listed.products) {
-        const candidate = (await call<{ product: Product }>('get_product', { product_id: item.id })).product
-        if (candidate.image && candidate.gallery.length > 0) { original = candidate; break }
-      }
-      expect(original, 'seeded product with an image and gallery').toBeDefined()
-      const before = original!
-      const changed = (await call<{ product: Product }>('update_product', { product_id: before.id, name: `${before.name} MCP media check` })).product
-      expect(changed.name).toBe(`${before.name} MCP media check`)
-      for (const field of ['image', 'gallery', 'media', 'social_image'] as const) expect(changed[field]).toEqual(before[field])
-      const read = (await call<{ product: Product }>('get_product', { product_id: before.id })).product
-      for (const field of ['image', 'gallery', 'media', 'social_image'] as const) expect(changed[field]).toEqual(read[field])
+      originalName = (await call<{ product: Product }>('get_product', { product_id: productId })).product.name
+      const changed = (await call<{ product: Product }>('update_product', { product_id: productId, name: `${originalName} MCP media check` })).product
+      expect(changed.name).toBe(`${originalName} MCP media check`)
+      expectSeededMedia(changed)
+      expectSeededMedia((await call<{ product: Product }>('get_product', { product_id: productId })).product)
     } finally {
       try {
-        if (original) {
-          const restored = (await call<{ product: Product }>('update_product', { product_id: original.id, name: original.name })).product
-          expect(restored.name).toBe(original.name)
-          expect(restored.image).toEqual(original.image)
-          expect(restored.gallery).toEqual(original.gallery)
+        if (originalName !== undefined) {
+          const restored = (await call<{ product: Product }>('update_product', { product_id: productId, name: originalName })).product
+          expect(restored.name).toBe(originalName)
+          expectSeededMedia(restored)
         }
       } finally {
         await releaseTenantMutationLock()

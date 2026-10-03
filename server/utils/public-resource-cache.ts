@@ -21,6 +21,7 @@ export const PUBLIC_RESOURCE_CACHE_TTL_SECONDS = 300
 
 const CACHE_INVALIDATION_RETRY_AFTER_MS = 5 * 60 * 1000
 const CACHE_INVALIDATION_MAX_ATTEMPTS = 5
+const SEARCH_SYNC_CONTINUE = 'search-sync-continue'
 const CACHE_INVALIDATION_TERMINAL_RETENTION_MS = 7 * 24 * 60 * 60 * 1000
 
 /**
@@ -74,12 +75,17 @@ export async function drainPublicResourceCacheInvalidations(
        AND (status = 'pending' OR (status = 'processing' AND (claimed_at IS NULL OR claimed_at < ?)))
        ${options.organizationId ? 'AND organization_id = ?' : ''}
   `, [nowIso, CACHE_INVALIDATION_MAX_ATTEMPTS, staleClaimCutoff, ...(options.organizationId ? [options.organizationId] : [])])
+  // A write drains its own site's change: one bounded search sync. Uploads that
+  // run leaves behind are queued as search-sync-continue rows, and those belong
+  // to the scheduled drainer — a request never loops on them. A failed one
+  // still fails the write.
+  const scopedContinuations = options.organizationId ? `AND reason <> '${SEARCH_SYNC_CONTINUE}'` : ''
   const rows = await queryAll<{ id: string; organization_id: string; attempt_count: number }>(db, `
     SELECT id, organization_id, attempt_count
       FROM public_resource_cache_invalidations
      WHERE attempt_count < ?
        AND (status = 'pending' OR (status = 'processing' AND (claimed_at IS NULL OR claimed_at < ?)))
-       ${options.organizationId ? 'AND organization_id = ?' : ''}
+       ${options.organizationId ? `AND organization_id = ? ${scopedContinuations}` : ''}
      ORDER BY created_at ASC
      LIMIT ?
   `, [CACHE_INVALIDATION_MAX_ATTEMPTS, staleClaimCutoff, ...(options.organizationId ? [options.organizationId] : []), options.limit ?? 50])
@@ -113,7 +119,7 @@ export async function drainPublicResourceCacheInvalidations(
         // A bounded run that left uploads behind is not a failure to retry; it
         // is more of the same change, so it goes back on the queue as a new row.
         if (synced.pending > 0) {
-          const more = publicResourceCacheInvalidationQuery(row.organization_id, 'search-sync-continue')
+          const more = publicResourceCacheInvalidationQuery(row.organization_id, SEARCH_SYNC_CONTINUE)
           await execute(db, more.query, more.params ?? [])
         } else {
           // This complete reconciliation rebuilt the organization's desired
@@ -153,11 +159,10 @@ export async function drainPublicResourceCacheInvalidations(
   if (options.organizationId) {
     const unfinished = new Set((await queryAll<{ status: string }>(db, `
       SELECT DISTINCT status FROM public_resource_cache_invalidations
-       WHERE organization_id = ? AND status IN ('pending', 'processing', 'failed')
+       WHERE organization_id = ? AND (status = 'failed' OR (status IN ('pending', 'processing') ${scopedContinuations}))
     `, [options.organizationId])).map(row => row.status))
-    // Drain queued search continuations as well as rows blocked by another
-    // request's claim. A scoped write succeeds only after its durable work
-    // converges; the existing deadline and real provider errors still fail it.
+    // Another request draining this site held a claim that blocked this one's
+    // rows. Wait for it to finish, then claim what it left.
     const waitDeadline = options.waitDeadline ?? Date.now() + ORGANIZATION_DRAIN_WAIT_MS
     if (unfinished.size > 0 && !unfinished.has('failed') && Date.now() < waitDeadline) {
       await new Promise(resolve => setTimeout(resolve, 100))

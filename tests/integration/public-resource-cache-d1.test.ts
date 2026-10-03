@@ -361,8 +361,8 @@ test('simultaneous drains cannot sync one organization out of order', async (t) 
 })
 
 
-test('a scoped drain consumes its search continuation and preserves real failures', async (t) => {
-  for (const outcome of ['completed', 'skipped', 'deadline'] as const) {
+test('a write syncs search once and leaves its continuation to the scheduled drain', async (t) => {
+  for (const outcome of ['completed', 'skipped'] as const) {
     await t.test(outcome, async (t) => {
       const { db, kv } = await migratedCacheD1(t)
       await db.prepare("INSERT INTO business_locations (id, organization_id, slug, title) VALUES ('first-location', 'org', 'first-location', 'First'), ('second-location', 'org', 'second-location', 'Second')").run()
@@ -391,24 +391,29 @@ test('a scoped drain consumes its search continuation and preserves real failure
         } }) } as unknown as NonNullable<OrganizationChangeDrainEnv['AI_SEARCH']>,
       }
       await insertInvalidation(db, { id: 'write', status: 'pending', attemptCount: 0, createdAt: '2026-10-02T00:00:00.000Z' })
-      const options = { organizationId: 'org', ...(outcome === 'deadline' ? { waitDeadline: 0 } : {}) }
-      if (outcome === 'completed') {
-        assert.equal(await drainPublicResourceCacheInvalidations(db, kv, env, options), 2)
-      } else {
-        await assert.rejects(drainPublicResourceCacheInvalidations(db, kv, env, options),
-          outcome === 'skipped' ? /AI Search skipped unchanged item.*unsupported document type/ : /pending cache or search index work remains/)
-      }
+      const continuation = async () => (await db.prepare("SELECT status, attempt_count, last_error FROM public_resource_cache_invalidations WHERE reason = 'search-sync-continue'").first<{
+        status: string; attempt_count: number; last_error: string | null
+      }>())!
+
+      // The write: one bounded sync, its own row processed, the rest queued.
+      assert.equal(await drainPublicResourceCacheInvalidations(db, kv, env, { organizationId: 'org' }), 1)
+      assert.equal(lists, 1)
       assert.deepEqual(uploads, [missing!.key])
-      assert.equal(lists, outcome === 'deadline' ? 1 : 2)
-      const rows = await db.prepare('SELECT reason, status, attempt_count, last_error FROM public_resource_cache_invalidations ORDER BY reason').all<{
-        reason: string; status: string; attempt_count: number; last_error: string | null
-      }>()
-      const continuation = rows.results.find(row => row.reason === 'search-sync-continue')!
-      assert.equal(continuation.status, outcome === 'completed' ? 'processed' : 'pending')
-      assert.equal(continuation.attempt_count, outcome === 'deadline' ? 0 : 1)
-      assert.equal(rows.results.find(row => row.reason === 'test')!.status, 'processed')
-      if (outcome === 'skipped') assert.match(continuation.last_error!, /unsupported document type/)
-      else assert.equal(continuation.last_error, null)
+      assert.equal((await db.prepare("SELECT status FROM public_resource_cache_invalidations WHERE id = 'write'").first<{ status: string }>())!.status, 'processed')
+      assert.deepEqual(await continuation(), { status: 'pending', attempt_count: 0, last_error: null })
+
+      // The scheduled drain finishes it, or reports what the provider refused.
+      if (outcome === 'completed') {
+        assert.equal(await drainPublicResourceCacheInvalidations(db, kv, env, {}), 1)
+        assert.deepEqual(await continuation(), { status: 'processed', attempt_count: 1, last_error: null })
+      } else {
+        await assert.rejects(drainPublicResourceCacheInvalidations(db, kv, env, {}), /AI Search skipped unchanged item.*unsupported document type/)
+        const row = await continuation()
+        assert.equal(row.status, 'pending')
+        assert.equal(row.attempt_count, 1)
+        assert.match(row.last_error!, /unsupported document type/)
+      }
+      assert.equal(lists, 2)
     })
   }
 })
