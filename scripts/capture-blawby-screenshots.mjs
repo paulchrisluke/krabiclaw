@@ -356,7 +356,10 @@ try {
       await stabilizePage(page)
       await page.screenshot({ path: filePath, fullPage: true })
       if (inventoryMode) {
-        if (!(await page.locator('main').innerText()).trim()) throw new Error(`${routeConfig.path} has no visible main content at ${viewportName}`)
+        const mainText = await page.locator('main').innerText().catch(error => {
+          throw new Error(`${routeConfig.path} could not read main content at ${viewportName}`, { cause: error })
+        })
+        if (!mainText.trim()) throw new Error(`${routeConfig.path} has no visible main content at ${viewportName}`)
         if (pageErrors.length || failedFirstParty.length) {
           throw new Error(`${routeConfig.path} failed at ${viewportName}: ${JSON.stringify({ pageErrors, failedFirstParty })}`)
         }
