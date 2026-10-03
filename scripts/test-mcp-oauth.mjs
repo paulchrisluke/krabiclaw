@@ -16,6 +16,7 @@
 
 import { createHash, randomBytes } from "crypto";
 import { request as httpsRequest } from "node:https";
+import { setTimeout } from "node:timers/promises";
 import { readHttpResponse } from "./utils/read-http-response.mjs";
 import { credentialCookie } from "./utils/e2e-auth.mjs";
 
@@ -317,6 +318,8 @@ async function main() {
     }
     pass(`Got authorization code: ${code.slice(0, 8)}...`);
 
+    // Respect @better-auth/cimd's default one-second metadata fetch interval.
+    await setTimeout(1000);
     // Exchange code for token
     const tokenResp = await postForm(TOKEN_URL, {
       grant_type: "authorization_code",
