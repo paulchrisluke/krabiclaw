@@ -5,19 +5,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnYarn } from './utils/spawn-yarn.mjs'
 
-// 'platform' is Krabiclaw's own organization in the fixture snapshot.
-const FIXTURE_ORG_IDS = [
-  'platform',
-  'org-demo',
-  'org-ncls-blawby',
-]
-
 // The customer fixtures targeted by tenant-guest-journeys.spec.ts. Scoping by
 // the indexed organization column keeps the email marker queries bounded.
 const GUEST_BOOKING_ORG_IDS = ['org-user-pottery-house', 'org-bVY8SxxUuG6Ctk2CQnfCk8T2cPsj4jJX', 'org-ncls-blawby']
 
-// E2E creates throwaway `e2e-*` organizations of its own, which the allowlist
-// below already excludes from the fixture set.
+// The onboarding actor creates throwaway `e2e-*` organizations. Both the
+// owning actor and slug must match; copied customer organizations are retained.
 // Retained/audit tables are explicit because their organization foreign keys
 // are often SET NULL (or intentionally polymorphic), so deleting the
 // organization alone would leave rows behind in the local database.
@@ -35,17 +28,6 @@ const RETAINED_ORG_TABLES = [
   'requests',
 ] as const
 
-const FIXTURE_USER_IDS = [
-  'user-demo',
-  'user-mcp-free',
-  'user-mcp-growth',
-  'user-mcp-growth-service',
-  'Nfqw39lwLZ1vejIfYJv24xvD4UKJh8re',
-  'user-pottery-house',
-  'user-kikuzuki',
-  'user-ncls-blawby',
-]
-
 const isStdout = process.argv.includes('--stdout')
 
 if (process.argv.includes('--staging') || process.argv.includes('--remote')) {
@@ -53,9 +35,8 @@ if (process.argv.includes('--staging') || process.argv.includes('--remote')) {
   process.exit(1)
 }
 
-// No --remote: this script targets non-fixture organizations through the fixed fixture
-// allowlist and age guard, plus guest rows marked '@playwright.example'. That scope is
-// meaningless against a deployed database, so it only ever runs against local D1.
+// No --remote: the onboarding test actor and '@playwright.example' guest marker
+// identify disposable local data, never data to remove from a deployed database.
 
 const ageArg = process.argv.find((arg) => arg.startsWith('--older-than-hours='))
 const olderThanHours = ageArg ? Number(ageArg.split('=')[1]) : 2
@@ -70,12 +51,9 @@ if (Number.isNaN(cutoffDate.getTime())) {
   process.exit(1)
 }
 const cutoff = cutoffDate.toISOString()
-// Better Auth tables (user, member, session, invitation) store createdAt as a Unix-seconds
-// integer via unixepoch(), not the ISO8601 text app tables use - category 3 needs this variant.
+// Better Auth's organization.createdAt stores Unix seconds.
 const cutoffUnixSeconds = Math.floor(cutoffDate.getTime() / 1000)
 
-const fixtureOrgIdList = FIXTURE_ORG_IDS.map((id) => `'${id}'`).join(', ')
-const fixtureUserIdList = FIXTURE_USER_IDS.map((id) => `'${id}'`).join(', ')
 const guestBookingOrgIdList = GUEST_BOOKING_ORG_IDS.map((id) => `'${id}'`).join(', ')
 
 const batchArg = process.argv.find((arg) => arg.startsWith('--batch-size='))
@@ -87,17 +65,12 @@ if (!Number.isInteger(batchSize) || batchSize <= 0) {
 
 // Repeat the bounded selector in each statement; D1 remote execution does not allow temporary tables.
 const eligibleOrgIds = `
-  SELECT id FROM organization
-  WHERE id NOT IN (${fixtureOrgIdList})
-    AND createdAt < ${cutoffUnixSeconds}
-  LIMIT ${batchSize}
-`
-
-const eligibleUserIds = `
-  SELECT id FROM user
-  WHERE id NOT IN (${fixtureUserIdList})
-    AND email LIKE '%@example.test'
-    AND createdAt < ${cutoffUnixSeconds}
+  SELECT o.id FROM organization o
+  WHERE o.slug LIKE 'e2e-%'
+    AND EXISTS (SELECT 1 FROM member m WHERE m.organizationId = o.id
+                AND m.userId = 'user-e2e-onboarding-wizard'
+                AND instr(',' || replace(m.role, ' ', '') || ',', ',owner,') > 0)
+    AND o.createdAt < ${cutoffUnixSeconds}
   LIMIT ${batchSize}
 `
 
@@ -117,10 +90,8 @@ const disposableGuestRequestIds = `
 `
 
 const sql = `-- Sweeps E2E-generated rows from local D1 so they don't accumulate forever.
--- Safe to re-run: only ever targets organizations outside the fixed fixture allowlist and the
--- '@playwright.example' guest-email marker that tests/e2e specs already use. Curated fixtures
--- (Pottery House, Kikuzuki, demo, MCP plan fixtures, NCLS/Blawby) are untouched - they live under
--- fixed IDs reset separately by generate-*-seed.ts.
+-- Targets only e2e-* organizations owned by the onboarding test actor and the
+-- '@playwright.example' guest-email marker used by guest journey tests.
 
 PRAGMA foreign_keys = ON;
 
@@ -146,7 +117,10 @@ DELETE FROM organization WHERE id IN (${eligibleOrgIds});
 DELETE FROM reservations WHERE request_id IN (${disposableGuestRequestIds});
 DELETE FROM bookings WHERE request_id IN (${disposableGuestRequestIds});
 DELETE FROM requests WHERE id IN (${disposableGuestRequestIds});
-DELETE FROM user WHERE id IN (${eligibleUserIds});
+
+-- Rate counters are transient local request state; each run exercises the real
+-- limits from an unspent quota without changing the application's limits.
+DELETE FROM rate_limits;
 `
 
 // An organization the sweep deletes may own a Stripe customer, created when a

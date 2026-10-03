@@ -1,7 +1,7 @@
 import { createFile, MP4BoxBuffer, type Movie } from 'mp4box'
 
 export interface VideoMetadata {
-  /** Whole seconds, rounded. */
+  /** Seconds, preserving the file header's precision. */
   duration: number
   width: number
   height: number
@@ -41,6 +41,5 @@ export function readMp4Metadata(bytes: ArrayBuffer | Uint8Array<ArrayBuffer>): V
   const [width, height] = quarterTurn ? [storedHeight, storedWidth] : [storedWidth, storedHeight]
   if (!Number.isFinite(seconds) || seconds <= 0) throw new Error('The video file does not state its duration')
   if (!width || !height) throw new Error('The video file does not state its dimensions')
-  // Whole seconds; a clip shorter than half a second is still one second long, not zero.
-  return { duration: Math.max(1, Math.round(seconds)), width, height }
+  return { duration: seconds, width, height }
 }

@@ -57,7 +57,7 @@
           </p>
           <BookingContactForm
             :loading="submitting"
-            :submit-text="confirmationMode === 'review' ? 'Request appointment' : t('saya.experience_detail.confirm_booking')"
+            :submit-text="confirmationMode === 'review' ? t('booking.request_appointment') : t('saya.experience_detail.confirm_booking')"
             @submit="submitBooking"
           />
         </div>

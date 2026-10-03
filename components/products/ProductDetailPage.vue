@@ -63,7 +63,7 @@
 
         <div class="grid gap-10 lg:grid-cols-[1fr_380px] lg:items-start" :class="compact ? 'mt-8' : 'mt-14'">
         <div class="min-w-0">
-          <p v-if="!canBook && !canEnquire && !canOrderExternally" role="status" class="rounded-xl border border-default bg-elevated p-5 text-muted lg:hidden">{{ vertical === 'service' && !offer ? 'Price unavailable. Please contact us to schedule.' : t('saya.common.temporarily_unavailable') }}</p>
+          <p v-if="!canBook && !canEnquire && !canOrderExternally" role="status" class="rounded-xl border border-default bg-elevated p-5 text-muted lg:hidden">{{ vertical === 'service' && !offer ? t('booking.price_unavailable_contact') : t('saya.common.temporarily_unavailable') }}</p>
           <section v-if="!pageDocument && !compact && product.description" class="border-t border-default pt-10">
             <h2 class="saya-display text-2xl text-default sm:text-3xl">{{ t('saya.experience_detail.what_youll_do') }}</h2>
             <p class="mt-4 whitespace-pre-line text-base leading-relaxed text-muted sm:text-lg">{{ product.description }}</p>
@@ -71,7 +71,7 @@
 
           <!-- The next few sessions, on the page: a guest sees when it runs
                before they open anything. The full picker is one press away. -->
-          <section v-if="canBook && !enquiryOnly" id="consultations" class="border-t border-default pt-8 scroll-mt-32">
+          <section v-if="canBook && !enquiryOnly" :id="compact ? undefined : 'consultations'" class="border-t border-default pt-8 scroll-mt-32">
             <div class="flex flex-wrap items-baseline justify-between gap-4">
               <h2 class="saya-display text-2xl text-default sm:text-3xl">{{ t('saya.experience_detail.upcoming_availability') }}</h2>
               <SayaButton v-if="upcomingSessions.length" variant="ghost" control-id="product-booking-toggle" @click="openBooking">
@@ -94,7 +94,7 @@
                   </p>
                 </div>
                 <SayaButton control-id="product-booking-toggle" @click="openBookingAt(session)">
-                  {{ vertical === 'service' ? 'Select time' : t('saya.experience_detail.book') }}
+                  {{ vertical === 'service' ? t('saya.experience_detail.select_time') : t('saya.experience_detail.book') }}
                 </SayaButton>
               </li>
             </ul>
@@ -188,13 +188,13 @@
                 {{ fact.label }}
               </span>
             </div>
-            <p v-if="vertical === 'service' && !product.order_url" class="text-sm text-muted">{{ booking?.confirmation_mode === 'review' ? 'Your request is reviewed before your appointment is confirmed.' : 'Your appointment is confirmed when you book.' }}</p>
+            <p v-if="vertical === 'service' && !product.order_url" class="text-sm text-muted">{{ booking?.confirmation_mode === 'review' ? t('booking.review_notice') : t('booking.instant_notice') }}</p>
             <p v-if="nextSession" class="inline-flex items-center gap-2 text-sm text-muted">
               <SayaIcon name="calendar-days" class="size-4" />
               {{ sessionDayLabel(nextSession) }} · {{ sessionTimeLabel(nextSession) }}
             </p>
             <p v-if="!canBook && !canEnquire && !canOrderExternally" class="rounded-lg bg-default px-4 py-3 text-center text-sm font-semibold text-muted">
-              {{ vertical === 'service' && !offer ? 'Price unavailable' : t('saya.common.temporarily_unavailable') }}
+              {{ vertical === 'service' && !offer ? t('booking.price_unavailable') : t('saya.common.temporarily_unavailable') }}
             </p>
             <div v-else class="pt-2">
               <SayaButton v-if="canOrderExternally" block :href="product.order_url!" target="_blank" rel="noopener noreferrer" @click="recordExternalOrderClick">{{ externalActionLabel }}</SayaButton>
@@ -311,7 +311,7 @@
       </section>
     </article>
     <div v-if="booking" class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8"><WhoYouMeet :organization-id="organizationId" :organization-name="organizationName || location?.title || ''" :product-id="product.id" :slug="product.slug" :session-id="bookingController.selectedSession.value?.id" /></div>
-    <slot name="content" />
+    <slot name="content" :can-book="canBook" />
   </div>
 </template>
 
@@ -364,13 +364,13 @@ const props = defineProps<{
 
 const displayTitle = computed(() => props.pageDocument?.title ?? props.product.name)
 const bookingLabel = computed(() => props.vertical === 'service'
-  ? props.booking?.confirmation_mode === 'review' ? 'Request appointment' : 'Book appointment'
+  ? props.booking?.confirmation_mode === 'review' ? t('booking.request_appointment') : t('booking.book_appointment')
   : t('saya.experience_detail.book_now'))
 
 const { trackProductOrder, trackProductView } = useOrganizationConversionTracking()
 const { localePath, t } = useI18n()
 const collectionLabel = computed(() => {
-  if (!props.location && props.vertical === 'service') return 'Services'
+  if (!props.location && props.vertical === 'service') return t('blawby.footer.services')
   if (props.presentation.locationCollectionSegment === 'menu') return t('saya.footer.menu')
   return props.presentation.locationCollectionSegment === 'experiences'
     ? t('saya.footer.experiences')

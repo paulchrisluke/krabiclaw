@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "6a31cd08-afaf-4b1f-85bc-a62d9431ec2a",
-  "prevId": "edf7c94d-7e8b-4ca1-831b-829eaf03ff70",
+  "id": "5a60d0d0-d857-4679-a8a0-560189dd00a9",
+  "prevId": "72755324-f23e-4f2e-8f40-3b337ee3eb14",
   "tables": {
     "account": {
       "name": "account",
@@ -5913,6 +5913,10 @@
           "name": "organization_settings_json_check",
           "value": "json_valid(settings_json) AND json_type(settings_json) IS 'object'"
         },
+        "organization_consultation_settings_check": {
+          "name": "organization_consultation_settings_check",
+          "value": "consultation_settings_json IS NULL OR (json_valid(consultation_settings_json) AND json_type(consultation_settings_json) IS 'object' AND json_extract(consultation_settings_json, '$.mode') IN ('external_url', 'native_disabled', 'native') AND json_type(consultation_settings_json, '$.cta_label') IS 'text' AND json_type(consultation_settings_json, '$.schedule_path') IS 'text' AND json_extract(consultation_settings_json, '$.schedule_path') LIKE '/%' AND json_type(consultation_settings_json, '$.confirmation_path') IS 'text' AND json_extract(consultation_settings_json, '$.confirmation_path') LIKE '/%' AND json_type(consultation_settings_json, '$.tracking_enabled') IN ('true', 'false') AND (json_type(consultation_settings_json, '$.metadata_json') IS NULL OR json_type(consultation_settings_json, '$.metadata_json') IN ('null', 'object')) AND (json_type(consultation_settings_json, '$.external_url') IS NULL OR json_type(consultation_settings_json, '$.external_url') IN ('null', 'text'))) IS TRUE"
+        },
         "organization_config_brand_color_check": {
           "name": "organization_config_brand_color_check",
           "value": "json_type(settings_json, '$.config.brand_color') IS NULL OR json_type(settings_json, '$.config.brand_color') IS 'text'"
@@ -5937,10 +5941,6 @@
           "name": "organization_config_default_timezone_check",
           "value": "json_type(settings_json, '$.config.default_timezone') IS 'text' AND length(json_extract(settings_json, '$.config.default_timezone')) > 0"
         },
-        "organization_consultation_metadata_check": {
-          "name": "organization_consultation_metadata_check",
-          "value": "json_type(settings_json, '$.consultation.metadata_json') IS NULL OR json_type(settings_json, '$.consultation.metadata_json') IN ('null', 'object')"
-        },
         "organization_compliance_metadata_check": {
           "name": "organization_compliance_metadata_check",
           "value": "json_type(settings_json, '$.compliance.metadata_json') IS NULL OR json_type(settings_json, '$.compliance.metadata_json') IN ('null', 'object')"
@@ -5961,17 +5961,9 @@
           "name": "organization_theme_by_template_object_check",
           "value": "json_type(settings_json, '$.theme_by_template') IS NULL OR json_type(settings_json, '$.theme_by_template') IS 'object'"
         },
-        "organization_consultation_object_check": {
-          "name": "organization_consultation_object_check",
-          "value": "json_type(settings_json, '$.consultation') IS NULL OR json_type(settings_json, '$.consultation') IS 'object'"
-        },
         "organization_compliance_object_check": {
           "name": "organization_compliance_object_check",
           "value": "json_type(settings_json, '$.compliance') IS NULL OR json_type(settings_json, '$.compliance') IS 'object'"
-        },
-        "organization_consultation_check": {
-          "name": "organization_consultation_check",
-          "value": "json_type(settings_json, '$.consultation') IS NULL OR (json_extract(settings_json, '$.consultation.mode') IN ('external_url', 'native_disabled') AND json_type(settings_json, '$.consultation.cta_label') IS 'text' AND json_extract(settings_json, '$.consultation.schedule_path') LIKE '/%' AND json_extract(settings_json, '$.consultation.confirmation_path') LIKE '/%' AND json_type(settings_json, '$.consultation.tracking_enabled') IN ('true', 'false')) IS TRUE"
         },
         "organization_compliance_check": {
           "name": "organization_compliance_check",
@@ -11441,6 +11433,7 @@
         "resource_localizations_org_locale_route_unique": {
           "name": "resource_localizations_org_locale_route_unique",
           "columns": [
+            "organization_id",
             "locale",
             "route_path"
           ],
@@ -11450,6 +11443,7 @@
         "resource_localizations_org_locale_type_idx": {
           "name": "resource_localizations_org_locale_type_idx",
           "columns": [
+            "organization_id",
             "locale",
             "resource_type"
           ],

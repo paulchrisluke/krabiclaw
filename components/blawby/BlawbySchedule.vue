@@ -123,7 +123,7 @@ useProfessionalServiceSchema(() => ({
     { name: 'Schedule', url: canonicalUrl.value },
   ],
   faqs: scheduleQa.value.map(item => ({ question: item.question, answer: item.answer })),
-  consultationUrl: scheduleHeroDestination.value,
+  consultationUrl: consultation.value.mode === 'native' ? consultation.value.schedule_path : scheduleHeroDestination.value,
 }))
 
 /**
