@@ -20,7 +20,6 @@ interface Day { date: string; timezone: string; slots: Slot[] }
  */
 test('concurrent guests cannot claim the same final reservation seat', async ({ page, request }, testInfo) => {
   test.skip(!writable, 'Booking writes require disposable local or preview data')
-  test.setTimeout(90_000)
   // The demo location's reservation capacity is shared with the MCP reservation specs.
   const releaseTenantMutationLock = await acquireTenantMutationLock(testInfo, E2E_DEMO_ORGANIZATION_ID)
   try {

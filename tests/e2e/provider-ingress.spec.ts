@@ -72,7 +72,6 @@ test('signed Resend ingress verifies the raw body and ignores mail that is not a
 })
 
 test('compact signed email reply persists once and rejects a changed address', async ({ request, baseURL }) => {
-  test.setTimeout(90_000)
   const fetchPhase = async (phase: string, path: string, options: Parameters<typeof request.fetch>[1]) => {
     const requestId = randomUUID()
     const startedAt = Date.now()

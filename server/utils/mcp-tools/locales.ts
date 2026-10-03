@@ -74,7 +74,7 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
   }),
   organizationTool({
     name: 'delete_resource_localization',
-    description: "Permanently delete the requested language representation and its owned document and redirects. This localization tool does not delete Q&A; authored Q&A uses delete_qa. Billing is unchanged.",
+    description: "Permanently remove one resource translation when the user requests deletion of that language representation. Also deletes its owned document and redirects. Authored Q&A is managed with delete_qa.",
     domain: 'locales',
     minimumRole: 'admin',
     confirmRequired: true,
@@ -88,7 +88,7 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
   }),
   organizationTool({
     name: 'get_product_catalog_localization',
-    description: "Read source Product fields and existing translations for one published secondary language. Collection names are translated separately with the resource-localization tools.",
+    description: "Read source product fields and existing translations when the user wants to review or translate the catalog in a published secondary language. Collection names use the resource-localization tools separately.",
     domain: 'locales',
     minimumRole: 'admin',
     confirmRequired: false,

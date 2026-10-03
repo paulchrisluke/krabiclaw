@@ -1,10 +1,10 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:71e363ddcf07649676d4c4b7f08843ad38b9cffeba3ffcf7f9f546145f74007d",
+  "fingerprint": "sha256:efa550ee2a13fe82f0dbe50c4efae8508644ef35837bc9346cb20eb46c093267",
   "tools": [
     {
       "name": "append_content_block",
-      "description": "Insert one block into a blog article or site page. Read the document first (get_blog_post, get_site_page): the writer says where the block goes by naming the block it follows in after_block_id — \"under this paragraph\" is the id of the markdown block holding that paragraph; omit after_block_id for the end of the document. To place a block inside a paragraph run, first replace_content_block the markdown block with the text before the split, then append the new block after it, then append the remaining text. The first block of an article, when it is an image, is the article's cover. Returns the whole document so the next edit has every block's id and updated_at.",
+      "description": "Add a content block to an existing blog article or site page when the user requests an insertion. Read the document first and use after_block_id to insert after an existing block; omit it to append. An image in the first article block becomes its cover. Returns the updated document with block IDs and timestamps.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -363,7 +363,7 @@
     },
     {
       "name": "batch_create_products",
-      "description": "Validate every row, then create all products atomically. Any invalid row rolls back the complete request.",
+      "description": "Create several products in the selected site’s catalog when the user supplies a new catalog batch. Validates every entry before writing; any invalid entry rejects the complete request. Publication and location offerings are assigned separately.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -1160,7 +1160,7 @@
     },
     {
       "name": "block_dates",
-      "description": "Close a location for every day from one date to another, inclusive, so guests cannot book those days — the same closure the calendar's Block writes to the location's special hours. Whole days only. Existing closures and dated hours are kept.",
+      "description": "Close a location for a whole-day date range when the user wants to prevent bookings on those dates. Both endpoints are inclusive. Adds a closure to special hours while retaining existing closures and dated hours.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -1171,7 +1171,7 @@
             "type": "string"
           },
           "location_id": {
-            "description": "Location id or slug.",
+            "description": "Internal location ID returned by list_locations or get_workspace_context.",
             "type": "string"
           },
           "note": {
@@ -2039,7 +2039,7 @@
     },
     {
       "name": "create_post",
-      "description": "Create a short post as a draft: an optional title, the caption as body (plain text, newlines kept), ordered image or video media, an optional location and an optional call_to_action {label, url}. Nothing is public until publish_post. A draft may be empty; publishing needs words, media or a call to action. Event dates, offers and codes are written in the body. Pass a new idempotency_key per post: repeating a call with the same key returns the same post instead of a second one. Use create_blog_post for long-form articles.",
+      "description": "Create a draft short post when the user wants an announcement, event notice or offer. Supports a plain-text caption, ordered media, optional title, location and call to action. It stays private until publish_post. Use a new idempotency_key for each post and reuse it only for retries of that request. Long-form articles use create_blog_post.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -2473,7 +2473,7 @@
     },
     {
       "name": "create_product",
-      "description": "Create a product with its options, variants and prices in the selected site’s catalog. Creation makes the site carry it but does not publish it; visibility and location offerings are set separately.",
+      "description": "Create a product with options, variants and prices when the user wants to add an item to the selected site’s catalog. The new product is unpublished; use set_product_publication and set_product_location to control website visibility and location offerings.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -3800,7 +3800,7 @@
     },
     {
       "name": "delete_metafield_definition",
-      "description": "Remove an attribute from the vocabulary. Its value is removed from every product that carried it.",
+      "description": "Permanently delete a product attribute definition when the user wants to remove that attribute from the site. Deletes every product value stored under the definition.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -3866,7 +3866,7 @@
     },
     {
       "name": "delete_product",
-      "description": "Delete a product and everything it owns. Refused while a canonical product page still points at it.",
+      "description": "Permanently delete a product and its owned variants, prices, attributes and placements when the user requests its removal. Refused if the product has booking history or a site page still references it. Withhold publication or disable sale to retain the product.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -3977,7 +3977,7 @@
     },
     {
       "name": "delete_resource_localization",
-      "description": "Permanently delete the requested language representation and its owned document and redirects. This localization tool does not delete Q&A; authored Q&A uses delete_qa. Billing is unchanged.",
+      "description": "Permanently remove one resource translation when the user requests deletion of that language representation. Also deletes its owned document and redirects. Authored Q&A is managed with delete_qa.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -4440,7 +4440,7 @@
     },
     {
       "name": "get_calendar",
-      "description": "What is on one location's calendar between two dates, as the dashboard calendar shows it: every reservation, experience booking and published post, plus which dates the location cannot take — its own closures, a location that is not active, and weekdays its hours never open. Dates are the location's local calendar days. At most 62 days per call.",
+      "description": "Read a location’s reservations, product session bookings, published posts and unavailable dates when the user wants to review its calendar. Dates are inclusive local calendar days, with at most 62 days per call. Use kinds to filter the agenda.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -4463,7 +4463,7 @@
             "type": "array"
           },
           "location_id": {
-            "description": "Location id or slug.",
+            "description": "Internal location ID returned by list_locations or get_workspace_context.",
             "type": "string"
           },
           "organization_id": {
@@ -4530,7 +4530,7 @@
     },
     {
       "name": "get_channel_post",
-      "description": "Read one live native provider post from the explicitly selected connected channel. provider_post_id comes from list_channel_posts; it is not a website post_id. Does not import or change website content.",
+      "description": "Read one post from the selected connected Facebook Page or Instagram professional account when the user wants its current caption, media or public link. Use provider_post_id from list_channel_posts and the exact target from get_social_connections. Website content is unchanged.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -4665,7 +4665,7 @@
         "additionalProperties": false,
         "properties": {
           "location_id": {
-            "description": "Location id or slug.",
+            "description": "Internal location ID returned by list_locations or get_workspace_context.",
             "type": "string"
           },
           "organization_id": {
@@ -6487,7 +6487,7 @@
     },
     {
       "name": "get_post",
-      "description": "Get one short post: its words, call to action, ordered media, website status, preview link for a draft, and each Facebook or Instagram publication with its exact state.",
+      "description": "Read a short website post before editing or publishing it. Returns its caption, call to action, ordered media, website status, draft preview link and stored Facebook or Instagram publication receipts. Use get_channel_post for current provider content.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -6802,7 +6802,7 @@
     },
     {
       "name": "get_product",
-      "description": "Read one site product with its options, variants, prices, publication, locations, collections, descriptive attributes and booking defaults. Prices belong to variants; booking defaults apply to new sessions.",
+      "description": "Read one site product before reviewing or editing its options, variants, prices, media, publication, locations, collections, attributes or booking defaults. Prices belong to variants; booking defaults apply to new sessions.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -7338,7 +7338,7 @@
     },
     {
       "name": "get_product_catalog_localization",
-      "description": "Read source Product fields and existing translations for one published secondary language. Collection names are translated separately with the resource-localization tools.",
+      "description": "Read source product fields and existing translations when the user wants to review or translate the catalog in a published secondary language. Collection names use the resource-localization tools separately.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -7781,7 +7781,7 @@
     },
     {
       "name": "get_social_connections",
-      "description": "Where this organization can publish short posts: its website, and the exact Facebook Page and Instagram professional account it connected, each with the target_id and connection_revision publish_post needs, the formats it takes, anything in the way (plan, disconnected account), the supported channel operations, and the dashboard URL where a person connects it. Never returns a token.",
+      "description": "Read the site’s saved website, Facebook Page and Instagram publishing connections before selecting a publication target. Returns target_id, connection_revision, supported formats and operations, stored connection problems and setup links. Live provider access is checked by channel operations; a saved connection does not establish current Page or account access. Credentials are not returned.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -8577,7 +8577,7 @@
     },
     {
       "name": "list_collections",
-      "description": "List this organization merchandising collections, in the order guests see them. Omit location_id for every collection; send it to narrow to one location.",
+      "description": "List the selected site’s product collections when the user wants to find menu sections or other product groups. Returns their public display order. Supply location_id to narrow the list to one location.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -9160,7 +9160,7 @@
     },
     {
       "name": "list_metafield_definitions",
-      "description": "List the site’s product attribute definitions. Adding an attribute of a supported type is one definition here, not a schema change.",
+      "description": "List the selected site’s product attribute definitions before reading or setting typed attributes such as inclusions, preparation instructions or pricing notes. Returns each attribute’s namespace, key, type and constraints.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -9601,7 +9601,7 @@
     },
     {
       "name": "list_posts",
-      "description": "List website posts (not live Facebook or Instagram inventory), newest change first, a page at a time. Pass location_id for one location's posts; omit it for all of them.",
+      "description": "List draft or published short website posts when the user wants to find announcements to review or edit. Results are paginated, newest change first. Filter by location_id for one location. Use list_channel_posts for live Facebook or Instagram posts.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -10272,7 +10272,7 @@
     },
     {
       "name": "open_dates",
-      "description": "Reopen a location for every day from one date to another, inclusive — the same as the calendar's Open. Every closure covering any of those days is cut around the range so the days outside it stay closed with their note; dated hours with no periods on those days are removed. Weekdays the regular hours never open stay closed: change opening_hours for that.",
+      "description": "Remove temporary closures for an inclusive date range when the user wants to reopen a location. Closure dates outside the range and their notes are preserved. Regularly closed weekdays stay closed; change opening_hours with update_location to open those weekdays.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -10283,7 +10283,7 @@
             "type": "string"
           },
           "location_id": {
-            "description": "Location id or slug.",
+            "description": "Internal location ID returned by list_locations or get_workspace_context.",
             "type": "string"
           },
           "organization_id": {
@@ -11452,7 +11452,7 @@
     },
     {
       "name": "reconcile_post_publication",
-      "description": "Resolve a Facebook or Instagram publication whose outcome is unknown, or refresh one, by reading Meta: it records only what Meta's own answer proves, never publishes, and never accepts an assertion that something is published. Pass provider_post_id when you know the exact post it became; it must belong to the connected Page or account. What stays ambiguous stays unknown.",
+      "description": "Check an unknown or existing Facebook or Instagram publication when the user wants to resolve or refresh its outcome. Reads the connected provider and updates the stored publication receipt; it does not publish. Supply provider_post_id only when the exact post is known and belongs to that connected Page or account. An unproven outcome remains unknown.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -11498,7 +11498,7 @@
     },
     {
       "name": "reconcile_products",
-      "description": "Create and update the supplied products in one idempotent pass, keyed by product_id. Products omitted from the request are left alone unless deactivate_missing is true, which turns off their sale switch — it never deletes them and never claims they are sold out.",
+      "description": "Create or update a supplied catalog batch when the user wants to synchronize products. A supplied product_id identifies the product to update or create; an entry without product_id creates a new product, so retrying it can create duplicates. Omitted products stay unchanged unless deactivate_missing is true, which disables their sale without deleting them.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -13857,7 +13857,7 @@
     },
     {
       "name": "replace_product_weekly_schedule",
-      "description": "Replace all weekly weekday/time slots for one Product and location, using the location’s saved timezone and Product duration/capacity. Empty slots clears that location’s schedule. Any Booking history, including cancelled bookings, protects saved Session times, capacity and state. Removed future sessions without history are cancelled; re-adding an unbooked slot can reopen its sessions with current defaults.",
+      "description": "Replace a product’s weekly time slots at one location when the user wants to change its recurring schedule. Uses the location timezone and product duration/capacity. An empty slots array clears the schedule. Sessions with any booking history are preserved; removed future sessions without bookings are cancelled, and re-added unbooked slots can reopen with current defaults.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -14200,7 +14200,7 @@
     },
     {
       "name": "set_collection_products",
-      "description": "Replace the membership and order of one collection with exactly the product ids you send, in that order. Anything you leave out is removed from this collection — the products themselves are untouched. Position lives on the membership, so the same product can sit third here and first elsewhere.",
+      "description": "Replace a product collection’s membership and display order when the user wants to change which items it contains. Supply every product ID to retain, in the intended order. Omitted products are removed from this collection but remain in the catalog.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -14501,7 +14501,7 @@
     },
     {
       "name": "set_product_booking_config",
-      "description": "Set the Product duration and capacity defaults used for new sessions. Existing sessions retain their saved times, capacity and state. Omitted fields stay unchanged; null clears a default and zero capacity means no places. Read back with get_product.",
+      "description": "Set product duration and capacity defaults when the user wants to configure new bookable sessions. Existing sessions keep their saved times, capacity and state. Omitted fields stay unchanged; null clears a default and zero capacity means no places. Read the defaults with get_product.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -15121,7 +15121,7 @@
     },
     {
       "name": "set_product_publication",
-      "description": "Publish or withhold a product on the selected site. This changes website visibility, independently of its sale switch and individual location visibility.",
+      "description": "Publish or withhold a product when the user wants to change its visibility on the selected site. This setting is independent of whether the product is available for sale and of visibility at individual locations.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -16581,7 +16581,7 @@
             ]
           },
           "location_id": {
-            "description": "Location id or slug.",
+            "description": "Internal location ID returned by list_locations or get_workspace_context.",
             "type": "string"
           },
           "max_capacity": {
@@ -17524,7 +17524,7 @@
     },
     {
       "name": "update_product",
-      "description": "Replace a site product’s intended state, including complete options, variants and prices. Keep variant IDs to preserve their booking links. Removing a variant with live bookings is refused; publication and location offerings are separate.",
+      "description": "Edit an existing product’s details, options, variants, prices or attributes. Only supplied fields change; supplied options, variants, prices and metafields replace their existing values. Preserve IDs for variants to retain. Removing a variant with any booking history is refused. Publication and location offerings use separate tools.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -18546,7 +18546,7 @@
     },
     {
       "name": "update_site_page",
-      "description": "Replace the selected site-page language variant using the latest read token. This writes the whole document: provide the complete blocks array, path, title and expected_updated_at from the last read, because every omitted metadata field is written as null rather than kept. Sending a different path moves the page and creates its locale-scoped redirect. If existing block ids are omitted, also provide the exact removed_block_ids and confirmation_token returned by the canonical page read.",
+      "description": "Replace a site-page language variant when the user wants to edit its content or metadata. Read it first and supply the complete blocks, path, title, pageType, recipe, sortOrder and expected_updated_at. Omitted summary is cleared. A changed path creates a language-specific redirect. To remove blocks, supply the exact removed_block_ids and confirmation_token from the page read.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {

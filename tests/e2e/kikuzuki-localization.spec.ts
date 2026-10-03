@@ -94,8 +94,7 @@ test.beforeAll(async ({ playwright }, testInfo) => {
   }
 })
 
-test('Kikuzuki keeps its Thai shell and collection translations on a hard load', async ({ page }, testInfo) => {
-  testInfo.setTimeout(120_000)
+test('Kikuzuki keeps its Thai shell and collection translations on a hard load', async ({ page }) => {
   const errors: string[] = []
   page.on('console', message => {
     if (message.type() === 'error') errors.push(message.text())
@@ -146,7 +145,6 @@ test('Kikuzuki keeps its Thai shell and collection translations on a hard load',
 
 
 test('Kikuzuki Localize preserves its translated address', async ({ browser, playwright }) => {
-  test.setTimeout(90_000)
   const baseURL = testBaseUrl()
   const owner = await playwright.request.newContext({ baseURL })
   try {

@@ -30,7 +30,7 @@ const effects = {
   delete_media_asset: 'Removes an asset and its placements, and deletes backing Cloudflare storage when no other asset references it.',
   delete_metafield_definition: 'Deletes a typed product attribute definition and every product value stored under it.',
   delete_post: 'Deletes the selected short post from the website; its Facebook and Instagram posts are left as they are.',
-  delete_product: 'Deletes a product, its reviews and placements, and updates the remaining product order.',
+  delete_product: 'Deletes the selected product and its owned variants, prices, attributes and placements; booking history or a referencing site page prevents deletion.',
   delete_resource_localization: 'Deletes the selected translated resource representation.',
   get_blog_post: 'Reads the selected tenant blog article and content for editing.',
   list_contact_inquiries: 'Reads authorized customer contact inquiries, including personal contact information.',
@@ -73,10 +73,10 @@ const effects = {
   list_organizations: 'Lists organizations accessible to the authenticated user without provisioning one.',
   list_site_pages: 'Lists tenant pages for the selected organization.',
   publish_blog_post: 'Publishes the selected draft blog article on the website.',
-  publish_post: 'Publishes the selected post to the website and to the explicitly named connected Facebook Page or Instagram account.',
+  publish_post: 'Publishes the selected post only to the explicitly requested website, Facebook Page or Instagram targets and records their outcomes.',
   reconcile_post_publication: 'Reads Facebook or Instagram to record the proven outcome of one publication; it never publishes.',
   put_resource_localization: 'Creates or overwrites translated resource values and supplied translated content.',
-  reconcile_products: 'Creates and updates products at one location, and marks omitted products unavailable only when explicitly requested.',
+  reconcile_products: 'Creates or updates catalog products by supplied product_id; entries without an ID create new products on each call. Disables sale of omitted products only when deactivate_missing is requested.',
   remove_media: 'Removes an asset placement from public content while retaining the underlying media asset.',
   remove_product_location: 'Removes a product from a location, so the location no longer offers it.',
   reorder_article_categories: 'Overwrites the order the categories of the selected organization\'s blog or documentation are presented in.',
@@ -94,40 +94,44 @@ const effects = {
   get_channel_post: 'Reads one live post belonging to the explicitly selected connected channel.',
   delete_channel_post: 'Deletes the explicitly named Facebook Page post and updates its publication receipt; website content is retained.',
   set_workspace_context: 'Overwrites the authenticated user selected workspace organization or location.',
-  update_article_category: 'Overwrites the selected category\'s name or description.',
+  update_article_category: 'Overwrites the selected category\'s name, description or parent category.',
   update_blog_post: 'Overwrites supplied fields of an existing tenant blog article.',
   update_collection: 'Overwrites the selected collection name, description or placement.',
-  update_location: 'Overwrites location hours, contact details, capacity or notification settings supplied by the user.',
+  update_location: 'Overwrites supplied location address, contact details, hours, timezone, capacity metadata or SEO fields.',
   block_dates: 'Overwrites the selected location\'s special hours with an added closure for the given days, so guests cannot book them on the public website.',
   open_dates: 'Overwrites the selected location\'s special hours with the given days reopened, so guests can book them on the public website again.',
   update_media_asset: 'Overwrites media metadata such as alt text or category.',
   update_post: 'Overwrites supplied fields of an existing short post on the website.',
   update_product: 'Overwrites product fields, including public content, availability and price.',
   update_reservation_policy: 'Creates or overwrites the reservation policy of the selected location, which is what opens reservations there.',
-  update_organization_settings: 'Overwrites supplied organization settings, including branding, currency, tracking, verification and indexing controls.',
+  update_organization_settings: 'Overwrites supplied site branding, contact email, default currency, announcement, public status or SEO fields.',
   update_site_page: 'Overwrites tenant page metadata or supplied structured content, subject to version and removal checks.',
   save_media_attachment: 'Stores a conversation file in Cloudflare media storage and returns a public URL, even before assignment to a page.',
 
 }
 
-const externalProcessing = {
-  publish_post: 'The post, its caption and its media are sent to the named Facebook Page or Instagram account, where they become public.',
-  reconcile_post_publication: 'Facebook or Instagram is read for the publication; the provider answers with its own state.',
-  list_channel_posts: 'The connected provider is queried for its current posts and media URLs without copying them.',
-  get_channel_post: 'The connected provider is queried for one current post.',
-  delete_channel_post: 'The explicitly selected Facebook Page post is deleted through Meta.',
-  save_media_attachment: 'The file is stored in Cloudflare storage at a public media URL.',
+const openWorldEffects = {
+  publish_post: 'Can send the requested caption and media to the public audience of an explicitly selected Facebook Page or Instagram account. Website-only publication remains within the selected site.',
+  delete_channel_post: 'Removes a public Facebook Page post through Meta and updates its local publication receipt.',
+  save_media_attachment: 'Downloads the host-supplied file URL and stores the attachment at a public Cloudflare media URL.',
+  list_channel_posts: 'Reads posts from Meta for the explicitly selected connected Facebook Page or Instagram account only.',
+  get_channel_post: 'Reads one post from Meta belonging to the explicitly selected connected Facebook Page or Instagram account.',
+  reconcile_post_publication: 'Reads Meta for an existing publication and updates its receipt in the selected workspace; it does not publish.',
+  delete_media_asset: 'Deletes the stored file from the Cloudflare media account when no other asset references it.',
 }
 
 function justifications(tool) {
   const effect = effects[tool.name]
   if (!effect) throw new Error(`Tool requires an implementation review: ${tool.name}`)
   const annotations = tool.annotations
+  if (annotations.openWorldHint && !openWorldEffects[tool.name]) {
+    throw new Error(`Open-world tool requires an explicit boundary review: ${tool.name}`)
+  }
   return {
     read_only_justification: effect,
-    open_world_justification: externalProcessing[tool.name] ?? (annotations.openWorldHint
-      ? `${effect} Its effects can change content or behavior on the public website.`
-      : `${effect} It does not publish content or write to an external service.`),
+    open_world_justification: annotations.openWorldHint
+      ? openWorldEffects[tool.name]
+      : `${effect} Its scope is the authenticated KrabiClaw workspace, not arbitrary external entities or the public web.`,
     destructive_justification: annotations.destructiveHint
       ? `${effect} Existing state is deleted, replaced or overwritten rather than only appended.`
       : `${effect} Existing content is not deleted or overwritten.`,

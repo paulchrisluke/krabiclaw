@@ -26,7 +26,6 @@ test('a verified user without an organization starts onboarding and can explicit
 // not change with viewport width; only the header does, so the narrow pass is
 // the header checks that actually differ rather than a second full traversal.
 test('public auth CTAs reflect the SSR session', async ({ page, baseURL }) => {
-  test.setTimeout(120_000)
   await dismissPreviewToolbar(page)
 
   // `Start free` is the action at every width. At 620px and below the header
