@@ -351,7 +351,9 @@ try {
       const response = await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
       if (inventoryMode) {
         if (response?.status() !== 200) throw new Error(`${routeConfig.path} returned ${response?.status() ?? 'no response'} at ${viewportName}`)
-        await page.waitForFunction(() => document.querySelector('#__nuxt')?.__vue_app__?.$nuxt?.isHydrating === false)
+        await page.waitForFunction(() => document.querySelector('#__nuxt')?.__vue_app__?.$nuxt?.isHydrating === false).catch(error => {
+          throw new Error(`${routeConfig.path} did not hydrate at ${viewportName} (${page.url()}): ${JSON.stringify({ pageErrors, failedFirstParty })}`, { cause: error })
+        })
       }
       await stabilizePage(page).catch(error => {
         throw new Error(`${routeConfig.path} could not stabilize at ${viewportName} (${page.url()})`, { cause: error })
