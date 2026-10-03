@@ -1,7 +1,7 @@
 import { defineHandler } from 'nitro'
 import { getRouterParam } from 'nitro/h3'
 import { INTEGRATION_SCOPES } from '~/shared/organization-settings'
-import { jsonResponse } from '~/server/utils/api-response'
+import { jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { linkedAccountAccessToken, requireIntegrationAccount } from '~/server/utils/auth'
 import { listGa4Properties } from '~/server/utils/google-analytics'
 import { integrationSummary, readIntegration } from '~/server/utils/organization-integrations'
@@ -35,12 +35,13 @@ export default defineHandler(async (event) => {
     const properties = await listGa4Properties((await linkedAccountAccessToken(env, accountId)).accessToken)
     return jsonResponse({ success: true, account_id: accountId, analytics, properties, error: null })
   } catch (error) {
+    rethrowHttpError(error)
     // The leaf still shows what is connected; the reason the properties could
     // not be read is what it shows in place of the list.
     console.error('google_analytics_properties_failed', { organizationId: organization.id, error })
     return jsonResponse({
-      success: true, account_id: accountId, analytics, properties: [],
+      account_id: accountId, analytics, properties: [],
       error: error instanceof Error ? error.message : String(error),
-    })
+    }, { status: 502 })
   }
 })

@@ -103,8 +103,9 @@ function messages(error: unknown): string {
 }
 
 /** Removes the selection; true when there was one. The linked account is its user's and stays. */
-export async function deleteIntegration(db: DbClient, organizationId: string, provider: IntegrationProvider): Promise<boolean> {
-  const result = await execute(db, 'DELETE FROM organization_integrations WHERE organization_id = ? AND provider = ?', [organizationId, provider])
+export async function deleteIntegration(db: DbClient, organizationId: string, provider: IntegrationProvider, expected?: { revision: string }): Promise<boolean> {
+  const result = await execute(db, `DELETE FROM organization_integrations WHERE organization_id = ? AND provider = ?${expected ? ' AND revision = ?' : ''}`,
+    expected ? [organizationId, provider, expected.revision] : [organizationId, provider])
   return (result.meta?.changes ?? 0) > 0
 }
 

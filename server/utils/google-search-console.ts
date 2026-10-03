@@ -98,7 +98,7 @@ export async function verifyAndAddProperty(
   // The token is stored before Google is asked to look for it: the page has
   // to be serving the tag by the time the fetch arrives.
   const selection = { account_id: accountId, target_id: siteUrl, target_name: siteUrl, verification_token: token }
-  await storeIntegration(env.DB, organizationId, 'google_search_console', { ...selection, verified: false })
+  const pending = await storeIntegration(env.DB, organizationId, 'google_search_console', { ...selection, verified: false }, { revision: null })
   try {
     await publish()
     await verifySiteOwnership(accessToken, siteUrl)
@@ -106,11 +106,11 @@ export async function verifyAndAddProperty(
   } catch (error) {
     // A property Google would not verify is not connected: the pending record
     // goes, and the tag stops being served, before the failure is reported.
-    await deleteIntegration(env.DB, organizationId, 'google_search_console')
+    await deleteIntegration(env.DB, organizationId, 'google_search_console', { revision: pending.revision })
     await publish()
     throw error
   }
   // A property Krabiclaw verified keeps its token: Google re-checks the tag and
   // drops ownership if it stops being served.
-  await storeIntegration(env.DB, organizationId, 'google_search_console', { ...selection, verified: true })
+  await storeIntegration(env.DB, organizationId, 'google_search_console', { ...selection, verified: true }, { revision: pending.revision })
 }

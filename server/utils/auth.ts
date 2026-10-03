@@ -1,5 +1,5 @@
 import { APIError, betterAuth, type BetterAuthPlugin } from 'better-auth'
-import { createAuthMiddleware } from 'better-auth/api'
+import { createAuthMiddleware, getOAuthState, isAPIError } from 'better-auth/api'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { hashPassword } from 'better-auth/crypto'
 import { loginMethodForPath } from '~/shared/auth/login-method'
@@ -35,6 +35,17 @@ import { reconcileZarazAnalytics } from '~/server/utils/zaraz-analytics'
 
 type MemberRow = InferSelectModel<typeof schema.member>
 type InvitationRow = InferSelectModel<typeof schema.invitation>
+
+type IntegrationCallbackContext = GenericEndpointContext['context'] & { integrationAccountId?: string }
+
+/** The account Better Auth just linked, carried only in this callback's hook context. */
+async function integrationAccountLinked(account: { id: string; userId: string }, ctx: GenericEndpointContext | null) {
+  if (ctx?.path !== '/callback/:id') return
+  const state = await getOAuthState()
+  if (state?.link?.userId !== account.userId) return
+  const context = ctx.context as IntegrationCallbackContext
+  context.integrationAccountId = account.id
+}
 
 const CIMD_TENANT_SCOPES = ['openid', 'email', 'offline_access', 'tenant'] as const
 export const OAUTH_SIGNING_POLICY = {
@@ -269,6 +280,7 @@ export function createAuth(env: CloudflareEnv) {
 
   const instance = betterAuth({
     baseURL: authBaseUrl,
+    onAPIError: { errorURL: `${authBaseUrl}/oauth/error` },
     basePath: '/api/auth',
     secret: env.BETTER_AUTH_SECRET,
     trustedOrigins: trustedOriginsForAuth(env),
@@ -282,6 +294,24 @@ export function createAuth(env: CloudflareEnv) {
         if (ctx.path === '/phone-number/verify' && ctx.body?.updatePhoneNumber !== true) {
           throw new APIError('BAD_REQUEST', { message: 'A phone number is verified from your account profile, not used to sign in.' })
         }
+      }),
+      after: createAuthMiddleware(async (ctx) => {
+        if (ctx.path !== '/callback/:id') return
+        const state = await getOAuthState()
+        const location = ctx.context.responseHeaders?.get('location')
+        if (!state?.link || !location) return
+        const callback = new URL(state.callbackURL, authBaseUrl)
+        // Only a successful integration link continues to resource selection.
+        if (new URL(location, authBaseUrl).href !== callback.href) return
+        const integration = callback.pathname.match(/^\/dashboard\/[^/]+\/settings\/integrations\/(facebook|instagram|google-analytics|google-search-console)$/)?.[1]
+        if (!integration) return
+        const provider = integration.startsWith('google-') ? 'google' : integration
+        if (ctx.params?.id !== provider) return
+        const accountId = (ctx.context as IntegrationCallbackContext).integrationAccountId
+        if (accountId) callback.searchParams.set('account_id', accountId)
+        else callback.searchParams.set('error', 'unable_to_link_account')
+        // No account list, timestamp guess, credential copy or custom OAuth state.
+        throw ctx.redirect(callback.href)
       }),
     },
     // Better Auth reads the session from the database on every getSession call,
@@ -317,6 +347,10 @@ export function createAuth(env: CloudflareEnv) {
       schema,
     }),
     databaseHooks: {
+      account: {
+        create: { after: integrationAccountLinked },
+        update: { after: integrationAccountLinked },
+      },
       user: {
         update: {
           after: async (user) => {
@@ -834,7 +868,19 @@ export async function linkedAccountAccessToken(
 ): Promise<{ accessToken: string; accessTokenExpiresAt: Date | undefined }> {
   const account = await readLinkedAccount(env, accountId)
   if (!account) throw new Error('The account this integration was connected through is no longer linked. Connect it again.')
-  const token = await createAuth(env).api.getAccessToken({ body: { accountId, userId: account.userId } })
+  let token
+  try {
+    token = await createAuth(env).api.getAccessToken({ body: { accountId, userId: account.userId } })
+  } catch (error) {
+    if (!isAPIError(error)) throw error
+    // Better Auth's status is a name (BAD_REQUEST); Nitro needs its numeric statusCode.
+    throw new HTTPError({
+      statusCode: error.statusCode,
+      message: error.body?.code ? `${error.body.code}: ${error.message}` : error.message,
+      data: error.body,
+      cause: error,
+    })
+  }
   if (!token.accessToken) throw new Error(`Better Auth returned no access token for the linked ${account.providerId} account.`)
   return { accessToken: token.accessToken, accessTokenExpiresAt: token.accessTokenExpiresAt }
 }
