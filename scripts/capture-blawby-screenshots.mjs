@@ -336,23 +336,42 @@ try {
     const page = await context.newPage()
     const pageErrors = []
     const failedFirstParty = []
+    const consoleErrors = []
+    const requestFailures = []
     page.on('pageerror', error => pageErrors.push(error.message))
+    page.on('console', message => {
+      if (message.type() === 'error') consoleErrors.push(message.text())
+    })
+    page.on('requestfailed', request => {
+      if (new URL(request.url()).origin === new URL(args.url).origin) {
+        requestFailures.push(`${request.failure()?.errorText} ${request.url()}`)
+      }
+    })
     page.on('response', response => {
       if (new URL(response.url()).origin === new URL(args.url).origin && response.status() >= 400) {
         failedFirstParty.push(`${response.status()} ${response.url()}`)
       }
     })
+    const failureDetails = async () => ({
+      pageErrors, failedFirstParty, consoleErrors, requestFailures,
+      appError: await page.evaluate(() => {
+        const error = document.querySelector('#__nuxt')?.__vue_app__?.$nuxt?.payload?.error
+        return error ? { message: error.message, status: error.statusCode, stack: error.stack, cause: error.cause?.message } : null
+      }),
+    })
     for (const [routeName, routeConfig] of routes) {
       pageErrors.length = 0
       failedFirstParty.length = 0
+      consoleErrors.length = 0
+      requestFailures.length = 0
       const targetUrl = resolveUrl(args.url, routeConfig.path)
       const filePath = path.resolve(args.outDir, 'screenshots', args.source, `${routeName}-${viewportName}.png`)
       await fs.mkdir(path.dirname(filePath), { recursive: true })
       const response = await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
       if (inventoryMode) {
         if (response?.status() !== 200) throw new Error(`${routeConfig.path} returned ${response?.status() ?? 'no response'} at ${viewportName}`)
-        await page.waitForFunction(() => document.querySelector('#__nuxt')?.__vue_app__?.$nuxt?.isHydrating === false).catch(error => {
-          throw new Error(`${routeConfig.path} did not hydrate at ${viewportName} (${page.url()}): ${JSON.stringify({ pageErrors, failedFirstParty })}`, { cause: error })
+        await page.waitForFunction(() => document.querySelector('#__nuxt')?.__vue_app__?.$nuxt?.isHydrating === false).catch(async error => {
+          throw new Error(`${routeConfig.path} did not hydrate at ${viewportName} (${page.url()}): ${JSON.stringify(await failureDetails())}`, { cause: error })
         })
       }
       await stabilizePage(page).catch(error => {
@@ -360,8 +379,8 @@ try {
       })
       await page.screenshot({ path: filePath, fullPage: true })
       if (inventoryMode) {
-        const mainText = await page.locator('main').innerText().catch(error => {
-          throw new Error(`${routeConfig.path} could not read main content at ${viewportName}`, { cause: error })
+        const mainText = await page.locator('main').innerText().catch(async error => {
+          throw new Error(`${routeConfig.path} could not read main content at ${viewportName} (${page.url()}): ${JSON.stringify(await failureDetails())}`, { cause: error })
         })
         if (!mainText.trim()) throw new Error(`${routeConfig.path} has no visible main content at ${viewportName}`)
         if (pageErrors.length || failedFirstParty.length) {
