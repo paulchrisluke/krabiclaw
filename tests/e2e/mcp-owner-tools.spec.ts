@@ -13,7 +13,6 @@ import { acquireTenantMutationLock } from './helpers/tenant-mutation-lock'
 
 test.describe('stateless MCP server', () => {
   test('owner can use site content and settings tools', async ({ request, baseURL }) => {
-    test.setTimeout(120_000)
     await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
     const organizationId = MCP_GROWTH_ORGANIZATION_ID
 
@@ -150,7 +149,6 @@ test.describe('stateless MCP server', () => {
   })
 
   test('owner can use submission inquiry tools', async ({ request, baseURL }, testInfo) => {
-    test.setTimeout(60_000)
     // A public reservation here shares the demo location's capacity with the calendar specs.
     const releaseTenantMutationLock = await acquireTenantMutationLock(testInfo, MCP_GROWTH_ORGANIZATION_ID)
     try {
@@ -263,7 +261,6 @@ test.describe('stateless MCP server', () => {
   })
 
   test('owner reads the calendar, blocks and opens dates, and sets its policy through MCP, and guests see it', async ({ request, page, baseURL }, testInfo) => {
-    test.setTimeout(90_000)
     const organizationId = MCP_GROWTH_ORGANIZATION_ID
     const locationId = 'loc-demo'
     // Far enough out that nothing else in the suite books it, and on a
@@ -369,7 +366,6 @@ test.describe('stateless MCP server', () => {
       await expect(terms).toContainText('Cancel free up to 2 days before your booking.')
       await expect(terms).toContainText('Please call for dietary requests.')
       await expect(terms).not.toContainText(/deposit|reschedule|change or cancel/i)
-      await page.screenshot({ path: testInfo.outputPath('reservation-policy.png'), fullPage: true })
     } finally {
       // Whatever failed above, loc-demo is handed back open and on the policy
       // it had: a closure or a notice left behind would fail every later
@@ -400,7 +396,6 @@ test.describe('stateless MCP server', () => {
   })
 
   test('owner can use location, reviews, and QA lifecycle tools', async ({ request, baseURL }) => {
-    test.setTimeout(90_000)
     await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
     const organizationId = MCP_GROWTH_ORGANIZATION_ID
 
@@ -489,7 +484,6 @@ test.describe('stateless MCP server', () => {
     })
 
     test('HTTP and MCP share booking defaults, weekly replacement and authored Q&A', async ({ request, baseURL }) => {
-      test.setTimeout(120_000)
       await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
       const organizationId = MCP_GROWTH_ORGANIZATION_ID
       const locationId = 'loc-demo'
@@ -579,7 +573,6 @@ test.describe('stateless MCP server', () => {
     })
 
     test('booked session authority survives CMS clear and MCP re-add', async ({ request, page, baseURL }) => {
-      test.setTimeout(120_000)
       await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
       const organizationId = MCP_GROWTH_ORGANIZATION_ID
       const call = async (toolName: string, args: Record<string, unknown>) => {
@@ -610,7 +603,6 @@ test.describe('stateless MCP server', () => {
         await expect(page.getByText('Places per session', { exact: true })).toBeVisible()
         await expect(page.locator('input[type="time"]')).toHaveCount(1)
         await expect(page.getByLabel('Places for this time')).toHaveCount(0)
-        await page.screenshot({ path: '/tmp/task10-minimal-weekly-slots.png', fullPage: true })
         const read = async () => {
           const response = await request.get(`${url}/sessions`)
           expect(response.status(), await response.text()).toBe(200)
@@ -647,7 +639,6 @@ test.describe('stateless MCP server', () => {
     })
 
     test('owner can manage media and Product tools including public booking', async ({ request, baseURL }) => {
-      test.setTimeout(120_000)
       await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
       const organizationId = MCP_GROWTH_ORGANIZATION_ID
       const locationId = 'loc-demo'

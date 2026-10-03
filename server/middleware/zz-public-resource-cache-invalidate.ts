@@ -25,6 +25,6 @@ export default onResponse(async (response, event) => {
   if (!kv || !runtimeEnv?.DB) throw new Error('ORGANIZATION_CACHE and DB bindings are required to purge site caches after a dashboard write')
 
   await purgeOrganizationCaches(runtimeEnv.DB, kv, organizationId, runtimeEnv.NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN)
-  await drainPublicResourceCacheInvalidations(runtimeEnv.DB, kv, runtimeEnv, { organizationId, limit: 100 })
+  await drainPublicResourceCacheInvalidations(runtimeEnv.DB, kv, runtimeEnv, { organizationId })
   return response
 })

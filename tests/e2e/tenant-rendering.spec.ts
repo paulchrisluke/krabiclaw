@@ -207,7 +207,6 @@ test.describe('NCLS representative journeys', () => {
   // One reader walking the site. Each route is a different page recipe, so the
   // traversal is the coverage; six separate fixtures were not.
   test('renders every route reachable from the header', async ({ page }) => {
-    test.setTimeout(90_000)
     for (const journey of [
       { path: '/pricing', text: /pricing|income|calculator/i },
       { path: '/article/writing-your-own-will-how-it-works', text: /will|North Carolina/i },

@@ -110,4 +110,43 @@ test.describe('stateless MCP server', () => {
       }
     }
   })
+  test('product mutation responses preserve the canonical image and gallery', async ({ request, baseURL }, testInfo) => {
+    const releaseTenantMutationLock = await acquireTenantMutationLock(testInfo, MCP_GROWTH_ORGANIZATION_ID)
+    type MediaItem = { asset_id: string }
+    type Product = { id: string; name: string; image: MediaItem | null; gallery: MediaItem[]; media: MediaItem[] }
+    const call = async <T>(toolName: string, args: Record<string, unknown>) => mcpData<T>(await (await mcpRequest(request, baseURL!, {
+      method: 'tools/call', toolName, args: { organization_id: MCP_GROWTH_ORGANIZATION_ID, ...args },
+    })).json())
+    // The seeded Margherita carries one image, also its only gallery item.
+    const productId = 'mi-1'
+    const seededAsset = 'media-demo-margherita'
+    const expectSeededMedia = (product: Product) => {
+      expect(product.image?.asset_id).toBe(seededAsset)
+      expect(product.gallery.map(item => item.asset_id)).toEqual([seededAsset])
+      expect(product.media.length).toBeGreaterThan(0)
+    }
+    let originalName: string | undefined
+    try {
+      await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
+      originalName = (await call<{ product: Product }>('get_product', { product_id: productId })).product.name
+      const changed = (await call<{ product: Product }>('update_product', { product_id: productId, name: `${originalName} MCP media check` })).product
+      expect(changed.name).toBe(`${originalName} MCP media check`)
+      expectSeededMedia(changed)
+      const saved = (await call<{ product: Product }>('get_product', { product_id: productId })).product
+      expect(saved.name).toBe(`${originalName} MCP media check`)
+      expectSeededMedia(saved)
+    } finally {
+      try {
+        if (originalName !== undefined) {
+          await call('update_product', { product_id: productId, name: originalName })
+          const restored = (await call<{ product: Product }>('get_product', { product_id: productId })).product
+          expect(restored.name).toBe(originalName)
+          expectSeededMedia(restored)
+        }
+      } finally {
+        await releaseTenantMutationLock()
+      }
+    }
+  })
+
 })

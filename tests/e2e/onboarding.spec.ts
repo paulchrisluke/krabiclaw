@@ -49,7 +49,6 @@ test.afterEach(async () => {
 })
 
 test('a new owner builds a draft and creates a site through the routed flow', async ({ page, request, baseURL, browser, playwright }) => {
-  test.setTimeout(180_000)
   const owner = await playwright.request.newContext({ baseURL })
   await loginAs(owner, baseURL!, 'user-e2e-kikuzuki-owner')
   const held = await owner.post(`/api/editor/organizations/${otherTenantId}/collections`, { data: { name: 'Small plates' } })
@@ -73,12 +72,9 @@ test('a new owner builds a draft and creates a site through the routed flow', as
   // Every step screen names itself, so waiting on it means "that step is
   // rendered", which the URL alone does not say.
   const step = (id: string) => page.locator(`[data-onboarding-step="${id}"]`)
-  // Each press of the footer is a save against a D1 in APAC from a US runner
-  // (~194ms a statement), so landing on the next step is given room rather than
-  // the default 10s.
-  const advance = async (label: string, next: string, timeout = 30_000) => {
+  const advance = async (label: string, next: string) => {
     await page.getByRole('button', { name: label, exact: true }).click()
-    await expect(step(next)).toBeVisible({ timeout })
+    await expect(step(next)).toBeVisible()
   }
 
   await page.goto('/dashboard/onboarding')
@@ -112,12 +108,10 @@ test('a new owner builds a draft and creates a site through the routed flow', as
   await page.getByPlaceholder('Search country...').fill('Thailand')
   await page.getByRole('option', { name: /Thailand/ }).click()
 
-  // The first save does the most work of any step in the flow: it creates the
-  // organization through Better Auth and then the site itself — seeded pages, a
-  // location, a team and the system subdomain — before the pane has anything to
-  // frame. Dozens of statements, so it gets 90s rather than 30.
-  const firstSaveTimeout = 90_000
-  await advance('Next', 'contact', firstSaveTimeout)
+  // The first save creates the organization through Better Auth and then the
+  // site itself — seeded pages, a location, a team and the system subdomain —
+  // before the pane has anything to frame.
+  await advance('Next', 'contact')
 
   // The draft holds the typed name as a manual business, with no Google place.
   const saved = await page.request.get('/api/dashboard/onboarding/drafts/active')
@@ -129,7 +123,7 @@ test('a new owner builds a draft and creates a site through the routed flow', as
   const organizationOrigin = new URL((await previewFrame.getAttribute('src'))!).origin
   if (tenantHostIsAddressable()) {
     const preview = page.frameLocator('iframe[title="Site preview"]')
-    await expect(preview.locator('body')).toContainText(name, { timeout: firstSaveTimeout })
+    await expect(preview.locator('body')).toContainText(name)
     await expect(preview.locator('body')).not.toContainText('did not match its contract')
 
     // The token authorized the first load and became a cookie, so navigating
@@ -196,7 +190,7 @@ test('a new owner builds a draft and creates a site through the routed flow', as
   // organization's dashboard, so leaving the flow is how the press reports it
   // finished.
   await page.getByRole('button', { name: 'Create my site', exact: true }).click()
-  await expect(page).not.toHaveURL(/\/dashboard\/onboarding/, { timeout: firstSaveTimeout })
+  await expect(page).not.toHaveURL(/\/dashboard\/onboarding/)
 
   // Activation created a new organization named after the business and made it
   // the session's active one, so post-login lands there too.
@@ -248,7 +242,6 @@ test('a new owner builds a draft and creates a site through the routed flow', as
 const KIKUZUKI = { placeId: 'ChIJi-IgEJ2VUTAR1R3W1qDnhQ8', name: 'Kikuzuki Japanese Robatayaki & Izakaya' }
 
 test('a new owner picks their Google listing and it seeds location, contact and hours', async ({ page, baseURL }) => {
-  test.setTimeout(180_000)
   await dismissPreviewToolbar(page)
   await loginAs(page.request, baseURL!, 'user-e2e-onboarding-wizard')
   const discarded = await page.request.delete('/api/dashboard/onboarding/drafts/active')
@@ -288,12 +281,12 @@ test('a new owner picks their Google listing and it seeds location, contact and 
   await page.getByRole('button', { name: 'Next', exact: true }).click()
 
   // Contact: Google's national number, read in the place's own country.
-  await expect(step('contact')).toBeVisible({ timeout: 90_000 })
+  await expect(step('contact')).toBeVisible()
   await expect(page.getByPlaceholder('Phone number')).toHaveValue('095 293 2112')
   await page.getByRole('button', { name: 'Next', exact: true }).click()
 
   // Hours: the place's timezone and its opening hours.
-  await expect(step('hours')).toBeVisible({ timeout: 30_000 })
+  await expect(step('hours')).toBeVisible()
   await expect(step('hours')).toContainText('Bangkok · GMT+7')
 
   // The saved draft names the Google place, which the server fetched itself.
@@ -311,7 +304,6 @@ test('a new owner picks their Google listing and it seeds location, contact and 
 // the draft that created the site goes with it. It used to survive detached, so
 // the owner signing up again was offered the deleted site to resume (#1113).
 test('deleting a site through Better Auth also deletes the draft that created it', async ({ page, baseURL }) => {
-  test.setTimeout(120_000)
   await loginAs(page.request, baseURL!, 'user-e2e-onboarding-wizard')
   const discarded = await page.request.delete('/api/dashboard/onboarding/drafts/active')
   expect(discarded.status(), await discarded.text()).toBe(200)
@@ -319,7 +311,6 @@ test('deleting a site through Better Auth also deletes the draft that created it
   const name = `E2E Deleted ${Date.now().toString(36)}`
   const firstSave = await page.request.post('/api/dashboard/onboarding/drafts/active', {
     data: { sourceType: 'manual', vertical: 'restaurant', name, details: { country: 'TH', city: 'Ao Nang', streetAddress: '88 Moo 2' } },
-    timeout: 90_000,
   })
   expect(firstSave.status(), await firstSave.text()).toBe(200)
   const { organizationId } = await firstSave.json() as { organizationId: string }
@@ -360,7 +351,6 @@ test('the business search API refuses what the picker would never send', async (
 // → Google Maps connects a location by the same selection. Both run against the
 // demo tenant's local copy; the location this adds is deactivated at the end.
 test('add-location and Settings connect a location through the same business picker', async ({ page, baseURL }) => {
-  test.setTimeout(180_000)
   await dismissPreviewToolbar(page)
   await loginAs(page.request, baseURL!, 'user-e2e-demo-owner')
   const org = 'ember-slice-demo'
@@ -390,7 +380,7 @@ test('add-location and Settings connect a location through the same business pic
   await next('Save hours')
   await expect(step('review')).toBeVisible()
   await next('Add location')
-  await expect(page.getByRole('heading', { name: 'Location added' })).toBeVisible({ timeout: 60_000 })
+  await expect(page.getByRole('heading', { name: 'Location added' })).toBeVisible()
 
   const added = (await connected()).find(location => location.google_place_id === placeId)
   expect(added, `no location connected to ${placeId}`).toBeTruthy()

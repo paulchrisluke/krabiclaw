@@ -42,19 +42,32 @@ const authorized = (target: FacebookPageTarget, init: GraphInit = {}): GraphInit
   ...init, headers: { ...(init.headers as Record<string, string> | undefined), authorization: `Bearer ${target.pageToken}` },
 })
 
-/** The Pages a linked Facebook account manages, each with its Page token. */
+/** Pages assigned to the system user configured by Facebook Login for Business. */
 export const listLinkedFacebookPages = async (env: CloudflareEnv, accountId: string): Promise<FacebookPage[]> => {
   const token = (await linkedAccountAccessToken(env, accountId)).accessToken
   const pages: FacebookPage[] = []
   let after: string | null = null
-  // A person who manages more Pages than one response holds manages all of
-  // them; the list follows Meta's cursor to its end.
+  const cursors = new Set<string>()
+  // This configured identity delegates Pages through assigned_pages, not the
+  // personal User's accounts edge. Its Page nodes expose access_token when
+  // the assigned identity has the required Page role.
   do {
-    const params = new URLSearchParams({ fields: 'id,name,access_token,category,fan_count,picture', limit: '100', ...(after ? { after } : {}) })
+    const params: URLSearchParams = new URLSearchParams({ fields: 'id,name,access_token,category,fan_count,picture', limit: '100', ...(after ? { after } : {}) })
     const page: { data?: FacebookPage[]; paging?: { cursors?: { after?: string }; next?: string } } = await metaGraphRequest(
-      `${GRAPH_BASE}/me/accounts?${params}`, { headers: { authorization: `Bearer ${token}` } })
-    pages.push(...(page.data ?? []))
+      `${GRAPH_BASE}/me/assigned_pages?${params}`, { headers: { authorization: `Bearer ${token}` } })
+    if (!Array.isArray(page.data)) throw new Error('Facebook returned no assigned Pages data.')
+    for (const assigned of page.data) {
+      if (!assigned || typeof assigned.id !== 'string' || !assigned.id || typeof assigned.name !== 'string' || !assigned.name) {
+        throw new Error('Facebook returned an assigned Page without its identity.')
+      }
+      if (typeof assigned.access_token !== 'string' || !assigned.access_token) {
+        throw new Error(`Facebook returned no access token for assigned Page ${assigned.id}. Check its delegated Page permissions.`)
+      }
+      pages.push(assigned)
+    }
     after = page.paging?.next ? page.paging.cursors?.after ?? null : null
+    if (page.paging?.next && (typeof after !== 'string' || !after || cursors.has(after))) throw new Error('Facebook returned an invalid assigned Pages pagination cursor.')
+    if (after) cursors.add(after)
   } while (after)
   return pages
 }
@@ -62,7 +75,7 @@ export const listLinkedFacebookPages = async (env: CloudflareEnv, accountId: str
 /** The connected Page's token, read through the linked account that manages it. */
 export const facebookPageToken = async (env: CloudflareEnv, connection: Pick<OrganizationIntegration, 'account_id' | 'target_id' | 'target_name'>): Promise<string> => {
   const page = (await listLinkedFacebookPages(env, connection.account_id)).find(candidate => candidate.id === connection.target_id)
-  if (!page) throw new Error(`The linked Facebook account no longer manages the Page ${connection.target_name}. Connect Facebook again.`)
+  if (!page) throw new Error(`The linked Facebook system user has no assignment for Page ${connection.target_name}. Check its delegated Page access.`)
   return page.access_token
 }
 

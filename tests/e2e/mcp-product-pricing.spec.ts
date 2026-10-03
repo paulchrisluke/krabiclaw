@@ -35,7 +35,6 @@ test.afterEach(async () => {
  * price it can quote, and never invents an amount to stand in for one.
  */
 test('deployed MCP transport prices variants, and refuses to invent a missing amount', async ({ request, baseURL }) => {
-  test.setTimeout(120_000)
 
   await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
   const toolsResponse = await mcpRequest(request, baseURL!, { method: 'tools/list' })

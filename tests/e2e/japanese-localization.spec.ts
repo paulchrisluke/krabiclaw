@@ -6,7 +6,6 @@ import { kikuzukiTestBaseUrl, kikuzukiTestExtraHeaders } from './test-env'
 // server's first byte: the document language, the navigation and the catalogue
 // are Japanese before hydration, and hydration does not replace them.
 test('Kikuzuki serves its published Japanese site in Japanese', async ({ page }) => {
-  test.setTimeout(180_000)
   const hydrationErrors: string[] = []
   page.on('console', message => {
     if (/hydration.*mismatch|mismatch.*hydration/i.test(message.text())) hydrationErrors.push(message.text())
