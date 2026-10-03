@@ -496,15 +496,6 @@ interface WorkspaceOrganizationRow {
 
 const WORKSPACE_ORGANIZATION_SQL = `JOIN organization s ON s.status = 'active' AND s.subdomain IS NOT NULL`
 
-// An absent column is an empty list; a stored value that will not parse is a
-// corrupt row, and reading both as [] dropped documents out of the index with
-// nothing anywhere saying they were missing.
-function parseStringList(value: string | null | undefined): string[] {
-  if (!value) return []
-  const parsed = JSON.parse(value) as unknown
-  return Array.isArray(parsed) ? parsed.filter((entry): entry is string => typeof entry === 'string') : []
-}
-
 function joinWords(...parts: Array<string | null | undefined>) {
   return parts.map(part => (part ?? '').trim()).filter(Boolean).join('\n\n')
 }
@@ -554,8 +545,8 @@ export async function buildWorkspaceDocuments(db: DbClient, organizationId?: str
       FROM business_locations bl ${WORKSPACE_ORGANIZATION_SQL} AND s.id = bl.organization_id
       WHERE 1 = 1${organizationWhere}
     `, organizationParams),
-    queryAll<{ id: string; organization_id: string; name: string; description: string | null; tags: string | null; location_slug: string | null; bookable: number; collection_id: string | null }>(db, `
-      SELECT p.id, pub.organization_id, p.name, p.description, p.tags,
+    queryAll<{ id: string; organization_id: string; name: string; description: string | null; location_slug: string | null; bookable: number; collection_id: string | null }>(db, `
+      SELECT p.id, pub.organization_id, p.name, p.description,
         (SELECT bl.slug FROM product_locations pl JOIN business_locations bl ON bl.id = pl.location_id
           WHERE pl.product_id = p.id AND pl.organization_id = p.organization_id AND bl.organization_id = pub.organization_id ORDER BY bl.title LIMIT 1) AS location_slug,
         EXISTS (SELECT 1 FROM product_booking_configs b WHERE b.product_id = p.id AND b.organization_id = p.organization_id) AS bookable,
@@ -632,7 +623,7 @@ export async function buildWorkspaceDocuments(db: DbClient, organizationId?: str
     records.push(doc(organization, 'product', row.id, {
       title: row.name, path, snippet: row.description || '',
       section: surface === 'experiences' ? 'Experiences' : presentation?.collectionLabel ?? 'Products', icon: 'utensils',
-      body: joinWords(row.name, row.description, parseStringList(row.tags).join(' ')),
+      body: joinWords(row.name, row.description),
     }))
   }
 

@@ -25,20 +25,6 @@ export function normalizeOptionalProductString(value: unknown, field: string, ma
   return normalized
 }
 
-export function validateProductTags(value: unknown): string[] {
-  if (value === undefined) return []
-  if (!Array.isArray(value)) invalid('tags must be an array')
-  if (value.length > PRODUCT_LIMITS.tags) invalid(`tags may contain at most ${PRODUCT_LIMITS.tags} values`)
-  const seen = new Set<string>()
-  return value.map((entry, index) => {
-    const normalized = requireTrimmedProductString(entry, `tags[${index}]`, PRODUCT_LIMITS.tag)
-    const identity = normalized.toLocaleLowerCase('en-US')
-    if (seen.has(identity)) invalid('tags must be unique ignoring case')
-    seen.add(identity)
-    return normalized
-  })
-}
-
 /**
  * Stripe Product `marketing_features`: generic selling bullets.
  *

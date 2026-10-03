@@ -184,6 +184,26 @@ node --experimental-strip-types scripts/pull-production-snapshot.ts --staging --
 node --experimental-strip-types scripts/pull-production-snapshot.ts --production --source krabiclaw-production-v7 --out production-final.sqlite --delta-from production-initial.sqlite
 ```
 
+The v8-to-v9 catalog replacement removes `products.tags` and its
+`products_tags_check`. Products are referenced by variants, options, publication,
+location offerings, collections, descriptive fields, booking configuration,
+sessions, and content documents; rebuilding the parent could delete these rows.
+The immutable v8 chain lives in `migrations-history/v8/`. The transfer applies
+any pending v8 migrations, copies all retained columns, removes product tag
+translations, and reports the number of removed tag records. Existing bookings,
+sessions, prices, credentials, and each environment's signing keys are preserved.
+Both v9 databases were created with `--location wnam` and Cloudflare reported WNAM.
+
+Before switching deployed Workers, finish the ordinary final source delta and
+inspect changed or deleted keys. Use the old environment-specific source:
+
+```sh
+node --experimental-strip-types scripts/pull-production-snapshot.ts --staging --source krabiclaw-staging-v8 --out staging-v9-initial.sqlite
+node --experimental-strip-types scripts/pull-production-snapshot.ts --production --source krabiclaw-production-v8 --out production-v9-initial.sqlite
+node --experimental-strip-types scripts/pull-production-snapshot.ts --staging --source krabiclaw-staging-v8 --out staging-v9-final.sqlite --delta-from staging-v9-initial.sqlite
+node --experimental-strip-types scripts/pull-production-snapshot.ts --production --source krabiclaw-production-v8 --out production-v9-final.sqlite --delta-from production-v9-initial.sqlite
+```
+
 Prepare the load before the binding repoint. Inspect changes and deletions since
 the initial load immediately before deployment; carry important edits explicitly
 and preserve writes to the new database. After each deployment, verify schema,

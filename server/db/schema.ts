@@ -349,9 +349,6 @@ export const products = sqliteTable("products", {
 	// of inclusions, preparation instructions, policies and features — those are
 	// separate metafield definitions.
 	marketing_features: text().default("[]").notNull(),
-	// Validated tag list with the domain/rendering behavior the old `tags_json`
-	// carried. A tag is not metadata and not a collection.
-	tags: text().default("[]").notNull(),
 	// Validated string-to-string annotation/integration escape hatch. The object
 	// shape is enforced here; string-valued entries are enforced by the shared
 	// validator, since a CHECK cannot iterate JSON. No pricing, scheduling,
@@ -372,7 +369,6 @@ export const products = sqliteTable("products", {
 	check("products_slug_check", sql`slug <> '' AND slug = lower(slug) AND slug NOT GLOB '*[^a-z0-9-]*' AND slug NOT LIKE '-%' AND slug NOT LIKE '%-' AND slug NOT LIKE '%--%'`),
 	check("products_active_check", sql`active IN (0, 1)`),
 	check("products_marketing_features_check", sql`json_valid(marketing_features) AND json_type(marketing_features) = 'array'`),
-	check("products_tags_check", sql`json_valid(tags) AND json_type(tags) = 'array'`),
 	check("products_metadata_check", sql`json_valid(metadata) AND json_type(metadata) = 'object'`),
 	check("products_order_url_check", sql`order_url IS NULL OR (order_url LIKE 'https://_%' AND instr(order_url, '@') = 0 AND instr(order_url, char(10)) = 0 AND instr(order_url, char(13)) = 0)`),
 ]);

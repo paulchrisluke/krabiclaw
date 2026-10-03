@@ -48,6 +48,7 @@ const { values } = parseArgs({
     production: { type: 'boolean', default: false },
     out: { type: 'string' },
     source: { type: 'string', default: 'DB' },
+    'source-file': { type: 'string' },
     'delta-from': { type: 'string' },
   },
   strict: true,
@@ -57,6 +58,8 @@ const { values } = parseArgs({
 const loads = (['local', 'staging', 'production'] as const).filter(name => values[name])
 if (loads.length > 1 || (loads.length === 0 && !values.out)) throw new Error('Choose one of --local, --staging or --production, or --out <target.sqlite> alone for a preflight.')
 const target = loads[0] ?? 'out'
+if (values['source-file'] && target !== 'local' && target !== 'out') throw new Error('--source-file is for a local migration or read-only preflight.')
+if (values['source-file'] && values.source !== 'DB') throw new Error('Choose --source or --source-file, not both.')
 const omitJwks = target === 'local' || (target === 'staging' && values.source === 'DB')
 // Production is only ever loaded as a schema replacement: the top-level `DB`
 // binding already names the replacement, and the database it replaces has to
@@ -176,11 +179,11 @@ execFileSync(process.execPath, ['scripts/check-schema-drift.mjs'], { cwd: proces
 const directory = mkdtempSync(join(tmpdir(), 'krabiclaw-snapshot-'))
 try {
   const dumpPath = join(directory, 'source.sql')
-  copyProductionRows(dumpPath)
+  if (!values['source-file']) copyProductionRows(dumpPath)
 
   const targetPath = values.out ? resolve(values.out) : join(directory, 'target.sqlite')
   const payloadPath = values.out ? `${targetPath}.payload.sql` : join(directory, 'payload.sql')
-  const manifest = transferDatabaseExport(dumpPath, targetPath, { payloadPath, withoutJwks: omitJwks, deltaFrom })
+  const manifest = transferDatabaseExport(values['source-file'] ? resolve(values['source-file']) : dumpPath, targetPath, { payloadPath, withoutJwks: omitJwks, deltaFrom })
   printTransferReport(manifest)
   const rows = manifest.tables.reduce((total, table) => total + table.target_rows, 0)
   if (target === 'out') {

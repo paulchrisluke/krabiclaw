@@ -94,13 +94,14 @@ export async function createProductBooking(event: H3Event, context: BookingCreat
     if (existing) return existing
   }
 
-  const product = await queryFirst<{ id: string; name: string }>(db, `
-    SELECT p.id, p.name FROM products p
+  const product = await queryFirst<{ id: string; name: string; order_url: string | null }>(db, `
+    SELECT p.id, p.name, p.order_url FROM products p
       JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
       JOIN product_booking_configs cfg ON cfg.product_id = p.id
      WHERE pub.organization_id = ? AND pub.published = 1 AND p.slug = ? AND p.active = 1 LIMIT 1
   `, [organizationId, slug])
   if (!product) return creationResult({ error: 'Product not found' }, { status: 404 })
+  if (!operator && product.order_url) return creationResult({ error: 'Book this product on its configured external website.', external_url: product.order_url }, { status: 409 })
 
   const session = await queryFirst<{ id: string; location_id: string | null; starts_at: string; ends_at: string; timezone: string }>(db, `
     SELECT s.id, s.location_id, s.starts_at, s.ends_at, s.timezone

@@ -186,13 +186,11 @@ contracts rather than editing their worktrees or reserved migrations.
 
 ## Cleanup-stack integration
 
-The foundation targets current staging's v8 schema. Applied migrations 0000 and
-0001 remain immutable; 0002 adds booking policy fields and moves consultation
-settings. The booking status constraint allows pending review bookings. Booking
-is unreferenced, so its generated rebuild passes the migration safety guard;
-config and organization columns expand in place to preserve their child rows.
-The seven existing weekly schedule columns remain. Archived database transfers
-apply the current forward migrations before projecting the target schema.
+The foundation is included in the v9 baseline. The immutable v8 chain lives in
+`migrations-history/v8/`; transfers apply its pending foundation migration before
+projecting existing rows into v9. Product tag removal changes the referenced
+`products_tags_check`, so v9 uses replacement databases rather than rebuilding
+Products and risking their variants, sessions, bookings, and other child rows.
 
 HTTP and MCP call the same `setProductBookingConfig`, `replaceWeeklySchedule`,
 `updateTenantPage` and `setPublicConsultationMode` writers. Booking configuration

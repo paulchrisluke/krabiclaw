@@ -5,14 +5,15 @@
     <!-- One responsive primary action: the mobile bar and the desktop card
          resolve the same booking, so the page never shows two of them. -->
     <div
-      v-if="booking && canBook"
+      v-if="booking && (canBook || canOrderExternally || canEnquire)"
       class="fixed inset-x-0 bottom-0 z-30 flex items-center justify-between gap-4 border-t border-default bg-default/95 px-5 py-4 shadow-lg backdrop-blur-sm lg:hidden"
     >
       <div v-if="priceLabel" class="min-w-0">
         <p v-if="compareAtLabel" class="text-xs text-muted line-through">{{ compareAtLabel }}</p>
         <p class="font-semibold leading-tight text-default">{{ priceLabel }}</p>
       </div>
-      <SayaButton v-if="enquiryOnly" class="shrink-0" :to="enquiryPath">
+      <SayaButton v-if="canOrderExternally" class="shrink-0" :href="product.order_url!" target="_blank" rel="noopener noreferrer" @click="recordExternalOrderClick">{{ externalActionLabel }}</SayaButton>
+      <SayaButton v-else-if="canEnquire" class="shrink-0" :to="enquiryPath">
         {{ t('saya.experience_detail.enquire') }}
       </SayaButton>
       <SayaButton v-else class="shrink-0" control-id="product-booking-toggle" @click="openBooking">
@@ -62,7 +63,7 @@
 
         <div class="grid gap-10 lg:grid-cols-[1fr_380px] lg:items-start" :class="compact ? 'mt-8' : 'mt-14'">
         <div class="min-w-0">
-          <p v-if="!canBook && !enquiryOnly" role="status" class="rounded-xl border border-default bg-elevated p-5 text-muted lg:hidden">{{ vertical === 'service' && !offer ? 'Price unavailable. Please contact us to schedule.' : t('saya.common.temporarily_unavailable') }}</p>
+          <p v-if="!canBook && !canEnquire && !canOrderExternally" role="status" class="rounded-xl border border-default bg-elevated p-5 text-muted lg:hidden">{{ vertical === 'service' && !offer ? 'Price unavailable. Please contact us to schedule.' : t('saya.common.temporarily_unavailable') }}</p>
           <section v-if="!pageDocument && !compact && product.description" class="border-t border-default pt-10">
             <h2 class="saya-display text-2xl text-default sm:text-3xl">{{ t('saya.experience_detail.what_youll_do') }}</h2>
             <p class="mt-4 whitespace-pre-line text-base leading-relaxed text-muted sm:text-lg">{{ product.description }}</p>
@@ -187,16 +188,17 @@
                 {{ fact.label }}
               </span>
             </div>
-            <p v-if="vertical === 'service'" class="text-sm text-muted">{{ booking?.confirmation_mode === 'review' ? 'Your request is reviewed before your appointment is confirmed.' : 'Your appointment is confirmed when you book.' }}</p>
+            <p v-if="vertical === 'service' && !product.order_url" class="text-sm text-muted">{{ booking?.confirmation_mode === 'review' ? 'Your request is reviewed before your appointment is confirmed.' : 'Your appointment is confirmed when you book.' }}</p>
             <p v-if="nextSession" class="inline-flex items-center gap-2 text-sm text-muted">
               <SayaIcon name="calendar-days" class="size-4" />
               {{ sessionDayLabel(nextSession) }} · {{ sessionTimeLabel(nextSession) }}
             </p>
-            <p v-if="!canBook && !enquiryOnly" class="rounded-lg bg-default px-4 py-3 text-center text-sm font-semibold text-muted">
+            <p v-if="!canBook && !canEnquire && !canOrderExternally" class="rounded-lg bg-default px-4 py-3 text-center text-sm font-semibold text-muted">
               {{ vertical === 'service' && !offer ? 'Price unavailable' : t('saya.common.temporarily_unavailable') }}
             </p>
             <div v-else class="pt-2">
-              <SayaButton v-if="enquiryOnly" block :to="enquiryPath">
+              <SayaButton v-if="canOrderExternally" block :href="product.order_url!" target="_blank" rel="noopener noreferrer" @click="recordExternalOrderClick">{{ externalActionLabel }}</SayaButton>
+              <SayaButton v-else-if="canEnquire" block :to="enquiryPath">
                 {{ t('saya.experience_detail.enquire') }}
               </SayaButton>
               <SayaButton v-else block control-id="product-booking-toggle" @click="openBooking">
@@ -228,14 +230,14 @@
             <p v-if="product.description" class="mt-6 text-base sm:text-lg leading-relaxed text-muted">{{ product.description }}</p>
             <p v-if="!isAvailable" class="mt-6 font-semibold text-muted">{{ t('saya.common.temporarily_unavailable') }}</p>
             <div class="mt-8 flex flex-wrap items-center gap-5">
-              <SayaButton v-if="isAvailable && enquiryOnly" :to="enquiryPath">{{ t('saya.experience_detail.enquire') }}</SayaButton>
+              <SayaButton v-if="canEnquire" :to="enquiryPath">{{ t('saya.experience_detail.enquire') }}</SayaButton>
               <SayaButton
-                v-if="isAvailable && product.order_url"
-                :href="product.order_url"
+                v-if="canOrderExternally"
+                :href="product.order_url!"
                 target="_blank"
                 rel="noopener noreferrer"
                 @click="recordExternalOrderClick"
-              >{{ t('saya.cta.order_now') }}</SayaButton>
+              >{{ externalActionLabel }}</SayaButton>
               <NuxtLink
                 :to="localePath(presentation.collectionPath)"
                 class="border-b border-default pb-0.5 text-xs font-bold uppercase tracking-widest text-default no-underline transition hover:opacity-60"
@@ -286,7 +288,7 @@
       <!-- One booking surface, mounted outside the card so the mobile sheet and
            the desktop button open the same thing. -->
       <BookingModal
-        v-if="booking"
+        v-if="booking && !product.order_url"
         v-model="bookingOpen"
         target-id="product-booking"
         :title="displayTitle"
@@ -354,7 +356,6 @@ const props = defineProps<{
   metafieldDefinitions: MetafieldDefinition[]
   currency: CurrencyCode
   presentation: ProductPresentation
-  analyticsEnabled?: boolean
   /** Existing page presentation; the Product remains the operational identity. */
   pageDocument?: PublicTenantPage
   /** The directory supplies its own selected-service introduction. */
@@ -436,11 +437,14 @@ const sellableVariants = computed(() => props.product.variants.filter(variant =>
 
 const isAvailable = computed(() =>
   props.product.active
-  && (props.location ? props.product.locations.some(entry => entry.location_id === props.location?.id && entry.active) : Boolean(props.booking?.online_timezone))
+  && (props.location ? props.product.locations.some(entry => entry.location_id === props.location?.id && entry.active) : Boolean(props.product.order_url || props.booking?.online_timezone))
   // Every option retired is the merchant having nothing left to sell here. The
   // booking form otherwise asked for an option it had none to offer.
-  && sellableVariants.value.length > 0)
-const canBook = computed(() => isAvailable.value && (props.vertical !== 'service' || offer.value !== null))
+  && (Boolean(props.product.order_url) || sellableVariants.value.length > 0))
+const canOrderExternally = computed(() => isAvailable.value && Boolean(props.product.order_url))
+const externalActionLabel = computed(() => props.booking || props.vertical === 'service' ? t('saya.experience_detail.book_now') : t('saya.cta.order_now'))
+const canEnquire = computed(() => isAvailable.value && !props.product.order_url && enquiryOnly.value)
+const canBook = computed(() => isAvailable.value && !props.product.order_url && !enquiryOnly.value && (props.vertical !== 'service' || offer.value !== null))
 
 
 
@@ -475,7 +479,7 @@ const factChips = computed(() => {
   const config = props.product.booking
   if (!config) return []
   const chips: Array<{ icon: 'clock' | 'user-group' | 'video-camera' | 'check-circle'; label: string }> = []
-  if (props.vertical === 'service' && !props.location) chips.push({ icon: 'video-camera', label: 'Online' })
+  if (props.vertical === 'service' && !props.location && !props.product.order_url) chips.push({ icon: 'video-camera', label: 'Online' })
   if (config.duration_minutes) {
     const minutes = config.duration_minutes
     const hours = Math.floor(minutes / 60)
@@ -492,7 +496,7 @@ const factChips = computed(() => {
   if (config.default_capacity && props.vertical !== 'service') {
     chips.push({ icon: 'user-group', label: t('saya.experience_detail.capacity', { count: config.default_capacity }) })
   }
-  if (props.vertical === 'service') chips.push({ icon: 'check-circle', label: config.confirmation_mode === 'review' ? 'Staff review' : 'Instant confirmation' })
+  if (props.vertical === 'service' && !props.product.order_url) chips.push({ icon: 'check-circle', label: config.confirmation_mode === 'review' ? 'Staff review' : 'Instant confirmation' })
   return chips
 })
 
@@ -512,8 +516,8 @@ const visibleDetails = computed(() => props.metafieldDefinitions.flatMap((defini
 }))
 
 const { data: initialSessions, error: initialSessionsError } = await useAsyncData(`product-detail-sessions:${props.organizationId}:${props.product.id}:${props.location?.id ?? 'online'}`, async () => {
+  if (!props.booking || props.product.order_url) return []
   if (props.sessions !== undefined) return props.sessions
-  if (!props.booking) return []
   if (import.meta.server) {
     const event = useRequestEvent()!
     const { cloudflareEnv } = await import('~/server/utils/api-response')
@@ -540,7 +544,7 @@ onMounted(() => {
   trackProductView(props.product.id, props.location?.id ?? null, offer.value && !enquiryOnly.value
     ? { product_id: props.product.id, name: props.product.name, currency: offer.value.currency, price: ga4Major(offer.value.unit_amount, offer.value.currency) }
     : null)
-  if (props.booking && isAvailable.value && !enquiryOnly.value) void loadSessions()
+  if (props.booking && canBook.value) void loadSessions()
 })
 
 /** What guests say, in one number: the mean rating to one decimal, or none. */
@@ -581,11 +585,11 @@ const mapEmbedUrl = computed(() => (props.location && props.location.latitude !=
 
 
 function recordExternalOrderClick() {
-  if (!import.meta.client || props.analyticsEnabled === false || !props.location) return
+  if (!import.meta.client) return
   trackProductOrder(
-    props.location.id,
+    props.location?.id ?? null,
     props.product.id,
-    props.presentation.productPath(props.location?.slug ?? '', props.product.slug),
+    props.pageDocument?.path ?? props.presentation.productPath(props.location?.slug ?? '', props.product.slug),
   )
 }
 

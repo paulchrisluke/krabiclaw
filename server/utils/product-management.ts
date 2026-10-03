@@ -47,7 +47,6 @@ import {
   validateProductMetadata,
   validateProductOptions,
   validateProductOrderUrl,
-  validateProductTags,
   validateProductUnitLabel,
   validateProductVariants,
   type NormalizedProductOption,
@@ -95,7 +94,7 @@ function parseJsonObject(value: unknown, field: string): Record<string, string> 
 
 const PRODUCT_COLUMNS = `
   p.id, p.organization_id, p.name, p.slug, p.description, p.active, p.order_url, p.unit_label,
-  p.marketing_features, p.tags, p.metadata, p.tax_code, p.source,
+  p.marketing_features, p.metadata, p.tax_code, p.source,
   p.created_at, p.updated_at, p.created_by, p.updated_by
 `
 
@@ -110,7 +109,6 @@ function mapProductRow(row: Row): Product {
     order_url: row.order_url === null ? null : String(row.order_url),
     unit_label: row.unit_label === null ? null : String(row.unit_label),
     marketing_features: parseJsonArray<string>(row.marketing_features, 'marketing_features'),
-    tags: parseJsonArray<string>(row.tags, 'tags'),
     metadata: parseJsonObject(row.metadata, 'metadata'),
     tax_code: row.tax_code === null ? null : String(row.tax_code),
     options: [],
@@ -596,7 +594,6 @@ interface PlannedProduct {
   order_url: string | null
   unit_label: string | null
   marketing_features: string[]
-  tags: string[]
   metadata: Record<string, string>
   tax_code: string | null
   options: PlannedOption[]
@@ -788,7 +785,6 @@ async function planProduct(
     order_url: validateProductOrderUrl(input.order_url),
     unit_label: validateProductUnitLabel(input.unit_label),
     marketing_features: validateProductMarketingFeatures(input.marketing_features),
-    tags: validateProductTags(input.tags),
     metadata: validateProductMetadata(input.metadata),
     tax_code: normalizeOptionalProductString(input.tax_code, 'tax_code', PRODUCT_LIMITS.taxCode),
     options: resolved.options,
@@ -829,18 +825,18 @@ function productWrites(
   const writes: BatchQuery[] = [{
     query: upsert
       ? `INSERT INTO products (id, organization_id, name, slug, description, active, order_url, unit_label,
-             marketing_features, tags, metadata, tax_code, source, created_at, updated_at, created_by, updated_by)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             marketing_features, metadata, tax_code, source, created_at, updated_at, created_by, updated_by)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT (id) DO UPDATE SET name = excluded.name, slug = excluded.slug, description = excluded.description,
              active = excluded.active, order_url = excluded.order_url, unit_label = excluded.unit_label,
-             marketing_features = excluded.marketing_features, tags = excluded.tags, metadata = excluded.metadata,
+             marketing_features = excluded.marketing_features, metadata = excluded.metadata,
              tax_code = excluded.tax_code, updated_at = excluded.updated_at, updated_by = excluded.updated_by
            WHERE products.organization_id = excluded.organization_id`
       : `INSERT INTO products (id, organization_id, name, slug, description, active, order_url, unit_label,
-             marketing_features, tags, metadata, tax_code, source, created_at, updated_at, created_by, updated_by)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             marketing_features, metadata, tax_code, source, created_at, updated_at, created_by, updated_by)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     params: [planned.id, organizationId, planned.name, planned.slug, planned.description, planned.active ? 1 : 0,
-      planned.order_url, planned.unit_label, JSON.stringify(planned.marketing_features), JSON.stringify(planned.tags),
+      planned.order_url, planned.unit_label, JSON.stringify(planned.marketing_features),
       JSON.stringify(planned.metadata), planned.tax_code, planned.source, now, now, actor.actorId, actor.actorId],
   }]
 
@@ -1084,7 +1080,6 @@ async function planProductUpdate(db: DbClient, input: {
     order_url: patch.order_url === undefined ? current.order_url : patch.order_url,
     unit_label: patch.unit_label === undefined ? current.unit_label : patch.unit_label,
     marketing_features: patch.marketing_features ?? current.marketing_features,
-    tags: patch.tags ?? current.tags,
     metadata: patch.metadata ?? current.metadata,
     tax_code: patch.tax_code === undefined ? current.tax_code : patch.tax_code,
     options: patch.options ?? current.options.map(option => ({

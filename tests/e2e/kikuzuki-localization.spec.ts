@@ -86,7 +86,6 @@ test.beforeAll(async ({ playwright }, testInfo) => {
       values: {
         name: 'ซูชิทูน่า',
         description: 'ทูน่า',
-        tags: [],
       },
     })
   } finally {

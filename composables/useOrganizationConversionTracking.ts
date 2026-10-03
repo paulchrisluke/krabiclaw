@@ -138,7 +138,7 @@ export function useOrganizationConversionTracking(consultationSource?: MaybeRefO
     track({ event_name: 'link_click', stage: 'external_handoff', link_item_id: linkItemId, page_type: 'links', page_path: '/links' })
   }
 
-  function trackProductOrder(locationId: string, productId: string, pagePath?: string) {
+  function trackProductOrder(locationId: string | null, productId: string, pagePath?: string) {
     track({ event_name: 'product_order_external_click', stage: 'external_handoff', location_id: locationId, product_id: productId, page_type: 'product', page_path: pagePath })
   }
 

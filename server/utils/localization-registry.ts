@@ -71,7 +71,7 @@ export const RESOURCE_LOCALIZATION_REGISTRY: Readonly<Record<LocalizedResourceTy
     reservation: { policy: POLICY_FIELDS } }, route: 'stored' },
   // Product SEO is owned by the canonical content document, so it is not
   // localized here: a second SEO source would be a second thing to keep true.
-  product: { table: 'products', tenantScope: 'organization_column', fields: { name: 'text', description: 'text', tags: 'string_array',
+  product: { table: 'products', tenantScope: 'organization_column', fields: { name: 'text', description: 'text',
     marketing_features: 'string_array', unit_label: 'text', metafields: 'metafields' }, route: 'derived' },
   collection: { table: 'collections', tenantScope: 'organization_column', fields: { name: 'text', description: 'text' }, route: 'none' },
   // A category's page is at its collection's path under the site's locale prefix; its slug is not translated.

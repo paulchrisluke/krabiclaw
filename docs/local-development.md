@@ -163,7 +163,18 @@ individual seed or provisioning script as an alternate repair path.
 replacement baseline, such as the v6 WNAM cutover, starts a new migration
 history; a local D1 created under the prior baseline then fails the schema
 check. Local data is a copy, so delete `.wrangler/state/v3/d1` and run
-`corepack yarn local:setup` again in that case.
+`corepack yarn local:setup` again in that case. When local review data needs
+preserving across a replacement, retain a SQLite backup of the previous local
+D1, apply the current migrations to the new local binding with `schema:local`,
+and use the same audited transfer:
+
+```sh
+node --experimental-strip-types scripts/pull-production-snapshot.ts --local --source-file /absolute/path/to/local-backup.sqlite
+```
+
+This reads the saved local database, verifies its recorded migration chain,
+and loads only a destination carrying the current schema and migration ledger.
+
 
 ## Dashboard URLs
 

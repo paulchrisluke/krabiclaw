@@ -1,12 +1,13 @@
 import { expect, request as playwrightRequest, test } from '@playwright/test'
 import { loginAs } from './helpers/auth'
+import { waitForNuxtHydration } from './helpers'
 import { mcpData, mcpRequest } from './helpers/mcp'
 import { blawbyTestExtraHeaders } from './test-env'
 
 test.use({ timezoneId: 'America/New_York' })
 
 test('native online review uses canonical Products, holds capacity, and releases it once', async ({ page, request, baseURL }) => {
-  test.setTimeout(90_000)
+  test.setTimeout(120_000)
   test.skip(process.env.NATIVE_CONSULTATION_PROOF !== 'true' || !['localhost', '127.0.0.1'].includes(new URL(baseURL!).hostname), 'Explicit opt-in in an isolated disposable checkout only; never mutate shared suite fixtures')
   const analyticsFailures: string[] = []
   page.on('response', response => {
@@ -243,6 +244,41 @@ test('native online review uses canonical Products, holds capacity, and releases
     await lightbox.getByRole('button', { name: 'Close', exact: true }).click()
     const placement = await page.locator('#consultations, [data-tenant-page]').evaluateAll(elements => elements.map(element => element.getBoundingClientRect().top))
     expect(placement[0]).toBeLessThan(placement[1]!)
+    const externalUrl = 'https://example.com/?booking=ncls'
+    await page.setExtraHTTPHeaders({})
+    await page.goto(`/dashboard/north-carolina-legal-services/products/${products[0]!.id}/order-url`)
+    await page.getByLabel('Website address', { exact: true }).fill(externalUrl)
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    const externalProduct = await mcpRequest(page.request, baseURL!, { method: 'tools/call', toolName: 'get_product', args: { organization_id: org, product_id: products[0]!.id } })
+    expect(mcpData<{ product: { order_url: string } }>(await externalProduct.json()).product.order_url).toBe(externalUrl)
+    const externalSessions = await request.get(`/api/public/products/${products[0]!.slug}/sessions?location_id=online`, { headers })
+    expect(externalSessions.status()).toBe(200)
+    expect((await externalSessions.json()).sessions).toEqual([])
+    await page.setExtraHTTPHeaders(headers)
+    await page.goto(service.path)
+    await expect(page.getByRole('heading', { name: service.title, exact: true, level: 1 })).toBeVisible()
+    for (const width of [1280, 390]) {
+      await page.setViewportSize({ width, height: 844 })
+      const handoff = page.locator(`a[href="${externalUrl}"]:visible`)
+      await expect(handoff).toHaveCount(1)
+      await expect(handoff).toHaveText('Book now')
+      await expect(page.getByRole('button', { name: 'Request appointment', exact: true })).toHaveCount(0)
+    }
+    await waitForNuxtHydration(page)
+    const recordedHandoff = page.waitForResponse(response => new URL(response.url()).pathname === '/api/public/conversion-events' && response.request().postDataJSON()?.event_name === 'product_order_external_click')
+    const externalTab = page.waitForEvent('popup')
+    await page.locator(`a[href="${externalUrl}"]:visible`).click()
+    expect((await recordedHandoff).status()).toBe(201)
+    const destination = await externalTab
+    await expect(destination).toHaveURL(externalUrl)
+    await destination.close()
+    const events = await mcpRequest(page.request, baseURL!, { method: 'tools/call', toolName: 'query_organization_analytics', args: { organization_id: org, mode: 'events', filters: { event_name: 'product_order_external_click', entity_id: products[0]!.id } } })
+    const recordedEvents = mcpData<{ rows: Array<Record<string, unknown>> }>(await events.json()).rows
+    expect(recordedEvents).toHaveLength(1)
+    expect(recordedEvents[0]).toMatchObject({ location_id: null, subject: { type: 'product', id: products[0]!.id }, metadata: { destination_hostname: 'example.com' } })
+    const restoreNative = await page.request.patch(`${editor}/products/${products[0]!.id}`, { data: { order_url: null } })
+    expect(restoreNative.status()).toBe(200)
+    await page.goto(service.path)
     await page.setViewportSize({ width: 390, height: 844 })
     await expect(page.getByRole('button', { name: 'Request appointment', exact: true })).toBeVisible()
     await page.setViewportSize({ width: 1280, height: 720 })

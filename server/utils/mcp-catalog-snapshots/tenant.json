@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:77f5d25425dc985bf375262fc798c726f4d52e6795479981f3f531f0251d83e4",
+  "fingerprint": "sha256:9cab879bee9e18632e7121993b59b7cad3e539eddd495c5c2298cb19bd18b456",
   "tools": [
     {
       "name": "append_content_block",
@@ -451,18 +451,11 @@
                   "type": "array"
                 },
                 "order_url": {
-                  "description": "A narrow ordering destination such as a delivery partner. Not the public product page.",
+                  "description": "External ordering or booking destination, such as Uber Eats, an experience checkout, or Clio Grow. When set, public actions use this URL instead of native booking. Null restores the configured native flow.",
                   "type": [
                     "string",
                     "null"
                   ]
-                },
-                "tags": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "maxItems": 32,
-                  "type": "array"
                 },
                 "tax_code": {
                   "type": [
@@ -1005,12 +998,6 @@
                     "copy"
                   ],
                   "type": "string"
-                },
-                "tags": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
                 },
                 "tax_code": {
                   "type": [
@@ -2677,7 +2664,7 @@
             "type": "array"
           },
           "order_url": {
-            "description": "A narrow ordering destination such as a delivery partner. Not the public product page.",
+            "description": "External ordering or booking destination, such as Uber Eats, an experience checkout, or Clio Grow. When set, public actions use this URL instead of native booking. Null restores the configured native flow.",
             "type": [
               "string",
               "null"
@@ -2686,13 +2673,6 @@
           "organization_id": {
             "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
-          },
-          "tags": {
-            "items": {
-              "type": "string"
-            },
-            "maxItems": 32,
-            "type": "array"
           },
           "tax_code": {
             "type": [
@@ -3224,12 +3204,6 @@
                   "copy"
                 ],
                 "type": "string"
-              },
-              "tags": {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
               },
               "tax_code": {
                 "type": [
@@ -7416,12 +7390,6 @@
                   "copy"
                 ],
                 "type": "string"
-              },
-              "tags": {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
               },
               "tax_code": {
                 "type": [
@@ -11946,7 +11914,7 @@
                   "type": "array"
                 },
                 "order_url": {
-                  "description": "A narrow ordering destination such as a delivery partner. Not the public product page.",
+                  "description": "External ordering or booking destination, such as Uber Eats, an experience checkout, or Clio Grow. When set, public actions use this URL instead of native booking. Null restores the configured native flow.",
                   "type": [
                     "string",
                     "null"
@@ -11955,13 +11923,6 @@
                 "product_id": {
                   "minLength": 1,
                   "type": "string"
-                },
-                "tags": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "maxItems": 32,
-                  "type": "array"
                 },
                 "tax_code": {
                   "type": [
@@ -12503,12 +12464,6 @@
                     "copy"
                   ],
                   "type": "string"
-                },
-                "tags": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
                 },
                 "tax_code": {
                   "type": [
@@ -13293,12 +13248,6 @@
                   "copy"
                 ],
                 "type": "string"
-              },
-              "tags": {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
               },
               "tax_code": {
                 "type": [
@@ -15628,12 +15577,6 @@
                 ],
                 "type": "string"
               },
-              "tags": {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
               "tax_code": {
                 "type": [
                   "string",
@@ -16198,12 +16141,6 @@
                   "copy"
                 ],
                 "type": "string"
-              },
-              "tags": {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
               },
               "tax_code": {
                 "type": [
@@ -18325,7 +18262,7 @@
             "type": "array"
           },
           "order_url": {
-            "description": "A narrow ordering destination such as a delivery partner. Not the public product page.",
+            "description": "External ordering or booking destination, such as Uber Eats, an experience checkout, or Clio Grow. When set, public actions use this URL instead of native booking. Null restores the configured native flow.",
             "type": [
               "string",
               "null"
@@ -18337,13 +18274,6 @@
           },
           "product_id": {
             "type": "string"
-          },
-          "tags": {
-            "items": {
-              "type": "string"
-            },
-            "maxItems": 32,
-            "type": "array"
           },
           "tax_code": {
             "type": [
@@ -18875,12 +18805,6 @@
                   "copy"
                 ],
                 "type": "string"
-              },
-              "tags": {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
               },
               "tax_code": {
                 "type": [

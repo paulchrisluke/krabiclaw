@@ -10,7 +10,8 @@
     @cancel="p.revert"
     @save="p.save"
   >
-    <UFormField label="Order URL" description="Where a customer goes to order this. Not the page it is shown on.">
+    <p class="mb-6 text-base text-muted">Customers continue to this website to order or book. Adding a link replaces the booking action on your website.</p>
+    <UFormField label="Website address">
       <UInput v-model="p.form.order_url" type="url" placeholder="https://…" class="w-full" />
     </UFormField>
   </DashboardLeafPanel>

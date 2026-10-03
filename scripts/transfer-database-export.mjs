@@ -73,6 +73,7 @@ const digest = (rows, names) => hash(rows.map(row => JSON.stringify(names.map(na
 const RETIRED_COLUMNS = {
   organization: ['integrations_json'],
   business_locations: ['description_provenance'],
+  products: ['tags'],
 }
 
 /**
@@ -376,7 +377,7 @@ export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = n
     let sourceFiles = files
     assert(ledger.length > 0, 'Source migration ledger is missing')
     let recognized = false
-    for (const directory of [MIGRATIONS_DIRECTORY, 'migrations-history/v7']) {
+    for (const directory of [MIGRATIONS_DIRECTORY, 'migrations-history/v8', 'migrations-history/v7']) {
       const candidates = readdirSync(resolve(directory)).filter(name => /^\d{4}_.+\.sql$/u.test(name)).sort()
       if (ledger.length > candidates.length || !ledger.every((name, index) => name === candidates[index])) continue
       const expected = new Database(':memory:')
@@ -416,8 +417,15 @@ export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = n
       assert(stage.prepare('SELECT count(*) AS n FROM business_locations WHERE description_provenance IS NOT NULL').get().n === 0,
         'business_locations.description_provenance holds values nothing maps; no rows were copied')
     }
-    if (sourceDirectory !== MIGRATIONS_DIRECTORY) {
-      for (const name of files.slice(1)) stage.exec(readFileSync(resolve(MIGRATIONS_DIRECTORY, name), 'utf8'))
+    if (fromV7) {
+      for (const name of readdirSync('migrations-history/v8').filter(name => /^\d{4}_.+\.sql$/u.test(name)).sort().slice(1)) {
+        stage.exec(readFileSync(resolve('migrations-history/v8', name), 'utf8'))
+      }
+    }
+    if (columns(stage, 'products').includes('tags')) {
+      const tagged = stage.prepare("SELECT count(*) AS n FROM products WHERE tags <> '[]'").get().n
+      const localized = stage.prepare("UPDATE resource_localizations SET values_json = json_remove(values_json, '$.tags') WHERE resource_type = 'product' AND json_type(values_json, '$.tags') IS NOT NULL").run().changes
+      manifest.transforms.push({ name: 'remove_product_tags', changes: tagged + localized })
     }
     const names = tableNames(stage)
     const count = (db, table) => db.prepare(`SELECT count(*) AS n FROM ${qi(table)}`).get().n

@@ -84,7 +84,6 @@ export interface Product {
   /** Stripe `unit_label`: a unit noun such as 'person'. Never pricing prose. */
   unit_label: string | null
   marketing_features: string[]
-  tags: string[]
   /** Validated string-to-string annotations. No domain behavior reads this. */
   metadata: Record<string, string>
   tax_code: string | null
@@ -140,7 +139,6 @@ export interface CreateProductInput {
   order_url?: string | null
   unit_label?: string | null
   marketing_features?: string[]
-  tags?: string[]
   metadata?: Record<string, string>
   tax_code?: string | null
   options?: ProductOptionInput[]

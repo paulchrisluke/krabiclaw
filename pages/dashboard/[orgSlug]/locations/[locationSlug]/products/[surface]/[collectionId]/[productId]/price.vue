@@ -22,8 +22,8 @@
         color="neutral"
         variant="soft"
         icon="i-lucide-list"
-        title="This has options"
-        description="Each combination has its own price. Edit them under Options."
+        title="This has multiple variants"
+        description="Each variant has its own price. Edit them under Variants."
       />
     </div>
   </DashboardLeafPanel>

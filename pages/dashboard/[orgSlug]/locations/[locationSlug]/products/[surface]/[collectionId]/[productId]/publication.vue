@@ -10,11 +10,11 @@
     @cancel="p.revert"
     @save="p.save"
   >
-    <!-- Three switches, three questions: off sale does not hide it, and hidden does not mean sold out. -->
-    <SettingRow v-model="p.form.active" label="On sale" description="The merchant switch. Off means you are not selling it anywhere." />
-    <SettingRow v-model="p.form.published" label="Published on this site" description="Whether the site shows it at all." />
-    <SettingRow v-if="p.locationId.value" v-model="p.form.location_published" label="Shown at this location" description="Whether this branch lists it." />
-    <SettingRow v-if="p.locationId.value" v-model="p.form.location_active" label="Sold at this location" description="Whether this branch takes orders for it." />
+    <p class="mb-6 text-base text-muted">Choose whether customers can see this {{ p.presentation.value.itemLabel.toLowerCase() }}. Pausing orders or bookings keeps its information on your website.</p>
+    <SettingRow v-model="p.form.published" label="Show on website" />
+    <SettingRow v-model="p.form.active" :label="p.form.bookable || p.presentation.value.itemLabel === 'Service' ? 'Accept bookings' : 'Accept orders'" />
+    <SettingRow v-if="p.locationId.value" v-model="p.form.location_published" label="Show at this location" />
+    <SettingRow v-if="p.locationId.value" v-model="p.form.location_active" :label="p.form.bookable ? 'Accept bookings at this location' : 'Accept orders at this location'" />
   </DashboardLeafPanel>
 </template>
 

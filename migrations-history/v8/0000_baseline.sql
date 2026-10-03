@@ -185,7 +185,7 @@ CREATE TABLE `bookings` (
 	FOREIGN KEY (`organization_id`,`product_id`,`product_session_id`) REFERENCES `product_sessions`(`organization_id`,`product_id`,`id`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (`organization_id`,`product_id`,`product_variant_id`) REFERENCES `product_variants`(`organization_id`,`product_id`,`id`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (`organization_id`,`request_id`) REFERENCES `requests`(`organization_id`,`id`) ON UPDATE no action ON DELETE no action,
-	CONSTRAINT "bookings_status_check" CHECK(status IN ('pending', 'confirmed', 'cancelled')),
+	CONSTRAINT "bookings_status_check" CHECK(status IN ('confirmed', 'cancelled')),
 	CONSTRAINT "bookings_instants_check" CHECK((cancelled_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', cancelled_at, '+0 days') IS cancelled_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
 	CONSTRAINT "bookings_party_size_check" CHECK(party_size > 0)
 );
@@ -567,7 +567,7 @@ CREATE TABLE `media_placements` (
 	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`organization_id`,`asset_id`) REFERENCES `media_assets`(`organization_id`,`id`) ON UPDATE no action ON DELETE cascade,
 	CONSTRAINT "media_placements_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
-	CONSTRAINT "media_placements_owner_type_check" CHECK(owner_type IN ('organization', 'business_location', 'product', 'content_document', 'content_block', 'review', 'review_request', 'activity_entry')),
+	CONSTRAINT "media_placements_owner_type_check" CHECK(owner_type IN ('organization', 'business_location', 'product', 'content_document', 'content_block', 'review', 'review_request')),
 	CONSTRAINT "media_placements_sort_order_check" CHECK(sort_order >= 0)
 );
 --> statement-breakpoint
@@ -770,7 +770,6 @@ CREATE TABLE `organization` (
 	`stripeCustomerId` text,
 	`createdAt` integer DEFAULT (unixepoch()) NOT NULL,
 	`logo` text,
-	`consultation_settings_json` text,
 	`settings_json` text DEFAULT '{"config":{"default_timezone":"UTC"}}' NOT NULL,
 	`theme_id` text DEFAULT 'saya-theme-v1' NOT NULL,
 	`subdomain` text,
@@ -1059,10 +1058,6 @@ CREATE TABLE `product_booking_configs` (
 	`organization_id` text NOT NULL,
 	`duration_minutes` integer,
 	`default_capacity` integer,
-	`confirmation_mode` text DEFAULT 'instant' NOT NULL,
-	`online_payment_required` integer DEFAULT 0 NOT NULL,
-	`online_timezone` text,
-	`calendar_group` text,
 	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	`created_by` text NOT NULL,
@@ -1071,10 +1066,7 @@ CREATE TABLE `product_booking_configs` (
 	FOREIGN KEY (`organization_id`,`product_id`) REFERENCES `products`(`organization_id`,`id`) ON UPDATE no action ON DELETE cascade,
 	CONSTRAINT "product_booking_configs_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
 	CONSTRAINT "product_booking_configs_duration_check" CHECK(duration_minutes IS NULL OR duration_minutes > 0),
-	CONSTRAINT "product_booking_configs_capacity_check" CHECK(default_capacity IS NULL OR default_capacity >= 0),
-	CONSTRAINT "product_booking_configs_confirmation_check" CHECK(confirmation_mode IN ('instant', 'review')),
-	CONSTRAINT "product_booking_configs_payment_check" CHECK(online_payment_required IN (0, 1)),
-	CONSTRAINT "product_booking_configs_calendar_check" CHECK(calendar_group IS NULL OR (length(trim(calendar_group)) > 0 AND online_timezone IS NOT NULL))
+	CONSTRAINT "product_booking_configs_capacity_check" CHECK(default_capacity IS NULL OR default_capacity >= 0)
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `product_booking_configs_org_product_unique` ON `product_booking_configs` (`organization_id`,`product_id`);--> statement-breakpoint
@@ -1250,6 +1242,7 @@ CREATE TABLE `products` (
 	`order_url` text,
 	`unit_label` text,
 	`marketing_features` text DEFAULT '[]' NOT NULL,
+	`tags` text DEFAULT '[]' NOT NULL,
 	`metadata` text DEFAULT '{}' NOT NULL,
 	`tax_code` text,
 	`source` text DEFAULT 'manual' NOT NULL,
@@ -1263,6 +1256,7 @@ CREATE TABLE `products` (
 	CONSTRAINT "products_slug_check" CHECK(slug <> '' AND slug = lower(slug) AND slug NOT GLOB '*[^a-z0-9-]*' AND slug NOT LIKE '-%' AND slug NOT LIKE '%-' AND slug NOT LIKE '%--%'),
 	CONSTRAINT "products_active_check" CHECK(active IN (0, 1)),
 	CONSTRAINT "products_marketing_features_check" CHECK(json_valid(marketing_features) AND json_type(marketing_features) = 'array'),
+	CONSTRAINT "products_tags_check" CHECK(json_valid(tags) AND json_type(tags) = 'array'),
 	CONSTRAINT "products_metadata_check" CHECK(json_valid(metadata) AND json_type(metadata) = 'object'),
 	CONSTRAINT "products_order_url_check" CHECK(order_url IS NULL OR (order_url LIKE 'https://_%' AND instr(order_url, '@') = 0 AND instr(order_url, char(10)) = 0 AND instr(order_url, char(13)) = 0))
 );

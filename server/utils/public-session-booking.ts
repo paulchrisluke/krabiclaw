@@ -6,8 +6,8 @@ import { isCurrencyCode } from '~/shared/currencies'
 import { publicTenantVisibilitySql } from '~/server/utils/public-base'
 
 export async function listPublicBookingSessions(db: DbClient, organizationId: string, slug: string, requestedScope?: unknown) {
-  const product = await queryFirst<{ id: string; organization_id: string; name: string; timezone: string | null }>(db, `
-    SELECT p.id, p.organization_id, p.name,
+  const product = await queryFirst<{ id: string; organization_id: string; name: string; order_url: string | null; timezone: string | null }>(db, `
+    SELECT p.id, p.organization_id, p.name, p.order_url,
            COALESCE(cfg.online_timezone,
            (SELECT l.timezone FROM business_locations l
               JOIN product_locations pl ON pl.location_id = l.id AND pl.product_id = p.id
@@ -19,6 +19,7 @@ export async function listPublicBookingSessions(db: DbClient, organizationId: st
      LIMIT 1
   `, [organizationId, slug])
   if (!product) throw new HTTPError({ statusCode: 404, statusMessage: 'Product not found' })
+  if (product.order_url) return { success: true, product: { id: product.id, name: product.name, slug }, sessions: [] }
   if (!product.timezone) throw new HTTPError({ statusCode: 409, statusMessage: 'Set the configured online or location timezone before offering sessions' })
 
   // A session belongs to a location, and a branch that has stopped selling
@@ -59,6 +60,6 @@ export async function listPublicOnlineProducts(db: DbClient, organizationId: str
   const organization = await queryFirst<{ default_currency: string }>(db, `SELECT default_currency FROM organization WHERE id = ? AND ${publicTenantVisibilitySql('organization', previewAuthorized)}`, [organizationId])
   if (!organization) throw new HTTPError({ statusCode: 404, statusMessage: 'Organization not found' })
   if (!isCurrencyCode(organization.default_currency)) throw new HTTPError({ statusCode: 409, statusMessage: 'Configure the organization currency before offering consultations' })
-  const products = (await listOrganizationProducts(db, { organizationId, publishedOnly: true })).filter(product => product.active && product.booking?.online_timezone)
+  const products = (await listOrganizationProducts(db, { organizationId, publishedOnly: true })).filter(product => product.active && (product.booking?.online_timezone || product.order_url))
   return { products, locations: [], currency: organization.default_currency }
 }

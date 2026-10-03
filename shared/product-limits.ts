@@ -12,8 +12,6 @@ export const PRODUCT_LIMITS = {
   name: 240,
   slug: 240,
   description: 10_000,
-  tags: 32,
-  tag: 120,
   marketingFeatures: 15,
   marketingFeature: 500,
   metadataEntries: 50,

@@ -293,7 +293,6 @@ export async function applyOnboardingDraft(
         name: product.name,
         description: product.description,
         order_url: product.order_url,
-        tags: product.tags,
         source: product.source,
         // What a customer buys is a variant, and the price belongs to it. A
         // Product the owner did not price gets a variant with no price, which

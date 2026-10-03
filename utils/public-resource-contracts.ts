@@ -107,7 +107,6 @@ export function isPublicProduct(value: unknown): value is Product {
     && typeof value.slug === 'string'
     && typeof value.description === 'string'
     && typeof value.active === 'boolean'
-    && Array.isArray(value.tags)
     && Array.isArray(value.options)
     && Array.isArray(value.variants)
     && value.variants.every(variant => isRecord(variant)

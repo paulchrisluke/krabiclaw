@@ -190,3 +190,50 @@ test.describe('tenant guest journeys (disposable local/preview data only)', () =
     expect((await request.post(cancelURL, { headers: authHeaders })).status()).not.toBe(200)
   })
 })
+
+for (const target of [
+  { name: 'Kikuzuki', owner: 'user-e2e-kikuzuki-owner', org: E2E_KIKUZUKI_ORGANIZATION_ID, slug: E2E_KIKUZUKI_ORGANIZATION_ID, location: 'loc-kikuzuki', locationSlug: 'kikuzuki-japanese-robatayaki-izakaya', base: kikuzukiTestBaseUrl(), headers: kikuzukiTestExtraHeaders(), experience: false },
+  { name: 'Pottery House', owner: 'user-e2e-pottery-owner', org: E2E_POTTERY_ORGANIZATION_ID, slug: E2E_POTTERY_ORGANIZATION_ID, location: 'loc-pottery-house', locationSlug: 'krabi', base: potteryHouseBaseURL, headers: potteryHouseExtraHeaders, experience: true },
+]) {
+  test(`${target.name} external checkout uses the shared CMS and public template`, async ({ page, request, baseURL }) => {
+    test.skip(!writableEnvironment, 'External checkout verification writes only local disposable products')
+    await loginAs(page.request, baseURL!, target.owner)
+    const editor = `/api/editor/organizations/${target.org}/products`
+    const created = await page.request.post(editor, { data: { name: `External checkout ${Date.now()}`, variants: [{ name: 'Standard', prices: [{ unit_amount: 120000, currency: 'THB' }] }] } })
+    expect(created.status(), await created.text()).toBe(201)
+    const product = (await created.json()).product
+    try {
+      const locations = await page.request.put(`${editor}/${product.id}/locations/${target.location}`, { data: { active: true, published: true } })
+      expect(locations.status()).toBe(200)
+      expect((await page.request.put(`${editor}/${product.id}/publication`, { data: { published: true } })).status()).toBe(200)
+      if (target.experience) expect((await page.request.put(`${editor}/${product.id}/booking`, { data: { duration_minutes: 60, default_capacity: 8 } })).status()).toBe(200)
+      const externalUrl = `https://example.com/?checkout=${target.slug}`
+      await page.goto(`/dashboard/${target.slug}/products/${product.id}/order-url`)
+      await page.getByLabel('Website address', { exact: true }).fill(externalUrl)
+      await page.getByRole('button', { name: 'Save', exact: true }).click()
+      const publicPath = target.experience ? `/experiences/${product.slug}` : `/locations/${target.locationSlug}/menu/${product.slug}`
+      await openTenantPage(page, `${target.base}${publicPath}`, target.headers)
+      await expect(page.getByRole('heading', { name: product.name, level: 1, exact: true })).toBeVisible()
+      for (const width of [1280, 390]) {
+        await page.setViewportSize({ width, height: 844 })
+        const handoff = page.locator(`a[href="${externalUrl}"]:visible`)
+        await expect(handoff).toHaveCount(1)
+        await expect(handoff).toHaveText(target.experience ? 'Book now' : 'Order now')
+        await expect(page.getByRole('button', { name: 'Book now', exact: true })).toHaveCount(0)
+      }
+      await waitForNuxtHydration(page)
+      const recorded = page.waitForResponse(response => new URL(response.url()).pathname === '/api/public/conversion-events' && response.request().postDataJSON()?.event_name === 'product_order_external_click')
+      const popup = page.waitForEvent('popup')
+      await page.locator(`a[href="${externalUrl}"]:visible`).click()
+      expect((await recorded).status()).toBe(201)
+      const destination = await popup
+      await expect(destination).toHaveURL(externalUrl)
+      await destination.close()
+      const saved = await request.get(`${target.base}${target.experience ? `/api/public/experiences/${product.slug}` : `/api/public/locations/${target.locationSlug}/products/${product.slug}`}`, { headers: target.headers })
+      expect(saved.status(), await saved.text()).toBe(200)
+      expect((await saved.json()).product.order_url).toBe(externalUrl)
+    } finally {
+      expect((await page.request.delete(`${editor}/${product.id}`)).status()).toBe(200)
+    }
+  })
+}

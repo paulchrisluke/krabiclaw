@@ -741,7 +741,7 @@ test.describe('stateless MCP server', () => {
       const update = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
         toolName: 'update_product',
-        args: { organization_id: organizationId, product_id: created.id, description: 'Updated through MCP', tags: ['small group'] },
+        args: { organization_id: organizationId, product_id: created.id, description: 'Updated through MCP' },
       })
       expect(update.status()).toBe(200)
 

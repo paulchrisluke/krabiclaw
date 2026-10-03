@@ -99,7 +99,7 @@ on its production custom domain. Use a fresh browser session. Check:
 2. `/th`, `/th/about`, `/th/contact`, `/th/menu`, both localized location pages,
    their menu/detail routes, and the teppanyaki experience load in Thai.
 3. Every source menu product has the exact translated name and description,
-   category, tags, options, and SEO fields where configured. Counts must match
+   category, options, and SEO fields where configured. Counts must match
    the target environment's source catalog.
 4. Switching back to English, following internal links, and reloading preserve
    correct locale behavior. Canonical and alternate URLs match the language.

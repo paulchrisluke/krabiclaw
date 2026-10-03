@@ -49,13 +49,6 @@ export async function loadExactPublicLocalizations(
   return indexStoredPublicLocalizations(rows, await loadMetafieldDefinitionIndex(db, organizationId))
 }
 
-const PROJECTED_FIELD_NAMES: Partial<Record<LocalizedResourceType, Readonly<Record<string, string>>>> = {
-  product: {
-    tags: 'tags',
-  },
-
-}
-
 function localizedSlug(routePath: string | null): string | null {
   if (!routePath) return null
   return routePath.split('/').filter(Boolean).at(-1) ?? null
@@ -86,7 +79,6 @@ export function projectExactLocalizedResource<T extends { id: string }>(
   if (localization.resourceType !== resourceType || localization.resourceId !== canonical.id) {
     throw new Error('Localized resource does not match its canonical resource')
   }
-  const fieldNames = PROJECTED_FIELD_NAMES[resourceType] ?? {}
   const definition = RESOURCE_LOCALIZATION_REGISTRY[resourceType]
   // Clearing a field is the empty state of its declared type. A map of
   // translated attributes empties to a map with nothing in it: "this product
@@ -98,17 +90,13 @@ export function projectExactLocalizedResource<T extends { id: string }>(
   // An address is not cleared: its translated parts sit on the location's own.
   const clearedValues = Object.fromEntries(
     Object.entries(definition.fields).flatMap(([field, shape]): Array<[string, unknown]> => {
-      const name = fieldNames[field] ?? field
-      if (shape === 'metafields') return [[name, {}]]
-      if (shape === 'string_array') return [[name, []]]
-      if (shape === 'text') return [[name, (canonical as Record<string, unknown>)[name] === null ? null : '']]
+      if (shape === 'metafields') return [[field, {}]]
+      if (shape === 'string_array') return [[field, []]]
+      if (shape === 'text') return [[field, (canonical as Record<string, unknown>)[field] === null ? null : '']]
       return []
     }),
   )
-  const projectedValues = Object.fromEntries(Object.entries(localization.values).map(([field, value]) => [
-    fieldNames[field] ?? field,
-    value,
-  ]))
+  const projectedValues = { ...localization.values }
   const titleField: Partial<Record<LocalizedResourceType, string>> = {
     organization: 'name',
     business_location: 'title',
@@ -121,8 +109,8 @@ export function projectExactLocalizedResource<T extends { id: string }>(
     product: 'description',
     collection: 'description',
   }
-  const localizedTitle = titleField[resourceType] ? localization.values[titleField[resourceType]] : undefined
-  const localizedDescription = descriptionField[resourceType] ? localization.values[descriptionField[resourceType]] : undefined
+  const localizedTitle = titleField[resourceType] ? projectedValues[titleField[resourceType]] : undefined
+  const localizedDescription = descriptionField[resourceType] ? projectedValues[descriptionField[resourceType]] : undefined
   if ('seo_title' in canonical) projectedValues.seo_title = typeof localizedTitle === 'string' ? localizedTitle : null
   if ('seo_description' in canonical) projectedValues.seo_description = typeof localizedDescription === 'string' ? localizedDescription : null
   const slug = localizedSlug(localization.routePath)

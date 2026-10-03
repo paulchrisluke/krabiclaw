@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "17e7b13f-7ca3-48f5-abeb-41333f070afd",
+  "id": "4bd08de3-49ba-4e9c-8199-777f2eeb39e4",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -1306,7 +1306,7 @@
       "checkConstraints": {
         "bookings_status_check": {
           "name": "bookings_status_check",
-          "value": "status IN ('pending', 'confirmed', 'cancelled')"
+          "value": "status IN ('confirmed', 'cancelled')"
         },
         "bookings_instants_check": {
           "name": "bookings_instants_check",
@@ -4022,7 +4022,7 @@
         },
         "media_placements_owner_type_check": {
           "name": "media_placements_owner_type_check",
-          "value": "owner_type IN ('organization', 'business_location', 'product', 'content_document', 'content_block', 'review', 'review_request', 'activity_entry')"
+          "value": "owner_type IN ('organization', 'business_location', 'product', 'content_document', 'content_block', 'review', 'review_request')"
         },
         "media_placements_sort_order_check": {
           "name": "media_placements_sort_order_check",
@@ -5345,13 +5345,6 @@
         },
         "logo": {
           "name": "logo",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "consultation_settings_json": {
-          "name": "consultation_settings_json",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -7280,36 +7273,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "confirmation_mode": {
-          "name": "confirmation_mode",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'instant'"
-        },
-        "online_payment_required": {
-          "name": "online_payment_required",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": false
-        },
-        "online_timezone": {
-          "name": "online_timezone",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "calendar_group": {
-          "name": "calendar_group",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "text",
@@ -7395,18 +7358,6 @@
         "product_booking_configs_capacity_check": {
           "name": "product_booking_configs_capacity_check",
           "value": "default_capacity IS NULL OR default_capacity >= 0"
-        },
-        "product_booking_configs_confirmation_check": {
-          "name": "product_booking_configs_confirmation_check",
-          "value": "confirmation_mode IN ('instant', 'review')"
-        },
-        "product_booking_configs_payment_check": {
-          "name": "product_booking_configs_payment_check",
-          "value": "online_payment_required IN (0, 1)"
-        },
-        "product_booking_configs_calendar_check": {
-          "name": "product_booking_configs_calendar_check",
-          "value": "calendar_group IS NULL OR (length(trim(calendar_group)) > 0 AND online_timezone IS NOT NULL)"
         }
       }
     },
@@ -8714,6 +8665,14 @@
           "autoincrement": false,
           "default": "'[]'"
         },
+        "tags": {
+          "name": "tags",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'[]'"
+        },
         "metadata": {
           "name": "metadata",
           "type": "text",
@@ -8823,6 +8782,10 @@
         "products_marketing_features_check": {
           "name": "products_marketing_features_check",
           "value": "json_valid(marketing_features) AND json_type(marketing_features) = 'array'"
+        },
+        "products_tags_check": {
+          "name": "products_tags_check",
+          "value": "json_valid(tags) AND json_type(tags) = 'array'"
         },
         "products_metadata_check": {
           "name": "products_metadata_check",

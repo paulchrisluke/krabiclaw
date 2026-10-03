@@ -34,7 +34,7 @@
 <script lang="ts">
 import type { ComputedRef, InjectionKey, Ref } from 'vue'
 
-export const SECTION_KEYS = ['photo', 'name', 'price', 'description', 'options', 'order-url', 'tags', 'attributes', 'publication', 'booking'] as const
+export const SECTION_KEYS = ['photo', 'name', 'price', 'description', 'options', 'order-url', 'attributes', 'publication', 'booking'] as const
 export type SectionKey = typeof SECTION_KEYS[number]
 export type BookingConcern = 'enabled' | 'duration' | 'capacity' | 'confirmation' | 'payment' | 'location' | 'calendar' | 'website' | number
 
@@ -69,7 +69,6 @@ export interface ProductForm {
   name: string
   description: string
   order_url: string
-  tags: string[]
   options: OptionDraft[]
   variants: VariantDraft[]
   metafields: Record<string, MetafieldValue>
@@ -199,12 +198,11 @@ const sectionLabels: Record<SectionKey, string> = {
   'name': 'Name',
   'price': 'Price',
   'description': 'Description',
-  'options': 'Options',
-  'order-url': 'Order link',
-  'tags': 'Tags',
-  'attributes': 'Attributes',
-  'publication': 'Where it appears',
-  'booking': 'Bookings',
+  'options': 'Variants',
+  'order-url': 'External link',
+  'attributes': 'Details',
+  'publication': 'Website',
+  'booking': 'Scheduling',
 }
 
 const detailKey = computed(() => level.child.value)
@@ -293,7 +291,6 @@ const form = reactive<ProductForm>({
   name: '',
   description: '',
   order_url: '',
-  tags: [] as string[],
   options: [] as OptionDraft[],
   variants: [] as VariantDraft[],
   metafields: {} as Record<string, MetafieldValue>,
@@ -320,7 +317,6 @@ function loadForm(row: Product) {
   form.name = row.name
   form.description = row.description
   form.order_url = row.order_url ?? ''
-  form.tags = [...row.tags]
   form.options = row.options.map(option => ({
     id: option.id,
     name: option.name,
@@ -478,7 +474,7 @@ function listSummary(values: readonly string[], empty: string) {
 function priceSummary(): string {
   const row = product.value
   if (!row) return ''
-  if (row.variants.length > 1) return `${row.variants.length} combinations`
+  if (row.variants.length > 1) return `${row.variants.length} variants`
   const variant = row.variants[0]
   if (!variant) return 'No price set'
   const price = selectPrice(variant.prices, { currency, location_id: locationId.value, at: new Date().toISOString() })
@@ -495,13 +491,13 @@ function bookingSummary(): string {
   const id = locationId.value
   if ((!id && !product.value?.booking?.online_timezone) || scheduleLoadedFor.value !== `${productId.value}:${id}`) return minutes
   const count = schedule.value.filter(slot => slot.start_time.trim()).length
-  return `${minutes} · ${count === 1 ? '1 time' : `${count} times`} a week`
+  return count ? `${minutes} · ${count === 1 ? '1 start time' : `${count} start times`} a week` : `${minutes} · No weekly availability set`
 }
 
 function publicationSummary(): string {
-  const parts: string[] = [form.active ? 'On sale' : 'Not on sale']
-  parts.push(form.published ? 'published' : 'withheld')
-  if (!form.location_published) parts.push('hidden here')
+  const parts = [form.published ? 'Visible on website' : 'Hidden from website']
+  if (locationId.value && !form.location_published) parts.push('Hidden at this location')
+  if (!form.active || (locationId.value && !form.location_active)) parts.push(form.bookable || vertical === 'service' ? 'Bookings paused' : 'Orders paused')
   return parts.join(' · ')
 }
 
@@ -546,22 +542,20 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => {
       items: [
         {
           id: 'options',
-          label: 'Options',
-          summary: listSummary(form.options.map(option => option.name).filter(Boolean), 'No options'),
-          placeholder: !form.options.length,
+          label: 'Variants',
+          summary: product.value.variants.length > 1 ? `${product.value.variants.length} variants` : 'One version',
           to: `${itemPath.value}/options`,
         },
-        { id: 'order-url', label: 'Order link', summary: form.order_url || 'No link', placeholder: !form.order_url, to: `${itemPath.value}/order-url` },
-        { id: 'tags', label: 'Tags', summary: listSummary(form.tags, 'No tags'), placeholder: !form.tags.length, to: `${itemPath.value}/tags` },
+        { id: 'order-url', label: 'External link', summary: form.order_url || 'No external link', placeholder: !form.order_url, to: `${itemPath.value}/order-url` },
         {
           id: 'attributes',
-          label: 'Attributes',
-          summary: listSummary(Object.keys(form.metafields), 'None set'),
+          label: 'Details',
+          summary: listSummary(definitions.value.filter(definition => form.metafields[metafieldHandle(definition)] !== undefined).map(definition => definition.name), 'None set'),
           placeholder: !Object.keys(form.metafields).length,
           to: `${itemPath.value}/attributes`,
         },
-        { id: 'publication', label: 'Where it appears', summary: publicationSummary(), to: `${itemPath.value}/publication` },
-        { id: 'booking', label: 'Bookings', summary: form.bookable ? bookingSummary() : 'Not bookable', placeholder: !form.bookable, to: `${itemPath.value}/booking` },
+        { id: 'publication', label: 'Website', summary: publicationSummary(), to: `${itemPath.value}/publication` },
+        { id: 'booking', label: 'Scheduling', summary: form.bookable ? bookingSummary() : 'Not bookable', placeholder: !form.bookable, to: `${itemPath.value}/booking` },
       ],
     },
   ]
@@ -663,7 +657,6 @@ function payload() {
     name: form.name.trim(),
     description: form.description,
     order_url: form.order_url || null,
-    tags: form.tags.map(tag => tag.trim()).filter(Boolean),
     ...(changed && describesCatalog ? catalog : {}),
     metafields: form.metafields,
     active: form.active,
@@ -683,9 +676,8 @@ const { createActionLabel, saveLabel: createSaveLabel, saveDisabled, save: saveC
   commit,
 })
 
-// An existing product's commit writes straight to the live record MCP reads,
-// so it says what it does: Publish. Creating still walks its sections.
-const saveLabel = computed(() => createSaveLabel.value ?? 'Publish')
+// Saving content and publishing the listing are separate owner decisions.
+const saveLabel = computed(() => createSaveLabel.value ?? 'Save')
 
 const closeTo = ref<string | null>(null)
 async function save(target?: string, bookingConcern?: BookingConcern) {
@@ -894,7 +886,6 @@ const productLocalizationFields = computed(() => {
   const fields: Array<{ key: string, label: string, source: string | readonly string[] | null | undefined, kind?: 'string-list', multiline?: boolean, rows?: number }> = [
     { key: 'name', label: 'Name', source: row?.name },
     { key: 'description', label: 'Description', source: row?.description, multiline: true, rows: 4 },
-    { key: 'tags', label: 'Tags', source: row?.tags, kind: 'string-list' },
   ]
   for (const definition of definitions.value) {
     if (!definition.localizable) continue
@@ -939,7 +930,7 @@ async function saveProductLocalization(locale: string, submitted: Record<string,
   const row = product.value
   if (!row) throw new Error(`The ${presentation.value.itemLabel.toLowerCase()} is unavailable.`)
   const values: Record<string, unknown> = {}
-  for (const key of ['name', 'description', 'tags']) {
+  for (const key of ['name', 'description']) {
     if (Object.hasOwn(submitted, key)) values[key] = submitted[key]
   }
   const metafields: Record<string, unknown> = {}
