@@ -17,6 +17,7 @@ import type { TenantPageBlock, TenantPageType } from '~/utils/tenant-page-blocks
 export interface TenantPageDraft {
   id: string
   page_id: string
+  product_id?: string | null
   locale: string
   path: string
   title: string
@@ -30,6 +31,7 @@ export interface TenantPageDraft {
 export interface TenantPageResponse {
   id: string
   page_id: string
+  product_id?: string | null
   organization_id: string
   locale: string
   path: string
@@ -152,6 +154,7 @@ function toDraft(page: TenantPageResponse): TenantPageDraft {
   return {
     id: page.id,
     page_id: page.page_id,
+    product_id: page.product_id,
     locale: page.locale,
     path: page.path,
     title: page.title,
@@ -288,6 +291,7 @@ export function useTenantPageDraft(organizationId: string, pageId: string) {
     const body = {
       id: draft.value.id || undefined,
       pageId: draft.value.page_id || undefined,
+      productId: draft.value.id && draft.value.id === draft.value.page_id ? draft.value.product_id : undefined,
       locale: draft.value.locale,
       path,
       title,

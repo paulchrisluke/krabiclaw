@@ -1,5 +1,5 @@
 <template>
-  <div class="rounded-xl overflow-hidden">
+  <div class="rounded-xl overflow-hidden" data-media-gallery>
     <div v-if="items.length === 0" class="flex aspect-4/3 items-center justify-center bg-muted">
       <SayaIcon :name="emptyIcon" class="size-16 text-dimmed" />
     </div>
@@ -29,7 +29,7 @@
       <img
         v-else
         :src="items[0]?.url"
-        :alt="items[0]?.alt || title"
+        :alt="items[0]?.alt ?? ''"
         class="h-full w-full object-cover"
       />
       <span
@@ -51,14 +51,14 @@
     <div v-else>
       <div
         class="grid gap-1 h-[360px] sm:h-[440px] lg:h-[520px]"
-        :class="items.length === 2 ? 'grid-cols-2' : 'grid-cols-2 grid-rows-2'"
+        :class="items.length === 2 ? 'grid-cols-2' : items.length === 3 ? 'grid-cols-2 grid-rows-2' : 'grid-cols-2 grid-rows-3'"
       >
         <button
           v-for="(item, index) in visibleItems"
           :key="`${item.url}-${index}`"
           type="button"
           class="relative h-full w-full overflow-hidden border-0 bg-transparent p-0 text-left"
-          :class="index === 0 && items.length >= 3 ? 'row-span-2' : ''"
+          :class="index === 0 ? items.length === 3 ? 'row-span-2' : items.length >= 4 ? 'row-span-3' : '' : ''"
           :aria-label="item.kind === 'video' ? `Play video, ${title}` : `Open media, ${title}`"
           @click="openLightbox(index)"
         >
@@ -80,7 +80,7 @@
           <img
             v-else
             :src="item.url"
-            :alt="item.alt || title"
+            :alt="item.alt ?? ''"
             class="h-full w-full object-cover transition-transform duration-300 hover:scale-[1.02]"
           />
           <span
@@ -139,7 +139,14 @@ defineSlots<{
   caption(_slotProps: { item: GalleryItem; index: number }): unknown
 }>()
 
-const items = computed(() => props.items.filter(item => item.url))
+const items = computed(() => {
+  const seen = new Set<string>()
+  return props.items.filter(item => {
+    if (!item.url || seen.has(item.url)) return false
+    seen.add(item.url)
+    return true
+  })
+})
 const visibleItems = computed(() => items.value.slice(0, 4))
 const lightboxOpen = ref(false)
 const lightboxIndex = ref(0)

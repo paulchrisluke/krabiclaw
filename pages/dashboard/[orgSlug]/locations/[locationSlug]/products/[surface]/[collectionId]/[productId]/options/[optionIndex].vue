@@ -3,7 +3,8 @@
   <DashboardLeafPanel
     id="product-option"
     :ready="p.ready.value && Boolean(option)"
-    :title="option?.name || 'Option'"
+    :title="option?.name || 'Choice'"
+    lead="Name a choice, such as Size, and add what customers can choose, such as Small and Large."
     :saving="p.saving.value"
     :disabled="p.saveDisabled.value"
     :save-label="p.saveLabel.value"
@@ -12,22 +13,25 @@
     @save="p.save(level.to.value ?? undefined)"
   >
     <div v-if="option && !removing" class="space-y-6">
-      <UFormField label="Option name">
+      <UFormField label="Name">
         <UInput v-model="option.name" placeholder="Size" :maxlength="PRODUCT_LIMITS.optionName" autofocus class="w-full" />
       </UFormField>
-      <UInputTags
+      <UFormField label="Choices">
+        <UInputTags
           :model-value="option.values.map(value => value.value)"
-          placeholder="Add a value"
+          placeholder="Add a choice"
           :max="PRODUCT_LIMITS.optionValues"
           :max-length="PRODUCT_LIMITS.optionValue"
           delimiter=","
+          :convert-value="value => value.trim()"
           add-on-blur
           add-on-paste
           class="w-full"
-          aria-label="Option values"
+          aria-label="Choices"
           @update:model-value="p.setOptionValues(index, $event as string[])"
         />
-      <UButton color="error" variant="soft" icon="i-lucide-trash-2" :label="`Remove ${option.name || 'option'}`" :loading="p.saving.value" @click="remove" />
+      </UFormField>
+      <UButton color="error" variant="soft" icon="i-lucide-trash-2" :label="`Remove ${option.name || 'choice'}`" :loading="p.saving.value" @click="remove" />
     </div>
   </DashboardLeafPanel>
 </template>
@@ -48,7 +52,7 @@ const option = computed(() => p.form.options[index.value] ?? null)
 // Removing it empties this leaf on purpose, on the way back to the list.
 const removing = ref(false)
 watchEffect(() => {
-  if (p.ready.value && !option.value && !removing.value) showError(createError({ statusCode: 404, statusMessage: 'Option not found' }))
+  if (p.ready.value && !option.value && !removing.value) showError(createError({ statusCode: 404, statusMessage: 'Choice not found' }))
 })
 
 const removeError = ref('')
@@ -62,7 +66,7 @@ async function remove() {
   p.removeOption(index.value)
   if (!p.isNew.value) {
     if (p.saveDisabled.value) {
-      removeError.value = 'Every option needs a name and at least one value before this can be saved.'
+      removeError.value = 'Every choice needs a name and at least one value before this can be saved.'
       p.form.options = options
       p.form.variants = variants
       removing.value = false

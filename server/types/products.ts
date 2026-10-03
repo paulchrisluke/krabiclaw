@@ -1,6 +1,6 @@
 import type { ResolvedMediaAsset } from '~/server/utils/media-asset-manager'
 import type { Price, PriceInput } from '~/shared/prices'
-import type { MetafieldValue } from '~/shared/metafields'
+import type { ProductDetails, ProductKind } from '~/shared/product-details'
 import type { SocialImageSource } from '~/utils/social-metadata'
 
 export type ProductSource = 'manual' | 'template' | 'ai' | 'import' | 'copy'
@@ -59,10 +59,7 @@ export interface Collection {
 }
 
 /** What generating this product's occurrences starts from. Sessions keep their own. */
-export interface ProductBookingConfig {
-  duration_minutes: number | null
-  default_capacity: number | null
-}
+export type ProductBookingConfig = Pick<import('~/server/utils/availability').ProductBookingConfig, 'duration_minutes' | 'default_capacity' | 'confirmation_mode' | 'online_payment_required' | 'online_timezone' | 'calendar_group'>
 
 /** Membership of one product in one collection, carrying its position there. */
 export interface CollectionMembership {
@@ -76,6 +73,7 @@ export interface CollectionMembership {
  * product can appear on two sites at two prices without being duplicated.
  */
 export interface Product {
+  kind: ProductKind
   id: string
   organization_id: string
   name: string
@@ -87,14 +85,13 @@ export interface Product {
   /** Stripe `unit_label`: a unit noun such as 'person'. Never pricing prose. */
   unit_label: string | null
   marketing_features: string[]
-  tags: string[]
   /** Validated string-to-string annotations. No domain behavior reads this. */
   metadata: Record<string, string>
   tax_code: string | null
   options: ProductOption[]
   variants: ProductVariant[]
   /** Typed descriptive attributes, keyed by '<namespace>.<key>'. */
-  metafields: Record<string, MetafieldValue>
+  details: ProductDetails
   publications: ProductPublication[]
   locations: ProductLocation[]
   collections: CollectionMembership[]
@@ -137,19 +134,19 @@ export interface ProductOptionInput {
 }
 
 export interface CreateProductInput {
+  kind: ProductKind
   name: string
   description?: string
   active?: boolean
   order_url?: string | null
   unit_label?: string | null
   marketing_features?: string[]
-  tags?: string[]
   metadata?: Record<string, string>
   tax_code?: string | null
   options?: ProductOptionInput[]
   /** Omitted means one default variant is created. */
   variants?: ProductVariantInput[]
-  metafields?: Record<string, MetafieldValue>
+  details?: ProductDetails
   source?: ProductSource
 }
 
@@ -205,14 +202,14 @@ export type ProductSurface = 'menu' | 'products' | 'experiences'
 
 export interface ProductPresentation {
   feature: 'products'
-  collectionPath: '/menu' | '/products' | '/experiences'
+  collectionPath: '/menu' | '/products' | '/experiences' | '/schedule'
   locationCollectionSegment: ProductSurface
   productPath: (_locationSlug: string, _productSlug: string) => string
-  collectionLabel: 'Menu' | 'Products' | 'Experiences'
-  itemLabel: 'Dish' | 'Product' | 'Experience'
+  collectionLabel: 'Menu' | 'Products' | 'Experiences' | 'Consultations' | 'Services'
+  itemLabel: 'Dish' | 'Product' | 'Experience' | 'Service'
   // English plurals are irregular enough here ("Dish" -> "Dishes",
   // "Collection" -> "Collections") that appending an "s" produces visible typos.
-  itemLabelPlural: 'Dishes' | 'Products' | 'Experiences'
+  itemLabelPlural: 'Dishes' | 'Products' | 'Experiences' | 'Services'
   collectionGroupLabel: 'Section' | 'Collection'
   collectionGroupLabelPlural: 'Sections' | 'Collections'
   /**

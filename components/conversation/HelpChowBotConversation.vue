@@ -1,5 +1,5 @@
 <template>
-  <div class="flex min-h-0 flex-1 flex-col">
+  <main class="flex min-h-0 flex-1 flex-col">
     <div class="min-h-0 flex-1 overflow-y-auto">
       <div class="mx-auto w-full max-w-3xl px-4 sm:px-6">
         <!-- The hero belongs to the empty state, so it lives here rather than in
@@ -137,7 +137,7 @@
         />
       </template>
     </USlideover>
-  </div>
+  </main>
 </template>
 
 <script setup lang="ts">

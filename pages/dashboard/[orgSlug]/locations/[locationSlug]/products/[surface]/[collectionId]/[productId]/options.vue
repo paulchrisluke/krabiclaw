@@ -5,6 +5,7 @@
     price (DESIGN.md: a pane that would need many fields becomes an index).
   -->
   <DashboardIndexPanel id="product-options" :title="p.sectionLabels['options']">
+    <p class="mb-6 text-sm text-muted">Offer different versions, such as sizes or session types. Add a choice such as Size, then set a price for each variant.</p>
     <EditorNavigationList :groups="groups" :active-item="activeItem" @act="act" />
   </DashboardIndexPanel>
 </template>
@@ -26,17 +27,17 @@ const groups = computed<EditorNavigationGroup[]>(() => [
     items: [
       ...p.form.options.map((option, index) => ({
         id: `option-${index}`,
-        label: option.name || 'Option',
+        label: option.name || 'Choice',
         summary: option.values.map(value => value.value).join(', ') || undefined,
         to: `${level.path.value}/${index}`,
       })),
-      ...(p.form.options.length < PRODUCT_LIMITS.options ? [{ id: 'add', label: 'Add an option', action: {} }] : []),
+      ...(p.form.options.length < PRODUCT_LIMITS.options ? [{ id: 'add', label: 'Add a choice', action: {} }] : []),
     ],
   },
   ...(p.form.variants.length > 1
     ? [{
         id: 'combinations',
-        label: 'Combinations',
+        label: 'Variants',
         items: p.form.variants.map(variant => ({
           id: `price-${variant.key}`,
           label: variant.name,

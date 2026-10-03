@@ -20,8 +20,8 @@ export type {
  * states a rule or does not state it.
  *
  * Product booking policy is not here at all. A product's cancellation terms
- * and preparation notes are typed metafields on the product, read through the
- * metafield contract like every other descriptive attribute.
+ * and preparation notes are typed details on the product, read through the
+ * named product detail contract like every other descriptive attribute.
  */
 
 export interface LocationReservationConfig {
@@ -241,13 +241,13 @@ export function reservationPolicySummarySource(config: LocationReservationConfig
 }
 
 /**
- * A product's booking policy, from its metafields.
+ * A product's booking policy, from its details.
  *
  * The policy text is a typed product attribute, so there is nothing to merge
  * and nothing to cascade: a product either has the attribute or it does not.
  */
-export function productPolicySummarySource(metafields: Record<string, unknown>) {
-  const notes = metafields['booking.cancellation-policy']
+export function productPolicySummarySource(details: Record<string, unknown>) {
+  const notes = details.cancellation_policy
   return {
     policy_type: 'experience' as const,
     advance_notice_minutes: null,

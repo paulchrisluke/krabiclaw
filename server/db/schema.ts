@@ -290,14 +290,13 @@ export const member = sqliteTable("member", {
 //
 // One catalog for every vertical. A restaurant dish, a pottery class, and a
 // consultation are all Products; nothing about their storage differs. There is
-// no `product_type` discriminator, because a discriminator that selects a
-// schema is how five verticals became five half-models. Capabilities compose
-// instead: a Product gains booking by having a product_booking_configs row,
+// one explicit kind for customer-facing facts; pricing and booking still
+// share the same model. Capabilities compose: a Product gains booking by having a product_booking_configs row,
 // stock by having an inventory_items row, a page by being referenced from a
 // content_documents root. Absence of a capability row is the absence of the
 // capability, never a NULL to be interpreted.
 //
-// Value sets (price `type`, session/booking `status`, metafield `value_type`)
+// Value sets (price `type`, session/booking `status`, product `kind`)
 // are NOT encoded as CHECK constraints. D1 enforces foreign keys on every
 // statement and cannot alter a CHECK in place, so a closed value set on a
 // referenced parent makes adding one value an impossible table rebuild. Value
@@ -319,7 +318,7 @@ export const member = sqliteTable("member", {
 //   never "use the site's". unit_label NULL means amounts are per unsuffixed
 //   unit. tax_code NULL means no declared code, not a default one.
 // Deletion: cascades to variants, options, publication/location rows,
-//   collection membership, metafield values, booking config, rules and
+//   collection membership, named details, booking config, rules and
 //   sessions. A canonical page pointing at the product REFUSES the delete
 //   (content_documents_product_scope_fk), and so does a booking:
 //   the domain checks both and says which, because the cascade would otherwise
@@ -328,6 +327,8 @@ export const member = sqliteTable("member", {
 //   server/utils/product-validation.ts (validators),
 //   server/utils/public-products.ts (public reads).
 export const products = sqliteTable("products", {
+	kind: text().notNull(),
+	details_json: text().default("{}").notNull(),
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
 	name: text().notNull(),
@@ -347,11 +348,8 @@ export const products = sqliteTable("products", {
 	unit_label: text(),
 	// Stripe Product `marketing_features`: generic selling bullets. Not a merge
 	// of inclusions, preparation instructions, policies and features — those are
-	// separate metafield definitions.
+	// named fields for the product kind.
 	marketing_features: text().default("[]").notNull(),
-	// Validated tag list with the domain/rendering behavior the old `tags_json`
-	// carried. A tag is not metadata and not a collection.
-	tags: text().default("[]").notNull(),
 	// Validated string-to-string annotation/integration escape hatch. The object
 	// shape is enforced here; string-valued entries are enforced by the shared
 	// validator, since a CHECK cannot iterate JSON. No pricing, scheduling,
@@ -370,9 +368,10 @@ export const products = sqliteTable("products", {
 	unique("products_org_slug_unique").on(table.organization_id, table.slug),
 	check("products_name_not_blank_check", sql`trim(name) <> ''`),
 	check("products_slug_check", sql`slug <> '' AND slug = lower(slug) AND slug NOT GLOB '*[^a-z0-9-]*' AND slug NOT LIKE '-%' AND slug NOT LIKE '%-' AND slug NOT LIKE '%--%'`),
+	check("products_kind_check", sql`kind IN ('dish', 'experience', 'service', 'item')`),
 	check("products_active_check", sql`active IN (0, 1)`),
 	check("products_marketing_features_check", sql`json_valid(marketing_features) AND json_type(marketing_features) = 'array'`),
-	check("products_tags_check", sql`json_valid(tags) AND json_type(tags) = 'array'`),
+	check("products_details_json_check", sql`json_valid(details_json) AND json_type(details_json) = 'object'`),
 	check("products_metadata_check", sql`json_valid(metadata) AND json_type(metadata) = 'object'`),
 	check("products_order_url_check", sql`order_url IS NULL OR (order_url LIKE 'https://_%' AND instr(order_url, '@') = 0 AND instr(order_url, char(10)) = 0 AND instr(order_url, char(13)) = 0)`),
 ]);
@@ -679,117 +678,15 @@ export const collection_products = sqliteTable("collection_products", {
 // ---------------------------------------------------------------------------
 // Typed descriptive extensions.
 //
-// This replaces `products.details_json` and the descriptive half of
-// `experience_json`. A definition names an attribute and states its type and
-// constraints once, for the tenant; a value row supplies one Product's answer.
-// That is the whole extension mechanism: adding an eleventh attribute of a
-// supported type is one definition row — no column, no field-specific handler,
-// no localization-registry entry, no rendering branch.
-//
-// This is deliberately NOT a universal `owner_type + owner_id + payload`
-// store. It carries reusable descriptive product attributes and nothing else.
-// Operational identities, money, capacity allocations and independently
-// referenced records have their own relations below. Page-only prose is block
-// content.
-// ---------------------------------------------------------------------------
-
-// Row meaning: one attribute this tenant's Products may carry.
-// Owner/scope: organization. Namespaced so an imported vocabulary cannot
-//   collide with a merchant's own.
-// `value_type` names a supported type from the registry in shared/ (scalar and
-//   list forms). `validations` is the typed constraint object for that type.
-//   Neither is a CHECK here: a closed set on a referenced parent cannot be
-//   altered in D1.
-// `localizable` is the definition's declaration of localization eligibility.
-//   The localization machinery reads THIS, rather than keeping its own
-//   hardcoded list of attribute names.
-// Null semantics: validations '{}' means "the type's own rules only".
-// Deletion: cascades to every product value of that definition. Deleting a
-//   definition is a deliberate vocabulary change, not a cleanup.
-// Read/write: server/utils/product-validation.ts owns definition and value
-//   validation for every caller — imports, CMS, MCP, onboarding.
-export const metafield_definitions = sqliteTable("metafield_definitions", {
-	id: text().primaryKey(),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
-	namespace: text().notNull(),
-	key: text().notNull(),
-	name: text().notNull(),
-	description: text(),
-	value_type: text().notNull(),
-	validations: text().default("{}").notNull(),
-	localizable: integer({ mode: "boolean" }).default(false).notNull(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	created_by: text().notNull(),
-	updated_by: text().notNull(),
-}, (table) => [
-	check("metafield_definitions_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
-	unique("metafield_definitions_org_id_unique").on(table.organization_id, table.id),
-	unique("metafield_definitions_namespace_key_unique").on(table.organization_id, table.namespace, table.key),
-	check("metafield_definitions_namespace_check", sql`namespace <> '' AND namespace = lower(namespace) AND namespace NOT GLOB '*[^a-z0-9_-]*'`),
-	check("metafield_definitions_key_check", sql`key <> '' AND key = lower(key) AND key NOT GLOB '*[^a-z0-9_-]*'`),
-	check("metafield_definitions_name_not_blank_check", sql`trim(name) <> ''`),
-	check("metafield_definitions_validations_check", sql`json_valid(validations) AND json_type(validations) = 'object'`),
-	check("metafield_definitions_localizable_check", sql`localizable IN (0, 1)`),
-]);
-
-// Row meaning: this Product's value for this definition.
-// Enforced in SQL: one value per (product, definition), and the Product and
-//   the definition belong to the same organization.
-// Enforced by server/utils/product-validation.ts: the value conforms to the
-//   definition's value_type and validations. A typed list is stored as a JSON
-//   array; the shape is structural here, the element type is the validator's.
-// Null semantics: no row means the Product does not carry the attribute.
-//   There is no per-definition default that a missing row falls back to.
-// Deletion: cascades from Product and from definition.
-// Localized values live in resource_localizations under the product resource
-//   type, gated by metafield_definitions.localizable.
-export const product_metafields = sqliteTable("product_metafields", {
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
-	product_id: text().notNull(),
-	definition_id: text().notNull(),
-	value: text().notNull(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	created_by: text().notNull(),
-	updated_by: text().notNull(),
-}, (table) => [
-	primaryKey({ columns: [table.product_id, table.definition_id], name: "product_metafields_pk" }),
-	check("product_metafields_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
-	foreignKey({ columns: [table.organization_id, table.product_id], foreignColumns: [products.organization_id, products.id], name: "product_metafields_product_scope_fk" }).onDelete("cascade"),
-	foreignKey({ columns: [table.organization_id, table.definition_id], foreignColumns: [metafield_definitions.organization_id, metafield_definitions.id], name: "product_metafields_definition_scope_fk" }).onDelete("cascade"),
-	index("product_metafields_definition_idx").on(table.definition_id),
-	check("product_metafields_value_check", sql`json_valid(value)`),
-]);
-
-// ---------------------------------------------------------------------------
-// Booking capability: configuration, recurrence rules, concrete sessions.
-//
-// This replaces `products.experience_json` and the tuple-keyed booking columns
-// on `requests`. The chain is deliberate and one-directional: a config row
-// says the Product is bookable; rules describe when sessions should exist;
-// sessions ARE the occurrences and own their own time, capacity and state; a
-// booking claims seats on one session. Nothing infers a step from the absence
-// of another.
-// ---------------------------------------------------------------------------
-
-// The existence of this row is what makes a Product bookable. Not a non-null
-// duration, not a vertical name, not a product_type discriminator.
-// Row meaning: this Product takes bookings, with these defaults.
-// Keys: product_id is the primary key — one config per Product.
-// Null semantics: duration_minutes NULL means each rule or session states its
-//   own length. default_capacity NULL means unlimited unless a rule or session
-//   states a number — which is different from default_capacity = 0, meaning
-//   bookable in principle but currently seatless.
-// Deletion: cascades from Product; cascades to rules and sessions, and through
-//   sessions to bookings. Removing booking capability is explicit and
-//   destructive by design, never a side effect of editing a page.
-// Read/write: server/utils/availability.ts.
 export const product_booking_configs = sqliteTable("product_booking_configs", {
 	product_id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
 	duration_minutes: integer(),
 	default_capacity: integer(),
+	confirmation_mode: text().default("instant").notNull(),
+	online_payment_required: integer({ mode: "boolean" }).default(false).notNull(),
+	online_timezone: text(),
+	calendar_group: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	created_by: text().notNull(),
@@ -802,6 +699,9 @@ export const product_booking_configs = sqliteTable("product_booking_configs", {
 	unique("product_booking_configs_org_product_unique").on(table.organization_id, table.product_id),
 	check("product_booking_configs_duration_check", sql`duration_minutes IS NULL OR duration_minutes > 0`),
 	check("product_booking_configs_capacity_check", sql`default_capacity IS NULL OR default_capacity >= 0`),
+	check("product_booking_configs_confirmation_check", sql`confirmation_mode IN ('instant', 'review')`),
+	check("product_booking_configs_payment_check", sql`online_payment_required IN (0, 1)`),
+	check("product_booking_configs_calendar_check", sql`calendar_group IS NULL OR (length(trim(calendar_group)) > 0 AND online_timezone IS NOT NULL)`),
 ]);
 
 // Typed weekly recurrence. This replaces the `recurring_slots` JSON map; it is
@@ -982,7 +882,7 @@ export const bookings = sqliteTable("bookings", {
 	// The status set lives here now. It never did: `status` was plain text with
 	// a comment pointing somewhere else, which is how `pending` survived after
 	// nothing wrote it on purpose.
-	check("bookings_status_check", sql`status IN ('confirmed', 'cancelled')`),
+	check("bookings_status_check", sql`status IN ('pending', 'confirmed', 'cancelled')`),
 	check("bookings_instants_check", sql`(cancelled_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', cancelled_at, '+0 days') IS cancelled_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
 	// A booking pins what it holds. Deleting the session or the variant it
 	// names is refused while the booking exists — a guest's seat is not
@@ -1426,6 +1326,7 @@ export const organization = sqliteTable("organization", {
 	logo: text(),
 
 	// ── Formerly `organizations`. ────────────────────────────────────────────────────
+	consultation_settings_json: text({ mode: "json" }).$type<OrganizationSettings["consultation"]>(),
 	settings_json: text({ mode: "json" }).$type<OrganizationSettings>().default({ config: { default_timezone: 'UTC' } }).notNull(),
 	theme_id: text().default("saya-theme-v1").notNull(),
 	subdomain: text().unique(),
@@ -1456,21 +1357,19 @@ export const organization = sqliteTable("organization", {
 	// the row's modification time and nothing else recorded a publish.
 	check("organization_instants_check", sql`(updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at) AND (analytics_data_start_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', analytics_data_start_at, '+0 days') IS analytics_data_start_at)`),
 	check("organization_settings_json_check", sql`json_valid(settings_json) AND json_type(settings_json) IS 'object'`),
+	check("organization_consultation_settings_check", sql`consultation_settings_json IS NULL OR (json_valid(consultation_settings_json) AND json_type(consultation_settings_json) IS 'object' AND json_extract(consultation_settings_json, '$.mode') IN ('external_url', 'native_disabled', 'native') AND json_type(consultation_settings_json, '$.cta_label') IS 'text' AND json_type(consultation_settings_json, '$.schedule_path') IS 'text' AND json_extract(consultation_settings_json, '$.schedule_path') LIKE '/%' AND json_type(consultation_settings_json, '$.confirmation_path') IS 'text' AND json_extract(consultation_settings_json, '$.confirmation_path') LIKE '/%' AND json_type(consultation_settings_json, '$.tracking_enabled') IN ('true', 'false') AND (json_type(consultation_settings_json, '$.metadata_json') IS NULL OR json_type(consultation_settings_json, '$.metadata_json') IN ('null', 'object')) AND (json_type(consultation_settings_json, '$.external_url') IS NULL OR json_type(consultation_settings_json, '$.external_url') IN ('null', 'text'))) IS TRUE`),
 	check("organization_config_brand_color_check", sql`json_type(settings_json, '$.config.brand_color') IS NULL OR json_type(settings_json, '$.config.brand_color') IS 'text'`),
 	check("organization_config_press_email_check", sql`json_type(settings_json, '$.config.press_email') IS NULL OR json_type(settings_json, '$.config.press_email') IS 'text'`),
 	check("organization_config_partnerships_email_check", sql`json_type(settings_json, '$.config.partnerships_email') IS NULL OR json_type(settings_json, '$.config.partnerships_email') IS 'text'`),
 	check("organization_config_catering_email_check", sql`json_type(settings_json, '$.config.catering_email') IS NULL OR json_type(settings_json, '$.config.catering_email') IS 'text'`),
 	check("organization_config_careers_email_check", sql`json_type(settings_json, '$.config.careers_email') IS NULL OR json_type(settings_json, '$.config.careers_email') IS 'text'`),
 	check("organization_config_default_timezone_check", sql`json_type(settings_json, '$.config.default_timezone') IS 'text' AND length(json_extract(settings_json, '$.config.default_timezone')) > 0`),
-	check("organization_consultation_metadata_check", sql`json_type(settings_json, '$.consultation.metadata_json') IS NULL OR json_type(settings_json, '$.consultation.metadata_json') IN ('null', 'object')`),
 	check("organization_compliance_metadata_check", sql`json_type(settings_json, '$.compliance.metadata_json') IS NULL OR json_type(settings_json, '$.compliance.metadata_json') IN ('null', 'object')`),
 	check("organization_theme_saya_check", sql`json_type(settings_json, '$.theme_by_template.saya') IS NULL OR (json_type(settings_json, '$.theme_by_template.saya') IS 'object' AND json_type(settings_json, '$.theme_by_template.saya.tokens') IS 'object' AND json_extract(settings_json, '$.theme_by_template.saya.status') IN ('active', 'disabled')) IS TRUE`),
 	check("organization_theme_blawby_check", sql`json_type(settings_json, '$.theme_by_template.blawby') IS NULL OR (json_type(settings_json, '$.theme_by_template.blawby') IS 'object' AND json_type(settings_json, '$.theme_by_template.blawby.tokens') IS 'object' AND json_extract(settings_json, '$.theme_by_template.blawby.status') IN ('active', 'disabled')) IS TRUE`),
 	check("organization_config_object_check", sql`json_type(settings_json, '$.config') IS NULL OR json_type(settings_json, '$.config') IS 'object'`),
 	check("organization_theme_by_template_object_check", sql`json_type(settings_json, '$.theme_by_template') IS NULL OR json_type(settings_json, '$.theme_by_template') IS 'object'`),
-	check("organization_consultation_object_check", sql`json_type(settings_json, '$.consultation') IS NULL OR json_type(settings_json, '$.consultation') IS 'object'`),
 	check("organization_compliance_object_check", sql`json_type(settings_json, '$.compliance') IS NULL OR json_type(settings_json, '$.compliance') IS 'object'`),
-	check("organization_consultation_check", sql`json_type(settings_json, '$.consultation') IS NULL OR (json_extract(settings_json, '$.consultation.mode') IN ('external_url', 'native_disabled') AND json_type(settings_json, '$.consultation.cta_label') IS 'text' AND json_extract(settings_json, '$.consultation.schedule_path') LIKE '/%' AND json_extract(settings_json, '$.consultation.confirmation_path') LIKE '/%' AND json_type(settings_json, '$.consultation.tracking_enabled') IN ('true', 'false')) IS TRUE`),
 	check("organization_compliance_check", sql`json_type(settings_json, '$.compliance') IS NULL OR (json_extract(settings_json, '$.compliance.address_visibility') IN ('visible', 'hidden') AND (json_extract(settings_json, '$.compliance.service_area_type') IS NULL OR json_extract(settings_json, '$.compliance.service_area_type') IN ('AdministrativeArea', 'City', 'Country', 'Place', 'State')) AND json_type(settings_json, '$.compliance.same_as') IN ('array', 'null') AND json_type(settings_json, '$.compliance.contact_points') IN ('array', 'null')) IS TRUE`),
 	check("organization_compliance_nonprofit_check", sql`json_extract(settings_json, '$.compliance.nonprofit_status') IS NULL OR json_extract(settings_json, '$.compliance.nonprofit_status') IN (${sql.raw([...NONPROFIT_STATUS_CANONICAL].map(value => `'${value}'`).join(', '))})`),
 	check("organization_feature_overrides_check", sql`feature_overrides IS NULL OR (json_valid(feature_overrides) AND json_type(feature_overrides) IS 'object')`),
@@ -2077,12 +1976,12 @@ export const resource_localizations = sqliteTable("resource_localizations", {
 		table.locale,
 	),
 	uniqueIndex("resource_localizations_org_locale_route_unique")
-		.on(table.locale, table.route_path)
+		.on(table.organization_id, table.locale, table.route_path)
 		.where(sql`route_path IS NOT NULL`),
 	check("resource_localizations_values_json_check", sql`json_valid(values_json) AND json_type(values_json) = 'object'`),
 	check("resource_localizations_non_english_check", sql`locale <> 'en'`),
 	check("resource_localizations_route_path_check", sql`route_path IS NULL OR (route_path LIKE '/' || locale || '/%' AND route_path NOT LIKE '%?%' AND route_path NOT LIKE '%#%' AND route_path NOT LIKE '%//%')`),
-	index("resource_localizations_org_locale_type_idx").on(table.locale, table.resource_type),
+	index("resource_localizations_org_locale_type_idx").on(table.organization_id, table.locale, table.resource_type),
 	index("resource_localizations_resource_idx").on(table.resource_type, table.resource_id),
 ]);
 

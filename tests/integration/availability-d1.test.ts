@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { readFileSync } from 'node:fs'
 import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api'
 import { Miniflare } from 'miniflare'
 import * as schema from '../../server/db/schema.ts'
@@ -12,8 +13,11 @@ import {
   listSessions,
   materializeSessions,
   setBookingStatus,
+  sessionMoveQuery,
   updateSession,
 } from '../../server/utils/availability.ts'
+import { requestInsertQueries, threadPayloadForGuest, getThreadOperationalRecord } from '../../server/domain/requests.ts'
+import { executeGuestThreadOperation } from '../../server/domain/guest-threads/operations.ts'
 import { occurrenceKey } from '../../shared/bookings.ts'
 import { addLocalDays, localDateTimeToInstant, localNow } from '../../utils/timezone.ts'
 
@@ -23,21 +27,23 @@ const PRODUCT = 'prod-class'
 const ACTOR = 'user-actor'
 const NOW = '2026-09-11T00:00:00.000Z'
 
-async function boot() {
+async function boot(legacy = false) {
   const runtime = new Miniflare({ workers: [{ config: {
     name: 'availability-proof', type: 'worker', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } },
     env: { DB: { type: 'd1' } },
   } }] })
   const db = await runtime.getD1Database('DB')
-  const statements = await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))
+  const statements = legacy
+    ? ['0000_baseline'].flatMap(name => readFileSync(`migrations/${name}.sql`, 'utf8').split('--> statement-breakpoint').map(sql => sql.trim()).filter(Boolean))
+    : await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))
   await db.batch(statements.map(statement => db.prepare(statement)))
   await db.prepare(`INSERT INTO organization (id, name, slug, subdomain, settings_json, theme_id, default_currency, status, onboarding_status, url_structure, vertical, updated_at)
     VALUES (?, 'Sessions', 'sessions', 'sessions', '{"config":{"default_timezone":"Asia/Bangkok"}}', 'theme', 'THB', 'active', 'complete', 'flat', 'experience', ?)`)
     .bind(ORG, NOW).run()
   await db.prepare(`INSERT INTO business_locations (id, organization_id, slug, title, status, timezone, created_at, updated_at)
     VALUES (?, ?, 'studio', 'Studio', 'active', 'Asia/Bangkok', ?, ?)`).bind(LOCATION, ORG, NOW, NOW).run()
-  await db.prepare(`INSERT INTO products (id, organization_id, name, slug, created_by, updated_by) VALUES (?, ?, 'Pottery Class', 'pottery-class', ?, ?)`)
+  await db.prepare(`INSERT INTO products (kind, id, organization_id, name, slug, created_by, updated_by) VALUES ('experience', ?, ?, 'Pottery Class', 'pottery-class', ?, ?)`)
     .bind(PRODUCT, ORG, ACTOR, ACTOR).run()
   await db.prepare('INSERT INTO product_publications (organization_id, product_id, published, created_by, updated_by) VALUES (?, ?, 1, ?, ?)').bind(ORG, PRODUCT, ACTOR, ACTOR).run()
   for (const [id, name] of [['var-adult', 'Adult'], ['var-child', 'Child']]) {
@@ -378,5 +384,71 @@ test('neutral adoption protects cancelled history and a claim racing its atomic 
     const invalid = await db.prepare("SELECT count(*) n FROM product_sessions s WHERE s.capacity IS NOT NULL AND s.capacity < (SELECT COALESCE(SUM(b.party_size),0) FROM bookings b WHERE b.product_session_id=s.id AND b.status='confirmed')").first('n')
     assert.equal(invalid, 0)
     assert.equal(await db.prepare('SELECT product_session_id FROM bookings WHERE id = ?').bind(booking.bookingId).first('product_session_id'), protectedId)
+  } finally { await runtime.dispose() }
+})
+
+
+test('one configured online calendar excludes overlapping pending requests and review retries release once', { timeout: 120_000 }, async () => {
+  const { runtime, db } = await boot()
+  try {
+    await db.prepare("INSERT INTO user (id, name, email) VALUES (?, 'Operator', 'operator@example.com')").bind(ACTOR).run()
+    await db.prepare("UPDATE product_booking_configs SET confirmation_mode = 'review', online_timezone = 'America/New_York', calendar_group = 'online' WHERE product_id = ?").bind(PRODUCT).run()
+    for (const [productId, variantId, group] of [['prod-consult', 'var-consult', 'online'], ['prod-independent', 'var-independent', null]]) {
+      await db.prepare(`INSERT INTO products (kind, id, organization_id, name, slug, created_by, updated_by) VALUES ('experience', ?, ?, ?, ?, ?, ?)`).bind(productId, ORG, productId, productId, ACTOR, ACTOR).run()
+      await db.prepare('INSERT INTO product_variants (id, organization_id, product_id, name, created_by, updated_by) VALUES (?, ?, ?, ?, ?, ?)').bind(variantId, ORG, productId, variantId, ACTOR, ACTOR).run()
+      await db.prepare("INSERT INTO product_booking_configs (product_id, organization_id, duration_minutes, default_capacity, confirmation_mode, online_timezone, calendar_group, created_by, updated_by) VALUES (?, ?, 45, 1, 'review', 'America/New_York', ?, ?, ?)").bind(productId, ORG, group, ACTOR, ACTOR).run()
+    }
+    for (const [id, productId, start, end] of [
+      ['session-one', PRODUCT, '2098-11-02T15:00:00.000Z', '2098-11-02T16:15:00.000Z'],
+      ['session-two', 'prod-consult', '2098-11-02T15:30:00.000Z', '2098-11-02T16:15:00.000Z'],
+      ['session-adjacent', 'prod-consult', '2098-11-02T16:15:00.000Z', '2098-11-02T17:00:00.000Z'],
+      ['session-independent', 'prod-independent', '2098-11-02T15:30:00.000Z', '2098-11-02T16:15:00.000Z'],
+    ]) await db.prepare("INSERT INTO product_sessions (id, organization_id, product_id, timezone, starts_at, ends_at, capacity, status, created_by, updated_by) VALUES (?, ?, ?, 'America/New_York', ?, ?, 1, 'scheduled', ?, ?)").bind(id, ORG, productId, start, end, ACTOR, ACTOR).run()
+    for (const id of ['thread-one', 'thread-two']) {
+      const queries = requestInsertQueries({ id, kind: 'booking', organization_id: ORG, location_id: null, user_id: null, review_id: null, conversation_state: 'needs_attention', resolved_at: null, payload: threadPayloadForGuest({ name: 'Guest', email: 'guest@example.com' }), created_at: NOW, updated_at: NOW })
+      await db.batch(queries.map(query => db.prepare(query.query).bind(...query.params!)))
+    }
+    const inputs = [
+      { organizationId: ORG, productId: PRODUCT, sessionId: 'session-one', productVariantId: 'var-adult', partySize: 1, requestId: 'thread-one' },
+      { organizationId: ORG, productId: 'prod-consult', sessionId: 'session-two', productVariantId: 'var-consult', partySize: 1, requestId: 'thread-two' },
+    ]
+    const raced = await Promise.allSettled(inputs.map(input => claimSessionCapacity(db, input)))
+    assert.equal(raced.filter(result => result.status === 'fulfilled').length, 1)
+    const index = raced.findIndex(result => result.status === 'fulfilled')
+    const winner = inputs[index]!
+    const record = await getThreadOperationalRecord(db, winner.requestId)
+    assert.equal(record?.status, 'pending')
+    assert.equal((await claimSessionCapacity(db, winner)).bookingId, record!.id)
+    assert.equal(await db.prepare('SELECT COUNT(*) n FROM bookings').first('n'), 1)
+    const listed = await listSessions(db, { organizationId: ORG, fromInstant: '2098-11-02T00:00:00.000Z', toInstant: '2098-11-03T00:00:00.000Z' })
+    assert.equal(listed.find(session => session.id === inputs[1 - index]!.sessionId)?.is_full, true)
+    assert.equal(listed.find(session => session.id === 'session-adjacent')?.remaining, 1)
+    assert.equal(listed.find(session => session.id === 'session-independent')?.remaining, 1)
+    const env = { NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://proof.example', EMAIL_REPLY_SECRET: 'local-reply-proof', EMAIL_DELIVERY_MODE: 'log_only' }
+    const confirm = { threadId: winner.requestId, organizationId: ORG, action: 'confirm', actorUserId: ACTOR, idempotencyKey: 'confirm-once', env }
+    assert.equal((await executeGuestThreadOperation(db, confirm)).ok, true)
+    assert.equal((await executeGuestThreadOperation(db, confirm)).ok, true)
+    assert.equal((await getThreadOperationalRecord(db, winner.requestId))?.status, 'confirmed')
+    assert.equal(await db.prepare('SELECT COUNT(*) n FROM bookings').first('n'), 1)
+    const moved = sessionMoveQuery({ bookingId: record!.id, organizationId: ORG, productId: winner.productId, sessionId: winner.sessionId, partySize: 1, now: new Date().toISOString() })
+    assert.equal((await db.prepare(moved.query).bind(...moved.params!).run()).meta.changes, 1, 'same-session changes exclude the allocation being moved')
+    assert.equal((await getThreadOperationalRecord(db, winner.requestId))?.id, record!.id)
+    assert.equal((await getThreadOperationalRecord(db, winner.requestId))?.status, 'confirmed')
+    await assert.rejects(() => claimSessionCapacity(db, { ...winner, partySize: 2 }), /different booking/)
+    const cancel = { ...confirm, action: 'cancel', idempotencyKey: 'cancel-once' }
+    assert.equal((await executeGuestThreadOperation(db, cancel)).ok, true)
+    assert.equal((await executeGuestThreadOperation(db, cancel)).ok, true)
+    assert.equal(await db.prepare("SELECT COUNT(*) n FROM activity_entries WHERE event_name = 'booking.cancel'").first('n'), 1)
+    const loser = inputs[1 - index]!
+    await claimSessionCapacity(db, loser)
+    const reject = { ...confirm, threadId: loser.requestId, action: 'reject', idempotencyKey: 'reject-once' }
+    assert.equal((await executeGuestThreadOperation(db, reject)).ok, true)
+    assert.equal((await executeGuestThreadOperation(db, reject)).ok, true)
+    assert.equal((await getThreadOperationalRecord(db, loser.requestId))?.status, 'cancelled')
+    const after = await listSessions(db, { organizationId: ORG, fromInstant: '2098-11-02T00:00:00.000Z', toInstant: '2098-11-03T00:00:00.000Z' })
+    assert.equal(after.find(session => session.id === 'session-one')?.remaining, 1)
+    assert.equal(after.find(session => session.id === 'session-two')?.remaining, 1)
+    assert.equal(await db.prepare("SELECT COUNT(*) n FROM activity_entries WHERE event_name = 'booking.confirm'").first('n'), 1)
+    assert.equal(await db.prepare("SELECT COUNT(*) n FROM activity_entries WHERE event_name = 'booking.reject'").first('n'), 1)
   } finally { await runtime.dispose() }
 })

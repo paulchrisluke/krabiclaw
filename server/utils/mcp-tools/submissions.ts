@@ -16,7 +16,7 @@ export const SUBMISSIONS_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'list_reservation_inquiries',
-      description: "Read table reservations for the selected site, optionally filtered by location and creation window of up to 90 days. Returns guest contact details, reservation details and status counts. Product session bookings are separate and use the dashboard inbox.",
+      description: "Read table reservations for the selected site, optionally filtered by location and creation window of up to 90 days. Returns guest contact details, reservation details and status counts. Use list_product_bookings to read product session bookings and consultations.",
       domain: 'submissions',
       minimumRole: 'admin',
       confirmRequired: false,

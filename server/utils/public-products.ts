@@ -4,7 +4,7 @@ import { bookingWindow, listSessions } from '~/server/utils/availability'
 import { resolveOrganizationCmsCapabilities } from '~/server/utils/cms-capabilities'
 import { getProductBySlug, hydrateProductMedia, listCollections, listLocationProducts } from '~/server/utils/product-management'
 import type { Collection, Product, ProductBookingConfig, ProductPresentation, ProductSurface } from '~/server/types/products'
-import { EXPERIENCE_PRESENTATION, isExperience, productSurfaceOf, resolveProductPresentation } from '~/utils/product-presentation'
+import { isExperience, productSurfaceOf, resolveProductPresentation, presentationForSurface } from '~/utils/product-presentation'
 import { isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
 import {
   loadExactPublicLocalizations,
@@ -91,7 +91,7 @@ export interface PublicProductSession {
 }
 
 export interface PublicProductDetail extends PublicProductCollection {
-  location: PublicProductLocation
+  location: PublicProductLocation | null
   product: Product
   /**
    * Present exactly when the Product takes bookings.
@@ -129,12 +129,10 @@ async function loadProductOrganization(db: DbClient, organizationId: string, rou
      LIMIT 1
   `, [organizationId])
   if (!organization) return null
-  // Experiences are a surface of their own on every vertical that sells
-  // products at all: a restaurant keeps its Menu and gains Experiences. The
-  // vertical's own surface still answers only to its own segment.
+  // Supported sites can carry dishes, experiences, services and merchandise.
   const verticalPresentation = resolveProductPresentation(organization.vertical)
   if (!verticalPresentation) return null
-  const presentation = routeKind === 'experiences' ? EXPERIENCE_PRESENTATION : verticalPresentation
+  const presentation = presentationForSurface(organization.vertical, routeKind)
   if (presentation.locationCollectionSegment !== routeKind) return null
   if (!isCurrencyCode(organization.default_currency)) throw new Error(`Unsupported organization currency: ${organization.default_currency}`)
   return { organization, presentation, currency: organization.default_currency }
@@ -172,10 +170,7 @@ export async function loadPublicProductCollection(
   const perLocation = await Promise.all(locations.map(location =>
     listLocationProducts(db, { organizationId: resolved.organization.id, locationId: location.id, publishedOnly: true })))
   const seen = new Set<string>()
-  // The only place a Product is assigned to a surface: it takes bookings, so
-  // it is an Experience, or it belongs to the vertical's own surface. Every
-  // caller below reads this same filtered list, so the collection page, the
-  // detail page and their siblings cannot disagree about what a route holds.
+  // Collections and detail routes use the same explicit product kind.
   const products = await hydrateProductMedia(db, organizationId, perLocation.flat().filter((product) => {
     if (seen.has(product.id)) return false
     seen.add(product.id)
@@ -197,7 +192,7 @@ export async function loadPublicProductDetail(
   locationSlug: string,
   productSlug: string,
   locale = 'en',
-): Promise<PublicProductDetail | null> {
+): Promise<(PublicProductDetail & { location: PublicProductLocation }) | null> {
   if (locale === 'en') {
     const collection = await loadPublicProductCollection(db, organizationId, routeKind, previewAuthorized, locationSlug)
     const location = collection?.locations[0]
@@ -206,7 +201,7 @@ export async function loadPublicProductDetail(
     // The product must be published on this site and actually offered at this
     // location: reaching it by slug alone would render a branch's page for
     // something the site withholds, or something that branch does not sell.
-    const offeredHere = found?.locations.some(entry => entry.location_id === location.id && entry.published && entry.active)
+    const offeredHere = found?.locations.some(entry => entry.location_id === location.id && entry.published)
     const publishedHere = found?.publications.some(entry => entry.organization_id === organizationId && entry.published)
     const onThisSurface = found ? productSurfaceOf(collection.organization.vertical, found) === routeKind : false
     if (!found || !offeredHere || !publishedHere || !onThisSurface) return null
@@ -303,7 +298,7 @@ export async function loadPublicExperienceDetail(
   const found = await getProductBySlug(db, resolved.organization.id, productSlug)
   if (!found || !isExperience(found)) return null
   if (!found.publications.some(entry => entry.organization_id === organizationId && entry.published)) return null
-  const offeredAt = new Set(found.locations.filter(entry => entry.published && entry.active).map(entry => entry.location_id))
+  const offeredAt = new Set(found.locations.filter(entry => entry.published).map(entry => entry.location_id))
   const locationRows = (await queryAll<PublicProductLocationRow>(db, `
     SELECT id, slug, title, feature_overrides, timezone, address, phone, maps_url, latitude, longitude
       FROM business_locations
@@ -345,7 +340,7 @@ export async function loadPublicProductApiDetail(
   locationSlug: string,
   productSlug: string,
   locale = 'en',
-): Promise<PublicProductDetail | null> {
+): Promise<(PublicProductDetail & { location: PublicProductLocation }) | null> {
   const organization = await queryFirst<{ id: string; vertical: string }>(db, `SELECT id, vertical FROM organization WHERE id = ? AND ${publicTenantVisibilitySql('organization', previewAuthorized)} LIMIT 1`, [organizationId])
   const presentation = organization ? resolveProductPresentation(organization.vertical) : null
   if (!organization || !presentation) return null
@@ -376,6 +371,10 @@ export async function loadPublicProductSessions(
   if (!detail.booking) return []
   // A branch with no zone cannot state when anything starts, so it offers
   // nothing here rather than a time in a zone nobody chose.
+  if (!detail.location) {
+    const { listPublicBookingSessions } = await import('~/server/utils/public-session-booking')
+    return (await listPublicBookingSessions(db, detail.organization.id, detail.product.slug, 'online')).sessions.filter(session => !session.is_full)
+  }
   if (!detail.location.timezone) return []
   const window = bookingWindow(detail.location.timezone)
   const sessions = await listSessions(db, {
@@ -415,12 +414,12 @@ export async function loadPublicProductReviews(
            original_review_date, created_at
      FROM reviews
      WHERE organization_id = ? AND status = 'approved'
-       AND location_id = ?
+       AND location_id IS ?
        AND (product_id = ? OR (product_id IS NULL AND source = 'google_places'))
        AND author_name IS NOT NULL AND trim(author_name) <> ''
        AND content IS NOT NULL AND trim(content) <> ''
      ORDER BY COALESCE(original_review_date, created_at) DESC, id DESC
      LIMIT 50
-  `, [detail.organization.id, detail.location.id, detail.product.id])
+  `, [detail.organization.id, detail.location?.id ?? null, detail.product.id])
   return rows.map(row => ({ ...row, google_review_metadata: parseGoogleReviewMetadata(row.google_review_metadata) }))
 }

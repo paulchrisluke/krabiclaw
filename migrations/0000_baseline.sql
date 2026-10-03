@@ -185,7 +185,7 @@ CREATE TABLE `bookings` (
 	FOREIGN KEY (`organization_id`,`product_id`,`product_session_id`) REFERENCES `product_sessions`(`organization_id`,`product_id`,`id`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (`organization_id`,`product_id`,`product_variant_id`) REFERENCES `product_variants`(`organization_id`,`product_id`,`id`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (`organization_id`,`request_id`) REFERENCES `requests`(`organization_id`,`id`) ON UPDATE no action ON DELETE no action,
-	CONSTRAINT "bookings_status_check" CHECK(status IN ('confirmed', 'cancelled')),
+	CONSTRAINT "bookings_status_check" CHECK(status IN ('pending', 'confirmed', 'cancelled')),
 	CONSTRAINT "bookings_instants_check" CHECK((cancelled_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', cancelled_at, '+0 days') IS cancelled_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
 	CONSTRAINT "bookings_party_size_check" CHECK(party_size > 0)
 );
@@ -567,7 +567,7 @@ CREATE TABLE `media_placements` (
 	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`organization_id`,`asset_id`) REFERENCES `media_assets`(`organization_id`,`id`) ON UPDATE no action ON DELETE cascade,
 	CONSTRAINT "media_placements_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
-	CONSTRAINT "media_placements_owner_type_check" CHECK(owner_type IN ('organization', 'business_location', 'product', 'content_document', 'content_block', 'review', 'review_request')),
+	CONSTRAINT "media_placements_owner_type_check" CHECK(owner_type IN ('organization', 'business_location', 'product', 'content_document', 'content_block', 'review', 'review_request', 'activity_entry')),
 	CONSTRAINT "media_placements_sort_order_check" CHECK(sort_order >= 0)
 );
 --> statement-breakpoint
@@ -586,31 +586,6 @@ CREATE TABLE `member` (
 --> statement-breakpoint
 CREATE INDEX `member_userId_organizationId_idx` ON `member` (`userId`,`organizationId`);--> statement-breakpoint
 CREATE INDEX `member_organizationId_idx` ON `member` (`organizationId`);--> statement-breakpoint
-CREATE TABLE `metafield_definitions` (
-	`id` text PRIMARY KEY NOT NULL,
-	`organization_id` text NOT NULL,
-	`namespace` text NOT NULL,
-	`key` text NOT NULL,
-	`name` text NOT NULL,
-	`description` text,
-	`value_type` text NOT NULL,
-	`validations` text DEFAULT '{}' NOT NULL,
-	`localizable` integer DEFAULT 0 NOT NULL,
-	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-	`created_by` text NOT NULL,
-	`updated_by` text NOT NULL,
-	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
-	CONSTRAINT "metafield_definitions_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
-	CONSTRAINT "metafield_definitions_namespace_check" CHECK(namespace <> '' AND namespace = lower(namespace) AND namespace NOT GLOB '*[^a-z0-9_-]*'),
-	CONSTRAINT "metafield_definitions_key_check" CHECK(key <> '' AND key = lower(key) AND key NOT GLOB '*[^a-z0-9_-]*'),
-	CONSTRAINT "metafield_definitions_name_not_blank_check" CHECK(trim(name) <> ''),
-	CONSTRAINT "metafield_definitions_validations_check" CHECK(json_valid(validations) AND json_type(validations) = 'object'),
-	CONSTRAINT "metafield_definitions_localizable_check" CHECK(localizable IN (0, 1))
-);
---> statement-breakpoint
-CREATE UNIQUE INDEX `metafield_definitions_org_id_unique` ON `metafield_definitions` (`organization_id`,`id`);--> statement-breakpoint
-CREATE UNIQUE INDEX `metafield_definitions_namespace_key_unique` ON `metafield_definitions` (`organization_id`,`namespace`,`key`);--> statement-breakpoint
 CREATE TABLE `oauthAccessToken` (
 	`id` text PRIMARY KEY NOT NULL,
 	`clientId` text NOT NULL,
@@ -770,6 +745,7 @@ CREATE TABLE `organization` (
 	`stripeCustomerId` text,
 	`createdAt` integer DEFAULT (unixepoch()) NOT NULL,
 	`logo` text,
+	`consultation_settings_json` text,
 	`settings_json` text DEFAULT '{"config":{"default_timezone":"UTC"}}' NOT NULL,
 	`theme_id` text DEFAULT 'saya-theme-v1' NOT NULL,
 	`subdomain` text,
@@ -791,21 +767,19 @@ CREATE TABLE `organization` (
 	CONSTRAINT "organization_slug_required_check" CHECK(trim(slug) <> ''),
 	CONSTRAINT "organization_instants_check" CHECK((updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at) AND (analytics_data_start_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', analytics_data_start_at, '+0 days') IS analytics_data_start_at)),
 	CONSTRAINT "organization_settings_json_check" CHECK(json_valid(settings_json) AND json_type(settings_json) IS 'object'),
+	CONSTRAINT "organization_consultation_settings_check" CHECK(consultation_settings_json IS NULL OR (json_valid(consultation_settings_json) AND json_type(consultation_settings_json) IS 'object' AND json_extract(consultation_settings_json, '$.mode') IN ('external_url', 'native_disabled', 'native') AND json_type(consultation_settings_json, '$.cta_label') IS 'text' AND json_type(consultation_settings_json, '$.schedule_path') IS 'text' AND json_extract(consultation_settings_json, '$.schedule_path') LIKE '/%' AND json_type(consultation_settings_json, '$.confirmation_path') IS 'text' AND json_extract(consultation_settings_json, '$.confirmation_path') LIKE '/%' AND json_type(consultation_settings_json, '$.tracking_enabled') IN ('true', 'false') AND (json_type(consultation_settings_json, '$.metadata_json') IS NULL OR json_type(consultation_settings_json, '$.metadata_json') IN ('null', 'object')) AND (json_type(consultation_settings_json, '$.external_url') IS NULL OR json_type(consultation_settings_json, '$.external_url') IN ('null', 'text'))) IS TRUE),
 	CONSTRAINT "organization_config_brand_color_check" CHECK(json_type(settings_json, '$.config.brand_color') IS NULL OR json_type(settings_json, '$.config.brand_color') IS 'text'),
 	CONSTRAINT "organization_config_press_email_check" CHECK(json_type(settings_json, '$.config.press_email') IS NULL OR json_type(settings_json, '$.config.press_email') IS 'text'),
 	CONSTRAINT "organization_config_partnerships_email_check" CHECK(json_type(settings_json, '$.config.partnerships_email') IS NULL OR json_type(settings_json, '$.config.partnerships_email') IS 'text'),
 	CONSTRAINT "organization_config_catering_email_check" CHECK(json_type(settings_json, '$.config.catering_email') IS NULL OR json_type(settings_json, '$.config.catering_email') IS 'text'),
 	CONSTRAINT "organization_config_careers_email_check" CHECK(json_type(settings_json, '$.config.careers_email') IS NULL OR json_type(settings_json, '$.config.careers_email') IS 'text'),
 	CONSTRAINT "organization_config_default_timezone_check" CHECK(json_type(settings_json, '$.config.default_timezone') IS 'text' AND length(json_extract(settings_json, '$.config.default_timezone')) > 0),
-	CONSTRAINT "organization_consultation_metadata_check" CHECK(json_type(settings_json, '$.consultation.metadata_json') IS NULL OR json_type(settings_json, '$.consultation.metadata_json') IN ('null', 'object')),
 	CONSTRAINT "organization_compliance_metadata_check" CHECK(json_type(settings_json, '$.compliance.metadata_json') IS NULL OR json_type(settings_json, '$.compliance.metadata_json') IN ('null', 'object')),
 	CONSTRAINT "organization_theme_saya_check" CHECK(json_type(settings_json, '$.theme_by_template.saya') IS NULL OR (json_type(settings_json, '$.theme_by_template.saya') IS 'object' AND json_type(settings_json, '$.theme_by_template.saya.tokens') IS 'object' AND json_extract(settings_json, '$.theme_by_template.saya.status') IN ('active', 'disabled')) IS TRUE),
 	CONSTRAINT "organization_theme_blawby_check" CHECK(json_type(settings_json, '$.theme_by_template.blawby') IS NULL OR (json_type(settings_json, '$.theme_by_template.blawby') IS 'object' AND json_type(settings_json, '$.theme_by_template.blawby.tokens') IS 'object' AND json_extract(settings_json, '$.theme_by_template.blawby.status') IN ('active', 'disabled')) IS TRUE),
 	CONSTRAINT "organization_config_object_check" CHECK(json_type(settings_json, '$.config') IS NULL OR json_type(settings_json, '$.config') IS 'object'),
 	CONSTRAINT "organization_theme_by_template_object_check" CHECK(json_type(settings_json, '$.theme_by_template') IS NULL OR json_type(settings_json, '$.theme_by_template') IS 'object'),
-	CONSTRAINT "organization_consultation_object_check" CHECK(json_type(settings_json, '$.consultation') IS NULL OR json_type(settings_json, '$.consultation') IS 'object'),
 	CONSTRAINT "organization_compliance_object_check" CHECK(json_type(settings_json, '$.compliance') IS NULL OR json_type(settings_json, '$.compliance') IS 'object'),
-	CONSTRAINT "organization_consultation_check" CHECK(json_type(settings_json, '$.consultation') IS NULL OR (json_extract(settings_json, '$.consultation.mode') IN ('external_url', 'native_disabled') AND json_type(settings_json, '$.consultation.cta_label') IS 'text' AND json_extract(settings_json, '$.consultation.schedule_path') LIKE '/%' AND json_extract(settings_json, '$.consultation.confirmation_path') LIKE '/%' AND json_type(settings_json, '$.consultation.tracking_enabled') IN ('true', 'false')) IS TRUE),
 	CONSTRAINT "organization_compliance_check" CHECK(json_type(settings_json, '$.compliance') IS NULL OR (json_extract(settings_json, '$.compliance.address_visibility') IN ('visible', 'hidden') AND (json_extract(settings_json, '$.compliance.service_area_type') IS NULL OR json_extract(settings_json, '$.compliance.service_area_type') IN ('AdministrativeArea', 'City', 'Country', 'Place', 'State')) AND json_type(settings_json, '$.compliance.same_as') IN ('array', 'null') AND json_type(settings_json, '$.compliance.contact_points') IN ('array', 'null')) IS TRUE),
 	CONSTRAINT "organization_compliance_nonprofit_check" CHECK(json_extract(settings_json, '$.compliance.nonprofit_status') IS NULL OR json_extract(settings_json, '$.compliance.nonprofit_status') IN ('https://schema.org/Nonprofit501c1', 'https://schema.org/Nonprofit501c2', 'https://schema.org/Nonprofit501c3', 'https://schema.org/Nonprofit501c4', 'https://schema.org/Nonprofit501c5', 'https://schema.org/Nonprofit501c6', 'https://schema.org/Nonprofit501c7', 'https://schema.org/Nonprofit501c8', 'https://schema.org/Nonprofit501c9', 'https://schema.org/Nonprofit501c10', 'https://schema.org/Nonprofit501c11', 'https://schema.org/Nonprofit501c12', 'https://schema.org/Nonprofit501c13', 'https://schema.org/Nonprofit501c14', 'https://schema.org/Nonprofit501c15', 'https://schema.org/Nonprofit501c16', 'https://schema.org/Nonprofit501c17', 'https://schema.org/Nonprofit501c18', 'https://schema.org/Nonprofit501c19', 'https://schema.org/Nonprofit501c20', 'https://schema.org/Nonprofit501c21', 'https://schema.org/Nonprofit501c22', 'https://schema.org/Nonprofit501c23', 'https://schema.org/Nonprofit501c24', 'https://schema.org/Nonprofit501c25', 'https://schema.org/Nonprofit501c26', 'https://schema.org/Nonprofit501c27', 'https://schema.org/Nonprofit501c28', 'https://schema.org/NonprofitANBI', 'https://schema.org/NonprofitSBBI')),
 	CONSTRAINT "organization_feature_overrides_check" CHECK(feature_overrides IS NULL OR (json_valid(feature_overrides) AND json_type(feature_overrides) IS 'object'))
@@ -1058,6 +1032,10 @@ CREATE TABLE `product_booking_configs` (
 	`organization_id` text NOT NULL,
 	`duration_minutes` integer,
 	`default_capacity` integer,
+	`confirmation_mode` text DEFAULT 'instant' NOT NULL,
+	`online_payment_required` integer DEFAULT 0 NOT NULL,
+	`online_timezone` text,
+	`calendar_group` text,
 	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	`created_by` text NOT NULL,
@@ -1066,7 +1044,10 @@ CREATE TABLE `product_booking_configs` (
 	FOREIGN KEY (`organization_id`,`product_id`) REFERENCES `products`(`organization_id`,`id`) ON UPDATE no action ON DELETE cascade,
 	CONSTRAINT "product_booking_configs_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
 	CONSTRAINT "product_booking_configs_duration_check" CHECK(duration_minutes IS NULL OR duration_minutes > 0),
-	CONSTRAINT "product_booking_configs_capacity_check" CHECK(default_capacity IS NULL OR default_capacity >= 0)
+	CONSTRAINT "product_booking_configs_capacity_check" CHECK(default_capacity IS NULL OR default_capacity >= 0),
+	CONSTRAINT "product_booking_configs_confirmation_check" CHECK(confirmation_mode IN ('instant', 'review')),
+	CONSTRAINT "product_booking_configs_payment_check" CHECK(online_payment_required IN (0, 1)),
+	CONSTRAINT "product_booking_configs_calendar_check" CHECK(calendar_group IS NULL OR (length(trim(calendar_group)) > 0 AND online_timezone IS NOT NULL))
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `product_booking_configs_org_product_unique` ON `product_booking_configs` (`organization_id`,`product_id`);--> statement-breakpoint
@@ -1089,24 +1070,6 @@ CREATE TABLE `product_locations` (
 );
 --> statement-breakpoint
 CREATE INDEX `product_locations_location_idx` ON `product_locations` (`location_id`,`published`,`active`);--> statement-breakpoint
-CREATE TABLE `product_metafields` (
-	`organization_id` text NOT NULL,
-	`product_id` text NOT NULL,
-	`definition_id` text NOT NULL,
-	`value` text NOT NULL,
-	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-	`created_by` text NOT NULL,
-	`updated_by` text NOT NULL,
-	PRIMARY KEY(`product_id`, `definition_id`),
-	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`organization_id`,`product_id`) REFERENCES `products`(`organization_id`,`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`organization_id`,`definition_id`) REFERENCES `metafield_definitions`(`organization_id`,`id`) ON UPDATE no action ON DELETE cascade,
-	CONSTRAINT "product_metafields_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
-	CONSTRAINT "product_metafields_value_check" CHECK(json_valid(value))
-);
---> statement-breakpoint
-CREATE INDEX `product_metafields_definition_idx` ON `product_metafields` (`definition_id`);--> statement-breakpoint
 CREATE TABLE `product_option_values` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
@@ -1233,6 +1196,8 @@ CREATE INDEX `product_variants_product_sort_idx` ON `product_variants` (`product
 CREATE UNIQUE INDEX `product_variants_org_id_unique` ON `product_variants` (`organization_id`,`id`);--> statement-breakpoint
 CREATE UNIQUE INDEX `product_variants_product_id_unique` ON `product_variants` (`organization_id`,`product_id`,`id`);--> statement-breakpoint
 CREATE TABLE `products` (
+	`kind` text NOT NULL,
+	`details_json` text DEFAULT '{}' NOT NULL,
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
 	`name` text NOT NULL,
@@ -1242,7 +1207,6 @@ CREATE TABLE `products` (
 	`order_url` text,
 	`unit_label` text,
 	`marketing_features` text DEFAULT '[]' NOT NULL,
-	`tags` text DEFAULT '[]' NOT NULL,
 	`metadata` text DEFAULT '{}' NOT NULL,
 	`tax_code` text,
 	`source` text DEFAULT 'manual' NOT NULL,
@@ -1254,9 +1218,10 @@ CREATE TABLE `products` (
 	CONSTRAINT "products_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
 	CONSTRAINT "products_name_not_blank_check" CHECK(trim(name) <> ''),
 	CONSTRAINT "products_slug_check" CHECK(slug <> '' AND slug = lower(slug) AND slug NOT GLOB '*[^a-z0-9-]*' AND slug NOT LIKE '-%' AND slug NOT LIKE '%-' AND slug NOT LIKE '%--%'),
+	CONSTRAINT "products_kind_check" CHECK(kind IN ('dish', 'experience', 'service', 'item')),
 	CONSTRAINT "products_active_check" CHECK(active IN (0, 1)),
 	CONSTRAINT "products_marketing_features_check" CHECK(json_valid(marketing_features) AND json_type(marketing_features) = 'array'),
-	CONSTRAINT "products_tags_check" CHECK(json_valid(tags) AND json_type(tags) = 'array'),
+	CONSTRAINT "products_details_json_check" CHECK(json_valid(details_json) AND json_type(details_json) = 'object'),
 	CONSTRAINT "products_metadata_check" CHECK(json_valid(metadata) AND json_type(metadata) = 'object'),
 	CONSTRAINT "products_order_url_check" CHECK(order_url IS NULL OR (order_url LIKE 'https://_%' AND instr(order_url, '@') = 0 AND instr(order_url, char(10)) = 0 AND instr(order_url, char(13)) = 0))
 );
@@ -1373,8 +1338,8 @@ CREATE TABLE `resource_localizations` (
 	CONSTRAINT "resource_localizations_route_path_check" CHECK(route_path IS NULL OR (route_path LIKE '/' || locale || '/%' AND route_path NOT LIKE '%?%' AND route_path NOT LIKE '%#%' AND route_path NOT LIKE '%//%'))
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `resource_localizations_org_locale_route_unique` ON `resource_localizations` (`locale`,`route_path`) WHERE route_path IS NOT NULL;--> statement-breakpoint
-CREATE INDEX `resource_localizations_org_locale_type_idx` ON `resource_localizations` (`locale`,`resource_type`);--> statement-breakpoint
+CREATE UNIQUE INDEX `resource_localizations_org_locale_route_unique` ON `resource_localizations` (`organization_id`,`locale`,`route_path`) WHERE route_path IS NOT NULL;--> statement-breakpoint
+CREATE INDEX `resource_localizations_org_locale_type_idx` ON `resource_localizations` (`organization_id`,`locale`,`resource_type`);--> statement-breakpoint
 CREATE INDEX `resource_localizations_resource_idx` ON `resource_localizations` (`resource_type`,`resource_id`);--> statement-breakpoint
 CREATE UNIQUE INDEX `resource_localizations_org_resource_locale_unique` ON `resource_localizations` (`organization_id`,`resource_type`,`resource_id`,`locale`);--> statement-breakpoint
 CREATE TABLE `review_requests` (

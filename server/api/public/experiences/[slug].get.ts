@@ -7,7 +7,6 @@ import { getRouterParam } from 'nitro/h3'
 import { getQuery } from 'nitro/h3'
 import { assertExactCanonicalLocale } from '~/server/utils/localization'
 import { selectProductCollectionSiblings } from '~/utils/product-seo'
-import { listMetafieldDefinitions } from '~/server/utils/product-management'
 
 export default defineHandler(async (event) => {
   const organizationId = event.context.organizationId as string | null | undefined
@@ -26,10 +25,10 @@ export default defineHandler(async (event) => {
     // order. One documented rule, applied here and in the SSR path alike.
     const membership = new Set(result.product.collections.map(entry => entry.collection_id))
     const siblingCollection = result.collections.find(collection => membership.has(collection.id)) ?? null
-    const priceSelection = { currency: result.currency, location_id: result.location.id, at: new Date().toISOString() }
+    const priceSelection = { currency: result.currency, location_id: result.location?.id ?? null, at: new Date().toISOString() }
     return jsonResponse({
       product: result.product,
-      location: publicLocationPayload(result.location),
+      location: result.location ? publicLocationPayload(result.location) : null,
       currency: result.currency,
       vertical: result.organization.vertical,
       brandName: result.organization.name,
@@ -40,7 +39,6 @@ export default defineHandler(async (event) => {
       collectionSiblings: siblingCollection
         ? selectProductCollectionSiblings(result.products, result.product, siblingCollection.id, priceSelection)
         : [],
-      metafieldDefinitions: await listMetafieldDefinitions(db, result.organization.id),
       localeRepresentations: result.localeRepresentations,
     })
   } catch (error) {

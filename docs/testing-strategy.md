@@ -146,9 +146,19 @@ The E2E suite runs locally, against a local D1 and a Worker the suite starts.
 The local Worker uses the `e2e` Wrangler environment and its local D1 copy:
 
 ```bash
-yarn e2e:local:prepare   # local D1, migrations, fixtures, production build
+yarn local:setup       # once: migrate and copy the configured development data
+yarn e2e:local:prepare  # verify the existing copy, remove test artifacts, build
 yarn test:e2e:local
 ```
+
+Ordinary browser and MCP journeys sign in with `CANARY_LOGIN_EMAIL` and
+`CANARY_LOGIN_PASSWORD` from `.env` (CI uses the corresponding secrets).
+Role, tenant-isolation and onboarding journeys need distinct actors; Playwright's
+global setup provisions them through Better Auth's admin and organization APIs,
+using the same configured password. It does not rebuild tenant fixtures or write
+authentication rows directly. Preparation does not recopy production on each run.
+It clears transient local rate counters so repeated runs exercise the real
+limits with a fresh quota.
 
 Local Playwright waits for the Worker's health endpoint before running specs.
 The tests exercise cache invalidation without provisioning or indexing a remote

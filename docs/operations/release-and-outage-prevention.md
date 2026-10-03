@@ -184,6 +184,36 @@ node --experimental-strip-types scripts/pull-production-snapshot.ts --staging --
 node --experimental-strip-types scripts/pull-production-snapshot.ts --production --source krabiclaw-production-v7 --out production-final.sqlite --delta-from production-initial.sqlite
 ```
 
+The v8-to-v11 catalog replacement removes product tags and custom field
+definitions. Every product has an explicit `kind` and a validated `details_json`
+object with named fields for that kind. Products are referenced by variants,
+options, publication, location offerings, collections, booking configuration,
+sessions and content documents; rebuilding the parent in place could delete
+these rows. The immutable v8 and intermediate v9 chains live in
+`migrations-history/v8/`, `migrations-history/v9/` and `migrations-history/v10/`.
+The v11 baseline also validates the canonical consultation settings column and
+scopes localized route uniqueness and lookup indexes by organization.
+
+The canonical transfer maps existing product types and known descriptive fields,
+including translations. Unknown or incompatible fields fail the transfer.
+Existing bookings, sessions, prices, credentials and each environment's signing
+keys are preserved. Both v11 databases were created with `--location wnam` and
+Cloudflare reported WNAM before loading:
+
+- `krabiclaw-production-v11`: `ef5d6da1-7feb-4b6e-93a9-aa3677eefea7`
+- `krabiclaw-staging-v11`: `6ec294fd-6ac9-4da6-9463-1e1f088f49d3`
+
+Prepared copies do not change deployed Workers. Before switching their bindings,
+finish the ordinary final source delta and inspect changed or deleted keys. Copy
+each environment from its own live v8 source:
+
+```sh
+node --experimental-strip-types scripts/pull-production-snapshot.ts --staging --source krabiclaw-staging-v8 --out staging-v11-initial.sqlite
+node --experimental-strip-types scripts/pull-production-snapshot.ts --production --source krabiclaw-production-v8 --out production-v11-initial.sqlite
+node --experimental-strip-types scripts/pull-production-snapshot.ts --staging --source krabiclaw-staging-v8 --out staging-v11-final.sqlite --delta-from staging-v11-initial.sqlite
+node --experimental-strip-types scripts/pull-production-snapshot.ts --production --source krabiclaw-production-v8 --out production-v11-final.sqlite --delta-from production-v11-initial.sqlite
+```
+
 Prepare the load before the binding repoint. Inspect changes and deletions since
 the initial load immediately before deployment; carry important edits explicitly
 and preserve writes to the new database. After each deployment, verify schema,

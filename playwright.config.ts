@@ -1,4 +1,3 @@
-import { randomBytes } from 'node:crypto'
 import { Buffer } from 'node:buffer'
 import { defineConfig, devices } from '@playwright/test'
 
@@ -19,11 +18,6 @@ const localPrepared = process.env.PLAYWRIGHT_LOCAL_PREPARED === 'true'
 const captureServerLogs = process.env.PLAYWRIGHT_SERVER_LOGS === 'true' || !!process.env.CI
 const localDevRouteSecret = previewUrl ? '' : 'local-playwright-dev-route-secret'
 
-if (!previewUrl && !process.env.E2E_TEST_PASSWORD) {
-  // Same shape as CI's generated password: the app's password policy requires an
-  // uppercase letter and a special character, which a bare hex string never has.
-  process.env.E2E_TEST_PASSWORD = `${Buffer.from(randomBytes(32)).toString('hex')}Aa1!`
-}
 if (!previewUrl) {
   process.env.E2E_DEV_ROUTE_SECRET = localDevRouteSecret
   // The provider-ingress spec signs Resend webhooks with this and the local
@@ -67,6 +61,7 @@ const localWorkerCommand = [
 
 export default defineConfig({
   testDir: './tests/e2e',
+  globalSetup: './scripts/provision-development-auth.ts',
   timeout: 30_000,
   expect: {
     timeout: 10_000

@@ -1,3 +1,4 @@
+import { PRODUCT_KINDS, type ProductKind } from '~/shared/product-details'
 import type { RenderedBookingPolicySummary } from '~/server/utils/reservations'
 import type { Collection, Product } from '~/server/types/products'
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
@@ -103,18 +104,18 @@ export function isPublicProduct(value: unknown): value is Product {
   return isRecord(value)
     && typeof value.id === 'string'
     && typeof value.organization_id === 'string'
+    && PRODUCT_KINDS.includes(value.kind as ProductKind)
     && typeof value.name === 'string'
     && typeof value.slug === 'string'
     && typeof value.description === 'string'
     && typeof value.active === 'boolean'
-    && Array.isArray(value.tags)
     && Array.isArray(value.options)
     && Array.isArray(value.variants)
     && value.variants.every(variant => isRecord(variant)
       && typeof variant.id === 'string'
       && typeof variant.name === 'string'
       && Array.isArray(variant.prices))
-    && isRecord(value.metafields)
+    && isRecord(value.details)
     && Array.isArray(value.locations)
     && value.locations.every(entry => isRecord(entry)
       && typeof entry.location_id === 'string'

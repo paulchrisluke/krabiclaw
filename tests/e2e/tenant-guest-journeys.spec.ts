@@ -4,6 +4,7 @@ import {
 } from './helpers'
 import { E2E_KIKUZUKI_ORGANIZATION_ID, E2E_POTTERY_ORGANIZATION_ID, devLoginHeaders, kikuzukiTestBaseUrl, kikuzukiTestExtraHeaders, testBaseUrl } from './test-env'
 import { loginAs } from './helpers/auth'
+import { mcpData, mcpRequest } from './helpers/mcp'
 
 type NotificationRow = { template: string }
 type DeliveryRow = { channel: 'email' | 'whatsapp'; purpose: string; status: string }
@@ -187,6 +188,80 @@ test.describe('tenant guest journeys (disposable local/preview data only)', () =
     const cancelURL = `${baseURL}/api/public/booking-requests/${body.booking_id}/cancel`
     const authHeaders = { ...headers, Authorization: `Bearer ${body.cancellation_token}` }
     expect((await request.post(cancelURL, { headers: authHeaders })).status()).toBe(200)
-    expect((await request.post(cancelURL, { headers: authHeaders })).status()).not.toBe(200)
+    expect((await request.post(cancelURL, { headers: authHeaders })).status()).toBe(404)
   })
 })
+
+for (const target of [
+  { name: 'Kikuzuki', owner: 'user-e2e-kikuzuki-owner', org: E2E_KIKUZUKI_ORGANIZATION_ID, slug: E2E_KIKUZUKI_ORGANIZATION_ID, location: 'loc-kikuzuki', locationSlug: 'kikuzuki-japanese-robatayaki-izakaya', base: kikuzukiTestBaseUrl(), headers: kikuzukiTestExtraHeaders(), experience: false, kind: 'dish' },
+  { name: 'Kikuzuki merchandise', org: E2E_KIKUZUKI_ORGANIZATION_ID, slug: E2E_KIKUZUKI_ORGANIZATION_ID, location: 'loc-kikuzuki', locationSlug: 'kikuzuki-japanese-robatayaki-izakaya', base: kikuzukiTestBaseUrl(), headers: kikuzukiTestExtraHeaders(), experience: false, kind: 'item' },
+  { name: 'Pottery House', owner: 'user-e2e-pottery-owner', org: E2E_POTTERY_ORGANIZATION_ID, slug: E2E_POTTERY_ORGANIZATION_ID, location: 'loc-pottery-house', locationSlug: 'krabi', base: potteryHouseBaseURL, headers: potteryHouseExtraHeaders, experience: true, kind: 'experience' },
+]) {
+  test(`${target.name} external checkout uses the shared CMS and public template`, async ({ page, request, baseURL }) => {
+    test.skip(!writableEnvironment, 'External checkout verification writes only local disposable products')
+    await loginAs(page.request, baseURL!)
+    const editor = `/api/editor/organizations/${target.org}/products`
+    const created = await page.request.post(editor, { data: { kind: target.kind, name: `External checkout ${Date.now()}`, variants: [{ name: 'Standard', prices: [{ unit_amount: 120000, currency: 'THB' }] }] } })
+    expect(created.status(), await created.text()).toBe(201)
+    const product = (await created.json()).product
+    try {
+      const locations = await page.request.put(`${editor}/${product.id}/locations/${target.location}`, { data: { active: true, published: true } })
+      expect(locations.status()).toBe(200)
+      expect((await page.request.put(`${editor}/${product.id}/publication`, { data: { published: true } })).status()).toBe(200)
+      if (target.experience) expect((await page.request.put(`${editor}/${product.id}/booking`, { data: { duration_minutes: 60, default_capacity: 8 } })).status()).toBe(200)
+      const externalUrl = `https://example.com/?checkout=${target.slug}`
+      await page.goto(`/dashboard/${target.slug}/products/${product.id}/order-url`)
+      await page.getByLabel('Website address', { exact: true }).fill(externalUrl)
+      await page.getByRole('button', { name: 'Save', exact: true }).click()
+      await expect(page).toHaveURL(new RegExp(`/products/${product.id}/photo$`))
+      const field = target.kind === 'dish' ? 'tagline' : target.kind === 'experience' ? 'preparation' : 'care_instructions'
+      const label = target.kind === 'dish' ? 'Short introduction' : target.kind === 'experience' ? 'Before you arrive' : 'Care instructions'
+      const detail = target.kind === 'dish' ? 'Made to order' : target.kind === 'experience' ? 'Arrive ten minutes before your class' : 'Hand wash in cold water'
+      await page.goto(`/dashboard/${target.slug}/products/${product.id}/attributes/${field}`)
+      await page.getByRole('textbox', { name: label, exact: true }).fill(detail)
+      await page.getByRole('button', { name: 'Save', exact: true }).click()
+      await expect(page).toHaveURL(new RegExp(`/products/${product.id}/attributes$`))
+      const viaMcp = mcpData<{ product: { kind: string; details: Record<string, string> } }>(await (await mcpRequest(page.request, baseURL!, { method: 'tools/call', toolName: 'get_product', args: { organization_id: target.org, product_id: product.id } })).json()).product
+      expect(viaMcp.kind).toBe(target.kind)
+      expect(viaMcp.details[field]).toBe(detail)
+      const publicPath = target.experience ? `/experiences/${product.slug}` : `/locations/${target.locationSlug}/${target.kind === 'dish' ? 'menu' : 'products'}/${product.slug}`
+      await openTenantPage(page, `${target.base}${publicPath}`, target.headers)
+      await expect(page.getByRole('heading', { name: product.name, level: 1, exact: true })).toBeVisible()
+      await expect(page.getByText(detail, { exact: true })).toBeVisible()
+      for (const width of [1280, 390]) {
+        await page.setViewportSize({ width, height: 844 })
+        const handoff = page.locator(`a[href="${externalUrl}"]:visible`)
+        await expect(handoff).toHaveCount(1)
+        await expect(handoff).toHaveText(target.experience ? 'Book now' : 'Order Now')
+        await expect(page.getByRole('button', { name: 'Book now', exact: true })).toHaveCount(0)
+      }
+      await waitForNuxtHydration(page)
+      const recorded = page.waitForResponse(response => new URL(response.url()).pathname === '/api/public/conversion-events' && response.request().postDataJSON()?.event_name === 'product_order_external_click')
+      const popup = page.waitForEvent('popup')
+      await page.locator(`a[href="${externalUrl}"]:visible`).click()
+      expect((await recorded).status()).toBe(201)
+      const destination = await popup
+      await expect(destination).toHaveURL(externalUrl)
+      await destination.close()
+      const saved = await request.get(`${target.base}${target.experience ? `/api/public/experiences/${product.slug}` : `/api/public/locations/${target.locationSlug}/products/${product.slug}`}`, { headers: target.headers })
+      expect(saved.status(), await saved.text()).toBe(200)
+      expect((await saved.json()).product.order_url).toBe(externalUrl)
+      await page.goto(`/dashboard/${target.slug}/products/${product.id}/publication/availability`)
+      const availability = page.getByRole('switch', { name: target.experience ? 'Accept bookings' : 'Accept orders', exact: true })
+      await expect(availability).toHaveAttribute('aria-checked', 'true')
+      await availability.click()
+      await page.getByRole('button', { name: 'Save', exact: true }).click()
+      await expect(page).toHaveURL(new RegExp(`/products/${product.id}$`))
+      const paused = mcpData<{ product: { active: boolean; publications: Array<{ organization_id: string; published: boolean }> } }>(await (await mcpRequest(page.request, baseURL!, { method: 'tools/call', toolName: 'get_product', args: { organization_id: target.org, product_id: product.id } })).json()).product
+      expect(paused.active).toBe(false)
+      expect(paused.publications).toContainEqual(expect.objectContaining({ organization_id: target.org, published: true }))
+      await openTenantPage(page, `${target.base}${publicPath}`, target.headers)
+      await expect(page.getByRole('heading', { name: product.name, level: 1, exact: true })).toBeVisible()
+      await expect(page.getByText(detail, { exact: true })).toBeVisible()
+      await expect(page.locator(`a[href="${externalUrl}"]:visible`)).toHaveCount(0)
+      await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', `${target.base}${publicPath}`)
+    } finally {
+      expect((await page.request.delete(`${editor}/${product.id}`)).status()).toBe(200)
+    }
+  })
+}

@@ -101,6 +101,8 @@ function goBack() {
 }
 
 function handleKeyDown(e: KeyboardEvent) {
+  // A nested select owns Escape and Tab while its listbox has focus.
+  if (e.defaultPrevented || (e.target instanceof Element && e.target.closest('[role="listbox"]'))) return
   if (e.key === 'Escape') {
     close()
   }

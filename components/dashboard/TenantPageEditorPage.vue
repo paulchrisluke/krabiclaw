@@ -61,6 +61,7 @@ export const SECTION_LABELS = {
   sections: 'Sections',
   title: 'Title',
   summary: 'Summary',
+  booking: 'Appointment booking',
 } as const
 export type SectionKey = keyof typeof SECTION_LABELS
 
@@ -157,6 +158,7 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => {
     {
       id: 'content',
       items: [
+        ...(draft.value.path.startsWith('/services/') && draft.value.id === draft.value.page_id ? [{ id: 'booking', label: 'Appointment booking', summary: draft.value.product_id ? 'Product linked' : 'No Product linked', to: `${recordPath.value}/booking` }] : []),
         {
           id: 'sections',
           label: 'Sections',

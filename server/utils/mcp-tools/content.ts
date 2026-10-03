@@ -143,12 +143,13 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'update_site_page',
-      description: "Replace a site-page language variant when the user wants to edit its content or metadata. Read it first and supply the complete blocks, path, title, pageType, recipe, sortOrder and expected_updated_at. Omitted summary is cleared. A changed path creates a language-specific redirect. To remove blocks, supply the exact removed_block_ids and confirmation_token from the page read.",
+      description: "Replace a site-page language variant when the user wants to edit its content or metadata. Read it first and supply the complete blocks, path, title, pageType, recipe, sortOrder and expected_updated_at. Omitted summary is cleared. Omitted product_id retains the linked product; null removes the link. A changed path creates a language-specific redirect. To remove blocks, supply the exact removed_block_ids and confirmation_token from the page read.",
       domain: 'content',
       minimumRole: 'admin',
       confirmRequired: true,
       inputSchema: {
         variant_id: { type: 'string' },
+        product_id: { type: ['string', 'null'], description: 'Explicit canonical Product binding on the source page only. Omit to retain; null unbinds. Translations inherit the source binding; slugs never imply a relationship.' },
         expected_updated_at: { type: 'string' },
         ...TENANT_PAGE_METADATA_SCHEMA,
         blocks: TENANT_PAGE_BLOCKS_SCHEMA,

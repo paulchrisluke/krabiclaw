@@ -751,7 +751,7 @@ if (MODE === "approve") {
 if (MODE === "apply") {
   const baseUrl = rawArgs["base-url"] || (REMOTE ? null : "http://localhost:3000");
   if (!baseUrl) throw new Error("Remote import verification requires --base-url for the target application.");
-  if (!process.env.E2E_TEST_PASSWORD) throw new Error("E2E_TEST_PASSWORD is required to generate and verify imported social cards.");
+  if (!process.env.CANARY_LOGIN_PASSWORD) throw new Error("CANARY_LOGIN_PASSWORD is required to generate and verify imported social cards.");
   const approvedPath = join(OUT_DIR, "approved.json");
   const seedPath = join(OUT_DIR, "seed-preview.sql");
   const manifestPath = join(OUT_DIR, "client-manifest.json");

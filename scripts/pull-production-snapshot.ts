@@ -15,9 +15,9 @@
  *   node --experimental-strip-types scripts/pull-production-snapshot.ts --out <target.sqlite> [--source <database>]
  *   node --experimental-strip-types scripts/pull-production-snapshot.ts --production --source <replaced database> [--delta-from <initial.sqlite>]
  *
- * The source is the top-level `DB` binding (production) unless `--source` names
- * a D1 database. A schema replacement names it, because once the binding is
- * repointed `DB` is the replacement, not the database being replaced.
+ * The default source is the deployed production Worker's `DB` binding unless
+ * `--source` names a D1 database. This reads the live database even while the
+ * repository configuration points to a prepared replacement.
  *
  * `--out` alone is the preflight: the transformed target, its data-only payload
  * and its manifest are kept at that path and nothing remote is written. Beside a
@@ -31,6 +31,7 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'n
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
+import { unstable_readConfig as readWranglerConfig } from 'wrangler'
 import { printTransferReport, SCHEMA_OBJECTS_QUERY, transferDatabaseExport } from './transfer-database-export.mjs'
 
 // Staging is a release gate, so it has to hold what production holds. It had no
@@ -48,6 +49,7 @@ const { values } = parseArgs({
     production: { type: 'boolean', default: false },
     out: { type: 'string' },
     source: { type: 'string', default: 'DB' },
+    'source-file': { type: 'string' },
     'delta-from': { type: 'string' },
   },
   strict: true,
@@ -57,6 +59,12 @@ const { values } = parseArgs({
 const loads = (['local', 'staging', 'production'] as const).filter(name => values[name])
 if (loads.length > 1 || (loads.length === 0 && !values.out)) throw new Error('Choose one of --local, --staging or --production, or --out <target.sqlite> alone for a preflight.')
 const target = loads[0] ?? 'out'
+try { process.loadEnvFile() } catch (error) {
+  if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') throw error
+}
+if (target === 'local' && !values['source-file']) values['source-file'] = process.env.LOCAL_DATABASE_SOURCE_FILE
+if (values['source-file'] && target !== 'local' && target !== 'out') throw new Error('--source-file is for a local migration or read-only preflight.')
+if (values['source-file'] && values.source !== 'DB') throw new Error('Choose --source or --source-file, not both.')
 const omitJwks = target === 'local' || (target === 'staging' && values.source === 'DB')
 // Production is only ever loaded as a schema replacement: the top-level `DB`
 // binding already names the replacement, and the database it replaces has to
@@ -67,6 +75,20 @@ if ((target === 'production' || (target === 'staging' && values['delta-from'])) 
 const deltaFrom = values['delta-from'] ? resolve(values['delta-from']) : null
 
 const wrangler = resolve('node_modules/wrangler/bin/wrangler.js')
+if (values.source === 'DB' && !values['source-file']) {
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID || process.env.CF_ACCOUNT_ID
+  const apiToken = process.env.CLOUDFLARE_API_TOKEN
+  const workerName = readWranglerConfig({ config: 'wrangler.toml' }).name
+  if (!accountId || !apiToken || !workerName) throw new Error('Production snapshot requires a configured Cloudflare account, API token and Worker name.')
+  const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${workerName}/settings`, {
+    headers: { authorization: `Bearer ${apiToken}` },
+  })
+  if (!response.ok) throw new Error(`Could not resolve the production Worker's DB binding: HTTP ${response.status}`)
+  const settings = await response.json() as { success?: boolean; result?: { bindings?: Array<{ type: string; name: string; id?: string }> } }
+  const sourceId = settings.result?.bindings?.find(binding => binding.type === 'd1' && binding.name === 'DB')?.id
+  if (!settings.success || !sourceId) throw new Error(`Could not resolve the production Worker's DB binding: HTTP ${response.status}`)
+  values.source = sourceId
+}
 
 /**
  * A failed `d1 execute` prints `✘ [ERROR]` with nothing after it and writes the
@@ -176,11 +198,11 @@ execFileSync(process.execPath, ['scripts/check-schema-drift.mjs'], { cwd: proces
 const directory = mkdtempSync(join(tmpdir(), 'krabiclaw-snapshot-'))
 try {
   const dumpPath = join(directory, 'source.sql')
-  copyProductionRows(dumpPath)
+  if (!values['source-file']) copyProductionRows(dumpPath)
 
   const targetPath = values.out ? resolve(values.out) : join(directory, 'target.sqlite')
   const payloadPath = values.out ? `${targetPath}.payload.sql` : join(directory, 'payload.sql')
-  const manifest = transferDatabaseExport(dumpPath, targetPath, { payloadPath, withoutJwks: omitJwks, deltaFrom })
+  const manifest = transferDatabaseExport(values['source-file'] ? resolve(values['source-file']) : dumpPath, targetPath, { payloadPath, withoutJwks: omitJwks, deltaFrom })
   printTransferReport(manifest)
   const rows = manifest.tables.reduce((total, table) => total + table.target_rows, 0)
   if (target === 'out') {

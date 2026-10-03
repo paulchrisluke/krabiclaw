@@ -1,22 +1,23 @@
 <template>
-  <div class="min-h-screen bg-default text-default">
-    <AppBreadcrumb :crumbs="breadcrumbs" />
+  <div class="bg-default text-default" :class="compact ? undefined : 'min-h-screen'">
+    <AppBreadcrumb v-if="!compact" :crumbs="breadcrumbs" />
 
     <!-- One responsive primary action: the mobile bar and the desktop card
          resolve the same booking, so the page never shows two of them. -->
     <div
-      v-if="booking && isAvailable"
+      v-if="booking && (canBook || canOrderExternally || canEnquire)"
       class="fixed inset-x-0 bottom-0 z-30 flex items-center justify-between gap-4 border-t border-default bg-default/95 px-5 py-4 shadow-lg backdrop-blur-sm lg:hidden"
     >
       <div v-if="priceLabel" class="min-w-0">
         <p v-if="compareAtLabel" class="text-xs text-muted line-through">{{ compareAtLabel }}</p>
         <p class="font-semibold leading-tight text-default">{{ priceLabel }}</p>
       </div>
-      <SayaButton v-if="enquiryOnly" class="shrink-0" :to="enquiryPath">
+      <SayaButton v-if="canOrderExternally" class="shrink-0" :href="product.order_url!" target="_blank" rel="noopener noreferrer" @click="recordExternalOrderClick">{{ externalActionLabel }}</SayaButton>
+      <SayaButton v-else-if="canEnquire" class="shrink-0" :to="enquiryPath">
         {{ t('saya.experience_detail.enquire') }}
       </SayaButton>
       <SayaButton v-else class="shrink-0" control-id="product-booking-toggle" @click="openBooking">
-        {{ t('saya.experience_detail.book_now') }}
+        {{ bookingLabel }}
       </SayaButton>
     </div>
 
@@ -27,15 +28,15 @@
            bookings has nothing to put in that column, so it keeps the single
            card. -->
       <div v-if="booking">
-        <SayaMediaGallery :items="galleryItems" :title="product.name" />
+        <MediaGallery v-if="!compact && galleryItems.length" :items="galleryItems" :title="displayTitle" />
 
         <!-- What it is, in one glance: name, tagline, how guests rate it,
              where it runs, how long, how many. Centred under the photographs
              the way the rest of Saya introduces a place. -->
-        <header class="mx-auto mt-10 max-w-3xl text-center">
+        <header v-if="!compact" class="mx-auto mt-10 max-w-3xl text-center">
           <p class="saya-kicker mb-3">{{ collectionName }}</p>
-          <h1 class="saya-display-md text-default">{{ product.name }}</h1>
-          <p v-if="tagline" class="mx-auto mt-4 max-w-2xl text-base text-muted sm:text-lg">{{ tagline }}</p>
+          <h1 class="saya-display-md text-3xl text-default sm:text-4xl lg:text-5xl">{{ displayTitle }}</h1>
+          <p v-if="pageDocument?.summary || tagline" class="mx-auto mt-4 max-w-2xl text-base text-muted sm:text-lg">{{ pageDocument?.summary || tagline }}</p>
           <div class="mt-4 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm text-muted">
               <template v-if="averageRating">
                 <span class="inline-flex items-center gap-1 font-medium text-default">
@@ -45,7 +46,7 @@
                 <span>{{ reviewCountLabel }}</span>
                 <span aria-hidden="true">·</span>
               </template>
-            <span>{{ location.title }}</span>
+            <span>{{ location?.title ?? organizationName }}</span>
           </div>
           <div v-if="factChips.length" class="mt-5 flex flex-wrap justify-center gap-2">
             <span
@@ -57,18 +58,20 @@
               {{ fact.label }}
             </span>
           </div>
+          <slot name="actions" />
         </header>
 
-        <div class="mt-14 grid gap-10 lg:grid-cols-[1fr_380px] lg:items-start">
+        <div class="grid gap-10 lg:grid-cols-[1fr_380px] lg:items-start" :class="compact ? 'mt-8' : 'mt-14'">
         <div class="min-w-0">
-          <section v-if="product.description" class="border-t border-default pt-10">
+          <p v-if="!canBook && !canEnquire && !canOrderExternally" role="status" class="rounded-xl border border-default bg-elevated p-5 text-muted lg:hidden">{{ vertical === 'service' && !offer ? t('booking.price_unavailable_contact') : t('saya.common.temporarily_unavailable') }}</p>
+          <section v-if="!pageDocument && !compact && product.description" class="border-t border-default pt-10">
             <h2 class="saya-display text-2xl text-default sm:text-3xl">{{ t('saya.experience_detail.what_youll_do') }}</h2>
             <p class="mt-4 whitespace-pre-line text-base leading-relaxed text-muted sm:text-lg">{{ product.description }}</p>
           </section>
 
           <!-- The next few sessions, on the page: a guest sees when it runs
                before they open anything. The full picker is one press away. -->
-          <section v-if="isAvailable && !enquiryOnly" class="mt-10 border-t border-default pt-10">
+          <section v-if="canBook && !enquiryOnly" :id="compact ? undefined : 'consultations'" class="border-t border-default pt-8 scroll-mt-32">
             <div class="flex flex-wrap items-baseline justify-between gap-4">
               <h2 class="saya-display text-2xl text-default sm:text-3xl">{{ t('saya.experience_detail.upcoming_availability') }}</h2>
               <SayaButton v-if="upcomingSessions.length" variant="ghost" control-id="product-booking-toggle" @click="openBooking">
@@ -79,17 +82,19 @@
                  a refresh in flight never blanks dates a reader can already see.
                  The empty copy is the last branch, reached only when a load has
                  returned nothing — it is an answer, not an unfinished one. -->
-            <ul v-if="upcomingSessions.length" class="mt-5 grid gap-3 sm:grid-cols-2">
+            <BookingTimezoneSelect v-if="allowTimezoneSelection" :model-value="bookingTimezone" :options="timezoneOptions" class="mt-5 max-w-sm" @update:model-value="guestTimezone = $event" />
+            <p v-if="bookingError" role="alert" class="mt-4 text-sm text-error">{{ bookingError }}</p>
+            <ul v-else-if="upcomingSessions.length" class="mt-5 grid gap-3 sm:grid-cols-2">
               <li v-for="session in upcomingSessions" :key="session.id" class="flex items-center justify-between gap-4 rounded-xl border border-default bg-elevated px-4 py-3">
                 <div class="min-w-0">
                   <p class="font-medium text-default">{{ sessionDayLabel(session) }}</p>
                   <p class="text-sm text-muted">
                     {{ sessionTimeLabel(session) }}
-                    <template v-if="session.remaining !== null"> · {{ t('saya.experience_detail.left', { count: session.remaining }) }}</template>
+                    <template v-if="session.remaining !== null && vertical !== 'service'"> · {{ t('saya.experience_detail.left', { count: session.remaining }) }}</template>
                   </p>
                 </div>
                 <SayaButton control-id="product-booking-toggle" @click="openBookingAt(session)">
-                  {{ t('saya.experience_detail.book') }}
+                  {{ vertical === 'service' ? t('saya.experience_detail.select_time') : t('saya.experience_detail.book') }}
                 </SayaButton>
               </li>
             </ul>
@@ -116,19 +121,19 @@
             </div>
           </section>
 
-          <section class="mt-10 border-t border-default pt-10">
+          <section v-if="location" class="mt-10 border-t border-default pt-10">
             <h2 class="saya-display text-2xl text-default sm:text-3xl">{{ t('saya.experience_detail.where_youll_meet') }}</h2>
             <div class="mt-5 overflow-hidden rounded-xl border border-default bg-elevated">
               <div class="flex items-start gap-4 p-6">
                 <SayaIcon name="map-pin" class="mt-0.5 size-5 shrink-0 text-primary" />
                 <div class="min-w-0">
-                  <p class="font-semibold text-default">{{ location.title }}</p>
+                  <p class="font-semibold text-default">{{ location?.title ?? organizationName }}</p>
                   <p v-if="addressLine" class="mt-1 text-sm text-muted">{{ addressLine }}</p>
-                  <p v-if="location.phone" class="mt-1 text-sm text-muted">{{ location.phone }}</p>
+                  <p v-if="location?.phone" class="mt-1 text-sm text-muted">{{ location.phone }}</p>
                   <p v-if="meetingPoint" class="mt-3 whitespace-pre-line text-sm leading-6 text-default">{{ meetingPoint }}</p>
                   <a
-                    v-if="location.maps_url"
-                    :href="location.maps_url"
+                    v-if="location?.maps_url"
+                    :href="location?.maps_url ?? undefined"
                     target="_blank"
                     rel="noopener noreferrer"
                     class="mt-2 inline-flex items-center gap-1 text-xs text-primary hover:underline"
@@ -141,7 +146,7 @@
               <iframe
                 v-if="mapEmbedUrl"
                 :src="mapEmbedUrl"
-                :title="location.title"
+                :title="location?.title ?? organizationName"
                 class="h-56 w-full border-t border-default"
                 style="border-width: 1px 0 0"
                 loading="lazy"
@@ -165,13 +170,13 @@
 
         <!-- The decision, travelling with the reader: what it costs, when it
              next runs, and the one action. -->
-        <div class="hidden lg:sticky lg:top-8 lg:block">
+        <div class="hidden lg:sticky lg:top-28 lg:block">
           <div class="space-y-5 rounded-xl border border-default bg-elevated p-6 shadow-sm">
             <div v-if="priceLabel">
               <p class="saya-display text-3xl tabular-nums text-default">
-                <span v-if="compareAtLabel" class="mr-2 text-lg text-muted line-through">{{ compareAtLabel }}</span>{{ enquiryOnly ? priceLabel : t('saya.experience_detail.from_price', { price: priceLabel }) }}
+                <span v-if="compareAtLabel" class="mr-2 text-lg text-muted line-through">{{ compareAtLabel }}</span>{{ enquiryOnly || (vertical === 'service' && sellableVariants.length === 1) ? priceLabel : t('saya.experience_detail.from_price', { price: priceLabel }) }}
               </p>
-              <p v-if="!enquiryOnly" class="mt-1 text-sm text-muted">{{ t('saya.experience_detail.per_person') }}</p>
+              <p v-if="!enquiryOnly && vertical !== 'service'" class="mt-1 text-sm text-muted">{{ t('saya.experience_detail.per_person') }}</p>
             </div>
             <div v-if="factChips.length" class="flex flex-wrap gap-2">
               <span
@@ -183,19 +188,21 @@
                 {{ fact.label }}
               </span>
             </div>
+            <p v-if="vertical === 'service' && !product.order_url" class="text-sm text-muted">{{ booking?.confirmation_mode === 'review' ? t('booking.review_notice') : t('booking.instant_notice') }}</p>
             <p v-if="nextSession" class="inline-flex items-center gap-2 text-sm text-muted">
               <SayaIcon name="calendar-days" class="size-4" />
               {{ sessionDayLabel(nextSession) }} · {{ sessionTimeLabel(nextSession) }}
             </p>
-            <p v-if="!isAvailable" class="rounded-lg bg-default px-4 py-3 text-center text-sm font-semibold text-muted">
-              {{ t('saya.common.temporarily_unavailable') }}
+            <p v-if="!canBook && !canEnquire && !canOrderExternally" class="rounded-lg bg-default px-4 py-3 text-center text-sm font-semibold text-muted">
+              {{ vertical === 'service' && !offer ? t('booking.price_unavailable') : t('saya.common.temporarily_unavailable') }}
             </p>
             <div v-else class="pt-2">
-              <SayaButton v-if="enquiryOnly" block :to="enquiryPath">
+              <SayaButton v-if="canOrderExternally" block :href="product.order_url!" target="_blank" rel="noopener noreferrer" @click="recordExternalOrderClick">{{ externalActionLabel }}</SayaButton>
+              <SayaButton v-else-if="canEnquire" block :to="enquiryPath">
                 {{ t('saya.experience_detail.enquire') }}
               </SayaButton>
               <SayaButton v-else block control-id="product-booking-toggle" @click="openBooking">
-                {{ t('saya.experience_detail.book_now') }}
+                {{ bookingLabel }}
               </SayaButton>
             </div>
           </div>
@@ -215,7 +222,7 @@
           <div class="py-2">
             <p class="saya-kicker">{{ collectionName }}</p>
             <h1 class="saya-display saya-italic mt-3 text-3xl sm:text-4xl lg:text-5xl text-default leading-tight">{{ product.name }}</h1>
-            <p class="mt-2 text-sm sm:text-base text-muted">{{ location.title }}</p>
+            <p class="mt-2 text-sm sm:text-base text-muted">{{ location?.title ?? organizationName }}</p>
             <div v-if="priceLabel" class="mt-6 flex items-baseline gap-3 text-2xl font-semibold tabular-nums">
               <span v-if="compareAtLabel" class="text-base font-normal text-muted line-through">{{ compareAtLabel }}</span>
               <span>{{ priceLabel }}</span>
@@ -223,14 +230,14 @@
             <p v-if="product.description" class="mt-6 text-base sm:text-lg leading-relaxed text-muted">{{ product.description }}</p>
             <p v-if="!isAvailable" class="mt-6 font-semibold text-muted">{{ t('saya.common.temporarily_unavailable') }}</p>
             <div class="mt-8 flex flex-wrap items-center gap-5">
-              <SayaButton v-if="isAvailable && enquiryOnly" :to="enquiryPath">{{ t('saya.experience_detail.enquire') }}</SayaButton>
+              <SayaButton v-if="canEnquire" :to="enquiryPath">{{ t('saya.experience_detail.enquire') }}</SayaButton>
               <SayaButton
-                v-if="isAvailable && product.order_url"
-                :href="product.order_url"
+                v-if="canOrderExternally"
+                :href="product.order_url!"
                 target="_blank"
                 rel="noopener noreferrer"
                 @click="recordExternalOrderClick"
-              >{{ t('saya.cta.order_now') }}</SayaButton>
+              >{{ externalActionLabel }}</SayaButton>
               <NuxtLink
                 :to="localePath(presentation.collectionPath)"
                 class="border-b border-default pb-0.5 text-xs font-bold uppercase tracking-widest text-default no-underline transition hover:opacity-60"
@@ -256,7 +263,7 @@
         <ul class="mt-6 grid gap-x-10 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
           <li v-for="sibling in collectionSiblings" :key="sibling.id">
             <NuxtLink
-              :to="localePath(presentation.productPath(location.slug, sibling.slug))"
+              :to="localePath(presentation.productPath(location?.slug ?? '', sibling.slug))"
               class="text-base text-default no-underline transition hover:opacity-60"
             >{{ sibling.name }}</NuxtLink>
           </li>
@@ -281,70 +288,14 @@
       <!-- One booking surface, mounted outside the card so the mobile sheet and
            the desktop button open the same thing. -->
       <BookingModal
-        v-if="booking"
+        v-if="booking && !product.order_url"
         v-model="bookingOpen"
         target-id="product-booking"
-        :title="product.name"
+        :title="displayTitle"
         :can-go-back="bookingStep > 1 && !submitting"
         @back="bookingStep = 1"
       >
-        <div v-if="bookingStep === 1" class="flex min-h-0 flex-1 flex-col">
-          <!-- What is being booked. One option is not a choice; several are,
-               and the guest makes it rather than the server picking an order. -->
-          <fieldset v-if="sellableVariants.length > 1" class="mb-5">
-            <legend class="mb-2 text-sm font-medium">{{ t('saya.product_detail.choose_option') }}</legend>
-            <div class="flex flex-col gap-2">
-              <label
-                v-for="variant in sellableVariants"
-                :key="variant.id"
-                class="flex cursor-pointer items-baseline justify-between gap-3 rounded-lg border border-default px-4 py-3 text-sm"
-                :class="selectedVariantId === variant.id ? 'border-primary bg-primary/5' : ''"
-              >
-                <span class="flex items-baseline gap-3">
-                  <input v-model="selectedVariantId" type="radio" :value="variant.id" name="booking-variant">
-                  <span>{{ variant.name }}</span>
-                </span>
-                <span v-if="variantPriceLabel(variant)" class="tabular-nums">{{ variantPriceLabel(variant) }}</span>
-              </label>
-            </div>
-          </fieldset>
-          <!-- A guest is choosing a time, so the empty state says what they
-               asked: nothing in the window they can book. -->
-          <p v-if="!sessionsPending && availabilityDates.length === 0" class="py-10 text-center text-sm text-muted">
-            {{ t('saya.experience_detail.no_availability', { count: PUBLIC_BOOKING_WINDOW_DAYS }) }}
-          </p>
-          <BookingTimeStep
-            v-else
-            v-model="timeSelection"
-            :dates="availabilityDates"
-            :loading="sessionsPending"
-            :guests="partySize"
-            :guests-max="guestsMax"
-            @update:guests="partySize = $event"
-            @next="bookingStep = 2"
-          />
-          <p v-if="bookingError" role="alert" class="mt-4 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-error">
-            {{ bookingError }}
-          </p>
-        </div>
-
-        <div v-else class="flex-1 overflow-y-auto">
-          <BookingRecap
-            v-if="timeSelection"
-            :main-line="timeSelection.label"
-            :meta-line="t('saya.experience_detail.guest_count', { count: partySize })"
-            :edit-label="t('saya.experience_detail.change')"
-            @edit="bookingStep = 1"
-          />
-          <p v-if="bookingError" role="alert" class="mb-4 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-error">
-            {{ bookingError }}
-          </p>
-          <BookingContactForm
-            :loading="submitting"
-            :submit-text="t('saya.experience_detail.confirm_booking')"
-            @submit="submitBooking"
-          />
-        </div>
+        <ProductBookingSteps :controller="bookingController" :confirmation-mode="booking.confirmation_mode" />
       </BookingModal>
 
       <section v-if="reviews.length" class="mt-16 border-t border-default pt-12">
@@ -359,39 +310,38 @@
         </div>
       </section>
     </article>
+    <slot name="content" :can-book="canBook" />
   </div>
 </template>
 
 <script setup lang="ts">
-import type { SubmissionMeasurement } from '~/composables/useOrganizationConversionTracking'
 import type { Product, ProductPresentation } from '~/server/types/products'
 import { useSchemaOrg } from '~/composables/useSchemaOrg'
 import type { CurrencyCode } from '~/shared/currencies'
 import { minorAmountToMajor, selectPrice, type Price } from '~/shared/prices'
 import { formatProductMoney } from '~/utils/product-money'
 import { ga4Major } from '~/utils/ga4-projection'
-import type { ConversionValue } from '~/utils/organization-conversion-events'
 import { productLocationCollectionPath } from '~/utils/product-presentation'
 import type { ProductCollectionSibling } from '~/utils/product-seo'
-import type { MetafieldDefinition, MetafieldValue } from '~/shared/metafields'
-import { EXPERIENCE_ATTRIBUTE_HANDLES, metafieldHandle, PRICING_NOTE_HANDLE } from '~/shared/metafields'
+import type { ProductDetailValue } from '~/shared/product-details'
+import { EXPERIENCE_ATTRIBUTE_HANDLES, productDetailFields, productDetailKey, PRICING_NOTE_HANDLE } from '~/shared/product-details'
 import type { PublicProductBooking, PublicProductLocationPayload, PublicProductReview, PublicProductSession } from '~/server/utils/public-products'
 import { formatPostalAddress, schemaPostalAddress } from '~/utils/postal-address'
 import SayaReviewCard from '~/components/saya/SayaReviewCard.vue'
 import BookingModal from '~/components/booking/BookingModal.vue'
-import BookingRecap from '~/components/booking/BookingRecap.vue'
-import BookingContactForm, { type ContactFormState } from '~/components/booking/BookingContactForm.vue'
-import BookingTimeStep, { type RawDateAvailability, type TimeSlotSelection } from '~/components/booking/BookingTimeStep.vue'
-import { setBookingConfirmation } from '~/composables/useBookingHandoff'
-import { localPartsAt } from '~/utils/timezone'
+import ProductBookingSteps from '~/components/booking/ProductBookingSteps.vue'
+import BookingTimezoneSelect from '~/components/booking/BookingTimezoneSelect.vue'
 import { PUBLIC_BOOKING_WINDOW_DAYS } from '~/shared/bookings'
-import { getErrorMessage } from '~/utils/errors'
+import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
+import { isRecord, publicApiRequest } from '~/utils/api-clients'
+import MediaGallery from '~/components/MediaGallery.vue'
 
 const props = defineProps<{
   organizationId: string
   vertical: string
   product: Product
-  location: PublicProductLocationPayload
+  location: PublicProductLocationPayload | null
+  organizationName?: string
   reviews: PublicProductReview[]
   /** Non-null exactly when this Product takes bookings. */
   booking: PublicProductBooking | null
@@ -399,19 +349,26 @@ const props = defineProps<{
    * The occurrences on sale here, loaded with the page rather than after it.
    * They arrive rendered, so the dates are in the HTML a crawler reads.
    */
-  sessions: PublicProductSession[]
+  sessions?: PublicProductSession[]
   collectionName: string
   collectionSiblings: ProductCollectionSibling[]
-  /** The tenant's attribute vocabulary, so this page can label its own facts. */
-  metafieldDefinitions: MetafieldDefinition[]
   currency: CurrencyCode
   presentation: ProductPresentation
-  analyticsEnabled?: boolean
+  /** Existing page presentation; the Product remains the operational identity. */
+  pageDocument?: PublicTenantPage
+  /** The directory supplies its own selected-service introduction. */
+  compact?: boolean
 }>()
 
-const { trackProductOrder, trackProductView, trackCheckoutStart, mirrorSubmission, pageEventId } = useOrganizationConversionTracking()
-const { locale, localePath, t } = useI18n()
+const displayTitle = computed(() => props.pageDocument?.title ?? props.product.name)
+const bookingLabel = computed(() => props.vertical === 'service'
+  ? props.booking?.confirmation_mode === 'review' ? t('booking.request_appointment') : t('booking.book_appointment')
+  : t('saya.experience_detail.book_now'))
+
+const { trackProductOrder, trackProductView } = useOrganizationConversionTracking()
+const { localePath, t } = useI18n()
 const collectionLabel = computed(() => {
+  if (!props.location && props.vertical === 'service') return t('blawby.footer.services')
   if (props.presentation.locationCollectionSegment === 'menu') return t('saya.footer.menu')
   return props.presentation.locationCollectionSegment === 'experiences'
     ? t('saya.footer.experiences')
@@ -419,11 +376,11 @@ const collectionLabel = computed(() => {
 })
 const breadcrumbs = computed(() => [
   { to: localePath('/'), label: t('saya.experience_detail.home') },
-  { to: localePath(props.presentation.collectionPath), label: collectionLabel.value },
-  { to: localePath(props.presentation.locationCollectionSegment === 'experiences'
+  { to: localePath(props.pageDocument ? '/services' : props.presentation.collectionPath), label: collectionLabel.value },
+  ...(props.location ? [{ to: localePath(props.presentation.locationCollectionSegment === 'experiences'
     ? `/locations/${encodeURIComponent(props.location.slug)}/experiences`
-    : productLocationCollectionPath(props.vertical, props.location.slug)), label: props.location.title },
-  { to: localePath(props.presentation.productPath(props.location.slug, props.product.slug)), label: props.product.name },
+    : productLocationCollectionPath(props.vertical, props.location.slug)), label: props.location.title }] : []),
+  { to: localePath(props.pageDocument?.path ?? props.presentation.productPath(props.location?.slug ?? '', props.product.slug)), label: displayTitle.value },
 ])
 
 /**
@@ -432,7 +389,7 @@ const breadcrumbs = computed(() => [
  * each variant's own price is on this page under its option.
  */
 const offer = computed<Price | null>(() => {
-  const selection = { currency: props.currency, location_id: props.location.id, at: new Date().toISOString() }
+  const selection = { currency: props.currency, location_id: props.location?.id ?? null, at: new Date().toISOString() }
   // Only variants a customer can actually choose: a disabled variant's price
   // would otherwise headline an amount the selector never offers.
   const offers = sellableVariants.value.flatMap(variant => selectPrice(variant.prices, selection) ?? [])
@@ -444,9 +401,10 @@ const offer = computed<Price | null>(() => {
  * "Free", or a "Market price" nobody wrote.
  */
 const priceLabel = computed(() => {
+  if (props.vertical === 'service' && sellableVariants.value.length === 1 && offer.value?.unit_amount === 0) return 'Free'
   const amount = formatProductMoney(offer.value)
   if (amount) return amount
-  const note = props.product.metafields[PRICING_NOTE_HANDLE]
+  const note = props.product.details[PRICING_NOTE_HANDLE]
   return typeof note === 'string' && note.trim() ? note : null
 })
 /**
@@ -477,10 +435,14 @@ const sellableVariants = computed(() => props.product.variants.filter(variant =>
 
 const isAvailable = computed(() =>
   props.product.active
-  && props.product.locations.some(entry => entry.location_id === props.location.id && entry.active)
+  && (props.location ? props.product.locations.some(entry => entry.location_id === props.location?.id && entry.active) : Boolean(props.product.order_url || props.booking?.online_timezone))
   // Every option retired is the merchant having nothing left to sell here. The
   // booking form otherwise asked for an option it had none to offer.
-  && sellableVariants.value.length > 0)
+  && (Boolean(props.product.order_url) || sellableVariants.value.length > 0))
+const canOrderExternally = computed(() => isAvailable.value && Boolean(props.product.order_url))
+const externalActionLabel = computed(() => props.booking || props.vertical === 'service' ? t('saya.experience_detail.book_now') : t('saya.cta.order_now'))
+const canEnquire = computed(() => isAvailable.value && !props.product.order_url && enquiryOnly.value)
+const canBook = computed(() => isAvailable.value && !props.product.order_url && !enquiryOnly.value && (props.vertical !== 'service' || offer.value !== null))
 
 
 
@@ -491,7 +453,11 @@ const isAvailable = computed(() =>
  * — two slots, read as the two things they are, not one list with a chosen
  * head.
  */
-const galleryItems = computed(() => [
+const galleryItems = computed(() => props.pageDocument
+  ? props.pageDocument.media.filter(asset => (asset.slot === 'cover' || asset.slot === 'gallery') && asset.public_url).map(asset => ({
+      url: asset.public_url!, kind: asset.kind, poster: asset.kind === 'video' ? asset.thumbnail_url : undefined, alt: asset.alt_text ?? undefined,
+    }))
+  : [
   ...(props.product.image ? [props.product.image] : []),
   ...props.product.gallery,
 ].map(asset => ({
@@ -510,7 +476,8 @@ const galleryItems = computed(() => [
 const factChips = computed(() => {
   const config = props.product.booking
   if (!config) return []
-  const chips: Array<{ icon: 'clock' | 'user-group'; label: string }> = []
+  const chips: Array<{ icon: 'clock' | 'user-group' | 'video-camera' | 'check-circle'; label: string }> = []
+  if (props.vertical === 'service' && !props.location && !props.product.order_url) chips.push({ icon: 'video-camera', label: 'Online' })
   if (config.duration_minutes) {
     const minutes = config.duration_minutes
     const hours = Math.floor(minutes / 60)
@@ -524,188 +491,59 @@ const factChips = computed(() => {
           : t('saya.experience_detail.hours', { count: hours }),
     })
   }
-  if (config.default_capacity) {
+  if (config.default_capacity && props.vertical !== 'service') {
     chips.push({ icon: 'user-group', label: t('saya.experience_detail.capacity', { count: config.default_capacity }) })
   }
+  if (props.vertical === 'service' && !props.product.order_url) chips.push({ icon: 'check-circle', label: config.confirmation_mode === 'review' ? 'Staff review' : 'Instant confirmation' })
   return chips
 })
 
 /**
- * The labelled facts under the product, named by the tenant's own definitions.
- * An attribute with no definition is not rendered under a raw key.
+ * Customer facts labeled by the shared product field schema.
+ * Invalid fields are refused by the canonical product writer.
  */
-const visibleDetails = computed(() => props.metafieldDefinitions.flatMap((definition) => {
-  const handle = metafieldHandle(definition)
+const visibleDetails = computed(() => productDetailFields(props.product.kind).flatMap((definition) => {
+  const handle = productDetailKey(definition)
   // The pricing note is shown where the price goes, so it is not repeated in
   // the attribute list underneath it.
   if (handle === PRICING_NOTE_HANDLE) return []
-  const value = props.product.metafields[handle]
+  const value = props.product.details[handle]
   if (value === undefined || value === null) return []
   const values = Array.isArray(value) ? value : [String(value)]
   return values.length ? [{ key: definition.id, label: definition.name, values }] : []
 }))
 
-const bookingOpen = ref(false)
-const bookingStep = ref(1)
-const partySize = ref(1)
-/** The options a customer can actually choose — what is priced, and what is booked. */
-const selectedVariantId = ref<string | null>(sellableVariants.value.length === 1 ? sellableVariants.value[0]!.id : null)
-function variantPriceLabel(variant: Product['variants'][number]) {
-  return formatProductMoney(selectPrice(variant.prices, { currency: props.currency, location_id: props.location.id, at: new Date().toISOString() }))
-}
-const timeSelection = ref<TimeSlotSelection | null>(null)
-const submitting = ref(false)
-const bookingError = ref('')
-/**
- * The occurrences, as the page was served with them.
- *
- * They arrive from the payload rather than from a fetch after hydration, so
- * the dates are in the HTML. The client refresh below replaces them; it does
- * not supply them, because the first reader may be a crawler that runs nothing.
- */
-const sessions = ref<PublicProductSession[]>([...props.sessions])
-const sessionsPending = ref(false)
-
-function localDateOf(session: PublicProductSession) {
-  const parts = localPartsAt(new Date(session.starts_at), session.timezone)
-  return `${String(parts.year).padStart(4, '0')}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`
-}
-function localTimeOf(session: PublicProductSession) {
-  const parts = localPartsAt(new Date(session.starts_at), session.timezone)
-  return `${String(parts.hour).padStart(2, '0')}:${String(parts.minute).padStart(2, '0')}`
-}
-
-// The calendar speaks in the session's own zone, so a 10:00 class is 10:00 for
-// every guest reading the page from anywhere.
-const availabilityDates = computed<RawDateAvailability[]>(() => {
-  const byDate = new Map<string, RawDateAvailability>()
-  for (const session of sessions.value) {
-    const date = localDateOf(session)
-    const entry = byDate.get(date) ?? { date, slots: [] }
-    entry.slots.push({
-      time_slot: localTimeOf(session),
-      capacity: session.remaining === null ? null : session.remaining,
-      booked: 0,
-      remaining: session.remaining,
-      is_closed: false,
-      is_full: session.is_full,
-    })
-    byDate.set(date, entry)
+const { data: initialSessions, error: initialSessionsError } = await useAsyncData(`product-detail-sessions:${props.organizationId}:${props.product.id}:${props.location?.id ?? 'online'}`, async () => {
+  if (!props.booking || props.product.order_url) return []
+  if (props.sessions !== undefined) return props.sessions
+  if (import.meta.server) {
+    const event = useRequestEvent()!
+    const { cloudflareEnv } = await import('~/server/utils/api-response')
+    const { listPublicBookingSessions } = await import('~/server/utils/public-session-booking')
+    return (await listPublicBookingSessions(cloudflareEnv(event).DB, props.organizationId, props.product.slug, props.location?.id ?? 'online')).sessions.filter(session => !session.is_full)
   }
-  return [...byDate.values()].sort((left, right) => left.date.localeCompare(right.date))
+  return (await publicApiRequest<{ success: true; sessions: PublicProductSession[] }>(`/api/public/products/${encodeURIComponent(props.product.slug)}/sessions?location_id=${encodeURIComponent(props.location?.id ?? 'online')}`, {
+    validate: (value): value is { success: true; sessions: PublicProductSession[] } => isRecord(value) && value.success === true && Array.isArray(value.sessions),
+  })).sessions.filter(session => !session.is_full)
 })
-
-/**
- * The largest party the calendar can take.
- *
- * Seats live on the session, not on the product: `default_capacity` is what
- * generating an occurrence starts from, and the sessions already on the
- * calendar keep whatever capacity they were given. Reading the product default
- * here capped a twelve-seat session at four, and a product with no default at
- * an unrelated eight.
- *
- * Once a time is chosen it is that session's remaining seats; before then it is
- * the most any session on the calendar has left. A session with no capacity at
- * all takes any party the endpoint accepts.
- */
-const MAX_PARTY_SIZE = 99
-const guestsMax = computed(() => {
-  const pool = selectedSession.value ? [selectedSession.value] : sessions.value
-  if (!pool.length) return 1
-  if (pool.some(session => session.remaining === null)) return MAX_PARTY_SIZE
-  return Math.max(1, ...pool.map(session => session.remaining ?? 0))
-})
-
-const selectedSession = computed<PublicProductSession | null>(() => {
-  const selection = timeSelection.value
-  if (!selection) return null
-  return sessions.value.find(session => localDateOf(session) === selection.day && localTimeOf(session) === selection.time) ?? null
-})
-
-/**
- * Load what the form needs. Opening is the checkbox's job.
- *
- * The control is a label for the modal's checkbox, so pressing it toggles that
- * checkbox and the modal reports the new state back through v-model. Setting
- * `bookingOpen` here as well raced the label's own activation: the state said
- * open, the checkbox had been flipped back, and the dialog stayed hidden with
- * its sessions loaded behind it.
- */
-/**
- * Re-read the occurrences, for a reader who has been on the page a while.
- *
- * This refreshes what the page was served with; it is not the only source of
- * it. A failure leaves the rendered sessions standing and says the load
- * failed — it does not claim there is nothing to book, which is a different
- * fact and the one this page used to state wrongly.
- */
-async function loadSessions() {
-  if (sessionsPending.value) return
-  sessionsPending.value = true
-  try {
-    const response = await publicApiRequest<{ success: true; sessions: PublicProductSession[] }>(
-      // This page is one branch's page, so it asks for that branch's
-      // occurrences. Two branches running the same class at the same hour
-      // would otherwise be indistinguishable by date and time alone.
-      `/api/public/products/${encodeURIComponent(props.product.slug)}/sessions?location_id=${encodeURIComponent(props.location.id)}`,
-      {
-        validate: (value): value is { success: true; sessions: PublicProductSession[] } =>
-          isRecord(value) && value.success === true && Array.isArray(value.sessions),
-      },
-    )
-    sessions.value = response.sessions.filter(session => !session.is_full)
-  } catch (error) {
-    bookingError.value = getErrorMessage(error, t('saya.experience_detail.booking_failed'))
-  } finally {
-    sessionsPending.value = false
-  }
-}
-
-async function openBooking() {
-  bookingStep.value = 1
-  bookingError.value = ''
-  await loadSessions()
-}
-
-watch(bookingOpen, (open) => {
-  // Observe the modal's canonical state, including an opening before hydration.
-  // The option and its price are not chosen yet, so none is claimed here.
-  if (open) trackCheckoutStart(props.product.id, props.location.id, { products: [{ product_id: props.product.id, name: props.product.name, quantity: 1 }] }, selectedVariantId.value)
-})
-
-/** A guest pressing a time on the page arrives in the form with it chosen. */
-async function openBookingAt(session: PublicProductSession) {
-  timeSelection.value = { day: localDateOf(session), time: localTimeOf(session), label: `${sessionDayLabel(session)} · ${sessionTimeLabel(session)}` }
-  await openBooking()
-}
+if (initialSessionsError.value) throw initialSessionsError.value
+if (!initialSessions.value) throw createError({ statusCode: 500, statusMessage: 'Appointment availability was not returned' })
+const bookingController = useSessionBooking(() => ({ organizationId: props.organizationId,
+    organizationName: props.location?.title ?? props.organizationName!, product: props.product, currency: props.currency,
+    location: props.location, sessions: initialSessions.value!, showPartySize: props.vertical !== 'service' }))
+const { bookingOpen, bookingStep, submitting, sessions: bookingSessions, sessionsPending, loadSessions, openBooking, openBookingAt,
+  upcomingSessions, nextSession, sessionDayLabel, sessionTimeLabel, bookingError, allowTimezoneSelection, bookingTimezone, timezoneOptions, guestTimezone } = bookingController
 
 // The page is served with its sessions; this re-reads them once the browser
 // has it, so a tab left open does not offer a seat that has since gone. Only
 // for a product a guest can book here; an enquiry has no calendar.
 onMounted(() => {
   // Every product view is a native interaction; only a priced, bookable product is an ecommerce item.
-  trackProductView(props.product.id, props.location.id, offer.value && !enquiryOnly.value
+  trackProductView(props.product.id, props.location?.id ?? null, offer.value && !enquiryOnly.value
     ? { product_id: props.product.id, name: props.product.name, currency: offer.value.currency, price: ga4Major(offer.value.unit_amount, offer.value.currency) }
     : null)
-  if (props.booking && isAvailable.value && !enquiryOnly.value) void loadSessions()
+  if (props.booking && canBook.value) void loadSessions()
 })
-
-const upcomingSessions = computed(() => {
-  const now = Date.now()
-  return sessions.value
-    .filter(session => Date.parse(session.starts_at) > now)
-    .sort((left, right) => left.starts_at.localeCompare(right.starts_at))
-    .slice(0, 4)
-})
-const nextSession = computed(() => upcomingSessions.value[0] ?? null)
-
-function sessionDayLabel(session: PublicProductSession): string {
-  return new Intl.DateTimeFormat(locale.value, { weekday: 'short', day: 'numeric', month: 'short', timeZone: session.timezone }).format(new Date(session.starts_at))
-}
-function sessionTimeLabel(session: PublicProductSession): string {
-  const format = new Intl.DateTimeFormat(locale.value, { hour: 'numeric', minute: '2-digit', timeZone: session.timezone })
-  return `${format.format(new Date(session.starts_at))} – ${format.format(new Date(session.ends_at))}`
-}
 
 /** What guests say, in one number: the mean rating to one decimal, or none. */
 const averageRating = computed(() => {
@@ -721,97 +559,35 @@ const reviewCountLabel = computed(() => (props.reviews.length === 1
  * handle (EXPERIENCE_ATTRIBUTE_HANDLES). Everything else the tenant defined
  * is "things to know".
  */
-function attribute<T>(handle: string, read: (_value: MetafieldValue) => T | null): T | null {
-  const value = props.product.metafields[handle]
+function attribute<T>(handle: keyof Product['details'], read: (_value: ProductDetailValue) => T | null): T | null {
+  const value = props.product.details[handle]
   return value === undefined || value === null ? null : read(value)
 }
-const asText = (value: MetafieldValue) => (typeof value === 'string' && value.trim() ? value : null)
-const asList = (value: MetafieldValue) => (Array.isArray(value) ? value.map(String).filter(Boolean) : null)
+const asText = (value: ProductDetailValue) => (typeof value === 'string' && value.trim() ? value : null)
+const asList = (value: ProductDetailValue) => (Array.isArray(value) ? value.map(String).filter(Boolean) : null)
 const tagline = computed(() => attribute(EXPERIENCE_ATTRIBUTE_HANDLES.tagline, asText))
 const meetingPoint = computed(() => attribute(EXPERIENCE_ATTRIBUTE_HANDLES.meetingPoint, asText))
 const includedItems = computed(() => attribute(EXPERIENCE_ATTRIBUTE_HANDLES.includedItems, asList) ?? [])
 const whatToBring = computed(() => attribute(EXPERIENCE_ATTRIBUTE_HANDLES.whatToBring, asList) ?? [])
 const PLACED_ATTRIBUTE_HANDLES = new Set<string>(Object.values(EXPERIENCE_ATTRIBUTE_HANDLES))
 const thingsToKnow = computed(() => visibleDetails.value.filter((detail) => {
-  const definition = props.metafieldDefinitions.find(entry => entry.id === detail.key)
-  return !definition || !PLACED_ATTRIBUTE_HANDLES.has(metafieldHandle(definition))
+  const definition = productDetailFields(props.product.kind).find(entry => entry.id === detail.key)
+  return !definition || !PLACED_ATTRIBUTE_HANDLES.has(productDetailKey(definition))
 }))
 
-const addressLine = computed(() => formatPostalAddress(props.location.address))
+const addressLine = computed(() => formatPostalAddress(props.location?.address ?? null))
 // A map from the coordinates the branch already has; no key, no second source.
-const mapEmbedUrl = computed(() => (props.location.latitude !== null && props.location.longitude !== null
+const mapEmbedUrl = computed(() => (props.location && props.location.latitude !== null && props.location.longitude !== null
   ? `https://www.google.com/maps?q=${props.location.latitude},${props.location.longitude}&output=embed`
   : null))
 
-async function submitBooking(contact: ContactFormState) {
-  const session = selectedSession.value
-  if (submitting.value) return
-  if (!session) {
-    bookingError.value = t('saya.experience_detail.choose_time')
-    bookingStep.value = 1
-    return
-  }
-  if (!selectedVariantId.value) {
-    bookingError.value = t('saya.product_detail.choose_option')
-    bookingStep.value = 1
-    return
-  }
-  submitting.value = true
-  bookingError.value = ''
-  try {
-    const response = await publicApiMutation<{ success: true; booking_id: string; cancellation_token: string; message: string; quoted_value?: ConversionValue | null; measurement?: SubmissionMeasurement; policy_summary?: ApiRecord | null }>(
-      `/api/public/products/${encodeURIComponent(props.product.slug)}/book`,
-      {
-        method: 'POST',
-        body: {
-          session_id: session.id,
-          variant_id: selectedVariantId.value,
-          party_size: partySize.value,
-          guest_name: contact.name,
-          guest_email: contact.email,
-          guest_phone: contact.phone || null,
-          notes: contact.notes || null,
-          locale: locale.value,
-          page_event_id: await pageEventId(),
-        },
-        validate: (value): value is { success: true; booking_id: string; cancellation_token: string; message: string; quoted_value?: ConversionValue | null; measurement?: SubmissionMeasurement } =>
-          isRecord(value) && value.success === true && typeof value.booking_id === 'string' && typeof value.cancellation_token === 'string',
-      },
-    )
-    mirrorSubmission('booking_submit', response.measurement, props.location.id, response.quoted_value)
-    setBookingConfirmation({
-      type: 'booking',
-      organizationId: props.organizationId,
-      organizationName: props.location.title,
-      guestName: contact.name,
-      startsAt: session.starts_at,
-      timezone: session.timezone,
-      guests: partySize.value,
-      productId: props.product.id,
-      title: props.product.name,
-      requests: contact.notes || null,
-      message: response.message,
-      cancelUrl: `/bookings/cancel?id=${response.booking_id}#${response.cancellation_token}`,
-      policySummary: response.policy_summary ?? null,
-      locationId: props.location.id,
-      locationName: props.location.title,
-      locationSlug: props.location.slug,
-    })
-    bookingOpen.value = false
-    await navigateTo('/bookings/confirmed')
-  } catch (error) {
-    bookingError.value = getErrorMessage(error, 'That booking could not be completed. Please try again.')
-  } finally {
-    submitting.value = false
-  }
-}
 
 function recordExternalOrderClick() {
-  if (!import.meta.client || props.analyticsEnabled === false) return
+  if (!import.meta.client) return
   trackProductOrder(
-    props.location.id,
+    props.location?.id ?? null,
     props.product.id,
-    props.presentation.productPath(props.location.slug, props.product.slug),
+    props.pageDocument?.path ?? props.presentation.productPath(props.location?.slug ?? '', props.product.slug),
   )
 }
 
@@ -828,7 +604,7 @@ function recordExternalOrderClick() {
  * date to state; it is still a Product on sale, so it says that rather than
  * claiming to be an Event that never happens.
  */
-const schemaSessions = computed(() => [...sessions.value].sort((left, right) => left.starts_at.localeCompare(right.starts_at)))
+const schemaSessions = computed(() => [...bookingSessions.value].sort((left, right) => left.starts_at.localeCompare(right.starts_at)))
 const structuredDataType = computed(() => {
   const declared = props.presentation.structuredDataType
   if (declared !== 'Event') return declared
@@ -841,19 +617,19 @@ const structuredDataType = computed(() => {
 // tenant's own domain.
 const requestURL = useRequestURL()
 const canonicalProductUrl = computed(() => new URL(
-  props.product.order_url || localePath(props.presentation.productPath(props.location.slug, props.product.slug)),
+  props.product.order_url || localePath(props.presentation.productPath(props.location?.slug ?? '', props.product.slug)),
   requestURL.origin,
 ).toString())
 
 /** Where it runs: the branch, as a place a guest can be sent to. */
-const schemaPlace = computed(() => ({
+const schemaPlace = computed(() => props.location ? ({
   '@type': 'Place',
   name: props.location.title,
   address: schemaPostalAddress(props.location.address),
-  ...(props.location.latitude !== null && props.location.longitude !== null
+  ...(props.location && props.location.latitude !== null && props.location.longitude !== null
     ? { geo: { '@type': 'GeoCoordinates', latitude: props.location.latitude, longitude: props.location.longitude } }
     : {}),
-}))
+}) : { '@type': 'VirtualLocation', url: canonicalProductUrl.value })
 
 /**
  * The seat on one occurrence, priced the way the page prices it.
@@ -887,7 +663,7 @@ function sessionEvent(session: PublicProductSession) {
     name: props.product.name,
     startDate: session.starts_at,
     endDate: session.ends_at,
-    eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+    eventAttendanceMode: props.location ? 'https://schema.org/OfflineEventAttendanceMode' : 'https://schema.org/OnlineEventAttendanceMode',
     eventStatus: 'https://schema.org/EventScheduled',
     location: schemaPlace.value,
     offers: sessionOffer(session),
@@ -895,6 +671,8 @@ function sessionEvent(session: PublicProductSession) {
 }
 
 useSchemaOrg(computed(() => {
+  // Page documents keep their canonical SEO/schema; a directory is not a second Product page.
+  if (props.pageDocument || props.compact) return null
   const type = structuredDataType.value
   const list = schemaSessions.value
   const first = list[0]
@@ -911,7 +689,7 @@ useSchemaOrg(computed(() => {
           url: canonicalProductUrl.value,
           startDate: first.starts_at,
           endDate: last.ends_at,
-          eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+          eventAttendanceMode: props.location ? 'https://schema.org/OfflineEventAttendanceMode' : 'https://schema.org/OnlineEventAttendanceMode',
           eventStatus: 'https://schema.org/EventScheduled',
           location: schemaPlace.value,
           // One offer per occurrence, so the markup says when each seat is for.

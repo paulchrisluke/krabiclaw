@@ -1,3 +1,4 @@
+import { getPublicConsultationSettings } from '~/server/utils/professional-services'
 import { boundedOccurrence } from '~/server/utils/pageview-tracking'
 import { getRouterParam, readBody } from 'nitro/h3'
 import { queryAll, queryFirst } from '~/server/db'
@@ -5,7 +6,7 @@ import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-res
 import { HOUR_MS, getClientIp, hashClientIp, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 import { recordOrganizationConversionEvent, type ConversionEntityType, type ConversionStage } from '~/server/utils/organization-conversions'
 import { BROWSER_INTERACTION_EVENT_NAMES, CONVERSION_EVENT_CATALOG, type OrganizationConversionEventName } from '~/utils/organization-conversion-events'
-import { isCanonicalEventId } from '~/server/utils/pageview-tracking'
+import { isCanonicalEventId, isKnownBot } from '~/server/utils/pageview-tracking'
 import { normalizeVertical } from '~/utils/vertical-copy'
 import { getLocationReservationConfig } from '~/server/utils/reservations'
 import { defineHandler } from 'nitro'
@@ -28,6 +29,7 @@ export default defineHandler(async (event) => {
   if (!organizationId) return jsonResponse({ error: 'organizationId required' }, { status: 400 })
   const db = cloudflareEnv(event).db
   if (!db) return jsonResponse({ error: 'Database unavailable' }, { status: 503 })
+  if (isKnownBot((event.req.headers.get('user-agent') || '').slice(0, 1024))) return jsonResponse({ ok: true, ignored: true })
   let body: ApiRecord
   try { body = await readBody(event) } catch { return jsonResponse({ error: 'Invalid request body' }, { status: 400 }) }
 
@@ -72,8 +74,8 @@ export default defineHandler(async (event) => {
       entityType = 'content_document'; entityId = page.id
     }
     if (stage === 'external_booking_handoff') {
-      const consultation = await queryFirst<{ external_url: string | null }>(db, `SELECT (settings_json ->> '$.consultation.external_url') AS external_url FROM organization WHERE id = ? AND (settings_json ->> '$.consultation.mode') = 'external_url' LIMIT 1`, [organizationId])
-      const host = consultation?.external_url ? destinationHost(consultation.external_url) : null
+      const consultation = await getPublicConsultationSettings(db, organizationId)
+      const host = consultation.mode === 'external_url' && consultation.external_url ? destinationHost(consultation.external_url) : null
       if (!host) return jsonResponse({ error: 'Consultation destination is unavailable' }, { status: 404 })
       ctaDestination = host
       metadata = { destination_hostname: host }
@@ -82,19 +84,19 @@ export default defineHandler(async (event) => {
     }
   } else if (eventName === 'product_order_external_click') {
     stage = 'external_handoff'
+    if (!Object.hasOwn(body, 'location_id') || (body.location_id !== null && (typeof body.location_id !== 'string' || !body.location_id.trim()))) return jsonResponse({ error: 'Supply location_id, or explicit null for an online offering' }, { status: 400 })
     locationId = cleanString(body.location_id, 120) || null
     entityId = cleanString(body.product_id, 120) || null
-    if (!locationId || !entityId) return jsonResponse({ error: 'location_id and product_id are required' }, { status: 400 })
-    // Published to this site, offered at a location OF THIS SITE, on sale, and
-    // carrying the link the guest just followed. Five separate facts, all
-    // required: the location arrives in the request body, and without the site
-    // check one tenant's page could report a click at another tenant's branch.
+    if (!entityId) return jsonResponse({ error: 'product_id is required' }, { status: 400 })
     const product = await queryFirst<{ id: string; order_url: string }>(db, `
       SELECT p.id, p.order_url FROM products p
-      JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id AND pub.organization_id = ? AND pub.published = 1
-      JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id AND pl.location_id = ? AND pl.published = 1 AND pl.active = 1
-      JOIN business_locations bl ON bl.organization_id = p.organization_id AND bl.id = pl.location_id AND bl.organization_id = ?
-      WHERE p.id = ? AND p.active = 1 AND p.order_url IS NOT NULL LIMIT 1`, [organizationId, locationId, organizationId, entityId])
+      JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id AND pub.published = 1
+      WHERE p.organization_id = ? AND p.id = ? AND p.active = 1 AND p.order_url IS NOT NULL
+        AND (? IS NULL OR EXISTS (
+          SELECT 1 FROM product_locations pl JOIN business_locations bl ON bl.id = pl.location_id AND bl.organization_id = pl.organization_id
+          WHERE pl.product_id = p.id AND pl.organization_id = p.organization_id AND pl.location_id = ?
+            AND pl.published = 1 AND pl.active = 1 AND bl.status = 'active'
+        )) LIMIT 1`, [organizationId, entityId, locationId, locationId])
     if (!product || !destinationHost(product.order_url)) return jsonResponse({ error: 'Product not found' }, { status: 404 })
     const destinationHostname = new URL(product.order_url).hostname.toLowerCase()
     entityType = 'product'; ctaDestination = destinationHostname; pageType = 'product'; metadata = { product_id: product.id, destination_hostname: destinationHostname }
@@ -108,14 +110,17 @@ export default defineHandler(async (event) => {
     stage = eventName === 'product_view' ? 'viewed' : 'started'
     locationId = cleanString(body.location_id, 120) || null
     entityId = cleanString(body.product_id, 120) || null
-    if (!locationId || !entityId) return jsonResponse({ error: 'location_id and product_id are required' }, { status: 400 })
-    // A product this site publishes, offered and on sale at a location of this site.
+    if (!entityId) return jsonResponse({ error: 'product_id is required' }, { status: 400 })
+    // A public online service has no physical location; both contexts require
+    // this tenant's active, published Product and its actual offering scope.
     const product = await queryFirst<{ id: string }>(db, `
       SELECT p.id FROM products p
       JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id AND pub.organization_id = ? AND pub.published = 1
-      JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id AND pl.location_id = ? AND pl.published = 1 AND pl.active = 1
-      JOIN business_locations bl ON bl.organization_id = p.organization_id AND bl.id = pl.location_id AND bl.organization_id = ?
-      WHERE p.id = ? AND p.active = 1 LIMIT 1`, [organizationId, locationId, organizationId, entityId])
+      WHERE p.id = ? AND p.active = 1 AND ${locationId
+        ? `EXISTS (SELECT 1 FROM product_locations pl JOIN business_locations bl ON bl.id = pl.location_id AND bl.organization_id = pl.organization_id
+             WHERE pl.product_id = p.id AND pl.organization_id = p.organization_id AND pl.location_id = ? AND pl.published = 1 AND pl.active = 1 AND bl.status = 'active')`
+        : `(p.order_url IS NOT NULL OR EXISTS (SELECT 1 FROM product_booking_configs cfg WHERE cfg.product_id = p.id AND cfg.organization_id = p.organization_id AND cfg.online_timezone IS NOT NULL))`}
+      LIMIT 1`, [organizationId, entityId, ...(locationId ? [locationId] : [])])
     if (!product) return jsonResponse({ error: 'Product not found' }, { status: 404 })
     entityType = 'product'; pageType = 'product'
     const requestedVariant = cleanString(body.variant_id, 120)

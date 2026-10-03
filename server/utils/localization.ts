@@ -18,12 +18,12 @@ import { localizationError } from '~/server/utils/localization-errors'
 import {
   RESOURCE_LOCALIZATION_REGISTRY,
   parseLocalizedResourceType,
-  loadMetafieldDefinitionIndex,
   validateLocalizedRoutePath,
   validateLocalizedValues,
   type LocalizedResourceType,
   type LocalizedValues,
 } from '~/server/utils/localization-registry'
+import { assertProductKind, type ProductKind } from '~/shared/product-details'
 import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 
@@ -272,7 +272,7 @@ function canonicalResourceQuery(resourceType: LocalizedResourceType, scope: 'one
   const { table, tenantScope } = RESOURCE_LOCALIZATION_REGISTRY[resourceType]
   const one = scope === 'one'
   if (tenantScope === 'self') return `SELECT id FROM ${table} WHERE id = ?${one ? ' AND id = ?' : ''}`
-  return `SELECT id FROM ${table} WHERE organization_id = ?${one ? ' AND id = ?' : ''}`
+  return `SELECT id${resourceType === 'product' ? ', kind' : ''} FROM ${table} WHERE organization_id = ?${one ? ' AND id = ?' : ''}`
 }
 
 async function assertCanonicalResourceExists(
@@ -508,11 +508,8 @@ export async function putResourceLocalization(
   const { locale, source } = await assertOrganizationLanguageEntitlement(env, db, input.organizationId, input.locale)
   if (source) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'English source content must be edited through its canonical resource')
   await assertCanonicalResourceExists(db, input.organizationId, resourceType, input.resourceId)
-  // Which product attributes may be translated is declared by the tenant's
-  // metafield definitions, so they are loaded and handed to the validator
-  // rather than restated as a list here.
-  const definitions = resourceType === 'product' ? await loadMetafieldDefinitionIndex(db, input.organizationId) : undefined
-  const values = validateLocalizedValues(resourceType, input.values, definitions)
+  const canonical = resourceType === 'product' ? await queryFirst<{ kind: string }>(db, canonicalResourceQuery(resourceType, 'one'), [input.organizationId, input.resourceId]) : null
+  const values = validateLocalizedValues(resourceType, input.values, canonical ? assertProductKind(canonical.kind) : undefined)
   const routePath = validateLocalizedRoutePath(resourceType, locale, input.routePath)
   const existing = await queryFirst<{ id: string; route_path: string | null; created_at: string; created_by_user_id: string }>(db, `
     SELECT id, route_path, created_at, created_by_user_id
@@ -755,10 +752,8 @@ export async function replaceResourceLocalizations(
   if (!Array.isArray(input.items) || input.items.length < 1 || input.items.length > 250) {
     localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'items must contain 1 to 250 localizations')
   }
-  // Which product attributes may be translated is declared by the tenant's
-  // metafield definitions, so they are loaded and handed to the validator
-  // rather than restated as a list here.
-  const definitions = resourceType === 'product' ? await loadMetafieldDefinitionIndex(db, input.organizationId) : undefined
+  const canonical = await queryAll<{ id: string; kind?: ProductKind }>(db, canonicalResourceQuery(resourceType, 'all'), [input.organizationId])
+  const kinds = new Map(canonical.map(row => [row.id, row.kind]))
   const parsed = input.items.map((value, index) => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', `items[${index}] must be an object`, { index })
@@ -770,16 +765,20 @@ export async function replaceResourceLocalizations(
     }
     return {
       resourceId: item.resource_id.trim(),
-      values: validateLocalizedValues(resourceType, item.values, definitions),
-      routePath: validateLocalizedRoutePath(resourceType, locale, item.route_path),
+      values: item.values,
+      routePath: item.route_path,
     }
   })
   const ids = parsed.map(item => item.resourceId)
   if (new Set(ids).size !== ids.length) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'Resource IDs must be unique')
-  const canonical = await queryAll<{ id: string }>(db, canonicalResourceQuery(resourceType, 'all'), [input.organizationId])
   const found = new Set(canonical.map(row => row.id))
   const missing = ids.filter(id => !found.has(id))
   if (missing.length) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'One or more canonical resources were not found', { resource_type: resourceType, resource_ids: missing })
+  const validated = parsed.map(item => ({
+    resourceId: item.resourceId,
+    values: validateLocalizedValues(resourceType, item.values, kinds.get(item.resourceId)),
+    routePath: validateLocalizedRoutePath(resourceType, locale, item.routePath),
+  }))
   const existing = await queryAll<PriorLocalization & { resource_id: string }>(db, `
     SELECT id, resource_id, route_path, created_at, created_by_user_id
       FROM resource_localizations
@@ -788,7 +787,7 @@ export async function replaceResourceLocalizations(
   const byResource = new Map(existing.map(row => [row.resource_id, row]))
   const now = new Date().toISOString()
   const statements: BatchQuery[] = []
-  for (const item of parsed) {
+  for (const item of validated) {
     const prior = byResource.get(item.resourceId)
     statements.push(...resourceLocalizationWriteQueries({
       organizationId: input.organizationId, resourceType, resourceId: item.resourceId,

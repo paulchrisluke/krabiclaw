@@ -17,6 +17,19 @@ test('the migration chain applies from zero and builds every table the schema de
     const built = (database.prepare("SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all() as Array<{ name: string }>)
       .map(row => row.name)
     assert.deepEqual(built, declared)
+    const consultation = { mode: 'native', cta_label: 'Book', schedule_path: '/schedule', confirmation_path: '/confirmed', tracking_enabled: true, metadata_json: {} }
+    database.prepare('INSERT INTO organization (id, name, slug, consultation_settings_json) VALUES (?, ?, ?, ?)').run('tenant-a', 'A', 'tenant-a', JSON.stringify(consultation))
+    database.prepare("INSERT INTO organization (id, name, slug) VALUES ('tenant-b', 'B', 'tenant-b')").run()
+    for (const invalid of [{ ...consultation, mode: 'unknown' }, { ...consultation, tracking_enabled: 'true' }, { ...consultation, metadata_json: [] }, { ...consultation, schedule_path: 'schedule' }, { mode: 'native' }]) {
+      assert.throws(() => database.prepare("UPDATE organization SET consultation_settings_json = ? WHERE id = 'tenant-a'").run(JSON.stringify(invalid)), /organization_consultation_settings_check/)
+    }
+    assert.deepEqual(JSON.parse((database.prepare("SELECT consultation_settings_json FROM organization WHERE id = 'tenant-a'").get() as { consultation_settings_json: string }).consultation_settings_json), consultation)
+    for (const organizationId of ['tenant-a', 'tenant-b']) {
+      database.prepare('INSERT INTO organization_locales (id, organization_id, locale, is_source, status) VALUES (?, ?, ?, 0, ?)').run(`${organizationId}-th`, organizationId, 'th', 'published')
+      database.prepare("INSERT INTO resource_localizations (id, organization_id, resource_type, resource_id, locale, route_path, values_json, created_by_user_id, updated_by_user_id) VALUES (?, ?, ?, ?, ?, ?, ?, 'test', 'test')").run(`${organizationId}-route`, organizationId, 'product', `${organizationId}-product`, 'th', '/th/products/shared', '{}')
+    }
+    assert.equal((database.prepare("SELECT COUNT(*) AS count FROM resource_localizations WHERE route_path = '/th/products/shared'").get() as { count: number }).count, 2)
+    assert.throws(() => database.prepare("INSERT INTO resource_localizations (id, organization_id, resource_type, resource_id, locale, route_path, values_json, created_by_user_id, updated_by_user_id) VALUES ('duplicate-route', 'tenant-a', 'product', 'another-product', 'th', '/th/products/shared', '{}', 'test', 'test')").run(), /UNIQUE constraint failed/)
     assert.equal(database.pragma('foreign_key_check').length, 0)
   } finally {
     database.close()
@@ -75,6 +88,22 @@ test('a v7 export transfers into the current baseline, its connections into orga
   }
 })
 
+test('consultation settings move preserves every value with one canonical source and referenced organization', () => {
+  const db = new Database(':memory:')
+  db.pragma('foreign_keys = ON')
+  try {
+    db.exec(readFileSync('migrations-history/v8/0000_baseline.sql', 'utf8'))
+    db.exec(readFileSync('migrations-history/v8/0001_message_attachments.sql', 'utf8'))
+    const settings = { consultation: { mode: 'external_url', cta_label: 'Schedule', external_url: 'https://example.com/book', schedule_path: '/schedule', confirmation_path: '/confirmed', tracking_enabled: false, metadata_json: { custom: 'preserved' } }, config: { default_timezone: 'America/New_York' } }
+    db.prepare('INSERT INTO organization (id,name,slug,createdAt,settings_json) VALUES (?,?,?,?,?)').run('consultation-migration', 'Example', 'consultation-migration', 1, JSON.stringify(settings))
+    db.exec(readFileSync('migrations-history/v8/0002_native_consultation_foundation.sql', 'utf8'))
+    const row = db.prepare('SELECT settings_json,consultation_settings_json FROM organization WHERE id = ?').get('consultation-migration') as { settings_json: string; consultation_settings_json: string }
+    assert.deepEqual(JSON.parse(row.settings_json), { config: settings.config })
+    assert.deepEqual(JSON.parse(row.consultation_settings_json), settings.consultation)
+    db.prepare('UPDATE organization SET consultation_settings_json = json_set(consultation_settings_json, \'$.mode\', \'native\') WHERE id = ?').run('consultation-migration')
+    assert.deepEqual(db.pragma('foreign_key_check'), [])
+  } finally { db.close() }
+})
 
 test('snapshot payload preserves destination signing keys for refreshes and carries source keys for replacements', async () => {
   const { writePayload } = await import('../../scripts/transfer-database-export.mjs')

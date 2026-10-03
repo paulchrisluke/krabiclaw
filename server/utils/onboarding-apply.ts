@@ -26,6 +26,7 @@ import type { CurrencyCode } from '~/shared/currencies'
 type ProvisioningEnv = Parameters<typeof provisionOrganization>[0]
 
 export interface OnboardingTarget {
+  vertical: OrganizationVertical
   organizationId: string
   subdomain: string
   locationId: string
@@ -140,6 +141,7 @@ export async function ensureOnboardingTarget(
 
   return {
     target: {
+      vertical: draft.vertical,
       organizationId,
       subdomain,
       locationId: locations[0]!.id,
@@ -290,10 +292,10 @@ export async function applyOnboardingDraft(
       actor: { actorId: userId },
       now,
       products: orderedProducts.map(product => ({
+        kind: input.target.vertical === 'restaurant' ? 'dish' : input.target.vertical === 'service' ? 'service' : 'item',
         name: product.name,
         description: product.description,
         order_url: product.order_url,
-        tags: product.tags,
         source: product.source,
         // What a customer buys is a variant, and the price belongs to it. A
         // Product the owner did not price gets a variant with no price, which

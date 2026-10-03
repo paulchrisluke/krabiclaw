@@ -1,19 +1,23 @@
 <template>
-  <ProductDetailPage :organization-id="organizationId" :vertical="detail.vertical" :product="detail.product" :location="detail.location" :reviews="detail.reviews" :booking="detail.booking" :sessions="detail.sessions" :collection-name="detail.collectionName" :collection-siblings="detail.collectionSiblings" :metafield-definitions="detail.metafieldDefinitions" :currency="detail.currency" :presentation="presentation" />
+  <ProductDetailPage :organization-id="organizationId" :vertical="detail.vertical" :product="detail.product" :location="detail.location" :reviews="detail.reviews" :booking="detail.booking" :sessions="detail.sessions" :collection-name="detail.collectionName" :collection-siblings="detail.collectionSiblings" :currency="detail.currency" :presentation="presentation" />
 </template>
 
 <script setup lang="ts">
 import ProductDetailPage from '~/components/products/ProductDetailPage.vue'
-import { requireProductPresentation } from '~/utils/product-presentation'
-import { composeProductSeoDescription, isOfferedProduct } from '~/utils/product-seo'
+import { presentationForSurface } from '~/utils/product-presentation'
+import { composeProductSeoDescription } from '~/utils/product-seo'
 
 definePageMeta({ layout: 'saya' })
 const resolved = await usePublicProductDetail('menu')
 const organizationId = resolved.organizationId
-const detail = computed(() => resolved.detail.value)
-const presentation = requireProductPresentation(detail.value.vertical)
+const detail = computed(() => {
+  const value = resolved.detail.value
+  if (!value.location) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
+  return { ...value, location: value.location }
+})
+const presentation = presentationForSurface(detail.value.vertical, 'menu')
 if (presentation.locationCollectionSegment !== 'menu') throw createError({ statusCode: 404 })
-const { localePath, t } = useI18n()
+const { t } = useI18n()
 /** The offer context this page quotes: this location, the site currency, now. */
 const priceSelection = computed(() => ({
   currency: detail.value.currency,
@@ -25,7 +29,6 @@ useSocialMetadata(() => ({
   // A product with no applicable offer is not being sold here, so it points at
   // the index instead of competing with it. Data-driven: nothing lists which
   // products this applies to.
-  canonicalPath: isOfferedProduct(detail.value.product, priceSelection.value) ? undefined : localePath(presentation.collectionPath),
   // The page's own title, not a second SEO field on the product: page-level SEO
   // belongs to the canonical document, and two editable titles drifted apart.
   title: detail.value.product.name,

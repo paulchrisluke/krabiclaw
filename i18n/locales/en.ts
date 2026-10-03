@@ -1,4 +1,21 @@
 export default {
+  "booking": {
+    "choose_consultation": "Choose your consultation",
+    "service": "Service",
+    "service_details": "Full service details →",
+    "no_services": "No consultation services are currently published.",
+    "service_unavailable": "Online booking is unavailable for this service.",
+    "contact_schedule": "Contact us to schedule.",
+    "timezone": "Time zone",
+    "search_timezones": "Search time zones",
+    "request_appointment": "Request appointment",
+    "book_appointment": "Book appointment",
+    "price_unavailable": "Price unavailable",
+    "price_unavailable_contact": "Price unavailable. Please contact us to schedule.",
+    "review_notice": "Your request is reviewed before your appointment is confirmed.",
+    "instant_notice": "Your appointment is confirmed when you book.",
+    "sessions_failed": "Available times could not be loaded. Please try again."
+  },
   "home": {
     "highlights": "Latest posts & photos.",
     "reviews": "Guest reviews & ratings."

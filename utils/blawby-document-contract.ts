@@ -31,7 +31,7 @@ function hasValidIdentity(value: unknown) {
 
 function hasValidConsultation(value: unknown) {
   return isRecord(value)
-    && (value.mode === 'external_url' || value.mode === 'native_disabled')
+    && (value.mode === 'native' || value.mode === 'external_url' || value.mode === 'native_disabled')
     && typeof value.cta_label === 'string'
     && isNullableString(value.external_url)
     && typeof value.schedule_path === 'string'

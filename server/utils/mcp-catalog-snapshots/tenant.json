@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:4ff0381310aa31ddc89ce4016773b2ae9d17cfa18e790027f6dbf029595fa282",
+  "fingerprint": "sha256:f357635edc55c918b09d24713fc95051b8dae2212cffa8b14b3ff40de71e7466",
   "tools": [
     {
       "name": "append_content_block",
@@ -382,8 +382,123 @@
                 "description": {
                   "type": "string"
                 },
+                "details": {
+                  "additionalProperties": false,
+                  "description": "Named customer-facing facts for the product kind. This is a complete replacement map; preserve fields to retain. pricing_note contains explicitly stated price wording and requires empty numeric prices.",
+                  "properties": {
+                    "allergens": {
+                      "description": "Allergens the merchant states this dish contains. For dish.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "cancellation_policy": {
+                      "description": "The merchant’s stated cancellation terms, displayed publicly; this text does not automate refunds. For experience, service.",
+                      "type": "string"
+                    },
+                    "care_instructions": {
+                      "description": "How to care for the item, shown in its details. For item.",
+                      "type": "string"
+                    },
+                    "dietary_notes": {
+                      "description": "Merchant-stated dietary facts displayed with a dish. For dish.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "dimensions": {
+                      "description": "Item measurements including their units, shown in its details. For item.",
+                      "type": "string"
+                    },
+                    "included_items": {
+                      "description": "Items or work included in the stated price, shown in their own public section. For experience, service.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "ingredients": {
+                      "description": "Ingredients shown in the dish details. For dish.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "materials": {
+                      "description": "Materials the item is made from, shown in its details. For item.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "meeting_point": {
+                      "description": "Instructions shown in the meeting section; meeting mode and video links are set in scheduling. For experience, service.",
+                      "type": "string"
+                    },
+                    "noodle": {
+                      "description": "Authored noodle information shown as dish facts; these do not establish purchasable variants. For dish.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "preparation": {
+                      "description": "Preparation instructions shown to customers before a session or appointment. For experience, service.",
+                      "type": "string"
+                    },
+                    "pricing_note": {
+                      "description": "An explicitly stated price such as Market price; use only when no numeric price is set. For dish, experience, service, item.",
+                      "type": "string"
+                    },
+                    "sizes": {
+                      "description": "Authored serving information; priced choices belong in variants. For dish.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "soup": {
+                      "description": "Authored soup information shown with the dish. For dish.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "tagline": {
+                      "description": "A short sentence shown below the product title. For dish, experience, service, item.",
+                      "type": "string"
+                    },
+                    "toppings": {
+                      "description": "Authored topping information; priced choices belong in variants. For dish.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "what_to_bring": {
+                      "description": "Items customers should bring, shown in the preparation section. For experience, service.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                },
+                "kind": {
+                  "description": "The customer-facing kind: dish, experience, service or item. Determines the allowed descriptive fields; booking and stock remain separate capabilities.",
+                  "enum": [
+                    "dish",
+                    "experience",
+                    "service",
+                    "item"
+                  ],
+                  "type": "string"
+                },
                 "marketing_features": {
-                  "description": "Generic selling bullets. Inclusions, preparation instructions and policies are separate metafields.",
+                  "description": "Generic selling bullets. Inclusions, preparation instructions and policies are separate details.",
                   "items": {
                     "type": "string"
                   },
@@ -397,16 +512,13 @@
                   "description": "Opaque string annotations for integrations. No pricing, scheduling, stock or filtering behavior may read these.",
                   "type": "object"
                 },
-                "metafields": {
-                  "description": "Complete replacement map keyed by \"<namespace>.<key>\"; preserve all entries you want to keep. Remove an entry to clear its value; use {} when no entries remain, never null values. For a literal price such as \"Market price\", set \"pricing.note\" to the exact user-provided text and send empty prices arrays for every variant. Numeric prices and pricing.note are mutually exclusive; clear pricing.note when adding numeric prices. Text-only prices display publicly but cannot be checked out. The definition must already exist; create it with create_metafield_definition.",
-                  "type": "object"
-                },
                 "name": {
                   "type": "string"
                 },
                 "options": {
                   "items": {
                     "additionalProperties": false,
+                    "description": "A customer choice such as Size, with values such as Small and Large. Variants combine these choices and carry prices. Descriptive facts belong in details.",
                     "properties": {
                       "id": {
                         "type": "string"
@@ -451,18 +563,11 @@
                   "type": "array"
                 },
                 "order_url": {
-                  "description": "A narrow ordering destination such as a delivery partner. Not the public product page.",
+                  "description": "External ordering or booking destination, such as Uber Eats, an experience checkout, or Clio Grow. When set, public actions use this URL instead of native booking. Null restores the configured native flow.",
                   "type": [
                     "string",
                     "null"
                   ]
-                },
-                "tags": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "maxItems": 32,
-                  "type": "array"
                 },
                 "tax_code": {
                   "type": [
@@ -624,7 +729,8 @@
                 }
               },
               "required": [
-                "name"
+                "name",
+                "kind"
               ],
               "type": "object"
             },
@@ -649,6 +755,22 @@
                 },
                 "booking": {
                   "properties": {
+                    "calendar_group": {
+                      "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
+                      "maxLength": 64,
+                      "minLength": 1,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "confirmation_mode": {
+                      "enum": [
+                        "instant",
+                        "review"
+                      ],
+                      "type": "string"
+                    },
                     "default_capacity": {
                       "minimum": 0,
                       "type": [
@@ -663,6 +785,17 @@
                         "null"
                       ]
                     },
+                    "online_payment_required": {
+                      "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+                      "type": "boolean"
+                    },
+                    "online_timezone": {
+                      "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "organization_id": {
                       "type": "string"
                     },
@@ -672,7 +805,11 @@
                   },
                   "required": [
                     "duration_minutes",
-                    "default_capacity"
+                    "default_capacity",
+                    "confirmation_mode",
+                    "online_payment_required",
+                    "online_timezone",
+                    "calendar_group"
                   ],
                   "type": [
                     "object",
@@ -702,6 +839,110 @@
                 },
                 "description": {
                   "type": "string"
+                },
+                "details": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "allergens": {
+                      "description": "Allergens the merchant states this dish contains. For dish.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "cancellation_policy": {
+                      "description": "The merchant’s stated cancellation terms, displayed publicly; this text does not automate refunds. For experience, service.",
+                      "type": "string"
+                    },
+                    "care_instructions": {
+                      "description": "How to care for the item, shown in its details. For item.",
+                      "type": "string"
+                    },
+                    "dietary_notes": {
+                      "description": "Merchant-stated dietary facts displayed with a dish. For dish.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "dimensions": {
+                      "description": "Item measurements including their units, shown in its details. For item.",
+                      "type": "string"
+                    },
+                    "included_items": {
+                      "description": "Items or work included in the stated price, shown in their own public section. For experience, service.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "ingredients": {
+                      "description": "Ingredients shown in the dish details. For dish.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "materials": {
+                      "description": "Materials the item is made from, shown in its details. For item.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "meeting_point": {
+                      "description": "Instructions shown in the meeting section; meeting mode and video links are set in scheduling. For experience, service.",
+                      "type": "string"
+                    },
+                    "noodle": {
+                      "description": "Authored noodle information shown as dish facts; these do not establish purchasable variants. For dish.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "preparation": {
+                      "description": "Preparation instructions shown to customers before a session or appointment. For experience, service.",
+                      "type": "string"
+                    },
+                    "pricing_note": {
+                      "description": "An explicitly stated price such as Market price; use only when no numeric price is set. For dish, experience, service, item.",
+                      "type": "string"
+                    },
+                    "sizes": {
+                      "description": "Authored serving information; priced choices belong in variants. For dish.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "soup": {
+                      "description": "Authored soup information shown with the dish. For dish.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "tagline": {
+                      "description": "A short sentence shown below the product title. For dish, experience, service, item.",
+                      "type": "string"
+                    },
+                    "toppings": {
+                      "description": "Authored topping information; priced choices belong in variants. For dish.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "what_to_bring": {
+                      "description": "Items customers should bring, shown in the preparation section. For experience, service.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
                 },
                 "gallery": {
                   "items": {
@@ -852,6 +1093,15 @@
                     "null"
                   ]
                 },
+                "kind": {
+                  "enum": [
+                    "dish",
+                    "experience",
+                    "service",
+                    "item"
+                  ],
+                  "type": "string"
+                },
                 "locations": {
                   "items": {
                     "properties": {
@@ -884,10 +1134,6 @@
                   "additionalProperties": {
                     "type": "string"
                   },
-                  "type": "object"
-                },
-                "metafields": {
-                  "description": "Typed descriptive attributes keyed by \"<namespace>.<key>\".",
                   "type": "object"
                 },
                 "name": {
@@ -974,12 +1220,6 @@
                     "copy"
                   ],
                   "type": "string"
-                },
-                "tags": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
                 },
                 "tax_code": {
                   "type": [
@@ -1133,13 +1373,14 @@
               },
               "required": [
                 "id",
+                "kind",
                 "name",
                 "slug",
                 "description",
                 "active",
                 "options",
                 "variants",
-                "metafields",
+                "details",
                 "publications",
                 "locations",
                 "collections",
@@ -1234,6 +1475,99 @@
           "entity",
           "id"
         ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "cancel_product_booking",
+      "description": "Cancel a pending or confirmed product booking or consultation when the user requests cancellation. Releases its places and emails the guest the cancellation. Call after the user approves the exact change. Records the action in the inbox history and may send email to the guest.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "idempotency_key": {
+            "description": "Caller-supplied durable idempotency key. Reuse only for the identical operation.",
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "operational_booking_id": {
+            "description": "Booking ID returned by list_product_bookings or create_product_booking. Distinct from request_id, which identifies the inbox conversation.",
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "operational_booking_id",
+          "idempotency_key"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "type": "object"
+      }
+    },
+    {
+      "name": "cancel_table_reservation",
+      "description": "Cancel an existing restaurant table reservation when the user requests cancellation. Releases its capacity and emails the guest the cancellation. Call after the user approves the exact change. Records the action in the inbox history and may send email to the guest.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "idempotency_key": {
+            "description": "Caller-supplied durable idempotency key. Reuse only for the identical operation.",
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "operational_reservation_id": {
+            "description": "Reservation ID from list_reservation_inquiries. Distinct from the inbox conversation ID.",
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "operational_reservation_id",
+          "idempotency_key"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "type": "object"
+      }
+    },
+    {
+      "name": "confirm_product_booking",
+      "description": "Confirm a pending product booking or consultation after staff review. Keeps its existing capacity allocation and emails the guest confirmation. Call after the user approves the exact change. Records the action in the inbox history and may send email to the guest.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "idempotency_key": {
+            "description": "Caller-supplied durable idempotency key. Reuse only for the identical operation.",
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "operational_booking_id": {
+            "description": "Booking ID returned by list_product_bookings or create_product_booking. Distinct from request_id, which identifies the inbox conversation.",
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "operational_booking_id",
+          "idempotency_key"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
         "type": "object"
       }
     },
@@ -1929,115 +2263,6 @@
       }
     },
     {
-      "name": "create_metafield_definition",
-      "description": "Define a product attribute: its name, type, constraints and whether it may be translated. Values are set on products through metafields.",
-      "inputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "description": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "key": {
-            "type": "string"
-          },
-          "localizable": {
-            "type": "boolean"
-          },
-          "name": {
-            "type": "string"
-          },
-          "namespace": {
-            "type": "string"
-          },
-          "organization_id": {
-            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
-            "type": "string"
-          },
-          "validations": {
-            "type": "object"
-          },
-          "value_type": {
-            "enum": [
-              "single_line_text",
-              "multi_line_text",
-              "integer",
-              "boolean",
-              "url",
-              "list.single_line_text"
-            ],
-            "type": "string"
-          }
-        },
-        "required": [
-          "namespace",
-          "key",
-          "name",
-          "value_type"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "definition": {
-            "properties": {
-              "description": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "id": {
-                "type": "string"
-              },
-              "key": {
-                "type": "string"
-              },
-              "localizable": {
-                "type": "boolean"
-              },
-              "name": {
-                "type": "string"
-              },
-              "namespace": {
-                "type": "string"
-              },
-              "validations": {
-                "type": "object"
-              },
-              "value_type": {
-                "enum": [
-                  "single_line_text",
-                  "multi_line_text",
-                  "integer",
-                  "boolean",
-                  "url",
-                  "list.single_line_text"
-                ],
-                "type": "string"
-              }
-            },
-            "required": [
-              "id",
-              "namespace",
-              "key",
-              "name",
-              "value_type",
-              "validations",
-              "localizable"
-            ],
-            "type": "object"
-          }
-        },
-        "required": [
-          "definition"
-        ],
-        "type": "object"
-      }
-    },
-    {
       "name": "create_post",
       "description": "Create a draft short post when the user wants an announcement, event notice or offer. Supports a plain-text caption, ordered media, optional title, location and call to action. It stays private until publish_post. Use a new idempotency_key for each post and reuse it only for retries of that request. Long-form articles use create_blog_post.",
       "inputSchema": {
@@ -2484,8 +2709,123 @@
           "description": {
             "type": "string"
           },
+          "details": {
+            "additionalProperties": false,
+            "description": "Named customer-facing facts for the product kind. This is a complete replacement map; preserve fields to retain. pricing_note contains explicitly stated price wording and requires empty numeric prices.",
+            "properties": {
+              "allergens": {
+                "description": "Allergens the merchant states this dish contains. For dish.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "cancellation_policy": {
+                "description": "The merchant’s stated cancellation terms, displayed publicly; this text does not automate refunds. For experience, service.",
+                "type": "string"
+              },
+              "care_instructions": {
+                "description": "How to care for the item, shown in its details. For item.",
+                "type": "string"
+              },
+              "dietary_notes": {
+                "description": "Merchant-stated dietary facts displayed with a dish. For dish.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "dimensions": {
+                "description": "Item measurements including their units, shown in its details. For item.",
+                "type": "string"
+              },
+              "included_items": {
+                "description": "Items or work included in the stated price, shown in their own public section. For experience, service.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "ingredients": {
+                "description": "Ingredients shown in the dish details. For dish.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "materials": {
+                "description": "Materials the item is made from, shown in its details. For item.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "meeting_point": {
+                "description": "Instructions shown in the meeting section; meeting mode and video links are set in scheduling. For experience, service.",
+                "type": "string"
+              },
+              "noodle": {
+                "description": "Authored noodle information shown as dish facts; these do not establish purchasable variants. For dish.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "preparation": {
+                "description": "Preparation instructions shown to customers before a session or appointment. For experience, service.",
+                "type": "string"
+              },
+              "pricing_note": {
+                "description": "An explicitly stated price such as Market price; use only when no numeric price is set. For dish, experience, service, item.",
+                "type": "string"
+              },
+              "sizes": {
+                "description": "Authored serving information; priced choices belong in variants. For dish.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "soup": {
+                "description": "Authored soup information shown with the dish. For dish.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "tagline": {
+                "description": "A short sentence shown below the product title. For dish, experience, service, item.",
+                "type": "string"
+              },
+              "toppings": {
+                "description": "Authored topping information; priced choices belong in variants. For dish.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "what_to_bring": {
+                "description": "Items customers should bring, shown in the preparation section. For experience, service.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
+          "kind": {
+            "description": "The customer-facing kind: dish, experience, service or item. Determines the allowed descriptive fields; booking and stock remain separate capabilities.",
+            "enum": [
+              "dish",
+              "experience",
+              "service",
+              "item"
+            ],
+            "type": "string"
+          },
           "marketing_features": {
-            "description": "Generic selling bullets. Inclusions, preparation instructions and policies are separate metafields.",
+            "description": "Generic selling bullets. Inclusions, preparation instructions and policies are separate details.",
             "items": {
               "type": "string"
             },
@@ -2499,16 +2839,13 @@
             "description": "Opaque string annotations for integrations. No pricing, scheduling, stock or filtering behavior may read these.",
             "type": "object"
           },
-          "metafields": {
-            "description": "Complete replacement map keyed by \"<namespace>.<key>\"; preserve all entries you want to keep. Remove an entry to clear its value; use {} when no entries remain, never null values. For a literal price such as \"Market price\", set \"pricing.note\" to the exact user-provided text and send empty prices arrays for every variant. Numeric prices and pricing.note are mutually exclusive; clear pricing.note when adding numeric prices. Text-only prices display publicly but cannot be checked out. The definition must already exist; create it with create_metafield_definition.",
-            "type": "object"
-          },
           "name": {
             "type": "string"
           },
           "options": {
             "items": {
               "additionalProperties": false,
+              "description": "A customer choice such as Size, with values such as Small and Large. Variants combine these choices and carry prices. Descriptive facts belong in details.",
               "properties": {
                 "id": {
                   "type": "string"
@@ -2553,7 +2890,7 @@
             "type": "array"
           },
           "order_url": {
-            "description": "A narrow ordering destination such as a delivery partner. Not the public product page.",
+            "description": "External ordering or booking destination, such as Uber Eats, an experience checkout, or Clio Grow. When set, public actions use this URL instead of native booking. Null restores the configured native flow.",
             "type": [
               "string",
               "null"
@@ -2562,13 +2899,6 @@
           "organization_id": {
             "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
-          },
-          "tags": {
-            "items": {
-              "type": "string"
-            },
-            "maxItems": 32,
-            "type": "array"
           },
           "tax_code": {
             "type": [
@@ -2730,7 +3060,8 @@
           }
         },
         "required": [
-          "name"
+          "name",
+          "kind"
         ],
         "type": "object"
       },
@@ -2744,6 +3075,22 @@
               },
               "booking": {
                 "properties": {
+                  "calendar_group": {
+                    "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "confirmation_mode": {
+                    "enum": [
+                      "instant",
+                      "review"
+                    ],
+                    "type": "string"
+                  },
                   "default_capacity": {
                     "minimum": 0,
                     "type": [
@@ -2758,6 +3105,17 @@
                       "null"
                     ]
                   },
+                  "online_payment_required": {
+                    "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+                    "type": "boolean"
+                  },
+                  "online_timezone": {
+                    "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "organization_id": {
                     "type": "string"
                   },
@@ -2767,7 +3125,11 @@
                 },
                 "required": [
                   "duration_minutes",
-                  "default_capacity"
+                  "default_capacity",
+                  "confirmation_mode",
+                  "online_payment_required",
+                  "online_timezone",
+                  "calendar_group"
                 ],
                 "type": [
                   "object",
@@ -2797,6 +3159,110 @@
               },
               "description": {
                 "type": "string"
+              },
+              "details": {
+                "additionalProperties": false,
+                "properties": {
+                  "allergens": {
+                    "description": "Allergens the merchant states this dish contains. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "cancellation_policy": {
+                    "description": "The merchant’s stated cancellation terms, displayed publicly; this text does not automate refunds. For experience, service.",
+                    "type": "string"
+                  },
+                  "care_instructions": {
+                    "description": "How to care for the item, shown in its details. For item.",
+                    "type": "string"
+                  },
+                  "dietary_notes": {
+                    "description": "Merchant-stated dietary facts displayed with a dish. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "dimensions": {
+                    "description": "Item measurements including their units, shown in its details. For item.",
+                    "type": "string"
+                  },
+                  "included_items": {
+                    "description": "Items or work included in the stated price, shown in their own public section. For experience, service.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "ingredients": {
+                    "description": "Ingredients shown in the dish details. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "materials": {
+                    "description": "Materials the item is made from, shown in its details. For item.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "meeting_point": {
+                    "description": "Instructions shown in the meeting section; meeting mode and video links are set in scheduling. For experience, service.",
+                    "type": "string"
+                  },
+                  "noodle": {
+                    "description": "Authored noodle information shown as dish facts; these do not establish purchasable variants. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "preparation": {
+                    "description": "Preparation instructions shown to customers before a session or appointment. For experience, service.",
+                    "type": "string"
+                  },
+                  "pricing_note": {
+                    "description": "An explicitly stated price such as Market price; use only when no numeric price is set. For dish, experience, service, item.",
+                    "type": "string"
+                  },
+                  "sizes": {
+                    "description": "Authored serving information; priced choices belong in variants. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "soup": {
+                    "description": "Authored soup information shown with the dish. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "tagline": {
+                    "description": "A short sentence shown below the product title. For dish, experience, service, item.",
+                    "type": "string"
+                  },
+                  "toppings": {
+                    "description": "Authored topping information; priced choices belong in variants. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "what_to_bring": {
+                    "description": "Items customers should bring, shown in the preparation section. For experience, service.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                },
+                "type": "object"
               },
               "gallery": {
                 "items": {
@@ -2947,6 +3413,15 @@
                   "null"
                 ]
               },
+              "kind": {
+                "enum": [
+                  "dish",
+                  "experience",
+                  "service",
+                  "item"
+                ],
+                "type": "string"
+              },
               "locations": {
                 "items": {
                   "properties": {
@@ -2979,10 +3454,6 @@
                 "additionalProperties": {
                   "type": "string"
                 },
-                "type": "object"
-              },
-              "metafields": {
-                "description": "Typed descriptive attributes keyed by \"<namespace>.<key>\".",
                 "type": "object"
               },
               "name": {
@@ -3069,12 +3540,6 @@
                   "copy"
                 ],
                 "type": "string"
-              },
-              "tags": {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
               },
               "tax_code": {
                 "type": [
@@ -3228,13 +3693,14 @@
             },
             "required": [
               "id",
+              "kind",
               "name",
               "slug",
               "description",
               "active",
               "options",
               "variants",
-              "metafields",
+              "details",
               "publications",
               "locations",
               "collections",
@@ -3248,6 +3714,82 @@
         "required": [
           "product"
         ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "create_product_booking",
+      "description": "Create a guest booking or consultation for a published product and an existing session. Requires an available numeric price; specify variant_id when the product has multiple active variants. Staff-review bookings remain pending; instant bookings are confirmed. Paid offerings may allow payment later. For paid sessions requiring online payment, returns payment_required without creating a booking. Free sessions remain bookable. Does not collect payment. Sends owner alerts and sends the guest an acknowledgement only when guest_acknowledgement is true. Call after the user approves the exact change. Records the action in the inbox history and may send email to the guest.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "external_reference": {
+            "maxLength": 200,
+            "type": "string"
+          },
+          "guest_acknowledgement": {
+            "description": "Explicit choice to send the guest creation email. Owner alerts, inbox, and audit always remain.",
+            "type": "boolean"
+          },
+          "guest_email": {
+            "type": "string"
+          },
+          "guest_name": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "guest_phone": {
+            "description": "Optional guest phone in international format.",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "description": "Caller-supplied durable idempotency key. Reuse only for the identical operation.",
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "notes": {
+            "maxLength": 1000,
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "party_size": {
+            "maximum": 99,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "product_slug": {
+            "type": "string"
+          },
+          "session_id": {
+            "type": "string"
+          },
+          "source": {
+            "description": "Explicit provenance, such as operator or external scheduler.",
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "variant_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "product_slug",
+          "session_id",
+          "party_size",
+          "guest_name",
+          "guest_email",
+          "idempotency_key",
+          "source",
+          "guest_acknowledgement"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
         "type": "object"
       }
     },
@@ -3799,37 +4341,6 @@
       }
     },
     {
-      "name": "delete_metafield_definition",
-      "description": "Permanently delete a product attribute definition when the user wants to remove that attribute from the site. Deletes every product value stored under the definition.",
-      "inputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "definition_id": {
-            "type": "string"
-          },
-          "organization_id": {
-            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "definition_id"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "deleted": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "deleted"
-        ],
-        "type": "object"
-      }
-    },
-    {
       "name": "delete_post",
       "description": "Delete a post from the website. Its Facebook and Instagram posts are not deleted; use delete_channel_post for an explicit supported channel deletion. Refused while a publication of it is in progress or unresolved.",
       "inputSchema": {
@@ -3866,7 +4377,7 @@
     },
     {
       "name": "delete_product",
-      "description": "Permanently delete a product and its owned variants, prices, attributes and placements when the user requests its removal. Refused if the product has booking history or a site page still references it. Withhold publication or disable sale to retain the product.",
+      "description": "Permanently delete a product and its owned variants, prices, details and placements when the user requests its removal. Refused if the product has booking history or a site page still references it. Withhold publication or disable sale to retain the product.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -6802,7 +7313,7 @@
     },
     {
       "name": "get_product",
-      "description": "Read one site product before reviewing or editing its options, variants, prices, media, publication, locations, collections, attributes or booking defaults. Prices belong to variants; booking defaults apply to new sessions.",
+      "description": "Read one site product before reviewing or editing its options, variants, prices, media, publication, locations, collections, named product facts or booking defaults. Prices belong to variants; booking defaults apply to new sessions.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -6829,6 +7340,22 @@
               },
               "booking": {
                 "properties": {
+                  "calendar_group": {
+                    "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "confirmation_mode": {
+                    "enum": [
+                      "instant",
+                      "review"
+                    ],
+                    "type": "string"
+                  },
                   "default_capacity": {
                     "minimum": 0,
                     "type": [
@@ -6843,6 +7370,17 @@
                       "null"
                     ]
                   },
+                  "online_payment_required": {
+                    "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+                    "type": "boolean"
+                  },
+                  "online_timezone": {
+                    "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "organization_id": {
                     "type": "string"
                   },
@@ -6852,7 +7390,11 @@
                 },
                 "required": [
                   "duration_minutes",
-                  "default_capacity"
+                  "default_capacity",
+                  "confirmation_mode",
+                  "online_payment_required",
+                  "online_timezone",
+                  "calendar_group"
                 ],
                 "type": [
                   "object",
@@ -6882,6 +7424,110 @@
               },
               "description": {
                 "type": "string"
+              },
+              "details": {
+                "additionalProperties": false,
+                "properties": {
+                  "allergens": {
+                    "description": "Allergens the merchant states this dish contains. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "cancellation_policy": {
+                    "description": "The merchant’s stated cancellation terms, displayed publicly; this text does not automate refunds. For experience, service.",
+                    "type": "string"
+                  },
+                  "care_instructions": {
+                    "description": "How to care for the item, shown in its details. For item.",
+                    "type": "string"
+                  },
+                  "dietary_notes": {
+                    "description": "Merchant-stated dietary facts displayed with a dish. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "dimensions": {
+                    "description": "Item measurements including their units, shown in its details. For item.",
+                    "type": "string"
+                  },
+                  "included_items": {
+                    "description": "Items or work included in the stated price, shown in their own public section. For experience, service.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "ingredients": {
+                    "description": "Ingredients shown in the dish details. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "materials": {
+                    "description": "Materials the item is made from, shown in its details. For item.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "meeting_point": {
+                    "description": "Instructions shown in the meeting section; meeting mode and video links are set in scheduling. For experience, service.",
+                    "type": "string"
+                  },
+                  "noodle": {
+                    "description": "Authored noodle information shown as dish facts; these do not establish purchasable variants. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "preparation": {
+                    "description": "Preparation instructions shown to customers before a session or appointment. For experience, service.",
+                    "type": "string"
+                  },
+                  "pricing_note": {
+                    "description": "An explicitly stated price such as Market price; use only when no numeric price is set. For dish, experience, service, item.",
+                    "type": "string"
+                  },
+                  "sizes": {
+                    "description": "Authored serving information; priced choices belong in variants. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "soup": {
+                    "description": "Authored soup information shown with the dish. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "tagline": {
+                    "description": "A short sentence shown below the product title. For dish, experience, service, item.",
+                    "type": "string"
+                  },
+                  "toppings": {
+                    "description": "Authored topping information; priced choices belong in variants. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "what_to_bring": {
+                    "description": "Items customers should bring, shown in the preparation section. For experience, service.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                },
+                "type": "object"
               },
               "gallery": {
                 "items": {
@@ -7032,6 +7678,15 @@
                   "null"
                 ]
               },
+              "kind": {
+                "enum": [
+                  "dish",
+                  "experience",
+                  "service",
+                  "item"
+                ],
+                "type": "string"
+              },
               "locations": {
                 "items": {
                   "properties": {
@@ -7064,10 +7719,6 @@
                 "additionalProperties": {
                   "type": "string"
                 },
-                "type": "object"
-              },
-              "metafields": {
-                "description": "Typed descriptive attributes keyed by \"<namespace>.<key>\".",
                 "type": "object"
               },
               "name": {
@@ -7154,12 +7805,6 @@
                   "copy"
                 ],
                 "type": "string"
-              },
-              "tags": {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
               },
               "tax_code": {
                 "type": [
@@ -7313,13 +7958,14 @@
             },
             "required": [
               "id",
+              "kind",
               "name",
               "slug",
               "description",
               "active",
               "options",
               "variants",
-              "metafields",
+              "details",
               "publications",
               "locations",
               "collections",
@@ -7333,6 +7979,30 @@
         "required": [
           "product"
         ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "get_product_booking",
+      "description": "Read one product booking or consultation when the user wants its guest details, status or current session. Use its updated_at when proposing a change.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "operational_booking_id": {
+            "description": "Booking ID returned by list_product_bookings or create_product_booking. Distinct from request_id, which identifies the inbox conversation.",
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "operational_booking_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
         "type": "object"
       }
     },
@@ -8773,6 +9443,15 @@
                 "id": {
                   "type": "string"
                 },
+                "kind": {
+                  "enum": [
+                    "dish",
+                    "experience",
+                    "service",
+                    "item"
+                  ],
+                  "type": "string"
+                },
                 "locations": {
                   "items": {
                     "properties": {
@@ -8825,6 +9504,7 @@
               },
               "required": [
                 "id",
+                "kind",
                 "name",
                 "slug",
                 "description",
@@ -9154,81 +9834,6 @@
         "required": [
           "locations",
           "page_info"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "list_metafield_definitions",
-      "description": "List the selected site’s product attribute definitions before reading or setting typed attributes such as inclusions, preparation instructions or pricing notes. Returns each attribute’s namespace, key, type and constraints.",
-      "inputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "organization_id": {
-            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
-            "type": "string"
-          }
-        },
-        "required": [],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "definitions": {
-            "items": {
-              "properties": {
-                "description": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "id": {
-                  "type": "string"
-                },
-                "key": {
-                  "type": "string"
-                },
-                "localizable": {
-                  "type": "boolean"
-                },
-                "name": {
-                  "type": "string"
-                },
-                "namespace": {
-                  "type": "string"
-                },
-                "validations": {
-                  "type": "object"
-                },
-                "value_type": {
-                  "enum": [
-                    "single_line_text",
-                    "multi_line_text",
-                    "integer",
-                    "boolean",
-                    "url",
-                    "list.single_line_text"
-                  ],
-                  "type": "string"
-                }
-              },
-              "required": [
-                "id",
-                "namespace",
-                "key",
-                "name",
-                "value_type",
-                "validations",
-                "localizable"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "definitions"
         ],
         "type": "object"
       }
@@ -9953,6 +10558,77 @@
       }
     },
     {
+      "name": "list_product_booking_sessions",
+      "description": "List scheduled sessions and remaining places for a product when the user wants to find a time for a booking or consultation. Includes conflicts with other appointments in its shared calendar. Use the returned session IDs to create or change a booking. This tool does not create sessions.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "cursor": {
+            "description": "Opaque next_cursor from the previous page.",
+            "type": "string"
+          },
+          "from": {
+            "description": "Inclusive ISO UTC instant.",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Page size. Defaults to 50; maximum 100.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "number"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "product_id": {
+            "type": "string"
+          },
+          "to": {
+            "description": "Exclusive ISO UTC instant, at most 93 days after from.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "product_id",
+          "from",
+          "to"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "type": "object"
+      }
+    },
+    {
+      "name": "list_product_bookings",
+      "description": "List product bookings and consultations for the selected site when the user wants to review appointments, guests or booking status. Returns booking IDs and their inbox conversation IDs. Table reservations use list_reservation_inquiries.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "cursor": {
+            "description": "Opaque next_cursor from the previous page.",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Page size. Defaults to 50; maximum 100.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "number"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "outputSchema": {
+        "type": "object"
+      }
+    },
+    {
       "name": "list_products",
       "description": "List products carried by the selected site, published or withheld. Results include products across the site; list_location_products narrows to one location.",
       "inputSchema": {
@@ -10011,6 +10687,15 @@
                 "id": {
                   "type": "string"
                 },
+                "kind": {
+                  "enum": [
+                    "dish",
+                    "experience",
+                    "service",
+                    "item"
+                  ],
+                  "type": "string"
+                },
                 "locations": {
                   "items": {
                     "properties": {
@@ -10063,6 +10748,7 @@
               },
               "required": [
                 "id",
+                "kind",
                 "name",
                 "slug",
                 "description",
@@ -10085,7 +10771,7 @@
     },
     {
       "name": "list_reservation_inquiries",
-      "description": "Read table reservations for the selected site, optionally filtered by location and creation window of up to 90 days. Returns guest contact details, reservation details and status counts. Product session bookings are separate and use the dashboard inbox.",
+      "description": "Read table reservations for the selected site, optionally filtered by location and creation window of up to 90 days. Returns guest contact details, reservation details and status counts. Use list_product_bookings to read product session bookings and consultations.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -11520,8 +12206,123 @@
                 "description": {
                   "type": "string"
                 },
+                "details": {
+                  "additionalProperties": false,
+                  "description": "Named customer-facing facts for the product kind. This is a complete replacement map; preserve fields to retain. pricing_note contains explicitly stated price wording and requires empty numeric prices.",
+                  "properties": {
+                    "allergens": {
+                      "description": "Allergens the merchant states this dish contains. For dish.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "cancellation_policy": {
+                      "description": "The merchant’s stated cancellation terms, displayed publicly; this text does not automate refunds. For experience, service.",
+                      "type": "string"
+                    },
+                    "care_instructions": {
+                      "description": "How to care for the item, shown in its details. For item.",
+                      "type": "string"
+                    },
+                    "dietary_notes": {
+                      "description": "Merchant-stated dietary facts displayed with a dish. For dish.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "dimensions": {
+                      "description": "Item measurements including their units, shown in its details. For item.",
+                      "type": "string"
+                    },
+                    "included_items": {
+                      "description": "Items or work included in the stated price, shown in their own public section. For experience, service.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "ingredients": {
+                      "description": "Ingredients shown in the dish details. For dish.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "materials": {
+                      "description": "Materials the item is made from, shown in its details. For item.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "meeting_point": {
+                      "description": "Instructions shown in the meeting section; meeting mode and video links are set in scheduling. For experience, service.",
+                      "type": "string"
+                    },
+                    "noodle": {
+                      "description": "Authored noodle information shown as dish facts; these do not establish purchasable variants. For dish.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "preparation": {
+                      "description": "Preparation instructions shown to customers before a session or appointment. For experience, service.",
+                      "type": "string"
+                    },
+                    "pricing_note": {
+                      "description": "An explicitly stated price such as Market price; use only when no numeric price is set. For dish, experience, service, item.",
+                      "type": "string"
+                    },
+                    "sizes": {
+                      "description": "Authored serving information; priced choices belong in variants. For dish.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "soup": {
+                      "description": "Authored soup information shown with the dish. For dish.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "tagline": {
+                      "description": "A short sentence shown below the product title. For dish, experience, service, item.",
+                      "type": "string"
+                    },
+                    "toppings": {
+                      "description": "Authored topping information; priced choices belong in variants. For dish.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "what_to_bring": {
+                      "description": "Items customers should bring, shown in the preparation section. For experience, service.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                },
+                "kind": {
+                  "description": "The customer-facing kind: dish, experience, service or item. Determines the allowed descriptive fields; booking and stock remain separate capabilities.",
+                  "enum": [
+                    "dish",
+                    "experience",
+                    "service",
+                    "item"
+                  ],
+                  "type": "string"
+                },
                 "marketing_features": {
-                  "description": "Generic selling bullets. Inclusions, preparation instructions and policies are separate metafields.",
+                  "description": "Generic selling bullets. Inclusions, preparation instructions and policies are separate details.",
                   "items": {
                     "type": "string"
                   },
@@ -11535,16 +12336,13 @@
                   "description": "Opaque string annotations for integrations. No pricing, scheduling, stock or filtering behavior may read these.",
                   "type": "object"
                 },
-                "metafields": {
-                  "description": "Complete replacement map keyed by \"<namespace>.<key>\"; preserve all entries you want to keep. Remove an entry to clear its value; use {} when no entries remain, never null values. For a literal price such as \"Market price\", set \"pricing.note\" to the exact user-provided text and send empty prices arrays for every variant. Numeric prices and pricing.note are mutually exclusive; clear pricing.note when adding numeric prices. Text-only prices display publicly but cannot be checked out. The definition must already exist; create it with create_metafield_definition.",
-                  "type": "object"
-                },
                 "name": {
                   "type": "string"
                 },
                 "options": {
                   "items": {
                     "additionalProperties": false,
+                    "description": "A customer choice such as Size, with values such as Small and Large. Variants combine these choices and carry prices. Descriptive facts belong in details.",
                     "properties": {
                       "id": {
                         "type": "string"
@@ -11589,7 +12387,7 @@
                   "type": "array"
                 },
                 "order_url": {
-                  "description": "A narrow ordering destination such as a delivery partner. Not the public product page.",
+                  "description": "External ordering or booking destination, such as Uber Eats, an experience checkout, or Clio Grow. When set, public actions use this URL instead of native booking. Null restores the configured native flow.",
                   "type": [
                     "string",
                     "null"
@@ -11598,13 +12396,6 @@
                 "product_id": {
                   "minLength": 1,
                   "type": "string"
-                },
-                "tags": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "maxItems": 32,
-                  "type": "array"
                 },
                 "tax_code": {
                   "type": [
@@ -11766,7 +12557,8 @@
                 }
               },
               "required": [
-                "name"
+                "name",
+                "kind"
               ],
               "type": "object"
             },
@@ -11790,6 +12582,22 @@
                 },
                 "booking": {
                   "properties": {
+                    "calendar_group": {
+                      "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
+                      "maxLength": 64,
+                      "minLength": 1,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "confirmation_mode": {
+                      "enum": [
+                        "instant",
+                        "review"
+                      ],
+                      "type": "string"
+                    },
                     "default_capacity": {
                       "minimum": 0,
                       "type": [
@@ -11804,6 +12612,17 @@
                         "null"
                       ]
                     },
+                    "online_payment_required": {
+                      "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+                      "type": "boolean"
+                    },
+                    "online_timezone": {
+                      "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "organization_id": {
                       "type": "string"
                     },
@@ -11813,7 +12632,11 @@
                   },
                   "required": [
                     "duration_minutes",
-                    "default_capacity"
+                    "default_capacity",
+                    "confirmation_mode",
+                    "online_payment_required",
+                    "online_timezone",
+                    "calendar_group"
                   ],
                   "type": [
                     "object",
@@ -11843,6 +12666,110 @@
                 },
                 "description": {
                   "type": "string"
+                },
+                "details": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "allergens": {
+                      "description": "Allergens the merchant states this dish contains. For dish.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "cancellation_policy": {
+                      "description": "The merchant’s stated cancellation terms, displayed publicly; this text does not automate refunds. For experience, service.",
+                      "type": "string"
+                    },
+                    "care_instructions": {
+                      "description": "How to care for the item, shown in its details. For item.",
+                      "type": "string"
+                    },
+                    "dietary_notes": {
+                      "description": "Merchant-stated dietary facts displayed with a dish. For dish.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "dimensions": {
+                      "description": "Item measurements including their units, shown in its details. For item.",
+                      "type": "string"
+                    },
+                    "included_items": {
+                      "description": "Items or work included in the stated price, shown in their own public section. For experience, service.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "ingredients": {
+                      "description": "Ingredients shown in the dish details. For dish.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "materials": {
+                      "description": "Materials the item is made from, shown in its details. For item.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "meeting_point": {
+                      "description": "Instructions shown in the meeting section; meeting mode and video links are set in scheduling. For experience, service.",
+                      "type": "string"
+                    },
+                    "noodle": {
+                      "description": "Authored noodle information shown as dish facts; these do not establish purchasable variants. For dish.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "preparation": {
+                      "description": "Preparation instructions shown to customers before a session or appointment. For experience, service.",
+                      "type": "string"
+                    },
+                    "pricing_note": {
+                      "description": "An explicitly stated price such as Market price; use only when no numeric price is set. For dish, experience, service, item.",
+                      "type": "string"
+                    },
+                    "sizes": {
+                      "description": "Authored serving information; priced choices belong in variants. For dish.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "soup": {
+                      "description": "Authored soup information shown with the dish. For dish.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "tagline": {
+                      "description": "A short sentence shown below the product title. For dish, experience, service, item.",
+                      "type": "string"
+                    },
+                    "toppings": {
+                      "description": "Authored topping information; priced choices belong in variants. For dish.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "what_to_bring": {
+                      "description": "Items customers should bring, shown in the preparation section. For experience, service.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
                 },
                 "gallery": {
                   "items": {
@@ -11993,6 +12920,15 @@
                     "null"
                   ]
                 },
+                "kind": {
+                  "enum": [
+                    "dish",
+                    "experience",
+                    "service",
+                    "item"
+                  ],
+                  "type": "string"
+                },
                 "locations": {
                   "items": {
                     "properties": {
@@ -12025,10 +12961,6 @@
                   "additionalProperties": {
                     "type": "string"
                   },
-                  "type": "object"
-                },
-                "metafields": {
-                  "description": "Typed descriptive attributes keyed by \"<namespace>.<key>\".",
                   "type": "object"
                 },
                 "name": {
@@ -12115,12 +13047,6 @@
                     "copy"
                   ],
                   "type": "string"
-                },
-                "tags": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
                 },
                 "tax_code": {
                   "type": [
@@ -12274,13 +13200,14 @@
               },
               "required": [
                 "id",
+                "kind",
                 "name",
                 "slug",
                 "description",
                 "active",
                 "options",
                 "variants",
-                "metafields",
+                "details",
                 "publications",
                 "locations",
                 "collections",
@@ -12296,6 +13223,37 @@
         "required": [
           "products"
         ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "reject_product_booking",
+      "description": "Decline a pending product booking or consultation after staff review. Cancels the booking, releases its places and emails the guest the decision. Call after the user approves the exact change. Records the action in the inbox history and may send email to the guest.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "idempotency_key": {
+            "description": "Caller-supplied durable idempotency key. Reuse only for the identical operation.",
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "operational_booking_id": {
+            "description": "Booking ID returned by list_product_bookings or create_product_booking. Distinct from request_id, which identifies the inbox conversation.",
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "operational_booking_id",
+          "idempotency_key"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
         "type": "object"
       }
     },
@@ -12518,6 +13476,22 @@
               },
               "booking": {
                 "properties": {
+                  "calendar_group": {
+                    "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "confirmation_mode": {
+                    "enum": [
+                      "instant",
+                      "review"
+                    ],
+                    "type": "string"
+                  },
                   "default_capacity": {
                     "minimum": 0,
                     "type": [
@@ -12532,6 +13506,17 @@
                       "null"
                     ]
                   },
+                  "online_payment_required": {
+                    "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+                    "type": "boolean"
+                  },
+                  "online_timezone": {
+                    "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "organization_id": {
                     "type": "string"
                   },
@@ -12541,7 +13526,11 @@
                 },
                 "required": [
                   "duration_minutes",
-                  "default_capacity"
+                  "default_capacity",
+                  "confirmation_mode",
+                  "online_payment_required",
+                  "online_timezone",
+                  "calendar_group"
                 ],
                 "type": [
                   "object",
@@ -12571,6 +13560,110 @@
               },
               "description": {
                 "type": "string"
+              },
+              "details": {
+                "additionalProperties": false,
+                "properties": {
+                  "allergens": {
+                    "description": "Allergens the merchant states this dish contains. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "cancellation_policy": {
+                    "description": "The merchant’s stated cancellation terms, displayed publicly; this text does not automate refunds. For experience, service.",
+                    "type": "string"
+                  },
+                  "care_instructions": {
+                    "description": "How to care for the item, shown in its details. For item.",
+                    "type": "string"
+                  },
+                  "dietary_notes": {
+                    "description": "Merchant-stated dietary facts displayed with a dish. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "dimensions": {
+                    "description": "Item measurements including their units, shown in its details. For item.",
+                    "type": "string"
+                  },
+                  "included_items": {
+                    "description": "Items or work included in the stated price, shown in their own public section. For experience, service.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "ingredients": {
+                    "description": "Ingredients shown in the dish details. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "materials": {
+                    "description": "Materials the item is made from, shown in its details. For item.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "meeting_point": {
+                    "description": "Instructions shown in the meeting section; meeting mode and video links are set in scheduling. For experience, service.",
+                    "type": "string"
+                  },
+                  "noodle": {
+                    "description": "Authored noodle information shown as dish facts; these do not establish purchasable variants. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "preparation": {
+                    "description": "Preparation instructions shown to customers before a session or appointment. For experience, service.",
+                    "type": "string"
+                  },
+                  "pricing_note": {
+                    "description": "An explicitly stated price such as Market price; use only when no numeric price is set. For dish, experience, service, item.",
+                    "type": "string"
+                  },
+                  "sizes": {
+                    "description": "Authored serving information; priced choices belong in variants. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "soup": {
+                    "description": "Authored soup information shown with the dish. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "tagline": {
+                    "description": "A short sentence shown below the product title. For dish, experience, service, item.",
+                    "type": "string"
+                  },
+                  "toppings": {
+                    "description": "Authored topping information; priced choices belong in variants. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "what_to_bring": {
+                    "description": "Items customers should bring, shown in the preparation section. For experience, service.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                },
+                "type": "object"
               },
               "gallery": {
                 "items": {
@@ -12721,6 +13814,15 @@
                   "null"
                 ]
               },
+              "kind": {
+                "enum": [
+                  "dish",
+                  "experience",
+                  "service",
+                  "item"
+                ],
+                "type": "string"
+              },
               "locations": {
                 "items": {
                   "properties": {
@@ -12753,10 +13855,6 @@
                 "additionalProperties": {
                   "type": "string"
                 },
-                "type": "object"
-              },
-              "metafields": {
-                "description": "Typed descriptive attributes keyed by \"<namespace>.<key>\".",
                 "type": "object"
               },
               "name": {
@@ -12843,12 +13941,6 @@
                   "copy"
                 ],
                 "type": "string"
-              },
-              "tags": {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
               },
               "tax_code": {
                 "type": [
@@ -13002,13 +14094,14 @@
             },
             "required": [
               "id",
+              "kind",
               "name",
               "slug",
               "description",
               "active",
               "options",
               "variants",
-              "metafields",
+              "details",
               "publications",
               "locations",
               "collections",
@@ -13857,12 +14950,16 @@
     },
     {
       "name": "replace_product_weekly_schedule",
-      "description": "Replace a product’s weekly time slots at one location when the user wants to change its recurring schedule. Uses the location timezone and product duration/capacity. An empty slots array clears the schedule. Sessions with any booking history are preserved; removed future sessions without bookings are cancelled, and re-added unbooked slots can reopen with current defaults.",
+      "description": "Replace a product’s weekly time slots when the user wants to change its recurring schedule. Supply a location ID for in-person sessions or null for online sessions. Uses the configured timezone and product duration/capacity. An empty slots array clears that schedule. Sessions with any booking history are preserved; removed future sessions without bookings are cancelled, and re-added unbooked slots can reopen with current defaults.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
           "location_id": {
-            "type": "string"
+            "description": "A saved location ID, or explicit null for online sessions in the Product’s saved online timezone.",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "organization_id": {
             "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
@@ -14036,6 +15133,104 @@
           "resource_type",
           "updated_resource_ids"
         ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "request_product_booking_change",
+      "description": "Request a different session or party size for an existing product booking or consultation. Emails the guest a proposal; the current booking and its places remain unchanged until the guest accepts. Acceptance preserves its review status and requires available capacity. Call after the user approves the exact change. Records the action in the inbox history and may send email to the guest.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_updated_at": {
+            "type": "string"
+          },
+          "idempotency_key": {
+            "description": "Caller-supplied durable idempotency key. Reuse only for the identical operation.",
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "operational_booking_id": {
+            "description": "Booking ID returned by list_product_bookings or create_product_booking. Distinct from request_id, which identifies the inbox conversation.",
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "party_size": {
+            "maximum": 99,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "session_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "operational_booking_id",
+          "session_id",
+          "party_size",
+          "expected_updated_at",
+          "idempotency_key"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "type": "object"
+      }
+    },
+    {
+      "name": "request_table_reservation_change",
+      "description": "Request a change to a restaurant table reservation’s location, date, time or party size. Emails the guest a proposal; the current reservation remains unchanged until the guest accepts. Call after the user approves the exact change. Records the action in the inbox history and may send email to the guest.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "date": {
+            "type": "string"
+          },
+          "expected_updated_at": {
+            "type": "string"
+          },
+          "idempotency_key": {
+            "description": "Caller-supplied durable idempotency key. Reuse only for the identical operation.",
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "location_id": {
+            "type": "string"
+          },
+          "operational_reservation_id": {
+            "description": "Reservation ID from list_reservation_inquiries. Distinct from the inbox conversation ID.",
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "party_size": {
+            "maximum": 99,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "time": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "operational_reservation_id",
+          "location_id",
+          "date",
+          "time",
+          "party_size",
+          "expected_updated_at",
+          "idempotency_key"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
         "type": "object"
       }
     },
@@ -14239,6 +15434,15 @@
                 "id": {
                   "type": "string"
                 },
+                "kind": {
+                  "enum": [
+                    "dish",
+                    "experience",
+                    "service",
+                    "item"
+                  ],
+                  "type": "string"
+                },
                 "locations": {
                   "items": {
                     "properties": {
@@ -14291,6 +15495,7 @@
               },
               "required": [
                 "id",
+                "kind",
                 "name",
                 "slug",
                 "description",
@@ -14306,6 +15511,55 @@
         },
         "required": [
           "products"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "set_consultation_mode",
+      "description": "Set how the selected website offers consultations when the user wants to enable website booking, use an external scheduler or disable booking. Native booking uses published online products linked to service pages. External scheduling requires an existing configured URL. Does not set prices or connect a calendar or payment provider.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "enum": [
+              "native",
+              "external_url",
+              "native_disabled"
+            ],
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "settings": {
+            "properties": {
+              "mode": {
+                "enum": [
+                  "native",
+                  "external_url",
+                  "native_disabled"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "mode"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "settings"
         ],
         "type": "object"
       }
@@ -14501,10 +15755,26 @@
     },
     {
       "name": "set_product_booking_config",
-      "description": "Set product duration and capacity defaults when the user wants to configure new bookable sessions. Existing sessions keep their saved times, capacity and state. Omitted fields stay unchanged; null clears a default and zero capacity means no places. Read the defaults with get_product.",
+      "description": "Configure a product’s duration, capacity, staff review, payment requirement and online calendar when the user wants to set up bookable sessions. Existing sessions keep their saved times, capacity and state. Omitted fields stay unchanged; null clears a nullable default and zero capacity means no places. Read the settings with get_product.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
+          "calendar_group": {
+            "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
+            "maxLength": 64,
+            "minLength": 1,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "confirmation_mode": {
+            "enum": [
+              "instant",
+              "review"
+            ],
+            "type": "string"
+          },
           "default_capacity": {
             "minimum": 0,
             "type": [
@@ -14516,6 +15786,17 @@
             "minimum": 1,
             "type": [
               "integer",
+              "null"
+            ]
+          },
+          "online_payment_required": {
+            "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+            "type": "boolean"
+          },
+          "online_timezone": {
+            "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
+            "type": [
+              "string",
               "null"
             ]
           },
@@ -14536,6 +15817,22 @@
         "properties": {
           "config": {
             "properties": {
+              "calendar_group": {
+                "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
+                "maxLength": 64,
+                "minLength": 1,
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "confirmation_mode": {
+                "enum": [
+                  "instant",
+                  "review"
+                ],
+                "type": "string"
+              },
               "default_capacity": {
                 "minimum": 0,
                 "type": [
@@ -14550,6 +15847,17 @@
                   "null"
                 ]
               },
+              "online_payment_required": {
+                "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+                "type": "boolean"
+              },
+              "online_timezone": {
+                "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "organization_id": {
                 "type": "string"
               },
@@ -14559,7 +15867,11 @@
             },
             "required": [
               "duration_minutes",
-              "default_capacity"
+              "default_capacity",
+              "confirmation_mode",
+              "online_payment_required",
+              "online_timezone",
+              "calendar_group"
             ],
             "type": [
               "object",
@@ -14612,6 +15924,22 @@
               },
               "booking": {
                 "properties": {
+                  "calendar_group": {
+                    "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "confirmation_mode": {
+                    "enum": [
+                      "instant",
+                      "review"
+                    ],
+                    "type": "string"
+                  },
                   "default_capacity": {
                     "minimum": 0,
                     "type": [
@@ -14626,6 +15954,17 @@
                       "null"
                     ]
                   },
+                  "online_payment_required": {
+                    "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+                    "type": "boolean"
+                  },
+                  "online_timezone": {
+                    "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "organization_id": {
                     "type": "string"
                   },
@@ -14635,7 +15974,11 @@
                 },
                 "required": [
                   "duration_minutes",
-                  "default_capacity"
+                  "default_capacity",
+                  "confirmation_mode",
+                  "online_payment_required",
+                  "online_timezone",
+                  "calendar_group"
                 ],
                 "type": [
                   "object",
@@ -14665,6 +16008,110 @@
               },
               "description": {
                 "type": "string"
+              },
+              "details": {
+                "additionalProperties": false,
+                "properties": {
+                  "allergens": {
+                    "description": "Allergens the merchant states this dish contains. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "cancellation_policy": {
+                    "description": "The merchant’s stated cancellation terms, displayed publicly; this text does not automate refunds. For experience, service.",
+                    "type": "string"
+                  },
+                  "care_instructions": {
+                    "description": "How to care for the item, shown in its details. For item.",
+                    "type": "string"
+                  },
+                  "dietary_notes": {
+                    "description": "Merchant-stated dietary facts displayed with a dish. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "dimensions": {
+                    "description": "Item measurements including their units, shown in its details. For item.",
+                    "type": "string"
+                  },
+                  "included_items": {
+                    "description": "Items or work included in the stated price, shown in their own public section. For experience, service.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "ingredients": {
+                    "description": "Ingredients shown in the dish details. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "materials": {
+                    "description": "Materials the item is made from, shown in its details. For item.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "meeting_point": {
+                    "description": "Instructions shown in the meeting section; meeting mode and video links are set in scheduling. For experience, service.",
+                    "type": "string"
+                  },
+                  "noodle": {
+                    "description": "Authored noodle information shown as dish facts; these do not establish purchasable variants. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "preparation": {
+                    "description": "Preparation instructions shown to customers before a session or appointment. For experience, service.",
+                    "type": "string"
+                  },
+                  "pricing_note": {
+                    "description": "An explicitly stated price such as Market price; use only when no numeric price is set. For dish, experience, service, item.",
+                    "type": "string"
+                  },
+                  "sizes": {
+                    "description": "Authored serving information; priced choices belong in variants. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "soup": {
+                    "description": "Authored soup information shown with the dish. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "tagline": {
+                    "description": "A short sentence shown below the product title. For dish, experience, service, item.",
+                    "type": "string"
+                  },
+                  "toppings": {
+                    "description": "Authored topping information; priced choices belong in variants. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "what_to_bring": {
+                    "description": "Items customers should bring, shown in the preparation section. For experience, service.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                },
+                "type": "object"
               },
               "gallery": {
                 "items": {
@@ -14815,6 +16262,15 @@
                   "null"
                 ]
               },
+              "kind": {
+                "enum": [
+                  "dish",
+                  "experience",
+                  "service",
+                  "item"
+                ],
+                "type": "string"
+              },
               "locations": {
                 "items": {
                   "properties": {
@@ -14847,10 +16303,6 @@
                 "additionalProperties": {
                   "type": "string"
                 },
-                "type": "object"
-              },
-              "metafields": {
-                "description": "Typed descriptive attributes keyed by \"<namespace>.<key>\".",
                 "type": "object"
               },
               "name": {
@@ -14937,12 +16389,6 @@
                   "copy"
                 ],
                 "type": "string"
-              },
-              "tags": {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
               },
               "tax_code": {
                 "type": [
@@ -15096,13 +16542,14 @@
             },
             "required": [
               "id",
+              "kind",
               "name",
               "slug",
               "description",
               "active",
               "options",
               "variants",
-              "metafields",
+              "details",
               "publications",
               "locations",
               "collections",
@@ -15152,6 +16599,22 @@
               },
               "booking": {
                 "properties": {
+                  "calendar_group": {
+                    "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "confirmation_mode": {
+                    "enum": [
+                      "instant",
+                      "review"
+                    ],
+                    "type": "string"
+                  },
                   "default_capacity": {
                     "minimum": 0,
                     "type": [
@@ -15166,6 +16629,17 @@
                       "null"
                     ]
                   },
+                  "online_payment_required": {
+                    "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+                    "type": "boolean"
+                  },
+                  "online_timezone": {
+                    "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "organization_id": {
                     "type": "string"
                   },
@@ -15175,7 +16649,11 @@
                 },
                 "required": [
                   "duration_minutes",
-                  "default_capacity"
+                  "default_capacity",
+                  "confirmation_mode",
+                  "online_payment_required",
+                  "online_timezone",
+                  "calendar_group"
                 ],
                 "type": [
                   "object",
@@ -15205,6 +16683,110 @@
               },
               "description": {
                 "type": "string"
+              },
+              "details": {
+                "additionalProperties": false,
+                "properties": {
+                  "allergens": {
+                    "description": "Allergens the merchant states this dish contains. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "cancellation_policy": {
+                    "description": "The merchant’s stated cancellation terms, displayed publicly; this text does not automate refunds. For experience, service.",
+                    "type": "string"
+                  },
+                  "care_instructions": {
+                    "description": "How to care for the item, shown in its details. For item.",
+                    "type": "string"
+                  },
+                  "dietary_notes": {
+                    "description": "Merchant-stated dietary facts displayed with a dish. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "dimensions": {
+                    "description": "Item measurements including their units, shown in its details. For item.",
+                    "type": "string"
+                  },
+                  "included_items": {
+                    "description": "Items or work included in the stated price, shown in their own public section. For experience, service.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "ingredients": {
+                    "description": "Ingredients shown in the dish details. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "materials": {
+                    "description": "Materials the item is made from, shown in its details. For item.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "meeting_point": {
+                    "description": "Instructions shown in the meeting section; meeting mode and video links are set in scheduling. For experience, service.",
+                    "type": "string"
+                  },
+                  "noodle": {
+                    "description": "Authored noodle information shown as dish facts; these do not establish purchasable variants. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "preparation": {
+                    "description": "Preparation instructions shown to customers before a session or appointment. For experience, service.",
+                    "type": "string"
+                  },
+                  "pricing_note": {
+                    "description": "An explicitly stated price such as Market price; use only when no numeric price is set. For dish, experience, service, item.",
+                    "type": "string"
+                  },
+                  "sizes": {
+                    "description": "Authored serving information; priced choices belong in variants. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "soup": {
+                    "description": "Authored soup information shown with the dish. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "tagline": {
+                    "description": "A short sentence shown below the product title. For dish, experience, service, item.",
+                    "type": "string"
+                  },
+                  "toppings": {
+                    "description": "Authored topping information; priced choices belong in variants. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "what_to_bring": {
+                    "description": "Items customers should bring, shown in the preparation section. For experience, service.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                },
+                "type": "object"
               },
               "gallery": {
                 "items": {
@@ -15355,6 +16937,15 @@
                   "null"
                 ]
               },
+              "kind": {
+                "enum": [
+                  "dish",
+                  "experience",
+                  "service",
+                  "item"
+                ],
+                "type": "string"
+              },
               "locations": {
                 "items": {
                   "properties": {
@@ -15387,10 +16978,6 @@
                 "additionalProperties": {
                   "type": "string"
                 },
-                "type": "object"
-              },
-              "metafields": {
-                "description": "Typed descriptive attributes keyed by \"<namespace>.<key>\".",
                 "type": "object"
               },
               "name": {
@@ -15477,12 +17064,6 @@
                   "copy"
                 ],
                 "type": "string"
-              },
-              "tags": {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
               },
               "tax_code": {
                 "type": [
@@ -15636,13 +17217,14 @@
             },
             "required": [
               "id",
+              "kind",
               "name",
               "slug",
               "description",
               "active",
               "options",
               "variants",
-              "metafields",
+              "details",
               "publications",
               "locations",
               "collections",
@@ -17524,7 +19106,7 @@
     },
     {
       "name": "update_product",
-      "description": "Edit an existing product’s details, options, variants, prices or attributes. Only supplied fields change; supplied options, variants, prices and metafields replace their existing values. Preserve IDs for variants to retain. Removing a variant with any booking history is refused. Publication and location offerings use separate tools.",
+      "description": "Edit an existing product’s named details, options, variants or prices. Only supplied fields change; supplied options, variants, prices and details replace their existing values. Preserve IDs for variants to retain. Removing a variant with any booking history is refused. Publication and location offerings use separate tools.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -17535,8 +19117,123 @@
           "description": {
             "type": "string"
           },
+          "details": {
+            "additionalProperties": false,
+            "description": "Named customer-facing facts for the product kind. This is a complete replacement map; preserve fields to retain. pricing_note contains explicitly stated price wording and requires empty numeric prices.",
+            "properties": {
+              "allergens": {
+                "description": "Allergens the merchant states this dish contains. For dish.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "cancellation_policy": {
+                "description": "The merchant’s stated cancellation terms, displayed publicly; this text does not automate refunds. For experience, service.",
+                "type": "string"
+              },
+              "care_instructions": {
+                "description": "How to care for the item, shown in its details. For item.",
+                "type": "string"
+              },
+              "dietary_notes": {
+                "description": "Merchant-stated dietary facts displayed with a dish. For dish.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "dimensions": {
+                "description": "Item measurements including their units, shown in its details. For item.",
+                "type": "string"
+              },
+              "included_items": {
+                "description": "Items or work included in the stated price, shown in their own public section. For experience, service.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "ingredients": {
+                "description": "Ingredients shown in the dish details. For dish.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "materials": {
+                "description": "Materials the item is made from, shown in its details. For item.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "meeting_point": {
+                "description": "Instructions shown in the meeting section; meeting mode and video links are set in scheduling. For experience, service.",
+                "type": "string"
+              },
+              "noodle": {
+                "description": "Authored noodle information shown as dish facts; these do not establish purchasable variants. For dish.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "preparation": {
+                "description": "Preparation instructions shown to customers before a session or appointment. For experience, service.",
+                "type": "string"
+              },
+              "pricing_note": {
+                "description": "An explicitly stated price such as Market price; use only when no numeric price is set. For dish, experience, service, item.",
+                "type": "string"
+              },
+              "sizes": {
+                "description": "Authored serving information; priced choices belong in variants. For dish.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "soup": {
+                "description": "Authored soup information shown with the dish. For dish.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "tagline": {
+                "description": "A short sentence shown below the product title. For dish, experience, service, item.",
+                "type": "string"
+              },
+              "toppings": {
+                "description": "Authored topping information; priced choices belong in variants. For dish.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "what_to_bring": {
+                "description": "Items customers should bring, shown in the preparation section. For experience, service.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
+          "kind": {
+            "description": "The customer-facing kind: dish, experience, service or item. Determines the allowed descriptive fields; booking and stock remain separate capabilities.",
+            "enum": [
+              "dish",
+              "experience",
+              "service",
+              "item"
+            ],
+            "type": "string"
+          },
           "marketing_features": {
-            "description": "Generic selling bullets. Inclusions, preparation instructions and policies are separate metafields.",
+            "description": "Generic selling bullets. Inclusions, preparation instructions and policies are separate details.",
             "items": {
               "type": "string"
             },
@@ -17550,16 +19247,13 @@
             "description": "Opaque string annotations for integrations. No pricing, scheduling, stock or filtering behavior may read these.",
             "type": "object"
           },
-          "metafields": {
-            "description": "Complete replacement map keyed by \"<namespace>.<key>\"; preserve all entries you want to keep. Remove an entry to clear its value; use {} when no entries remain, never null values. For a literal price such as \"Market price\", set \"pricing.note\" to the exact user-provided text and send empty prices arrays for every variant. Numeric prices and pricing.note are mutually exclusive; clear pricing.note when adding numeric prices. Text-only prices display publicly but cannot be checked out. The definition must already exist; create it with create_metafield_definition.",
-            "type": "object"
-          },
           "name": {
             "type": "string"
           },
           "options": {
             "items": {
               "additionalProperties": false,
+              "description": "A customer choice such as Size, with values such as Small and Large. Variants combine these choices and carry prices. Descriptive facts belong in details.",
               "properties": {
                 "id": {
                   "type": "string"
@@ -17604,7 +19298,7 @@
             "type": "array"
           },
           "order_url": {
-            "description": "A narrow ordering destination such as a delivery partner. Not the public product page.",
+            "description": "External ordering or booking destination, such as Uber Eats, an experience checkout, or Clio Grow. When set, public actions use this URL instead of native booking. Null restores the configured native flow.",
             "type": [
               "string",
               "null"
@@ -17616,13 +19310,6 @@
           },
           "product_id": {
             "type": "string"
-          },
-          "tags": {
-            "items": {
-              "type": "string"
-            },
-            "maxItems": 32,
-            "type": "array"
           },
           "tax_code": {
             "type": [
@@ -17798,6 +19485,22 @@
               },
               "booking": {
                 "properties": {
+                  "calendar_group": {
+                    "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "confirmation_mode": {
+                    "enum": [
+                      "instant",
+                      "review"
+                    ],
+                    "type": "string"
+                  },
                   "default_capacity": {
                     "minimum": 0,
                     "type": [
@@ -17812,6 +19515,17 @@
                       "null"
                     ]
                   },
+                  "online_payment_required": {
+                    "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+                    "type": "boolean"
+                  },
+                  "online_timezone": {
+                    "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "organization_id": {
                     "type": "string"
                   },
@@ -17821,7 +19535,11 @@
                 },
                 "required": [
                   "duration_minutes",
-                  "default_capacity"
+                  "default_capacity",
+                  "confirmation_mode",
+                  "online_payment_required",
+                  "online_timezone",
+                  "calendar_group"
                 ],
                 "type": [
                   "object",
@@ -17851,6 +19569,110 @@
               },
               "description": {
                 "type": "string"
+              },
+              "details": {
+                "additionalProperties": false,
+                "properties": {
+                  "allergens": {
+                    "description": "Allergens the merchant states this dish contains. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "cancellation_policy": {
+                    "description": "The merchant’s stated cancellation terms, displayed publicly; this text does not automate refunds. For experience, service.",
+                    "type": "string"
+                  },
+                  "care_instructions": {
+                    "description": "How to care for the item, shown in its details. For item.",
+                    "type": "string"
+                  },
+                  "dietary_notes": {
+                    "description": "Merchant-stated dietary facts displayed with a dish. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "dimensions": {
+                    "description": "Item measurements including their units, shown in its details. For item.",
+                    "type": "string"
+                  },
+                  "included_items": {
+                    "description": "Items or work included in the stated price, shown in their own public section. For experience, service.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "ingredients": {
+                    "description": "Ingredients shown in the dish details. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "materials": {
+                    "description": "Materials the item is made from, shown in its details. For item.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "meeting_point": {
+                    "description": "Instructions shown in the meeting section; meeting mode and video links are set in scheduling. For experience, service.",
+                    "type": "string"
+                  },
+                  "noodle": {
+                    "description": "Authored noodle information shown as dish facts; these do not establish purchasable variants. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "preparation": {
+                    "description": "Preparation instructions shown to customers before a session or appointment. For experience, service.",
+                    "type": "string"
+                  },
+                  "pricing_note": {
+                    "description": "An explicitly stated price such as Market price; use only when no numeric price is set. For dish, experience, service, item.",
+                    "type": "string"
+                  },
+                  "sizes": {
+                    "description": "Authored serving information; priced choices belong in variants. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "soup": {
+                    "description": "Authored soup information shown with the dish. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "tagline": {
+                    "description": "A short sentence shown below the product title. For dish, experience, service, item.",
+                    "type": "string"
+                  },
+                  "toppings": {
+                    "description": "Authored topping information; priced choices belong in variants. For dish.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "what_to_bring": {
+                    "description": "Items customers should bring, shown in the preparation section. For experience, service.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                },
+                "type": "object"
               },
               "gallery": {
                 "items": {
@@ -18001,6 +19823,15 @@
                   "null"
                 ]
               },
+              "kind": {
+                "enum": [
+                  "dish",
+                  "experience",
+                  "service",
+                  "item"
+                ],
+                "type": "string"
+              },
               "locations": {
                 "items": {
                   "properties": {
@@ -18033,10 +19864,6 @@
                 "additionalProperties": {
                   "type": "string"
                 },
-                "type": "object"
-              },
-              "metafields": {
-                "description": "Typed descriptive attributes keyed by \"<namespace>.<key>\".",
                 "type": "object"
               },
               "name": {
@@ -18123,12 +19950,6 @@
                   "copy"
                 ],
                 "type": "string"
-              },
-              "tags": {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
               },
               "tax_code": {
                 "type": [
@@ -18282,13 +20103,14 @@
             },
             "required": [
               "id",
+              "kind",
               "name",
               "slug",
               "description",
               "active",
               "options",
               "variants",
-              "metafields",
+              "details",
               "publications",
               "locations",
               "collections",
@@ -18546,7 +20368,7 @@
     },
     {
       "name": "update_site_page",
-      "description": "Replace a site-page language variant when the user wants to edit its content or metadata. Read it first and supply the complete blocks, path, title, pageType, recipe, sortOrder and expected_updated_at. Omitted summary is cleared. A changed path creates a language-specific redirect. To remove blocks, supply the exact removed_block_ids and confirmation_token from the page read.",
+      "description": "Replace a site-page language variant when the user wants to edit its content or metadata. Read it first and supply the complete blocks, path, title, pageType, recipe, sortOrder and expected_updated_at. Omitted summary is cleared. Omitted product_id retains the linked product; null removes the link. A changed path creates a language-specific redirect. To remove blocks, supply the exact removed_block_ids and confirmation_token from the page read.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -18691,6 +20513,13 @@
           "path": {
             "description": "The page path to write. Send the current path unless you are moving the page; a different path moves it and creates the locale-scoped redirect.",
             "type": "string"
+          },
+          "product_id": {
+            "description": "Explicit canonical Product binding on the source page only. Omit to retain; null unbinds. Translations inherit the source binding; slugs never imply a relationship.",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "recipe": {
             "description": "The template section this page fills, or null for a page that fills none. Send the recipe from the last read unless you are changing it; an omitted recipe is not kept.",

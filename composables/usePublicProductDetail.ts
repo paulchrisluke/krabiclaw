@@ -3,12 +3,11 @@ import type { PublicProductBooking, PublicProductLocationPayload, PublicProductR
 import { isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
 import { isRecord, publicApiRequest } from '~/utils/api-clients'
 import type { ProductCollectionSibling } from '~/utils/product-seo'
-import type { MetafieldDefinition } from '~/shared/metafields'
 import { isPublicProduct, type PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
 
 export interface PublicProductDetailPayload {
   product: Product
-  location: PublicProductLocationPayload
+  location: PublicProductLocationPayload | null
   currency: CurrencyCode
   vertical: string
   brandName: string
@@ -25,14 +24,13 @@ export interface PublicProductDetailPayload {
   collectionName: string
   collectionSiblings: ProductCollectionSibling[]
   /** The tenant's attribute vocabulary, so the page can label its own facts. */
-  metafieldDefinitions: MetafieldDefinition[]
   localeRepresentations: PublicLocaleRepresentation[]
 }
 
 function isPublicProductDetailPayload(value: unknown): value is PublicProductDetailPayload {
   return isRecord(value)
     && isPublicProduct(value.product)
-    && isRecord(value.location)
+    && (value.location === null || (isRecord(value.location)
     && typeof value.location.id === 'string'
     && typeof value.location.slug === 'string'
     && typeof value.location.title === 'string'
@@ -40,7 +38,7 @@ function isPublicProductDetailPayload(value: unknown): value is PublicProductDet
     && (value.location.phone === null || typeof value.location.phone === 'string')
     && (value.location.maps_url === null || typeof value.location.maps_url === 'string')
     && (value.location.latitude === null || typeof value.location.latitude === 'number')
-    && (value.location.longitude === null || typeof value.location.longitude === 'number')
+    && (value.location.longitude === null || typeof value.location.longitude === 'number')))
     && isCurrencyCode(value.currency)
     && typeof value.vertical === 'string'
     && typeof value.brandName === 'string'
@@ -75,12 +73,6 @@ function isPublicProductDetailPayload(value: unknown): value is PublicProductDet
       && typeof sibling.id === 'string'
       && typeof sibling.name === 'string'
       && typeof sibling.slug === 'string')
-    && Array.isArray(value.metafieldDefinitions)
-    && value.metafieldDefinitions.every(definition => isRecord(definition)
-      && typeof definition.id === 'string'
-      && typeof definition.namespace === 'string'
-      && typeof definition.key === 'string'
-      && typeof definition.name === 'string')
     && Array.isArray(value.localeRepresentations)
     && value.localeRepresentations.every(item => isRecord(item)
       && typeof item.locale === 'string'
@@ -110,11 +102,10 @@ export async function usePublicProductDetail(routeKind: ProductSurface) {
     async (_nuxtApp, { signal }) => {
       if (import.meta.server) {
         if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
-        const [{ cloudflareEnv }, { loadPublicExperienceDetail, loadPublicProductDetail, loadPublicProductReviews, loadPublicProductSessions, publicLocationPayload }, { selectProductCollectionSiblings }, { listMetafieldDefinitions }] = await Promise.all([
+        const [{ cloudflareEnv }, { loadPublicExperienceDetail, loadPublicProductDetail, loadPublicProductReviews, loadPublicProductSessions, publicLocationPayload }, { selectProductCollectionSiblings }] = await Promise.all([
           import('~/server/utils/api-response'),
           import('~/server/utils/public-products'),
           import('~/utils/product-seo'),
-          import('~/server/utils/product-management'),
         ])
         const env = cloudflareEnv(requestEvent)
         const db = env.DB
@@ -131,7 +122,7 @@ export async function usePublicProductDetail(routeKind: ProductSurface) {
         const siblingCollection = detail.collections.find(collection => membership.has(collection.id)) ?? null
         return {
           product: detail.product,
-          location: publicLocationPayload(detail.location),
+          location: detail.location ? publicLocationPayload(detail.location) : null,
           currency: detail.currency,
           vertical: detail.organization.vertical,
           brandName: detail.organization.name,
@@ -146,10 +137,9 @@ export async function usePublicProductDetail(routeKind: ProductSurface) {
           collectionName: siblingCollection?.name ?? '',
           collectionSiblings: siblingCollection
             ? selectProductCollectionSiblings(detail.products, detail.product, siblingCollection.id, {
-                currency: detail.currency, location_id: detail.location.id, at: new Date().toISOString(),
+                currency: detail.currency, location_id: detail.location?.id ?? null, at: new Date().toISOString(),
               })
             : [],
-          metafieldDefinitions: await listMetafieldDefinitions(db, detail.organization.id),
           localeRepresentations: detail.localeRepresentations,
         }
       }

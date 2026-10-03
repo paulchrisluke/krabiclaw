@@ -104,10 +104,8 @@ export async function getOrganizationLocalizationProgress(
     // and no category query: an experience is a product, and a collection is a
     // site merchandising record localized in its own group below.
     queryAll<LocalizableRow>(db, `
-      SELECT p.id, 'product' AS resource_type, p.name, p.description, p.tags, p.marketing_features, p.unit_label,
-             (SELECT json_group_object(d.namespace || '.' || d.key, json(pm.value))
-                FROM product_metafields pm JOIN metafield_definitions d ON d.id = pm.definition_id
-               WHERE pm.product_id = p.id AND d.localizable = 1) AS metafields,
+      SELECT p.id, 'product' AS resource_type, p.name, p.description, p.marketing_features, p.unit_label,
+             p.details_json AS details,
              rl.values_json
         FROM products p
         JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
@@ -180,7 +178,7 @@ export async function getOrganizationLocalizationProgress(
     // Which product attributes are translatable is the definition's own
     // declaration, so the field list is the columns plus whatever the tenant
     // declared — not a list maintained here.
-    { id: 'catalog', label: 'Catalog', result: progress(catalog, ['name', 'description', 'tags', 'marketing_features', 'unit_label', 'metafields']), path: (row: LocalizableRow) => `products/${row.id}`, resourceType: 'product', resourceId: (row: LocalizableRow) => row.id },
+    { id: 'catalog', label: 'Catalog', result: progress(catalog, ['name', 'description', 'marketing_features', 'unit_label', 'details']), path: (row: LocalizableRow) => `products/${row.id}`, resourceType: 'product', resourceId: (row: LocalizableRow) => row.id },
     { id: 'collections', label: 'Collections', result: progress(collections, ['name', 'description']), path: (row: LocalizableRow) => `collections/${row.id}`, resourceType: 'collection', resourceId: (row: LocalizableRow) => row.id },
     { id: 'pages', label: 'Pages', result: progress(pages, ['title', 'summary', 'content']), path: (row: LocalizableRow) => `pages/${row.id}`, resourceType: 'content_document', resourceId: (row: LocalizableRow) => row.id },
     { id: 'posts', label: 'Posts', result: progress(posts, ['summary', 'metadata.event.title', 'metadata.offer.terms_conditions']), path: (row: LocalizableRow) => `locations/${row.location_slug}/posts/${row.id}`, resourceType: 'content_document', resourceId: (row: LocalizableRow) => row.id },

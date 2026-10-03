@@ -2,11 +2,9 @@ import { setProductBookingConfig, deleteProductBookingConfig, replaceWeeklySched
 import type { CreateProductInput, Product, ReconcileProductInput, UpdateProductInput } from '~/server/types/products'
 import {
   createCollection,
-  createMetafieldDefinition,
   createProduct,
   createProductsBatch,
   deleteCollection,
-  deleteMetafieldDefinition,
   deleteProduct,
   getProduct,
   requireOrganizationProduct,
@@ -14,7 +12,6 @@ import {
   listCollectionProducts,
   listCollections,
   listLocationProducts,
-  listMetafieldDefinitions,
   listOrganizationProducts,
   reconcileProducts,
   removeProductLocation,
@@ -29,7 +26,6 @@ import { assertResourceAccess, memberAccessPrincipal } from '~/server/utils/memb
 import { mcpPageInfo, mcpPageWindow } from '~/server/utils/mcp-pagination'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import { listOrganizationsForUser } from '~/server/utils/mcp-workflows'
-import type { MetafieldDefinition } from '~/shared/metafields'
 import type { McpExecutorContext } from './shared'
 import { NOT_HANDLED, objectArray, omit, requiredString, requiredStringArray } from './shared'
 
@@ -82,6 +78,7 @@ function productPage(products: Product[], window: { limit: number; offset: numbe
 
 function productListItem(product: Product) {
   return {
+    kind: product.kind,
     id: product.id,
     name: product.name,
     slug: product.slug,
@@ -90,14 +87,6 @@ function productListItem(product: Product) {
     variant_count: product.variants.length,
     publications: product.publications,
     locations: product.locations,
-  }
-}
-
-function definitionResult(definition: MetafieldDefinition) {
-  return {
-    id: definition.id, namespace: definition.namespace, key: definition.key, name: definition.name,
-    description: definition.description, value_type: definition.value_type,
-    validations: definition.validations, localizable: definition.localizable,
   }
 }
 
@@ -110,7 +99,7 @@ export async function handleProductsTools(ctx: McpExecutorContext) {
     case 'set_product_booking_config': {
       const config = await setProductBookingConfig(organization.db, {
         ...scope, productId: requiredString(args, 'product_id'), actorId: organization.userId,
-        patch: { duration_minutes: args.duration_minutes, default_capacity: args.default_capacity },
+        patch: { duration_minutes: args.duration_minutes, default_capacity: args.default_capacity, confirmation_mode: args.confirmation_mode, online_payment_required: args.online_payment_required, online_timezone: args.online_timezone, calendar_group: args.calendar_group },
       })
       return { config }
     }
@@ -118,8 +107,8 @@ export async function handleProductsTools(ctx: McpExecutorContext) {
       await deleteProductBookingConfig(organization.db, { ...scope, productId: requiredString(args, 'product_id') })
       return { deleted: true }
     case 'replace_product_weekly_schedule': {
-      const locationId = requiredString(args, 'location_id')
-      await authorizeLocation(ctx, locationId)
+      const locationId = args.location_id === null ? null : requiredString(args, 'location_id')
+      if (locationId !== null) await authorizeLocation(ctx, locationId)
       return await replaceWeeklySchedule(organization.db, {
         ...scope, productId: requiredString(args, 'product_id'), locationId,
         slots: args.slots, actorId: organization.userId,
@@ -281,29 +270,7 @@ export async function handleProductsTools(ctx: McpExecutorContext) {
       return { collections: await listCollections(organization.db, { ...scope, locationId }) }
     }
 
-    case 'list_metafield_definitions':
-      return { definitions: (await listMetafieldDefinitions(organization.db, organization.organizationId)).map(definitionResult) }
-    case 'create_metafield_definition':
-      return {
-        definition: definitionResult(await createMetafieldDefinition(organization.db, {
-          organizationId: organization.organizationId,
-          definition: {
-            namespace: requiredString(args, 'namespace'),
-            key: requiredString(args, 'key'),
-            name: requiredString(args, 'name'),
-            description: typeof args.description === 'string' ? args.description : null,
-            value_type: requiredString(args, 'value_type') as MetafieldDefinition['value_type'],
-            validations: (args.validations ?? {}) as MetafieldDefinition['validations'],
-            localizable: args.localizable === true,
-          },
-          actor,
-        })),
-      }
-    case 'delete_metafield_definition':
-      await deleteMetafieldDefinition(organization.db, {
-        organizationId: organization.organizationId, definitionId: requiredString(args, 'definition_id'),
-      })
-      return { deleted: true }
+
   }
   return NOT_HANDLED
 }

@@ -12,11 +12,11 @@
       </HelpChowBotConversation>
 
       <template #fallback>
-        <div class="min-h-0 flex-1 overflow-y-auto">
+        <main class="min-h-0 flex-1 overflow-y-auto">
           <div class="mx-auto w-full max-w-3xl px-4 sm:px-6">
             <PlatformHelpHero />
           </div>
-        </div>
+        </main>
       </template>
     </ClientOnly>
   </div>

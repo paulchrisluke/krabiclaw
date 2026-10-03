@@ -1,12 +1,11 @@
 import { expect, test } from '@playwright/test'
 import { loginAs } from './helpers/auth'
-import { MCP_GROWTH_USER_ID } from './helpers/plan-fixtures'
 import { MCP_VERSION, MCP_GROWTH_ORGANIZATION_ID, mcpRequest, mcpData } from './helpers/mcp'
 import { acquireTenantMutationLock } from './helpers/tenant-mutation-lock'
 
 test.describe('stateless MCP server', () => {
   test('ChatGPT session exposes native media upload', async ({ request, baseURL }) => {
-    await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
+    await loginAs(request, baseURL!)
 
     const initialize = await mcpRequest(request, baseURL!, {
       method: 'initialize',
@@ -89,7 +88,7 @@ test.describe('stateless MCP server', () => {
     const placement = { owner_type: 'business_location', owner_id: locationId, slot: 'gallery' }
     let original: string[] = []
     try {
-      await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
+      await loginAs(request, baseURL!)
       const galleryOrder = async () => (await call<{ location: { media: Array<{ slot: string; asset_id: string }> } }>('get_location', { location_id: locationId }))
         .location.media.filter(item => item.slot === 'gallery').map(item => item.asset_id)
       // The fixture's two-image gallery, in its stored order.
@@ -127,7 +126,7 @@ test.describe('stateless MCP server', () => {
     }
     let originalName: string | undefined
     try {
-      await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
+      await loginAs(request, baseURL!)
       originalName = (await call<{ product: Product }>('get_product', { product_id: productId })).product.name
       const changed = (await call<{ product: Product }>('update_product', { product_id: productId, name: `${originalName} MCP media check` })).product
       expect(changed.name).toBe(`${originalName} MCP media check`)

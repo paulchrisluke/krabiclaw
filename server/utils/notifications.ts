@@ -37,7 +37,7 @@ import {
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { createCanonicalNotification } from '~/server/utils/notification-center'
 import { buildOwnerThreadInboxUrl, dashboardOrigin, getPlatformDomain, resolveDashboardSlugs } from '~/server/utils/dashboard-notification-links'
-import { claimDelivery, createDeliveryReceipt, getDeliveryClaimEligibility, recordDeliveryOutcome } from '~/server/domain/guest-threads/deliveries'
+import { claimDelivery, createDeliveryReceipt, getDeliveryClaimEligibility, recordDeliveryOutcome, waitForDeliverySettlement } from '~/server/domain/guest-threads/deliveries'
 import { appendEntry, findEntryByDedupeKey } from '~/server/domain/guest-threads/entries'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 import type { GuestThreadDeliveryPurpose } from '~/server/domain/guest-threads/types'
@@ -99,6 +99,9 @@ interface ContactNotificationInput extends OrganizationContext {
 }
 
 interface BookingNotificationInput extends OrganizationContext {
+  /** Suppress only the guest acknowledgement; owner alerts and inbox audit remain. */
+  guestAcknowledgement?: boolean
+  status?: 'pending' | 'confirmed'
   /** So the email can lead with the experience's own photo. */
   productId?: string | null
   locationId?: string | null
@@ -321,15 +324,16 @@ async function sendEmailNotification(
     : null
   const claim = delivery ? await claimDelivery(db, delivery.id) : null
   if (claim && !claim.claimed) {
-    const succeeded = claim.delivery.status === 'sent' || claim.delivery.status === 'delivered' || claim.delivery.status === 'read'
-    const eligibility = getDeliveryClaimEligibility(claim.delivery)
-    if (!succeeded && claim.delivery.provider === 'resend' && (eligibility === 'claimable' || eligibility === 'in_flight')) {
+    const settled = await waitForDeliverySettlement(db, claim.delivery)
+    const succeeded = settled.status === 'sent' || settled.status === 'delivered' || settled.status === 'read'
+    const eligibility = getDeliveryClaimEligibility(settled)
+    if (!succeeded && settled.provider === 'resend' && (eligibility === 'claimable' || eligibility === 'in_flight')) {
       throw new Error('Email delivery remains eligible for webhook retry')
     }
     // Another worker owns this receipt. If it settled as sent there is nothing
     // left to do; if it settled as failed, this call has no delivery either, and
     // says so rather than resolving as though it had one.
-    if (!succeeded) throw new Error(`Email delivery already settled as ${claim.delivery.status}: ${claim.delivery.error ?? 'no provider error recorded'}`)
+    if (!succeeded) throw new Error(`Email delivery already settled as ${settled.status}: ${settled.error ?? 'no provider error recorded'}`)
     return
   }
 
@@ -400,7 +404,8 @@ async function sendWhatsAppThreadNotification(
   })
   const claim = await claimDelivery(db, delivery.id)
   if (!claim.claimed) {
-    return claim.delivery.status === 'skipped' || claim.delivery.status === 'sent' || claim.delivery.status === 'delivered' || claim.delivery.status === 'read'
+    const settled = await waitForDeliverySettlement(db, claim.delivery)
+    return settled.status === 'skipped' || settled.status === 'sent' || settled.status === 'delivered' || settled.status === 'read'
   }
 
   let result: Awaited<ReturnType<typeof sendWhatsAppNotification>>
@@ -499,6 +504,7 @@ export function raiseSettledFailures(
   throw new AggregateError(
     failed.map(({ reason }) => reason instanceof Error ? reason : new Error(String(reason))),
     `${label} failed for ${context}: ${failed.map(({ task }) => task).join(' and ')}`,
+    { cause: failed[0]!.reason },
   )
 }
 
@@ -991,7 +997,7 @@ export async function notifyBookingCreated(
     notes: opts.notes ?? null, heroImageUrl: hero?.imageUrl ?? null, replyUrl: inboxUrl,
   })
   const guestEmail = await renderNotificationEmail(guestBookingReceivedMessage({
-    guestName: opts.guestName, organizationName: studio, organizationLogoUrl: logoUrl,
+    guestName: opts.guestName, organizationName: studio, organizationLogoUrl: logoUrl, status: opts.status,
     productTitle: opts.productTitle, date: prettyDate, time: prettyTime, partySize: String(opts.partySize),
     notes: opts.notes, contactPhone: opts.contactPhone ?? null, contactEmail: opts.contactEmail ?? null,
     cancelUrl: opts.cancelUrl ?? null, heroImageUrl: hero?.imageUrl ?? null,
@@ -1011,16 +1017,16 @@ export async function notifyBookingCreated(
       message: ownerMessage,
       whatsappTemplate: 'new_reservation',
     }),
-    sendEmailNotification(env, db, {
+    ...(opts.guestAcknowledgement === false ? [] : [sendEmailNotification(env, db, {
       ...opts,
       to: opts.email,
       replyTo,
       template: 'booking_customer_received',
-      title: `Your booking request was sent — ${opts.productTitle}`,
+      title: `${opts.status === 'pending' ? 'Your booking request was sent' : 'Your booking is confirmed'} — ${opts.productTitle}`,
       payload,
-      email: { subject: `Your booking request was sent — ${opts.productTitle}`, html: guestEmail.html, text: guestEmail.text },
+      email: { subject: `${opts.status === 'pending' ? 'Your booking request was sent' : 'Your booking is confirmed'} — ${opts.productTitle}`, html: guestEmail.html, text: guestEmail.text },
       delivery: threadDelivery(threadContext, 'guest_acknowledgement', 'email', 'booking_customer_received', opts.email),
-    }),
+    })]),
   ])
 
   raiseSettledFailures('notifyBookingCreated', `bookingId ${opts.bookingId}`, results)

@@ -1,6 +1,7 @@
 import { expect, test, type APIRequestContext, type APIResponse, type Page } from '@playwright/test'
 import { openTenantPage } from './helpers'
 import { loginAs } from './helpers/auth'
+import { mcpRequest } from './helpers/mcp'
 import { E2E_KIKUZUKI_ORGANIZATION_ID, kikuzukiTestBaseUrl, kikuzukiTestExtraHeaders, testBaseUrl } from './test-env'
 
 const organizationId = E2E_KIKUZUKI_ORGANIZATION_ID
@@ -40,7 +41,7 @@ test.beforeAll(async ({ playwright }, testInfo) => {
   testInfo.setTimeout(120_000)
   const baseURL = testBaseUrl()
   const owner = await playwright.request.newContext({ baseURL })
-  await loginAs(owner, baseURL, 'user-e2e-kikuzuki-owner')
+  await loginAs(owner, baseURL)
 
   try {
     await expectStatus(await owner.post(`/api/editor/organizations/${organizationId}/locales/${locale}/add`), 200)
@@ -86,12 +87,36 @@ test.beforeAll(async ({ playwright }, testInfo) => {
       values: {
         name: 'ซูชิทูน่า',
         description: 'ทูน่า',
-        tags: [],
       },
     })
   } finally {
     await owner.dispose()
   }
+})
+
+test('a localization batch with a missing product leaves existing translations unchanged', async ({ request, baseURL }) => {
+  await loginAs(request, baseURL!)
+  const path = `/api/editor/organizations/${organizationId}/localization/product/item-kiku-tuna-sushi/${locale}`
+  const before = await request.get(path)
+  expect(before.status()).toBe(200)
+  const existing = await before.json()
+  const replace = await mcpRequest(request, baseURL!, {
+    method: 'tools/call', toolName: 'replace_resource_localizations',
+    args: {
+      organization_id: organizationId, resource_type: 'product', locale,
+      items: [
+        { resource_id: 'item-kiku-tuna-sushi', values: { name: 'Must not be written' } },
+        { resource_id: 'missing-localization-product', values: { name: 'Missing' } },
+      ],
+    },
+  })
+  expect(replace.status()).toBe(200)
+  const rejected = await replace.json()
+  expect(rejected.result.isError).toBe(true)
+  expect(rejected.result.content[0].text).toContain('One or more canonical resources were not found')
+  const after = await request.get(path)
+  expect(after.status()).toBe(200)
+  expect(await after.json()).toEqual(existing)
 })
 
 test('Kikuzuki keeps its Thai shell and collection translations on a hard load', async ({ page }) => {
@@ -148,7 +173,7 @@ test('Kikuzuki Localize preserves its translated address', async ({ browser, pla
   const baseURL = testBaseUrl()
   const owner = await playwright.request.newContext({ baseURL })
   try {
-    await loginAs(owner, baseURL, 'user-e2e-kikuzuki-owner')
+    await loginAs(owner, baseURL)
     const dashboardContext = await browser.newContext({ baseURL, storageState: await owner.storageState() })
     const cms = await dashboardContext.newPage()
     try {

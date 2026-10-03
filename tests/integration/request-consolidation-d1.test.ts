@@ -40,7 +40,7 @@ test('a thread and the record it refers to commit and cancel as one', { timeout:
       `INSERT INTO organization (id,name,slug) VALUES ('${ORG}','Proof','proof')`,
       `INSERT INTO user (id,name,email) VALUES ('${ACTOR}','Proof','owner@proof.example')`,
       `INSERT INTO business_locations (id,organization_id,slug,title,timezone) VALUES ('${LOCATION}','${ORG}','proof','Proof','Asia/Bangkok')`,
-      `INSERT INTO products (id,organization_id,name,slug,created_by,updated_by) VALUES ('product-proof','${ORG}','Pottery Class','pottery-class','${ACTOR}','${ACTOR}')`,
+      `INSERT INTO products (kind, id,organization_id,name,slug,created_by,updated_by) VALUES ('experience', 'product-proof','${ORG}','Pottery Class','pottery-class','${ACTOR}','${ACTOR}')`,
       `INSERT INTO product_variants (id,organization_id,product_id,name,created_by,updated_by) VALUES ('variant-proof','${ORG}','product-proof','Standard','${ACTOR}','${ACTOR}')`,
       // The branch offers it: a session at a location takes seats only while
       // that location is still selling the product.
@@ -238,7 +238,7 @@ test('archive and unarchive file a conversation without touching its booking, st
       `INSERT INTO organization (id,name,slug) VALUES ('${ORG}','Proof','proof'), ('org-foreign','Foreign','foreign')`,
       `INSERT INTO user (id,name,email) VALUES ('${ACTOR}','Proof','owner@proof.example')`,
       `INSERT INTO business_locations (id,organization_id,slug,title,timezone) VALUES ('${LOCATION}','${ORG}','proof','Proof','Asia/Bangkok')`,
-      `INSERT INTO products (id,organization_id,name,slug,created_by,updated_by) VALUES ('product-proof','${ORG}','Pottery Class','pottery-class','${ACTOR}','${ACTOR}')`,
+      `INSERT INTO products (kind, id,organization_id,name,slug,created_by,updated_by) VALUES ('experience', 'product-proof','${ORG}','Pottery Class','pottery-class','${ACTOR}','${ACTOR}')`,
       `INSERT INTO product_variants (id,organization_id,product_id,name,created_by,updated_by) VALUES ('variant-proof','${ORG}','product-proof','Standard','${ACTOR}','${ACTOR}')`,
       `INSERT INTO product_locations (organization_id,product_id,location_id,active,published,created_by,updated_by) VALUES ('${ORG}','product-proof','${LOCATION}',1,1,'${ACTOR}','${ACTOR}')`,
       `INSERT INTO product_booking_configs (product_id,organization_id,duration_minutes,default_capacity,created_by,updated_by) VALUES ('product-proof','${ORG}',120,4,'${ACTOR}','${ACTOR}')`,
