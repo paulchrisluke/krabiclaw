@@ -7,22 +7,22 @@
     loop they lost every section the marketing site had (#903).
   -->
   <template v-if="page">
-    <ProductDetailPage v-if="linkedProduct && consultationProducts?.data.value" :key="linkedProduct.id" :organization-id="organizationId" :organization-name="consultationProducts.organizationName" vertical="service" :product="linkedProduct" :booking="linkedProduct.booking" :location="null" :currency="consultationProducts.data.value.currency" :page-document="page" collection-name="Services" :presentation="servicePresentation" :reviews="[]" :collection-siblings="[]">
+    <ProductDetailPage v-if="linkedProduct && consultationProducts?.data.value" :key="linkedProduct.id" :organization-id="organizationId" :organization-name="consultationProducts.organizationName" vertical="service" :product="linkedProduct" :booking="linkedProduct.booking" :location="null" :currency="consultationProducts.data.value.currency" :page-document="page" :collection-name="t('blawby.footer.services')" :presentation="servicePresentation" :reviews="[]" :collection-siblings="[]">
       <template #actions>
         <BlawbyButton v-if="secondaryAction" class="mt-5" variant="outline" :to="secondaryAction.url">{{ secondaryAction.label }}</BlawbyButton>
       </template>
-      <template #content>
-        <TenantPageRenderer :page="serviceContent!" />
+      <template #content="{ canBook }">
+        <TenantPageRenderer :page="serviceContent(canBook)" />
       </template>
     </ProductDetailPage>
-    <TenantPageRenderer v-else :page="renderedPage!" />
+    <TenantPageRenderer v-else :page="page" />
   </template>
 </template>
 
 <script setup lang="ts">
 import ProductDetailPage from '~/components/products/ProductDetailPage.vue'
 import { requireProductPresentation } from '~/utils/product-presentation'
-import { blockTextOrNull } from '~/utils/tenant-page-block-data'
+import { blockTextOrNull, isInternalRoute } from '~/utils/tenant-page-block-data'
 import { publicApiRequest, isRecord } from '~/utils/api-clients'
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
@@ -33,7 +33,7 @@ import type { BlawbyDocumentPayload } from '~/utils/blawby-document-contract'
 const props = defineProps<{ path: string; locale?: string | null }>()
 const { organizationId, isPlatform, previewAuthorized, organization } = useTenantOrganization()
 const { isBlawby } = usePublicTemplate()
-const { locale: i18nLocale } = useI18n()
+const { locale: i18nLocale, localePath, t } = useI18n()
 // Page ownership is a resolved site, not a tenant type. Krabiclaw's own site is
 // a site row with page documents like any other, and requiring `isTenant` here
 // is what forced its marketing pages to be hardcoded components (#903).
@@ -132,23 +132,19 @@ const secondaryAction = computed(() => {
   const hero = page.value?.blocks.find(block => block.type === 'hero')
   const label = blockTextOrNull(hero?.data.secondary_label)
   const url = blockTextOrNull(hero?.data.secondary_url)
-  return label && url ? { label, url } : null
+  return label && url ? { label, url: isInternalRoute(url) ? localePath(url) : url } : null
 })
-const renderedPage = computed(() => {
-  if (!page.value || !linkedProduct.value || !blawbyDocument?.value) return page.value
+// ProductDetailPage owns bookability. Only its rendered booking section receives
+// authored scheduling links; unavailable products keep the site's scheduling URL.
+function serviceContent(canBook: boolean): PublicTenantPage {
+  if (!page.value || !blawbyDocument?.value) throw createError({ statusCode: 500, statusMessage: 'Service document was not returned' })
   const schedulePath = blawbyDocument.value.shell.consultation.schedule_path
-  return { ...page.value, blocks: page.value.blocks.map(block => {
+  return { ...page.value, blocks: page.value.blocks.filter(block => block.type !== 'hero').map(block => {
     const data = { ...block.data }
-    // Keep each authored label and all rich content. A service's existing
-    // scheduling CTA reaches its own linked booking widget in native mode.
-    if (block.type === 'hero' && data.cta_url === schedulePath) data.cta_url = '#consultations'
-    if ((block.type === 'booking_cta' || block.type === 'contact_cta' || block.type === 'cta') && data.url === schedulePath) data.url = '#consultations'
+    if (canBook && (block.type === 'booking_cta' || block.type === 'contact_cta' || block.type === 'cta') && data.url === schedulePath) data.url = '#consultations'
     return { ...block, data }
   }) }
-})
-// The shared introduction replaces only the hero. Every authored body block
-// stays in its original order, including the prose formerly beside the gallery.
-const serviceContent = computed(() => renderedPage.value ? { ...renderedPage.value, blocks: renderedPage.value.blocks.filter(block => block.type !== 'hero') } : null)
+}
 
 // The locale representations of the page this instance is showing, written the
 // way every other public route writes them (pages/blog/[slug].vue,

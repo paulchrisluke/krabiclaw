@@ -83,9 +83,10 @@ if (values.source === 'DB' && !values['source-file']) {
   const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${workerName}/settings`, {
     headers: { authorization: `Bearer ${apiToken}` },
   })
+  if (!response.ok) throw new Error(`Could not resolve the production Worker's DB binding: HTTP ${response.status}`)
   const settings = await response.json() as { success?: boolean; result?: { bindings?: Array<{ type: string; name: string; id?: string }> } }
   const sourceId = settings.result?.bindings?.find(binding => binding.type === 'd1' && binding.name === 'DB')?.id
-  if (!response.ok || !settings.success || !sourceId) throw new Error(`Could not resolve the production Worker's DB binding: HTTP ${response.status}`)
+  if (!settings.success || !sourceId) throw new Error(`Could not resolve the production Worker's DB binding: HTTP ${response.status}`)
   values.source = sourceId
 }
 

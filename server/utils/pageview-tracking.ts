@@ -131,8 +131,15 @@ export async function resolvePublicPageIdentity(env: CloudflareEnv, db: AppDb, i
 
   const experienceSlug = /^\/experiences\/([^/]+)$/.exec(routing.sourcePath)?.[1]
   if (experienceSlug) {
+    let slug: string
+    try {
+      slug = decodeURIComponent(experienceSlug)
+    } catch (error) {
+      if (error instanceof URIError) return null
+      throw error
+    }
     const { loadPublicExperienceDetail } = await import('~/server/utils/public-products')
-    const detail = await loadPublicExperienceDetail(env, db, organizationId, false, decodeURIComponent(experienceSlug), sourceLocale)
+    const detail = await loadPublicExperienceDetail(env, db, organizationId, false, slug, sourceLocale)
     if (!detail) return null
     return { ...base, locale: sourceLocale, locationId: detail.location?.id ?? null, pageId: null, pageType: 'product', recipe: null, documentId: null, productId: detail.product.id }
   }

@@ -272,7 +272,7 @@ if (!args.url) {
 }
 const inventoryMode = Boolean(args.sitemapUrl)
 if (inventoryMode) {
-  if (args.source !== 'blawby') throw new Error('--sitemap-url is only for a Blawby target')
+  if (args.source !== 'blawby') throw new Error('--sitemap-url requires --source blawby')
   args.routes = { ...await publishedRoutes(args.sitemapUrl), ...args.explicitRoutes }
 }
 
@@ -346,7 +346,7 @@ try {
       const response = await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
       if (inventoryMode) {
         if (response?.status() !== 200) throw new Error(`${routeConfig.path} returned ${response?.status() ?? 'no response'} at ${viewportName}`)
-        await page.locator('.blawby-shell[data-hydrated="true"]').waitFor()
+        await page.waitForFunction(() => document.querySelector('#__nuxt')?.__vue_app__?.$nuxt?.isHydrating === false)
       }
       await stabilizePage(page)
       await page.screenshot({ path: filePath, fullPage: true })

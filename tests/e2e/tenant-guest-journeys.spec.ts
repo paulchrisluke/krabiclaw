@@ -188,7 +188,7 @@ test.describe('tenant guest journeys (disposable local/preview data only)', () =
     const cancelURL = `${baseURL}/api/public/booking-requests/${body.booking_id}/cancel`
     const authHeaders = { ...headers, Authorization: `Bearer ${body.cancellation_token}` }
     expect((await request.post(cancelURL, { headers: authHeaders })).status()).toBe(200)
-    expect((await request.post(cancelURL, { headers: authHeaders })).status()).not.toBe(200)
+    expect((await request.post(cancelURL, { headers: authHeaders })).status()).toBe(404)
   })
 })
 
@@ -213,12 +213,14 @@ for (const target of [
       await page.goto(`/dashboard/${target.slug}/products/${product.id}/order-url`)
       await page.getByLabel('Website address', { exact: true }).fill(externalUrl)
       await page.getByRole('button', { name: 'Save', exact: true }).click()
+      await expect(page).toHaveURL(new RegExp(`/products/${product.id}/photo$`))
       const field = target.kind === 'dish' ? 'tagline' : target.kind === 'experience' ? 'preparation' : 'care_instructions'
       const label = target.kind === 'dish' ? 'Short introduction' : target.kind === 'experience' ? 'Before you arrive' : 'Care instructions'
       const detail = target.kind === 'dish' ? 'Made to order' : target.kind === 'experience' ? 'Arrive ten minutes before your class' : 'Hand wash in cold water'
       await page.goto(`/dashboard/${target.slug}/products/${product.id}/attributes/${field}`)
       await page.getByRole('textbox', { name: label, exact: true }).fill(detail)
       await page.getByRole('button', { name: 'Save', exact: true }).click()
+      await expect(page).toHaveURL(new RegExp(`/products/${product.id}/attributes$`))
       const viaMcp = mcpData<{ product: { kind: string; details: Record<string, string> } }>(await (await mcpRequest(page.request, baseURL!, { method: 'tools/call', toolName: 'get_product', args: { organization_id: target.org, product_id: product.id } })).json()).product
       expect(viaMcp.kind).toBe(target.kind)
       expect(viaMcp.details[field]).toBe(detail)
@@ -249,6 +251,7 @@ for (const target of [
       await expect(availability).toHaveAttribute('aria-checked', 'true')
       await availability.click()
       await page.getByRole('button', { name: 'Save', exact: true }).click()
+      await expect(page).toHaveURL(new RegExp(`/products/${product.id}$`))
       const paused = mcpData<{ product: { active: boolean; publications: Array<{ organization_id: string; published: boolean }> } }>(await (await mcpRequest(page.request, baseURL!, { method: 'tools/call', toolName: 'get_product', args: { organization_id: target.org, product_id: product.id } })).json()).product
       expect(paused.active).toBe(false)
       expect(paused.publications).toContainEqual(expect.objectContaining({ organization_id: target.org, published: true }))

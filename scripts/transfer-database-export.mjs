@@ -378,7 +378,7 @@ export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = n
     let sourceFiles = files
     assert(ledger.length > 0, 'Source migration ledger is missing')
     let recognized = false
-    for (const directory of [MIGRATIONS_DIRECTORY, 'migrations-history/v9', 'migrations-history/v8', 'migrations-history/v7']) {
+    for (const directory of [MIGRATIONS_DIRECTORY, 'migrations-history/v10', 'migrations-history/v9', 'migrations-history/v8', 'migrations-history/v7']) {
       const candidates = readdirSync(resolve(directory)).filter(name => /^\d{4}_.+\.sql$/u.test(name)).sort()
       if (ledger.length > candidates.length || !ledger.every((name, index) => name === candidates[index])) continue
       const expected = new Database(':memory:')

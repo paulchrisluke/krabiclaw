@@ -1,7 +1,7 @@
 <template>
-  <section class="py-10 sm:py-14" aria-label="Choose your consultation">
+  <section id="consultations" class="py-10 sm:py-14 scroll-mt-32" :aria-label="t('booking.choose_consultation')">
     <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-      <UFormField label="Service" class="max-w-xl">
+      <UFormField :label="t('booking.service')" class="max-w-xl">
         <USelect v-model.nullable="selectedId" :items="items" value-key="id" label-key="title" :portal="false" :ui="{ content: 'z-50' }" class="w-full min-w-0" />
       </UFormField>
       <div v-if="selectedService" class="mt-8 flex items-start gap-5">
@@ -9,13 +9,13 @@
         <div class="max-w-3xl">
           <h2 class="blawby-display text-2xl text-default sm:text-3xl">{{ selectedService.title }}</h2>
           <p v-if="selectedService.description" class="mt-3 leading-7 text-muted">{{ selectedService.description }}</p>
-          <NuxtLink :to="localePath(selectedService.url)" class="mt-3 inline-block text-sm font-medium text-primary underline underline-offset-4">Full service details →</NuxtLink>
+          <NuxtLink :to="localePath(selectedService.url)" class="mt-3 inline-block text-sm font-medium text-primary underline underline-offset-4">{{ t('booking.service_details') }}</NuxtLink>
         </div>
       </div>
-      <p v-else role="status" class="mt-5 text-muted">No consultation services are currently published.</p>
-      <p v-if="selectedService && !selectedProduct" role="status" class="mt-6 text-muted">Online booking is unavailable for this service. <NuxtLink :to="localePath('/contact')" class="text-primary underline">Contact us to schedule.</NuxtLink></p>
+      <p v-else role="status" class="mt-5 text-muted">{{ t('booking.no_services') }}</p>
+      <p v-if="selectedService && !selectedProduct" role="status" class="mt-6 text-muted">{{ t('booking.service_unavailable') }} <NuxtLink :to="localePath('/contact')" class="text-primary underline">{{ t('booking.contact_schedule') }}</NuxtLink></p>
     </div>
-    <ProductDetailPage v-if="selectedProduct" :key="selectedProduct.id" compact :organization-id="organizationId" :organization-name="organizationName" vertical="service" :product="selectedProduct" :booking="selectedProduct.booking" :location="null" :currency="data!.currency" collection-name="Services" :presentation="presentation" :reviews="[]" :collection-siblings="[]" />
+    <ProductDetailPage v-if="selectedProduct" :key="selectedProduct.id" compact :organization-id="organizationId" :organization-name="organizationName" vertical="service" :product="selectedProduct" :booking="selectedProduct.booking" :location="null" :currency="data!.currency" :collection-name="t('blawby.footer.services')" :presentation="presentation" :reviews="[]" :collection-siblings="[]" />
   </section>
 </template>
 <script setup lang="ts">
@@ -27,7 +27,7 @@ import { requireProductPresentation } from '~/utils/product-presentation'
 const { data, organizationId, organizationName } = await useOnlineConsultationProducts()
 if (!data.value) throw createError({ statusCode: 500, statusMessage: 'Consultation services were not returned' })
 const event = useRequestEvent()
-const { locale, localePath } = useI18n()
+const { locale, localePath, t } = useI18n()
 const { data: services, error: servicesError } = await useAsyncData(`consultation-service-grid:${organizationId}:${locale.value}`, async () => {
   if (import.meta.server) {
     const { cloudflareEnv } = await import('~/server/utils/api-response')

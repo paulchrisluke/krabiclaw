@@ -155,9 +155,9 @@ export function useSessionBooking(input: MaybeRefOrGetter<SessionBookingContext>
             isRecord(value) && value.success === true && Array.isArray(value.sessions),
         },
       )
-      sessions.value = response.sessions.filter(session => !session.is_full)
+      sessions.value = response.sessions
     } catch (error) {
-      bookingError.value = getErrorMessage(error, t('saya.experience_detail.booking_failed'))
+      bookingError.value = getErrorMessage(error, t('booking.sessions_failed'))
     } finally {
       sessionsPending.value = false
     }
@@ -184,7 +184,7 @@ export function useSessionBooking(input: MaybeRefOrGetter<SessionBookingContext>
   const upcomingSessions = computed(() => {
     const now = Date.now()
     return sessions.value
-      .filter(session => Date.parse(session.starts_at) > now)
+      .filter(session => !session.is_full && Date.parse(session.starts_at) > now)
       .sort((left, right) => left.starts_at.localeCompare(right.starts_at))
       .slice(0, 4)
   })
