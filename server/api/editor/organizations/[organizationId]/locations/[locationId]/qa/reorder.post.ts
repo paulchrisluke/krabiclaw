@@ -1,5 +1,5 @@
 // POST /api/editor/organizations/[organizationId]/locations/[locationId]/qa/reorder
-import { jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
+import { jsonResponse } from '~/server/utils/api-response'
 import { reorderLocationQa } from '~/server/utils/mcp-workflows'
 import { requireLocationAccess } from '~/server/utils/location-access'
 
@@ -16,14 +16,8 @@ export default defineHandler(async (event) => {
   }
 
   const updates = (body as { updates?: Array<{ id: string; sort_order: number }> }).updates
-  try {
-    const result = await reorderLocationQa(db, organization.id, locationId, updates as Array<{ id: string; sort_order: number }>)
-    return jsonResponse(result)
-  } catch (error) {
-    rethrowHttpError(error)
-    const message = error instanceof Error ? error.message : 'Q&A reorder failed'
-    return jsonResponse({ error: message }, { status: message.includes('not found') ? 404 : 400 })
-  }
+  const result = await reorderLocationQa(db, organization.id, locationId, updates as Array<{ id: string; sort_order: number }>)
+  return jsonResponse(result)
 })
 import { defineHandler } from 'nitro';
 import { getRouterParam, readBody  } from 'nitro/h3';

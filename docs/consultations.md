@@ -51,9 +51,9 @@ No historical price/duration or operating hours are hard-coded.
 
 `organization.consultation_settings_json` stores the same public consultation
 object with one canonical `mode`: `external_url`, `native_disabled`, or `native`.
-Migration 0004 adds the column and backfills the complete legacy object without
-rebuilding the referenced organization parent or changing other settings. Reads
-fall back to legacy JSON only during rollout; writers use only the new column.
+Migration 0002 moves the complete consultation object into this column and
+removes its old settings_json key. Other settings and referenced organization
+rows are preserved. All runtime reads and writes use the new column.
 Native activation is an explicit operator setting, separate from publishing the
 configurable offerings. No production configuration is changed by this PR.
 
@@ -110,8 +110,9 @@ archival cleanup above; deletion would violate the existing history contract.
 
 Foundation deliberately returns `payment_required` for a required positive Price
 until #1169 supplies authenticated capture/hold conversion. It never fabricates
-payment success. No #1202 guest-operation tools, #1203 OAuth/projection, financial provider calls,
-production products, migrations, deployment or cutover activation are included.
+payment success. The combined PR includes #1202 booking MCP operations. Calendar provider
+OAuth/projection, financial provider calls, production catalog provisioning,
+deployment and production activation are separate operations.
 
 ## Owner visual review and provider direction
 
@@ -185,14 +186,13 @@ contracts rather than editing their worktrees or reserved migrations.
 
 ## Cleanup-stack integration
 
-Foundation is based on cleanup PR #1218 (`9ea1749988`), including the shared
-CMS, Session authority and minimal weekly schedule changes. The migration head
-is `0004_native_consultation_foundation.sql`, regenerated from that canonical
-base. Applied baseline, Products `0002` and weekly `0003` history is unchanged.
-The generated config rebuild is replaced by additive columns so D1 cannot
-cascade-delete Session history; the generated snapshot remains authoritative.
-Archived transfers apply the guarded weekly simplification once and then the
-remaining forward migrations before projecting the target schema.
+The foundation targets current staging's v8 schema. Applied migrations 0000 and
+0001 remain immutable; 0002 adds booking policy fields and moves consultation
+settings. The booking status constraint allows pending review bookings. Booking
+is unreferenced, so its generated rebuild passes the migration safety guard;
+config and organization columns expand in place to preserve their child rows.
+The seven existing weekly schedule columns remain. Archived database transfers
+apply the current forward migrations before projecting the target schema.
 
 HTTP and MCP call the same `setProductBookingConfig`, `replaceWeeklySchedule`,
 `updateTenantPage` and `setPublicConsultationMode` writers. Booking configuration
@@ -203,23 +203,20 @@ values; explicit null clears nullable fields, and capacity zero remains zero.
 accepts only weekday/start_time slots. Null uses the Product's configured online
 timezone. Existing Session facts and every Booking link survive replacement.
 
-`update_tenant_page.product_id` binds an existing source page to a same-tenant
+`update_site_page.product_id` binds an existing source page to a same-tenant
 Product, retains the binding when omitted and unbinds with null. Translations
 inherit the source binding. `set_consultation_mode` configures only the existing
 site mode through the CMS writer; MCP's normal mutation path awaits cache purge.
-These are configuration adapters, not the #1202 guest operations feature.
-Payments and Calendar must regenerate their unshipped migrations against this
-verified head before advancing. Provider assignment and commercial gating remain
-separate coordinated decisions. The cleanup release deployment hold still applies.
+Booking MCP operations share the public allocator, guest inbox transitions,
+notification receipts and change proposals. Creation requires a numeric price,
+uses durable caller idempotency and records operator provenance independently
+of guest identity. Guest acknowledgement is an explicit choice; owner alerts
+and audit history remain mandatory. Booking writes are annotated as open-world
+because they can email guests. Tool names and descriptions retain staging's
+submission corrections, including update_site_page and list_reservation_inquiries.
 
-This Foundation Worker reads the new `0004` columns and is not the cleanup
-code-first artifact for an old schema. Do not deploy it through the cleanup
-code-first exception. Qualify and coordinate the Foundation expansion/activation
-separately after the cleanup rollout's approved schema sequence. No deployment
-or remote DDL authorization is implied by this local integration.
-
-The final complete CodeRabbit review against cleanup head `9ea1749988`
-completed with one minor finding. Online Product detail preloads now filter
-full sessions consistently with physical Product detail preloads. Focused
-Worker/browser adapter checks and the remaining template journeys passed;
-no repeated partial review or full-suite loop was used.
+Calendar provider assignment and payment collection are separate integrations.
+This PR does not collect payments or assign team members. Required online payment
+for a positive price fails visibly before creating an unpaid booking. Keep the
+PR draft while reviewing the CMS; local checks do not authorize deployment or
+prove ChatGPT tool selection or OpenAI submission approval.

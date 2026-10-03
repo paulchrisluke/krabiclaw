@@ -1,20 +1,9 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 import { openTenantPage, waitForNuxtHydration } from './helpers'
 import { testBaseUrl } from './test-env'
 
-async function captureCompletePricing(page: Page, path: string) {
-  // Load below-the-fold CMS art through ordinary scrolling before evidence capture.
-  for (const section of await page.locator('[data-tenant-page] > section').all()) {
-    await section.scrollIntoViewIfNeeded()
-  }
-  const closingArt = page.locator('.kc-pricing-cta > img')
-  if (await closingArt.count()) await closingArt.evaluate(image => (image as HTMLImageElement).decode())
-  await page.evaluate(() => window.scrollTo(0, 0))
-  await page.screenshot({ path, fullPage: true })
-}
-
 // Real page + canonical billing endpoint. No routes replace billing or CMS data.
-test('pricing desktop exposes provider details after one reveal and does not replay', async ({ page }, testInfo) => {
+test('pricing desktop exposes provider details after one reveal and does not replay', async ({ page }) => {
   const response = await openTenantPage(page, `${testBaseUrl()}/pricing`, {})
   expect(response?.status()).toBe(200)
   await waitForNuxtHydration(page)
@@ -62,13 +51,12 @@ test('pricing desktop exposes provider details after one reveal and does not rep
   const target = new URL((await paidAction.getAttribute('href'))!, testBaseUrl())
   expect(target.searchParams.get('plan')).toBe('growth')
   expect(target.searchParams.get('redirect')).toBe('/api/post-login?plan=growth')
-  await captureCompletePricing(page, testInfo.outputPath('pricing-desktop.png'))
   await page.setViewportSize({ width: 1000, height: 800 })
   await page.evaluate(() => window.scrollTo(0, 100))
   await expect(page.locator('[data-photo-state="flipping"]')).toHaveCount(0)
 })
 
-test('pricing mobile peeks the next card, contains overflow, and respects reduced motion', async ({ page }, testInfo) => {
+test('pricing mobile peeks the next card, contains overflow, and respects reduced motion', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.emulateMedia({ reducedMotion: 'reduce' })
   const response = await openTenantPage(page, `${testBaseUrl()}/pricing`, {})
@@ -82,12 +70,11 @@ test('pricing mobile peeks the next card, contains overflow, and respects reduce
   expect(geometry.scrollWidth).toBeGreaterThan(geometry.width)
   expect(geometry.secondLeft).toBeLessThan(geometry.viewport)
   expect(geometry.pageWidth).toBeLessThanOrEqual(geometry.viewport + 1)
-  await captureCompletePricing(page, testInfo.outputPath('pricing-mobile-reduced-motion.png'))
   await cards.nth(1).scrollIntoViewIfNeeded()
   await expect(cards.nth(1).getByRole('link')).toBeVisible()
 })
 
-test('pricing keyboard focus exposes the action immediately', async ({ page }, testInfo) => {
+test('pricing keyboard focus exposes the action immediately', async ({ page }) => {
   const response = await openTenantPage(page, `${testBaseUrl()}/pricing`, {})
   expect(response?.status()).toBe(200)
   await waitForNuxtHydration(page)
@@ -97,10 +84,9 @@ test('pricing keyboard focus exposes the action immediately', async ({ page }, t
   await expect(action).toBeFocused()
   await expect(card).toHaveAttribute('data-photo-state', 'details')
   await expect(action).toBeVisible()
-  await page.screenshot({ path: testInfo.outputPath('pricing-keyboard.png'), fullPage: true })
 })
 
-test('pricing remains readable with JavaScript disabled', async ({ browser }, testInfo) => {
+test('pricing remains readable with JavaScript disabled', async ({ browser }) => {
   const context = await browser.newContext({ javaScriptEnabled: false })
   const page = await context.newPage()
   try {
@@ -111,7 +97,6 @@ test('pricing remains readable with JavaScript disabled', async ({ browser }, te
     await expect(cards.first().getByRole('heading')).toBeVisible()
     await expect(cards.first().getByRole('link')).toBeVisible()
     await expect(page.locator('[data-price-unavailable]')).toHaveCount(0)
-    await page.screenshot({ path: testInfo.outputPath('pricing-no-javascript.png'), fullPage: true })
   } finally {
     await context.close()
   }

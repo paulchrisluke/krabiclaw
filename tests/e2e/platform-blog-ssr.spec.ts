@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { loginAs } from './helpers/auth'
+import { waitForNuxtHydration } from './helpers'
 
 test('platform blog renders its public API posts in server HTML', async ({ request }) => {
   const api = await request.get('/api/public/blog')
@@ -79,7 +80,6 @@ function expectPageIdentity(nodes: Array<Record<string, unknown>>, url: string, 
 }
 
 test('docs collection, categories and articles publish connected canonical JSON-LD', async ({ request, baseURL }) => {
-  test.setTimeout(120_000)
   const response = await request.get('/api/public/blog?collection=docs')
   expect(response.status()).toBe(200)
   const { posts } = await response.json() as { posts: Array<{ slug: string; title: string; category: { slug: string; name: string } | null }> }
@@ -145,6 +145,7 @@ test('mobile docs retain full navigation and one accessible prompt copy action',
   await context.grantPermissions(['clipboard-read', 'clipboard-write'])
   await page.goto('/docs/make-your-first-site-edit')
   await expect(page.locator('article h1')).toHaveText('Make your first site edit')
+  await waitForNuxtHydration(page)
   const sections = page.getByRole('button', { name: 'On this page', exact: true })
   await sections.press('Enter')
   await expect(sections).toHaveAttribute('aria-expanded', 'true')
@@ -171,7 +172,7 @@ test('mobile docs retain full navigation and one accessible prompt copy action',
 })
 
 
-test('docs reading header exposes one mobile search shortcut without a second content search bar', async ({ page }, testInfo) => {
+test('docs reading header exposes one mobile search shortcut without a second content search bar', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/docs')
   await expect(page.locator('h1')).toHaveText('Docs')
@@ -179,28 +180,22 @@ test('docs reading header exposes one mobile search shortcut without a second co
   expect(inventory.status()).toBe(200)
   const { posts } = await inventory.json() as { posts: Array<{ category: { id: string } | null }> }
   await expect(page.locator('.docs-task')).toHaveCount(posts.filter((post, index) => index > 0 && post.category !== null).length)
-  await page.screenshot({ path: testInfo.outputPath('docs-index-desktop.png') })
   await page.setViewportSize({ width: 390, height: 844 })
   const search = page.locator('header').getByRole('button', { name: 'Search docs, blog, help...' }).filter({ visible: true })
   await expect(search).toHaveCount(1)
   await expect(page.locator('main').getByRole('button', { name: /Search/ })).toHaveCount(0)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-  await page.screenshot({ path: testInfo.outputPath('docs-index-mobile.png') })
   await search.press('Enter')
   await expect(page.getByRole('dialog')).toBeVisible()
-  await page.screenshot({ path: testInfo.outputPath('docs-search-mobile.png') })
   await page.getByRole('dialog').press('Escape')
   await expect(page.getByRole('dialog')).toHaveCount(0)
   await page.goto('/docs/category/getting-started')
-  await page.screenshot({ path: testInfo.outputPath('docs-category-mobile.png') })
   await page.goto('/docs/make-your-first-site-edit')
-  await page.screenshot({ path: testInfo.outputPath('docs-article-mobile.png') })
   await page.setViewportSize({ width: 1440, height: 900 })
-  await page.screenshot({ path: testInfo.outputPath('docs-article-desktop.png') })
 })
 
 
-test('docs category landings explain published tasks and preserve canonical guide identities', async ({ page, request, baseURL }, testInfo) => {
+test('docs category landings explain published tasks and preserve canonical guide identities', async ({ page, request, baseURL }) => {
   const response = await request.get('/api/public/blog?collection=docs')
   const { posts, categories } = await response.json() as { posts: Array<{ slug: string; title: string; excerpt: string | null; category: { slug: string } }>; categories: Array<{ slug: string; name: string }> }
   await page.setViewportSize({ width: 1440, height: 900 })
@@ -250,11 +245,9 @@ test('docs category landings explain published tasks and preserve canonical guid
       await expect.poll(() => image.evaluate(element => (element as HTMLImageElement).complete && (element as HTMLImageElement).naturalWidth > 0)).toBe(true)
     }
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-    await page.screenshot({ path: testInfo.outputPath(`category-${category.slug}-desktop.png`), fullPage: true })
     await page.setViewportSize({ width: 390, height: 844 })
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     await expect(feature).toBeVisible()
-    await page.screenshot({ path: testInfo.outputPath(`category-${category.slug}-mobile.png`), fullPage: true })
     await page.setViewportSize({ width: 1440, height: 900 })
   }
   // Exercise Nuxt client navigation, rather than proving only independent SSR loads.
@@ -283,6 +276,8 @@ for (const signedIn of [false, true]) {
       await page.setViewportSize({ width, height: 900 })
       for (const path of ['/docs', '/blog']) {
         await page.goto(path)
+        // A click on the server-rendered toggle before hydration does nothing.
+        await waitForNuxtHydration(page)
         const header = page.locator('header').first()
         const toggle = header.getByRole('button', { name: 'Open menu', exact: true })
         await expect(toggle).toBeVisible()

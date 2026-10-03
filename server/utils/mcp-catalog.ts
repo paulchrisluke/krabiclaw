@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 
 export interface McpCatalogToolSnapshot {
   name: string
+  description: string
   inputSchema: Record<string, unknown>
   outputSchema?: Record<string, unknown>
 }
@@ -31,6 +32,7 @@ export function canonicalCatalogSnapshot(tools: McpCatalogToolSnapshot[]) {
   return tools
     .map(tool => ({
       name: tool.name,
+      description: tool.description,
       inputSchema: sortValue(tool.inputSchema) as Record<string, unknown>,
       outputSchema: sortValue(tool.outputSchema ?? {}) as Record<string, unknown>,
     }))

@@ -7,7 +7,8 @@ import type {
   GuestThreadListItemViewModel,
 } from '../../server/domain/guest-threads/types'
 import { loginAs } from './helpers/auth'
-import { E2E_POTTERY_ORGANIZATION_ID, devLoginHeaders, potteryHouseTestExtraHeaders, tenantTestExtraHeaders, testBaseUrl } from './test-env'
+import { acquireTenantMutationLock } from './helpers/tenant-mutation-lock'
+import { E2E_DEMO_ORGANIZATION_ID, E2E_POTTERY_ORGANIZATION_ID, devLoginHeaders, potteryHouseTestExtraHeaders, tenantTestExtraHeaders, testBaseUrl } from './test-env'
 
 interface NotificationView {
   id: string
@@ -115,14 +116,22 @@ function setLocationSlot(request: APIRequestContext, slot: LocationSlot) {
 // cleanup puts back what the tenant had rather than clearing the field. Null is a
 // value here: it means the location had none, which is not the same as "leave it".
 let priorSpecialHours: { value: unknown } | null = null
+// loc-demo's hours and reservation capacity are shared with the calendar and MCP specs.
+let releaseDemoLock: (() => Promise<void>) | null = null
 
 test.afterEach(async ({ page }) => {
-  if (!priorSpecialHours) return
-  const previous = priorSpecialHours.value
-  priorSpecialHours = null
-  // A cleanup that quietly 4xxs would leave loc-demo open at an hour it does not serve,
-  // and PATCH resolves on any status, so the status is asserted rather than assumed.
-  await expectStatus(await restoreSpecialHours(page.request, previous), 200)
+  const release = releaseDemoLock
+  releaseDemoLock = null
+  try {
+    if (!priorSpecialHours) return
+    const previous = priorSpecialHours.value
+    priorSpecialHours = null
+    // A cleanup that quietly 4xxs would leave loc-demo open at an hour it does not serve,
+    // and PATCH resolves on any status, so the status is asserted rather than assumed.
+    await expectStatus(await restoreSpecialHours(page.request, previous), 200)
+  } finally {
+    await release?.()
+  }
 })
 
 // The list has no search of its own any more (search is the dashboard's one
@@ -161,7 +170,6 @@ function contactNotification(state: NotificationList, guestName: string) {
 
 test('guest thread state stays source-owned, per-user, tenant-isolated, and idempotent', async ({ playwright }) => {
   test.skip(!writable, 'Guest-thread writes require disposable local or preview data')
-  test.setTimeout(120_000)
 
   const owner = await playwright.request.newContext({ baseURL })
   const secondOwner = await playwright.request.newContext({ baseURL })
@@ -336,7 +344,6 @@ async function submitContact(request: APIRequestContext, guestName: string) {
 
 test('archive and Move to messages file a conversation without reordering the inbox', async ({ playwright }) => {
   test.skip(!writable, 'Guest-thread writes require disposable local or preview data')
-  test.setTimeout(120_000)
 
   const owner = await playwright.request.newContext({ baseURL })
   const foreignOwner = await playwright.request.newContext({ baseURL })
@@ -425,7 +432,6 @@ for (const viewport of [
 ]) {
   test(`the row menu archives a conversation and moves it back (${viewport.name})`, async ({ page }) => {
     test.skip(!writable, 'Guest-thread writes require disposable local or preview data')
-    test.setTimeout(120_000)
     await page.setViewportSize({ width: viewport.width, height: viewport.height })
     await loginAs(page.request, baseURL, ownerId)
     const guestName = `Mailbox row ${viewport.name} ${Date.now()}`
@@ -502,9 +508,9 @@ for (const viewport of [
   })
 }
 
-test('Today uses the CMS patterns and sends one reservation change request', async ({ page }) => {
+test('Today uses the CMS patterns and sends one reservation change request', async ({ page }, testInfo) => {
   test.skip(!writable, 'Today writes require disposable local or preview data')
-  test.setTimeout(180_000)
+  releaseDemoLock = await acquireTenantMutationLock(testInfo, E2E_DEMO_ORGANIZATION_ID)
   await loginAs(page.request, baseURL)
 
   const now = Date.now()

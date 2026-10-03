@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { credentialSession } from './utils/e2e-auth.mjs'
+import { mcpRequest } from './utils/mcp-request.mjs'
 
 const _baseUrlArg = process.argv.includes('--base-url')
   ? process.argv[process.argv.indexOf('--base-url') + 1]
@@ -11,7 +12,6 @@ if (_baseUrlArg !== undefined && !_baseUrlArg) {
 }
 const BASE_URL = (_baseUrlArg ?? process.env.MCP_BASE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
 
-const MCP_URL = `${BASE_URL}/api/mcp`
 const MCP_VERSION = process.env.MCP_PROTOCOL_VERSION ?? '2025-06-18'
 
 let failed = false
@@ -30,40 +30,8 @@ function skip(message) {
   console.log(`skip  ${message}`)
 }
 
-async function request(method, params = {}, authHeaders = {}, options = {}) {
-  const payload = {
-    jsonrpc: '2.0',
-    method,
-    params,
-    _meta: {
-      'io.modelcontextprotocol/version': MCP_VERSION,
-      'io.modelcontextprotocol/method': method,
-      ...(method === 'tools/call' && params.name ? { 'io.modelcontextprotocol/name': String(params.name) } : {}),
-    },
-  }
-  if (!options.omitId) {
-    payload.id = `${method}-${Date.now()}`
-  }
-
-  const res = await fetch(MCP_URL, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'mcp-protocol-version': MCP_VERSION,
-      'mcp-method': method,
-      ...(method === 'tools/call' && params.name ? { 'mcp-name': String(params.name) } : {}),
-      ...authHeaders,
-    },
-    body: JSON.stringify(payload),
-  })
-  const text = await res.text()
-  let body
-  try {
-    body = text ? JSON.parse(text) : null
-  } catch {
-    body = text
-  }
-  return { res, body }
+function request(method, params = {}, authHeaders = {}, options = {}) {
+  return mcpRequest(BASE_URL, method, params, authHeaders, options)
 }
 
 async function authHeaders() {
@@ -207,9 +175,9 @@ async function main() {
     fail('list_organizations missing structuredContent.organizations', welcome.body)
   }
 
-  const malformedCall = await request('tools/call', { name: 'upload_user_media', arguments: null }, headers)
+  const malformedCall = await request('tools/call', { name: 'save_media_attachment', arguments: null }, headers)
   expectStatus('malformed tools/call arguments return JSON-RPC envelope', malformedCall.res.status, 200)
-  if (malformedCall.body?.error?.code === -32602 && String(malformedCall.body?.error?.message ?? '').includes('arguments must be an object')) {
+  if (malformedCall.body?.error?.code === -32602 && String(malformedCall.body?.error?.message ?? '').includes('"arguments"')) {
     pass('malformed tools/call arguments are non-terminating JSON-RPC invalidParams')
   } else {
     fail('malformed tools/call arguments did not return JSON-RPC invalidParams', malformedCall.body)

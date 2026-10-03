@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { credentialSession } from './utils/e2e-auth.mjs'
+import { mcpToolCall } from './utils/mcp-request.mjs'
 
 const BASE_URL = (process.argv.includes('--base-url')
   ? process.argv[process.argv.indexOf('--base-url') + 1]
@@ -11,7 +12,6 @@ const ORGANIZATION_ID = process.argv.includes('--organization-id')
 const USER_ID = process.argv.includes('--user-id')
   ? process.argv[process.argv.indexOf('--user-id') + 1]
   : process.env.MCP_USER_ID
-const MCP_VERSION = process.env.MCP_PROTOCOL_VERSION ?? '2025-06-18'
 
 const isLocal = (() => { try { const h = new URL(BASE_URL).hostname; return h === 'localhost' || h === '127.0.0.1'; } catch { return false; } })()
 let failed = false
@@ -34,39 +34,11 @@ async function getAuthHeaders() {
   if (!isLocal && process.env.MCP_CREDENTIAL_LOGIN !== '1') {
     throw new Error('Set MCP_BEARER_TOKEN for remote checks, or MCP_CREDENTIAL_LOGIN=1 for a credentialed tunnel.')
   }
-  return credentialSession(BASE_URL, { userId: USER_ID || 'user-e2e-mcp-owner-a' })
+  return credentialSession(BASE_URL, { userId: USER_ID || 'user-e2e-demo-owner' })
 }
 
-async function mcp(headers, name, args = {}) {
-  const res = await fetch(`${BASE_URL}/api/mcp`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'mcp-protocol-version': MCP_VERSION,
-      'mcp-method': 'tools/call',
-      'mcp-name': name,
-      ...headers,
-    },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: `${name}-${Date.now()}`,
-      method: 'tools/call',
-      params: { name, arguments: args },
-      _meta: {
-        'io.modelcontextprotocol/version': MCP_VERSION,
-        'io.modelcontextprotocol/method': 'tools/call',
-        'io.modelcontextprotocol/name': name,
-      },
-    }),
-  })
-  const text = await res.text()
-  let body
-  try {
-    body = JSON.parse(text)
-  } catch {
-    body = text
-  }
-  return { status: res.status, body }
+function mcp(headers, name, args = {}) {
+  return mcpToolCall(BASE_URL, headers, name, args)
 }
 
 function resultData(body) {
@@ -121,24 +93,24 @@ async function main() {
   expectValue('get_workspace_context marks one active organization', Array.isArray(workspaceData?.organizations) && workspaceData.organizations.filter(entry => entry?.active === true).length === 1 && workspaceData.organizations.find(entry => entry?.active === true)?.id === organizationId, workspaceData)
 
   const draftTitle = `MCP edit check ${Date.now()}`
-  const pageList = await mcp(headers, 'list_tenant_pages', { locale: 'en' })
-  expectStatus('list_tenant_pages succeeds', pageList)
+  const pageList = await mcp(headers, 'list_site_pages', { locale: 'en' })
+  expectStatus('list_site_pages succeeds', pageList)
   const homeVariant = resultData(pageList.body)?.pages?.find(page => page?.path === '/')
   if (!homeVariant?.id) {
-    fail('list_tenant_pages did not return the home variant', pageList.body)
+    fail('list_site_pages did not return the home variant', pageList.body)
     process.exit(1)
   }
-  const contentBefore = await mcp(headers, 'get_tenant_page', { variant_id: homeVariant.id })
-  expectStatus('get_tenant_page succeeds before update', contentBefore)
+  const contentBefore = await mcp(headers, 'get_site_page', { variant_id: homeVariant.id })
+  expectStatus('get_site_page succeeds before update', contentBefore)
   const pageBefore = resultData(contentBefore.body)?.page
   const blocks = pageBefore?.blocks
   if (!Array.isArray(blocks)) {
-    fail('get_tenant_page did not return canonical blocks', contentBefore.body)
+    fail('get_site_page did not return canonical blocks', contentBefore.body)
     process.exit(1)
   }
-  // update_tenant_page replaces the document, so state the path, title, position
+  // update_site_page replaces the document, so state the path, title, position
   // and identity that were just read rather than leaving them to be filled in.
-  const save = await mcp(headers, 'update_tenant_page', {
+  const save = await mcp(headers, 'update_site_page', {
     variant_id: homeVariant.id,
     expected_updated_at: pageBefore.document.updated_at,
     path: pageBefore.path,
@@ -156,12 +128,12 @@ async function main() {
       media: block.media ?? [],
     })),
   })
-  expectStatus('update_tenant_page succeeds', save)
+  expectStatus('update_site_page succeeds', save)
   const saveData = resultData(save.body)
-  expectValue('update_tenant_page preserves the home variant', saveData?.page?.id === homeVariant.id, saveData)
+  expectValue('update_site_page preserves the home variant', saveData?.page?.id === homeVariant.id, saveData)
 
-  const content = await mcp(headers, 'get_tenant_page', { variant_id: homeVariant.id })
-  expectStatus('get_tenant_page succeeds', content)
+  const content = await mcp(headers, 'get_site_page', { variant_id: homeVariant.id })
+  expectStatus('get_site_page succeeds', content)
   const hero = resultData(content.body)?.page?.blocks?.find(block => block?.type === 'hero')
   if (hero?.data?.title === draftTitle) pass('canonical content includes updated hero title')
   else fail('canonical content did not include updated hero title', hero)

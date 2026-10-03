@@ -75,7 +75,7 @@ test('a v7 export transfers into the current baseline, its connections into orga
   }
 })
 
-test('consultation settings backfill preserves the full legacy object and referenced organization', () => {
+test('consultation settings move preserves every value with one canonical source and referenced organization', () => {
   const db = new Database(':memory:')
   db.pragma('foreign_keys = ON')
   try {
@@ -85,7 +85,7 @@ test('consultation settings backfill preserves the full legacy object and refere
     db.prepare('INSERT INTO organization (id,name,slug,createdAt,settings_json) VALUES (?,?,?,?,?)').run('consultation-migration', 'Example', 'consultation-migration', 1, JSON.stringify(settings))
     db.exec(readFileSync('migrations/0002_native_consultation_foundation.sql', 'utf8'))
     const row = db.prepare('SELECT settings_json,consultation_settings_json FROM organization WHERE id = ?').get('consultation-migration') as { settings_json: string; consultation_settings_json: string }
-    assert.deepEqual(JSON.parse(row.settings_json), settings)
+    assert.deepEqual(JSON.parse(row.settings_json), { config: settings.config })
     assert.deepEqual(JSON.parse(row.consultation_settings_json), settings.consultation)
     db.prepare('UPDATE organization SET consultation_settings_json = json_set(consultation_settings_json, \'$.mode\', \'native\') WHERE id = ?').run('consultation-migration')
     assert.deepEqual(db.pragma('foreign_key_check'), [])

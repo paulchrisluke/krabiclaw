@@ -1,6 +1,5 @@
 import { expect, test } from '@playwright/test'
 import { createHmac } from 'node:crypto'
-import { writeFile } from 'node:fs/promises'
 import type { ProductBookingConfig } from '../../server/types/products'
 import { loginAs } from './helpers/auth'
 import { mcpData, mcpRequest } from './helpers/mcp'
@@ -10,7 +9,6 @@ import { devLoginHeaders, E2E_POTTERY_ORGANIZATION_ID as org, potteryHouseTestEx
 type Created = { success: boolean; operational_booking_id: string; request_id: string; status: string; replayed: boolean; code?: string }
 
 test('MCP Product booking uses public capacity, durable replay, guest identity and canonical inbox transitions', async ({ page, request, baseURL }, testInfo) => {
-  test.setTimeout(180_000)
   test.skip(!['localhost', '127.0.0.1'].includes(new URL(baseURL!).hostname), 'Writes and log-only delivery require isolated local D1')
   const release = await acquireTenantMutationLock(testInfo, org)
   try {
@@ -94,12 +92,9 @@ test('MCP Product booking uses public capacity, durable replay, guest identity a
       const dashboard = await request.get(`${baseURL}/api/dashboard/bookings/booking/${created.request_id}?org=${encodeURIComponent(orgSlug)}`)
       expect(dashboard.status(), await dashboard.text()).toBe(200)
       expect((await dashboard.json()).booking).toMatchObject({ id: created.request_id, status: 'pending', threadId: created.request_id })
-      await testInfo.attach('created-mcp-booking', { body: JSON.stringify({ created, stored, listed: listedBooking }, null, 2), contentType: 'application/json' })
-      await writeFile(testInfo.outputPath('created-mcp-booking.json'), JSON.stringify({ created, stored, listed: listedBooking }, null, 2) + '\n')
       await loginAs(page.request, baseURL!, 'user-e2e-pottery-owner')
       await page.goto(`${baseURL}/dashboard/${encodeURIComponent(orgSlug)}/bookings/booking/${created.request_id}`)
       await expect(page.getByText('MCP Guest', { exact: true }).first()).toBeVisible()
-      await page.screenshot({ path: testInfo.outputPath('pending-mcp-booking.png'), fullPage: true })
       const notifications = await request.get(`${baseURL}/api/dev/notifications?organization_id=${org}&since=${encodeURIComponent(since)}`, { headers: devLoginHeaders() })
       expect(notifications.status()).toBe(200)
       const state = await notifications.json()

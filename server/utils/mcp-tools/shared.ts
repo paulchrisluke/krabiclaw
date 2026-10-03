@@ -227,7 +227,7 @@ const mediaPlacementObject = {
 
 /**
  * A block's media as a writer sends it. The same object a read returns, so a
- * block read from get_blog_post or get_tenant_page can be sent back verbatim:
+ * block read from get_blog_post or get_site_page can be sent back verbatim:
  * only asset_id and slot are taken, the delivery fields are ignored. The input
  * used to accept the two fields alone, and a block echoed with its public_url
  * was refused as an unknown argument — which is how images went missing.
@@ -831,31 +831,17 @@ export function globalTool(definition: RawMcpToolDefinition | McpToolDefinition)
 
 export type RawMcpToolDefinition = Omit<McpToolDefinition, 'annotations' | 'securitySchemes'>
 
-// The explicit catalog table below is authoritative. These defaults are only
-// constructors for definitions whose reviewed table entry has the same shape.
-export const READ_ONLY_DEFAULT: McpToolAnnotations = Object.freeze({
+// The explicit catalog table below is authoritative. Website/CMS operations
+// stay within the selected workspace even when its content is publicly visible.
+// Publishing to a social audience and downloading host files cross that boundary.
+const R: McpToolAnnotations = Object.freeze({
   readOnlyHint: true,
   idempotentHint: true,
   openWorldHint: false,
   destructiveHint: false,
 })
-
-export function openWorldWriteAnnotations(): McpToolAnnotations {
-  return { readOnlyHint: false, openWorldHint: true, destructiveHint: false }
-}
-
-export function boundedDestructiveAnnotations(): McpToolAnnotations {
-  return { readOnlyHint: false, openWorldHint: false, destructiveHint: true }
-}
-
-export function openWorldDestructiveAnnotations(): McpToolAnnotations {
-  return { readOnlyHint: false, openWorldHint: true, destructiveHint: true }
-}
-
-const R = READ_ONLY_DEFAULT
-const W = Object.freeze(openWorldWriteAnnotations())
-const BD = Object.freeze(boundedDestructiveAnnotations())
-const D = Object.freeze(openWorldDestructiveAnnotations())
+const W: McpToolAnnotations = Object.freeze({ readOnlyHint: false, openWorldHint: false, destructiveHint: false })
+const D: McpToolAnnotations = Object.freeze({ readOnlyHint: false, openWorldHint: false, destructiveHint: true })
 
 /** Submission-review contract. Every real public tool is listed explicitly. */
 export const EXPECTED_TOOL_ANNOTATIONS = {
@@ -866,42 +852,43 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   set_product_booking_config: D,
   delete_product_booking_config: D,
   replace_product_weekly_schedule: D,
-  create_product_booking: { ...W, idempotentHint: true },
+  create_product_booking: { ...W, openWorldHint: true, idempotentHint: true },
   get_product_booking: R,
   list_product_bookings: R,
   list_product_booking_sessions: R,
-  confirm_product_booking: { ...W, idempotentHint: true },
-  reject_product_booking: { ...D, idempotentHint: true },
-  cancel_product_booking: { ...D, idempotentHint: true },
-  request_product_booking_change: { ...W, idempotentHint: true },
-  cancel_table_reservation: { ...D, idempotentHint: true },
-  request_table_reservation_change: { ...W, idempotentHint: true },
+  confirm_product_booking: { ...W, openWorldHint: true, idempotentHint: true },
+  reject_product_booking: { ...D, openWorldHint: true, idempotentHint: true },
+  cancel_product_booking: { ...D, openWorldHint: true, idempotentHint: true },
+  request_product_booking_change: { ...W, openWorldHint: true, idempotentHint: true },
+  cancel_table_reservation: { ...D, openWorldHint: true, idempotentHint: true },
+  request_table_reservation_change: { ...W, openWorldHint: true, idempotentHint: true },
   append_content_block: W,
   attach_media: W,
   batch_create_products: W,
   create_blog_post: W,
   create_post: W,
   create_product: W,
-  create_tenant_page: W,
+  create_site_page: W,
   delete_blog_post: D,
   delete_content_block: D,
-  delete_media_asset: D,
+  // Deletes the stored file from the Cloudflare media account.
+  delete_media_asset: { ...D, openWorldHint: true },
   delete_post: D,
   delete_product: D,
   delete_resource_localization: D,
   get_blog_post: R,
-  get_contact_inquiries: R,
+  list_contact_inquiries: R,
   get_location: R,
   get_post: R,
   get_product: R,
-  get_reservation_inquiries: R,
+  list_reservation_inquiries: R,
   get_resource_localization: R,
   get_organization: R,
   get_organization_analytics: R,
   query_organization_analytics: R,
   get_organization_media_assets: R,
   get_organization_settings: R,
-  get_tenant_page: R,
+  get_site_page: R,
   get_workspace_context: R,
   list_blog_posts: R,
   list_location_products: R,
@@ -911,28 +898,25 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   list_posts: R,
   get_social_connections: R,
   // Reads Meta, and records what the read proves about one publication.
-  reconcile_post_publication: W,
+  reconcile_post_publication: { ...D, openWorldHint: true },
   list_channel_posts: { ...R, openWorldHint: true },
   get_channel_post: { ...R, openWorldHint: true },
-  delete_channel_post: D,
+  delete_channel_post: { ...D, openWorldHint: true },
   list_organization_locales: R,
   list_organization_qa: R,
   list_organization_reviews: R,
   list_organizations: R,
-  list_tenant_pages: R,
+  list_site_pages: R,
   publish_blog_post: D,
-  publish_post: D,
+  publish_post: { ...D, openWorldHint: true },
   put_resource_localization: D,
   remove_media: D,
   reorder_media: D,
   replace_content_block: D,
-  save_generated_image: W,
-  save_generated_image_file: W,
   set_brand_color: D,
-  set_default_currency: D,
   set_consultation_mode: D,
   set_media: D,
-  set_workspace_context: BD,
+  set_workspace_context: D,
   reconcile_products: D,
   update_blog_post: D,
   update_location: D,
@@ -943,9 +927,9 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   update_post: D,
   update_product: D,
   update_organization_settings: D,
-  update_tenant_page: D,
-  delete_tenant_page: D,
-  upload_user_media: W,
+  update_site_page: D,
+  delete_site_page: D,
+  save_media_attachment: { ...W, openWorldHint: true },
   list_products: R,
   set_product_publication: D,
   set_product_location: D,

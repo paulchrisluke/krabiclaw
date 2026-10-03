@@ -113,7 +113,7 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         page_info: mcpPageInfo(window, page.length, assets.length > window.limit, resource),
       };
     }
-    case "upload_user_media": {
+    case "save_media_attachment": {
       const description = optionalString(args, "description") ?? null;
       const category = optionalString(args, "category") ?? null;
       const fileReferenceValue = args.file;

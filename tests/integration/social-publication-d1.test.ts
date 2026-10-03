@@ -16,6 +16,7 @@ import { remainingMetaSubjectData } from '../../server/utils/integration-release
 import { deleteIntegration, listIntegrations, readIntegration, storeIntegration } from '../../server/utils/organization-integrations.ts'
 import { MetaGraphError, verifyMetaSignedRequest, configuredMetaApps } from '../../server/utils/meta-graph.ts'
 import { attachMediaPlacement } from '../../server/utils/media-placement.ts'
+import { listLinkedFacebookPages, facebookPageToken } from '../../server/utils/facebook-pages.ts'
 import deauthorizeCallback from '../../server/api/integrations/meta/deauthorize.post.ts'
 import deleteCallback from '../../server/api/integrations/meta/data-deletion.post.ts'
 import deletionStatus from '../../server/api/integrations/meta/data-deletion.get.ts'
@@ -46,6 +47,7 @@ class FakeMeta {
   igMedia = new Map<string, { container: string }>()
   pagePosts: Array<Record<string, unknown>> = []
   igFeed: Array<Record<string, unknown>> = []
+  assignedPageResponses = new Map<string, unknown>([['', { data: [{ id: PAGE, name: 'Krabi Claw', access_token: 'page-token' }] }]])
 
   fault(kind: Fault['kind'], match: Fault['match'], times = 1) { this.faults.push({ kind, match, times }) }
   sent(predicate: (request: SeenRequest) => boolean) { return this.requests.filter(predicate) }
@@ -72,7 +74,11 @@ class FakeMeta {
   }
 
   facebook(method: string, path: string, query: URLSearchParams, body: Record<string, string>): Response {
-    if (path === 'me/accounts') return json({ data: [{ id: PAGE, name: 'Krabi Claw', access_token: 'page-token' }] })
+    if (path === 'me/assigned_pages') {
+      const cursor = query.get('after') ?? ''
+      if (!this.assignedPageResponses.has(cursor)) throw new Error(`Unexpected assigned Pages cursor ${cursor}`)
+      return json(this.assignedPageResponses.get(cursor))
+    }
     if (method === 'POST' && path === `${PAGE}/photos`) { const id = this.id('photo-'); this.fbPhotos.set(id, body.url!); return json({ id }) }
     if (method === 'POST' && path === `${PAGE}/feed`) {
       const attached: string[] = Object.keys(body).filter(key => key.startsWith('attached_media')).sort().map(key => JSON.parse(body[key]!).media_fbid)
@@ -514,6 +520,42 @@ test('channel inventory and deletion stay separate from authored website content
   }
 })
 
+
+test('configured Facebook system user reads every assigned Page and rejects incomplete provider data', async () => {
+  const { runtime, env, meta, restore } = await setUp()
+  try {
+    const first = { id: OTHER_PAGE, name: 'Another Page', access_token: 'another-token' }
+    const second = { id: PAGE, name: 'Krabi Claw', access_token: 'page-token' }
+    meta.assignedPageResponses.set('', { data: [first], paging: { next: 'https://graph.facebook.com/next', cursors: { after: 'second' } } })
+    meta.assignedPageResponses.set('second', { data: [second] })
+    assert.deepEqual(await listLinkedFacebookPages(env, 'fb-account'), [first, second])
+    assert.equal(await facebookPageToken(env, { account_id: 'fb-account', target_id: PAGE, target_name: 'Krabi Claw' }), 'page-token')
+    const requests = meta.sent(request => request.path.endsWith('/assigned_pages'))
+    assert.deepEqual(requests.map(request => [request.method, request.path, request.query.get('after')]), [
+      ['GET', '/v25.0/me/assigned_pages', null], ['GET', '/v25.0/me/assigned_pages', 'second'],
+      ['GET', '/v25.0/me/assigned_pages', null], ['GET', '/v25.0/me/assigned_pages', 'second'],
+    ])
+    assert.equal(requests[0]!.query.get('fields'), 'id,name,access_token,category,fan_count,picture')
+    assert.equal(meta.sent(request => request.path.endsWith('/accounts')).length, 0)
+    for (const [response, message] of [
+      [{}, /no assigned Pages data/],
+      [{ data: [{}] }, /without its identity/],
+      [{ data: [{ id: PAGE, name: 'Krabi Claw' }] }, /no access token/],
+      [{ data: [], paging: { next: 'https://graph.facebook.com/next' } }, /invalid assigned Pages pagination cursor/],
+      [{ data: [], paging: { next: 'https://graph.facebook.com/next', cursors: { after: 'second' } } }, /invalid assigned Pages pagination cursor/],
+    ] as const) {
+      meta.assignedPageResponses.set('', response)
+      meta.assignedPageResponses.set('second', response)
+      await assert.rejects(listLinkedFacebookPages(env, 'fb-account'), message)
+    }
+    meta.assignedPageResponses.set('', { data: [] })
+    assert.deepEqual(await listLinkedFacebookPages(env, 'fb-account'), [])
+    await assert.rejects(facebookPageToken(env, { account_id: 'fb-account', target_id: PAGE, target_name: 'Krabi Claw' }), /has no assignment/)
+  } finally {
+    restore()
+    await runtime.dispose()
+  }
+})
 
 test('channel MCP tools report invalid parameters while preserving connection and provider failures', async () => {
   const { runtime, db, env, meta, restore } = await setUp()

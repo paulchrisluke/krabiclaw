@@ -1,5 +1,5 @@
 // PATCH /api/editor/organizations/[organizationId]/locations/[locationId]/qa/[qaId]
-import { jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
+import { jsonResponse } from '~/server/utils/api-response'
 import { updateLocationQa } from '~/server/utils/mcp-workflows'
 import { requireLocationAccess } from '~/server/utils/location-access'
 
@@ -24,14 +24,8 @@ export default defineHandler(async (event) => {
     sort_order?: unknown
   }
 
-  try {
-    const result = await updateLocationQa(db, organization.id, locationId, qaId, body)
-    return jsonResponse(result)
-  } catch (error) {
-    rethrowHttpError(error)
-    const message = error instanceof Error ? error.message : 'Q&A update failed'
-    return jsonResponse({ error: message }, { status: message.includes('not found') ? 404 : 400 })
-  }
+  const result = await updateLocationQa(db, organization.id, locationId, qaId, body)
+  return jsonResponse(result)
 })
 import { defineHandler } from 'nitro';
 import { getRouterParam, readBody  } from 'nitro/h3';

@@ -1,4 +1,4 @@
-import { jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
+import { jsonResponse } from '~/server/utils/api-response'
 import { requireOrganizationAccess } from '~/server/utils/location-access'
 import { deleteProductBookingConfig } from '~/server/utils/availability'
 import { defineHandler } from 'nitro'
@@ -8,12 +8,7 @@ export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
   const productId = getRouterParam(event, 'productId')
   if (!organizationId || !productId) return jsonResponse({ error: 'Organization ID and product ID are required' }, { status: 400 })
-  try {
-    const { db, organization } = await requireOrganizationAccess(event, organizationId)
-    await deleteProductBookingConfig(db, { organizationId: organization.id, productId })
-    return jsonResponse({ success: true, product_id: productId })
-  } catch (error) {
-    rethrowHttpError(error)
-    return jsonResponse({ error: 'Failed to remove booking configuration' }, { status: 500 })
-  }
+  const { db, organization } = await requireOrganizationAccess(event, organizationId)
+  await deleteProductBookingConfig(db, { organizationId: organization.id, productId })
+  return jsonResponse({ success: true, product_id: productId })
 })

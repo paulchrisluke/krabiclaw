@@ -42,6 +42,7 @@ for (const config of surfaces) {
   const dispatchNames = new Set(config.dispatchTools.map(tool => tool.name))
 
   for (const tool of config.publicTools) {
+    if (typeof tool.description !== 'string' || !tool.description.trim()) failures.push(`${config.surface}: ${tool.name} needs a nonempty description`)
     if (!dispatchNames.has(tool.name)) failures.push(`${config.surface}: public tool ${tool.name} is absent from dispatch`)
   }
 

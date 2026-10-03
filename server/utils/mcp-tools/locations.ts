@@ -5,7 +5,7 @@ import { locationListItemObject, locationMutationSummaryObject, locationObject, 
 export const LOCATIONS_TOOLS: McpToolDefinition[] = [
   organizationTool({
       name: 'list_locations',
-      description: 'List site locations in a compact format with ids, slugs, titles, and active-state markers so you can target location-scoped tools reliably.',
+      description: 'List the selected site’s locations with their IDs, slugs, titles and active state. Location-scoped tools take these IDs.',
       domain: 'locations',
       minimumRole: 'admin',
       confirmRequired: false,
@@ -21,11 +21,11 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'get_location',
-      description: 'Get one location.',
+      description: "Read one selected site location, including its contact details, opening hours, timezone and media. Use its returned ID for location-specific changes.",
       domain: 'locations',
       minimumRole: 'admin',
       confirmRequired: false,
-      inputSchema: { location_id: { type: 'string', description: 'Location id or slug.' } },
+      inputSchema: { location_id: { type: 'string', description: 'Internal location ID returned by list_locations or get_workspace_context.' } },
       required: ['location_id'],
       outputSchema: {
         type: 'object',
@@ -40,7 +40,7 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
       minimumRole: 'admin',
       confirmRequired: false,
       inputSchema: {
-        location_id: { type: 'string', description: 'Location id or slug.' },
+        location_id: { type: 'string', description: 'Internal location ID returned by list_locations or get_workspace_context.' },
         address: postalAddressSchema,
         phone: { type: 'string', description: 'Public phone number shown to guests on the website and in booking/reservation confirmation emails.' },
         email: { type: ['string', 'null'], description: 'Public email shown to guests on the website and in booking/reservation confirmation emails. Pass null to clear it.' },
@@ -55,12 +55,12 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'get_calendar',
-      description: 'What is on one location\'s calendar between two dates, as the dashboard calendar shows it: every reservation, experience booking and published post, plus which dates the location cannot take — its own closures, a location that is not active, and weekdays its hours never open. Dates are the location\'s local calendar days. At most 62 days per call.',
+      description: "Read a location’s reservations, product session bookings, published posts and unavailable dates when the user wants to review its calendar. Dates are inclusive local calendar days, with at most 62 days per call. Use kinds to filter the agenda.",
       domain: 'locations',
       minimumRole: 'admin',
       confirmRequired: false,
       inputSchema: {
-        location_id: { type: 'string', description: 'Location id or slug.' },
+        location_id: { type: 'string', description: 'Internal location ID returned by list_locations or get_workspace_context.' },
         from: { ...calendarDateSchema, description: 'First day, YYYY-MM-DD.' },
         to: { ...calendarDateSchema, description: 'Last day, YYYY-MM-DD, inclusive.' },
         kinds: { type: 'array', items: { type: 'string', enum: ['reservation', 'booking', 'post'] }, description: 'Limit to these kinds. Defaults to every kind the location offers.' },
@@ -79,12 +79,12 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'block_dates',
-      description: 'Close a location for every day from one date to another, inclusive, so guests cannot book those days — the same closure the calendar\'s Block writes to the location\'s special hours. Whole days only. Existing closures and dated hours are kept.',
+      description: "Close a location for a whole-day date range when the user wants to prevent bookings on those dates. Both endpoints are inclusive. Adds a closure to special hours while retaining existing closures and dated hours.",
       domain: 'locations',
       minimumRole: 'admin',
       confirmRequired: false,
       inputSchema: {
-        location_id: { type: 'string', description: 'Location id or slug.' },
+        location_id: { type: 'string', description: 'Internal location ID returned by list_locations or get_workspace_context.' },
         from: { ...calendarDateSchema, description: 'First closed day, YYYY-MM-DD.' },
         to: { ...calendarDateSchema, description: 'Last closed day, YYYY-MM-DD, inclusive. Same as from for one day.' },
         note: { type: ['string', 'null'], description: 'Why, for the team; guests never see it.' },
@@ -94,12 +94,12 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'open_dates',
-      description: 'Reopen a location for every day from one date to another, inclusive — the same as the calendar\'s Open. Every closure covering any of those days is cut around the range so the days outside it stay closed with their note; dated hours with no periods on those days are removed. Weekdays the regular hours never open stay closed: change opening_hours for that.',
+      description: "Remove temporary closures for an inclusive date range when the user wants to reopen a location. Closure dates outside the range and their notes are preserved. Regularly closed weekdays stay closed; change opening_hours with update_location to open those weekdays.",
       domain: 'locations',
       minimumRole: 'admin',
       confirmRequired: false,
       inputSchema: {
-        location_id: { type: 'string', description: 'Location id or slug.' },
+        location_id: { type: 'string', description: 'Internal location ID returned by list_locations or get_workspace_context.' },
         from: { ...calendarDateSchema, description: 'First reopened day, YYYY-MM-DD.' },
         to: { ...calendarDateSchema, description: 'Last reopened day, YYYY-MM-DD, inclusive. Same as from for one day.' },
       },

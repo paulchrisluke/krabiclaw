@@ -24,7 +24,7 @@
         <UFormField label="Confirmation">
           <USelect v-model="p.form.confirmation_mode" :items="[{ label: 'Instant confirmation', value: 'instant' }, { label: 'Staff review', value: 'review' }]" class="w-full" />
         </UFormField>
-        <UCheckbox v-model="p.form.online_payment_required" label="Collect online payment when requesting" description="This policy requires Payments for priced offerings. A zero Price is free." />
+        <UCheckbox v-model="p.form.online_payment_required" label="Require online payment for paid sessions" description="Paid sessions cannot be booked until online checkout is available. Free sessions remain bookable." />
         <UCheckbox v-if="!p.locationId.value" v-model="p.form.native_consultations" label="Enable native consultations on this website" description="Guests can book published online offerings through the shared booking flow." />
         <UCheckbox v-model="p.form.online_schedule" label="Online sessions" description="Schedule without a physical location." />
         <template v-if="p.form.online_schedule">

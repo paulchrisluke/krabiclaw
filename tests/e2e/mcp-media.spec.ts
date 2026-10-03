@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 import { loginAs } from './helpers/auth'
 import { MCP_GROWTH_USER_ID } from './helpers/plan-fixtures'
 import { MCP_VERSION, MCP_GROWTH_ORGANIZATION_ID, mcpRequest, mcpData } from './helpers/mcp'
+import { acquireTenantMutationLock } from './helpers/tenant-mutation-lock'
 
 test.describe('stateless MCP server', () => {
   test('ChatGPT session exposes native media upload', async ({ request, baseURL }) => {
@@ -32,10 +33,8 @@ test.describe('stateless MCP server', () => {
     })
     expect(tools.status()).toBe(200)
     const toolsBody = await tools.json() as { result: { tools: Array<{ name: string, inputSchema?: { required?: string[], properties?: Record<string, unknown>, additionalProperties?: boolean }, outputSchema?: Record<string, unknown>, _meta?: Record<string, unknown> }> } }
-    const uploadTool = toolsBody.result.tools.find(tool => tool.name === 'upload_user_media')
+    const uploadTool = toolsBody.result.tools.find(tool => tool.name === 'save_media_attachment')
     expect(toolsBody.result.tools.some(tool => tool.name === 'show_generated_images')).toBe(false)
-    const generatedFileTool = toolsBody.result.tools.find(tool => tool.name === 'save_generated_image_file')
-    expect(generatedFileTool?._meta?.['openai/fileParams']).toEqual(['attachment_id'])
     const removedPicker = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'show_generated_images',
@@ -80,4 +79,74 @@ test.describe('stateless MCP server', () => {
     expect(mismatchedTargetBody.result?.isError).toBe(true)
     expect(mismatchedTargetBody.result?.content?.[0]?.text).toContain('Unknown argument: location_id')
   })
+
+  test('a gallery reorder moves the fixture gallery and get_location reads the new order', async ({ request, baseURL }, testInfo) => {
+    const releaseTenantMutationLock = await acquireTenantMutationLock(testInfo, MCP_GROWTH_ORGANIZATION_ID)
+    const call = async <T>(toolName: string, args: Record<string, unknown>) => mcpData<T>(await (await mcpRequest(request, baseURL!, {
+      method: 'tools/call', toolName, args: { organization_id: MCP_GROWTH_ORGANIZATION_ID, ...args },
+    })).json())
+    const locationId = 'loc-demo-2'
+    const placement = { owner_type: 'business_location', owner_id: locationId, slot: 'gallery' }
+    let original: string[] = []
+    try {
+      await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
+      const galleryOrder = async () => (await call<{ location: { media: Array<{ slot: string; asset_id: string }> } }>('get_location', { location_id: locationId }))
+        .location.media.filter(item => item.slot === 'gallery').map(item => item.asset_id)
+      // The fixture's two-image gallery, in its stored order.
+      original = await galleryOrder()
+      const [first, second] = original
+      // Nothing changes until the fixture is known to be exactly the two images restored below.
+      expect(original, 'loc-demo-2 fixture gallery').toHaveLength(2)
+      await call('reorder_media', { placement, moves: [{ asset_id: second, before_asset_id: first }] })
+      expect(await galleryOrder()).toEqual([second, first])
+      await call('reorder_media', { placement, moves: [{ asset_id: first, before_asset_id: second }] })
+      expect(await galleryOrder()).toEqual([first, second])
+    } finally {
+      // Put the fixture back in its stored order whatever failed above.
+      try {
+        if (original.length === 2) await call('reorder_media', { placement, moves: [{ asset_id: original[0], before_asset_id: original[1] }] })
+      } finally {
+        await releaseTenantMutationLock()
+      }
+    }
+  })
+  test('product mutation responses preserve the canonical image and gallery', async ({ request, baseURL }, testInfo) => {
+    const releaseTenantMutationLock = await acquireTenantMutationLock(testInfo, MCP_GROWTH_ORGANIZATION_ID)
+    type MediaItem = { asset_id: string }
+    type Product = { id: string; name: string; image: MediaItem | null; gallery: MediaItem[]; media: MediaItem[] }
+    const call = async <T>(toolName: string, args: Record<string, unknown>) => mcpData<T>(await (await mcpRequest(request, baseURL!, {
+      method: 'tools/call', toolName, args: { organization_id: MCP_GROWTH_ORGANIZATION_ID, ...args },
+    })).json())
+    // The seeded Margherita carries one image, also its only gallery item.
+    const productId = 'mi-1'
+    const seededAsset = 'media-demo-margherita'
+    const expectSeededMedia = (product: Product) => {
+      expect(product.image?.asset_id).toBe(seededAsset)
+      expect(product.gallery.map(item => item.asset_id)).toEqual([seededAsset])
+      expect(product.media.length).toBeGreaterThan(0)
+    }
+    let originalName: string | undefined
+    try {
+      await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
+      originalName = (await call<{ product: Product }>('get_product', { product_id: productId })).product.name
+      const changed = (await call<{ product: Product }>('update_product', { product_id: productId, name: `${originalName} MCP media check` })).product
+      expect(changed.name).toBe(`${originalName} MCP media check`)
+      expectSeededMedia(changed)
+      const saved = (await call<{ product: Product }>('get_product', { product_id: productId })).product
+      expect(saved.name).toBe(`${originalName} MCP media check`)
+      expectSeededMedia(saved)
+    } finally {
+      try {
+        if (originalName !== undefined) {
+          await call('update_product', { product_id: productId, name: originalName })
+          const restored = (await call<{ product: Product }>('get_product', { product_id: productId })).product
+          expect(restored.name).toBe(originalName)
+          expectSeededMedia(restored)
+        }
+      } finally {
+        await releaseTenantMutationLock()
+      }
+    }
+  })
+
 })

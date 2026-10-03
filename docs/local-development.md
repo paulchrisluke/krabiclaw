@@ -83,7 +83,7 @@ handoff until the post-start social-card generation and public verification pass
 
 ```sh
 corepack yarn local:cards
-corepack yarn client:verify --url http://localhost:3000 --site-id site-demo --tenant-slug ember-slice-demo
+corepack yarn client:verify --url http://localhost:3000 --organization-id org-demo --tenant-slug demo
 ```
 
 It signs in as the developer account and regenerates every tenant's cards

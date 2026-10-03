@@ -10,6 +10,7 @@ import {
   deleteProduct,
   getProduct,
   requireOrganizationProduct,
+  hydrateProductMedia,
   listCollectionProducts,
   listCollections,
   listLocationProducts,
@@ -56,9 +57,18 @@ async function resolveCarriedProduct(ctx: McpExecutorContext, productId: string)
   return await requireOrganizationProduct(ctx.organization.db, {
     organizationId: ctx.organization.organizationId, productId,
   }).catch((error: unknown) => {
+    // A product this site does not carry is the caller's mistake; any other
+    // failure is the server's and keeps its own error.
+    if ((error as { statusCode?: number }).statusCode !== 404) throw error
     const message = (error as { statusMessage?: string }).statusMessage
     throw mcpProtocolError(MCP_ERROR.invalidParams, message && message !== 'Not Found' ? message : 'Product not found')
   })
+}
+
+/** Every full MCP product response includes this site's canonical media. */
+async function productResult(ctx: McpExecutorContext, product: Product) {
+  const [hydrated] = await hydrateProductMedia(ctx.organization.db, ctx.organization.organizationId, [product])
+  return { product: hydrated }
 }
 
 /** One page of products, with the extra row the query asked for removed. */
@@ -133,8 +143,9 @@ export async function handleProductsTools(ctx: McpExecutorContext) {
       })
       return productPage(products, window)
     }
-    case 'get_product':
-      return { product: await resolveCarriedProduct(ctx, requiredString(args, 'product_id')) }
+    case 'get_product': {
+      return await productResult(ctx, await resolveCarriedProduct(ctx, requiredString(args, 'product_id')))
+    }
 
     case 'create_product': {
       // The site carries what it created, withheld until someone publishes it
@@ -144,16 +155,14 @@ export async function handleProductsTools(ctx: McpExecutorContext) {
         product: args as unknown as CreateProductInput, actor,
         publication: { published: false },
       })
-      return { product }
+      return await productResult(ctx, product)
     }
     case 'update_product': {
       const productId = requiredString(args, 'product_id')
       await resolveCarriedProduct(ctx, productId)
-      return {
-        product: await updateProduct(organization.db, {
-          ...scope, productId, patch: omit(args, ['product_id']) as unknown as UpdateProductInput, actor,
-        }),
-      }
+      return await productResult(ctx, await updateProduct(organization.db, {
+        ...scope, productId, patch: omit(args, ['product_id']) as unknown as UpdateProductInput, actor,
+      }))
     }
     case 'delete_product': {
       const productId = requiredString(args, 'product_id')
@@ -176,7 +185,7 @@ export async function handleProductsTools(ctx: McpExecutorContext) {
       }
       if (typeof args.published !== 'boolean') throw mcpProtocolError(MCP_ERROR.invalidParams, 'published must be a boolean')
       await setProductPublication(organization.db, { ...scope, productId, published: args.published, actor })
-      return { product: await getProduct(organization.db, organization.organizationId, productId) }
+      return await productResult(ctx, await getProduct(organization.db, organization.organizationId, productId))
     }
     case 'set_product_location': {
       const productId = requiredString(args, 'product_id')
@@ -192,7 +201,7 @@ export async function handleProductsTools(ctx: McpExecutorContext) {
         published: typeof args.published === 'boolean' ? args.published : undefined,
         actor,
       })
-      return { product: await getProduct(organization.db, organization.organizationId, productId) }
+      return await productResult(ctx, await getProduct(organization.db, organization.organizationId, productId))
     }
     case 'remove_product_location': {
       const productId = requiredString(args, 'product_id')
@@ -200,7 +209,7 @@ export async function handleProductsTools(ctx: McpExecutorContext) {
       await resolveCarriedProduct(ctx, productId)
       await authorizeLocation(ctx, locationId)
       await removeProductLocation(organization.db, { organizationId: organization.organizationId, productId, locationId })
-      return { product: await getProduct(organization.db, organization.organizationId, productId) }
+      return await productResult(ctx, await getProduct(organization.db, organization.organizationId, productId))
     }
     case 'batch_create_products': {
       // The site carries what it created, withheld until someone publishes it
@@ -213,12 +222,12 @@ export async function handleProductsTools(ctx: McpExecutorContext) {
     }
     case 'reconcile_products':
       return {
-        products: await reconcileProducts(organization.db, {
+        products: await hydrateProductMedia(organization.db, organization.organizationId, await reconcileProducts(organization.db, {
           ...scope,
           products: objectArray(args.products, 'products') as unknown as ReconcileProductInput[],
           actor,
           deactivateMissing: args.deactivate_missing === true,
-        }),
+        })),
       }
 
     case 'list_collections': {

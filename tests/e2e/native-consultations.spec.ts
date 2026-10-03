@@ -7,7 +7,6 @@ test.use({ timezoneId: 'America/New_York' })
 
 test('native online review uses canonical Products, holds capacity, and releases it once', async ({ page, request, baseURL }) => {
   test.skip(process.env.NATIVE_CONSULTATION_PROOF !== 'true' || !['localhost', '127.0.0.1'].includes(new URL(baseURL!).hostname), 'Explicit opt-in in an isolated disposable checkout only; never mutate shared suite fixtures')
-  test.setTimeout(120_000)
   const analyticsFailures: string[] = []
   page.on('response', response => {
     if (/\/api\/(analytics\/track|public\/conversion-events)$/.test(new URL(response.url()).pathname) && response.status() >= 400) analyticsFailures.push(`${response.status()} ${response.url()}`)
@@ -52,10 +51,9 @@ test('native online review uses canonical Products, holds capacity, and releases
   expect((await (await page.request.get(`${editor}/consultation`)).json()).mode).toBe('native')
     await page.goto(`/dashboard/north-carolina-legal-services/products/${products[0]!.id}/booking`)
     await expect(page.getByLabel('Online timezone', { exact: true })).toHaveValue('UTC')
-    await page.screenshot({ path: 'artifacts/consultations-editor-desktop.png', fullPage: true })
     const bindViaMcp = async (productId?: string | null) => {
       const current = (await (await page.request.get(`${editor}/pages/${service.id}`)).json()).page
-      const response = await mcpRequest(page.request, baseURL!, { method: 'tools/call', toolName: 'update_tenant_page', args: {
+      const response = await mcpRequest(page.request, baseURL!, { method: 'tools/call', toolName: 'update_site_page', args: {
         organization_id: org, variant_id: service.id, expected_updated_at: current.document.updated_at,
         path: current.path, title: current.title, summary: current.summary, pageType: current.page_type,
         recipe: current.recipe, sortOrder: current.sort_order,
@@ -90,7 +88,6 @@ test('native online review uses canonical Products, holds capacity, and releases
     expect(preserved.summary).toBe(service.summary)
     await page.goto(`/dashboard/north-carolina-legal-services/pages/${service.id}/booking`)
     await expect(bindingSelector).toContainText(products[0]!.name)
-    await page.screenshot({ path: 'artifacts/consultations-service-link-editor.png', fullPage: true })
     await page.setExtraHTTPHeaders(headers)
     const wrongRoute = await request.get(`/experiences/${products[0]!.slug}`, { headers })
     expect(wrongRoute.status()).toBe(404)
@@ -149,9 +146,7 @@ test('native online review uses canonical Products, holds capacity, and releases
     await expect(pageTimezone).toContainText('(America/New_York)')
     await expect(page.locator('a[href*="/experiences/"]')).toHaveCount(0)
     await expect.poll(() => page.locator('section[aria-label="Choose your consultation"] img').evaluateAll(images => images.every(image => (image as HTMLImageElement).naturalWidth > 0))).toBe(true)
-    await page.screenshot({ path: 'artifacts/consultations-desktop.png', fullPage: true })
     await page.setViewportSize({ width: 390, height: 844 })
-    await page.screenshot({ path: 'artifacts/consultations-directory-mobile.png', fullPage: true })
     await page.setViewportSize({ width: 1280, height: 720 })
     await page.getByRole('link', { name: 'Full service details →', exact: true }).click()
     await expect(page).toHaveURL(new RegExp(`${service.path}$`))
@@ -185,10 +180,8 @@ test('native online review uses canonical Products, holds capacity, and releases
     await lightbox.getByRole('button', { name: 'Close', exact: true }).click()
     const placement = await page.locator('#consultations, [data-tenant-page]').evaluateAll(elements => elements.map(element => element.getBoundingClientRect().top))
     expect(placement[0]).toBeLessThan(placement[1]!)
-    await page.screenshot({ path: 'artifacts/consultations-detail-desktop.png', fullPage: true })
     await page.setViewportSize({ width: 390, height: 844 })
     await expect(page.getByRole('button', { name: 'Request appointment', exact: true })).toBeVisible()
-    await page.screenshot({ path: 'artifacts/consultations-detail-mobile.png', fullPage: true })
     await page.setViewportSize({ width: 1280, height: 720 })
     await page.getByRole('button', { name: 'Request appointment', exact: true }).focus()
     await page.keyboard.press('Enter')
@@ -207,7 +200,6 @@ test('native online review uses canonical Products, holds capacity, and releases
     expect(mobilePopupBox!.y + mobilePopupBox!.height).toBeLessThanOrEqual(844)
     await zoneSearch.fill('Pacific/Auckland')
     await expect(timezonePopup.getByRole('option')).toHaveCount(1)
-    await page.screenshot({ path: 'artifacts/consultations-timezone-search-mobile.png' })
     await zoneSearch.press('Escape')
     await expect(timezonePopup).toBeHidden()
     await expect(bookingDialog).toBeVisible()
@@ -223,9 +215,7 @@ test('native online review uses canonical Products, holds capacity, and releases
     await expect(bookingDialog.getByRole('button', { name: /more guests|fewer guests/i })).toHaveCount(0)
     await bookingDialog.getByRole('button', { name: /2:00 PM/ }).first().click()
     await page.setViewportSize({ width: 1280, height: 720 })
-    await page.screenshot({ path: 'artifacts/consultations-dialog-desktop.png', fullPage: false })
     await page.setViewportSize({ width: 390, height: 844 })
-    await page.screenshot({ path: 'artifacts/consultations-dialog-mobile.png', fullPage: false })
     const sessions = await Promise.all(products.map(async product => {
       const response = await request.get(`/api/public/products/${product.slug}/sessions?location_id=online&from=${day}&to=${day}`, { headers })
       expect(response.status(), await response.text()).toBe(200)
@@ -253,7 +243,6 @@ test('native online review uses canonical Products, holds capacity, and releases
     await expect(dialog.getByText(/ · 2:00 PM$/, { exact: false })).toBeVisible()
     await dialog.getByLabel('Full name', { exact: true }).fill('Browser review guest')
     await dialog.getByLabel('Email address', { exact: true }).fill(`browser-consultation-${stamp}@playwright.example`)
-    await page.screenshot({ path: 'artifacts/consultations-contact-mobile.png', fullPage: false })
     const submitted = page.waitForResponse(response => response.url().includes(`/products/${products[0]!.slug}/book`) && response.request().method() === 'POST')
     await dialog.getByRole('button', { name: 'Request appointment', exact: true }).click()
     const browserBookingResponse = await submitted
@@ -262,7 +251,6 @@ test('native online review uses canonical Products, holds capacity, and releases
     expect(browserBooking.status).toBe('pending')
     await expect(page).toHaveURL(/\/bookings\/confirmed/)
     await expect(page.getByRole('heading', { name: /Request received, Browser review guest/ })).toBeVisible()
-    await page.screenshot({ path: 'artifacts/consultations-receipt-mobile.png', fullPage: false })
     expect(analyticsFailures).toEqual([])
     for (let replay = 0; replay < 2; replay++) {
       const confirm = await page.request.post(`/api/dashboard/organizations/${org}/guest-threads/${browserBooking.request_id}/operations/confirm`, { data: { idempotencyKey: `confirm-${stamp}` } })

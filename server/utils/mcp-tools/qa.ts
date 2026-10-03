@@ -18,7 +18,7 @@ export const QA_TOOLS: McpToolDefinition[] = [
   organizationTool({ name: 'reorder_qa', description: 'Set sort positions of authored Q&A records in one explicit scope. Every id must be distinct, manual and in scope; otherwise no record is reordered. Imported Google records are protected.', domain: 'qa', minimumRole: 'admin', confirmRequired: false, inputSchema: { ...qaScope, updates: { type: 'array', minItems: 1, items: { type: 'object', properties: { id: { type: 'string', minLength: 1 }, sort_order: { type: 'integer' } }, required: ['id', 'sort_order'], additionalProperties: false } } }, required: ['updates'], outputSchema: { type: 'object', properties: { updated: { type: 'integer' } }, required: ['updated'] } }),
   organizationTool({
     name: 'list_organization_qa',
-    description: 'Read general tenant Q&A, or only the specified page Q&A when page_path is provided. This tool lists authored and imported Q&A. Authored Q&A can be managed through the CMS and authored Q&A tools; imported Google question and answer content is managed in Google.',
+    description: 'Read the site’s general Q&A, or the Q&A of one page when page_path is provided. This tool lists authored and imported Q&A. Authored Q&A can be managed through the CMS and authored Q&A tools; imported Google question and answer content is managed in Google.',
     domain: 'qa',
     minimumRole: 'admin',
     confirmRequired: false,

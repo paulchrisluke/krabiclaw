@@ -147,7 +147,6 @@ export async function createProductBooking(event: H3Event, context: BookingCreat
     if (!price) return creationResult({ error: 'A valid Price is required for this offering', code: 'price_unavailable' }, { status: 409 })
     if (config.online_payment_required && price.unit_amount > 0) return creationResult({ error: 'Online payment is required to request this appointment', code: 'payment_required' }, { status: 409 })
   }
-  const bookingStatus = config.confirmation_mode === 'review' ? 'pending' : 'confirmed'
 
 
   const clientIp = getClientIp(event)
@@ -174,7 +173,7 @@ export async function createProductBooking(event: H3Event, context: BookingCreat
   const now = new Date().toISOString()
   const payload = threadPayloadForGuest({ name: guestName, email: guestEmail, phone: normalizedGuestPhone, notes, ipHash })
   if (operator) {
-    payload.provenance = { source: operator.source, external_reference: operator.externalReference, actor_user_id: operator.userId, idempotency_key: operator.idempotencyKey, fingerprint: fingerprint!, guest_acknowledgement: operator.guestAcknowledgement, creation_kind: 'ordinary', creation_status: bookingStatus, followups_completed: false }
+    payload.provenance = { source: operator.source, external_reference: operator.externalReference, actor_user_id: operator.userId, idempotency_key: operator.idempotencyKey, fingerprint: fingerprint!, guest_acknowledgement: operator.guestAcknowledgement, creation_kind: 'ordinary', creation_status: config.confirmation_mode === 'review' ? 'pending' : 'confirmed', followups_completed: false }
   }
   payload.cancellation = { token_hash: cancellationTokenHash, expires_at: cancellation.expiresAt, used_at: null }
 
@@ -199,6 +198,12 @@ export async function createProductBooking(event: H3Event, context: BookingCreat
                    WHERE id = ? AND EXISTS (SELECT 1 FROM requests WHERE id = ?)`,
           params: [threadId, now, bookingId, threadId],
         },
+        ...(operator ? [{
+          query: `UPDATE requests SET payload_json = json_set(payload_json, '$.provenance.creation_status',
+                    (SELECT status FROM bookings WHERE id = ?))
+                  WHERE id = ? AND EXISTS (SELECT 1 FROM bookings WHERE id = ? AND request_id = requests.id)`,
+          params: [bookingId, threadId, bookingId],
+        }] : []),
         {
           query: `INSERT INTO activity_entries (id, request_id, kind, scope_kind, actor_kind, actor_user_id, event_name, payload_json, dedupe_key, sequence, occurred_at, created_at)
                   SELECT ?, request_id, 'operation', 'request', ?, ?, 'booking.created',
@@ -225,6 +230,14 @@ export async function createProductBooking(event: H3Event, context: BookingCreat
   }
 
   if (!operationalBookingId) throw new Error('Booking allocation did not produce an operational ID')
+  // The allocator reads policy atomically with the claim. A setting may have
+  // changed since the preflight read, so notify from the committed creation.
+  const creation = await queryFirst<{ status: string }>(db, `
+    SELECT json_extract(payload_json, '$.afterStatus') AS status FROM activity_entries
+    WHERE request_id = ? AND event_name = 'booking.created' AND dedupe_key = ?
+  `, [threadId, `booking:${operationalBookingId}:created`])
+  if (creation?.status !== 'pending' && creation?.status !== 'confirmed') throw new Error('Booking creation status is missing or invalid')
+  const bookingStatus = creation.status
   await publishGuestInboxThreadEvent(env, db, { threadId, type: 'thread.created' })
 
   // One instant, one zone: the message the guest reads and the record the
@@ -271,7 +284,7 @@ export async function createProductBooking(event: H3Event, context: BookingCreat
     ...await Promise.allSettled([
       notifyBookingCreated(env, db, {
         organizationId: organization.id, organizationName: organization.name, locationId: session.location_id,
-        guestAcknowledgement: operator?.guestAcknowledgement ?? true, bookingId: threadId, status: replayState.booking ? (replayState.booking.creation_status === 'pending' ? 'pending' : 'confirmed') : bookingStatus, guestName, email: guestEmail, guestPhone: normalizedGuestPhone,
+        guestAcknowledgement: operator?.guestAcknowledgement ?? true, bookingId: threadId, status: bookingStatus, guestName, email: guestEmail, guestPhone: normalizedGuestPhone,
         productId: product.id, productTitle: product.name, startsAt: session.starts_at, timezone: session.timezone,
         partySize, notes: notes || null,
         cancelUrl, contactPhone, contactEmail, ownerInboxUrl,

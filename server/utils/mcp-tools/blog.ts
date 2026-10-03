@@ -36,7 +36,7 @@ const articleCategoryListResult = {
 export const BLOG_TOOLS: McpToolDefinition[] = [
   organizationTool({
       name: 'list_blog_posts',
-      description: 'List this organization\'s draft and published articles, a page at a time, in the order each collection is read in publicly (sort_order, then newest first). The blog and the documentation are two collections of the same articles; pass collection to list one. This is the organization\'s own long-form content — distinct from list_posts, which is the short-post feed.',
+      description: "List draft and published long-form articles in the selected site’s blog or documentation collection. Results are paginated in public display order. Short website posts are listed separately by list_posts.",
       domain: 'blog',
       minimumRole: 'admin',
       confirmRequired: false,
@@ -50,7 +50,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'get_blog_post',
-      description: 'Get a single blog post by id or slug. Returns the canonical top-level content_blocks array plus one updated_at concurrency token; there is no body, components, or content_document authoring shape.',
+      description: "Read one blog or documentation article by ID or slug, including its ordered content_blocks and updated_at token. Use that token when editing or publishing the article.",
       domain: 'blog',
       minimumRole: 'admin',
       confirmRequired: false,
@@ -67,7 +67,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'create_blog_post',
-      description: 'Create a long-form, evergreen, SEO-indexed article as a draft, using content_blocks as the only authoring shape. It is not public until publish_blog_post; review the draft with its preview_url first. Pass a new idempotency_key per article: repeating a call with the same key returns the same article instead of a second one. Every published article is in one of its collection\'s categories: pass category_id from list_article_categories.',
+      description: "Create a draft blog or documentation article with ordered content_blocks. It stays private until published. A category in the selected collection is required for publication. Use a new idempotency_key for each article; retrying the same key returns the same article. The preview_url allows draft review.",
       domain: 'blog',
       minimumRole: 'admin',
       confirmRequired: true,
@@ -86,7 +86,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'update_blog_post',
-      description: 'Save changes to an existing blog article: metadata, or the whole article body. Only provided fields are changed. content_blocks replaces every block and requires expected_updated_at; to change one block, use append_content_block, replace_content_block or delete_content_block instead. Changes to a live article are public immediately; compose and review them with the user first.',
+      description: "Edit the selected blog or documentation article. Only supplied metadata changes; content_blocks replaces the entire body and requires expected_updated_at from the latest read. Stale tokens conflict. Changes to a published article are public immediately.",
       domain: 'blog',
       minimumRole: 'admin',
       confirmRequired: false,
@@ -109,7 +109,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'publish_blog_post',
-      description: 'Publish a draft blog article now. Requires the current document concurrency token. Publishing an article that is already published changes nothing — not its date, not its announcement. Use only after the writer has approved the final article.',
+      description: "Publish the selected draft blog or documentation article when publication is requested. Requires expected_updated_at from the latest read. An already published article is unchanged, including its date and announcement.",
       domain: 'blog', minimumRole: 'admin', confirmRequired: true,
       inputSchema: {
         post_id: { type: 'string', description: 'Post id or slug.' },
@@ -120,7 +120,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'reorder_blog_posts',
-      description: "Set the order one collection (the blog or the documentation) is read in on the public site, within and across its categories; the categories' own order is reorder_article_categories. Send every article id in that collection exactly once, drafts included, in the intended order; a partial order is rejected. Each article's sort_order is its position from 1; an article written afterwards has sort_order 0 and leads, newest first, until it is placed.",
+      description: "Replace the public display order of articles in one blog or documentation collection. Supply every article ID in that collection exactly once, including drafts. New articles with sort_order 0 appear first until ordered; category ordering is separate.",
       domain: 'blog',
       minimumRole: 'admin',
       confirmRequired: false,
@@ -137,7 +137,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'delete_blog_post',
-      description: 'Delete a blog post.',
+      description: "Permanently delete the selected blog or documentation article and its owned content. Use only when the user requests removing that article; a published article is removed from the website.",
       domain: 'blog',
       minimumRole: 'admin',
       confirmRequired: true,
@@ -152,7 +152,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'list_article_categories',
-      description: "List one collection's categories (the blog's or the documentation's) as a tree read depth-first — each category, then its subcategories — in the order they are read in publicly, with how many articles and subcategories each holds. Every published article is in exactly one; each category has its own public page at /blog/category/{slug} or /docs/category/{slug}.",
+      description: "List categories and subcategories in one site blog or documentation collection, in public display order, with article and child-category counts. Published articles require a category in their collection.",
       domain: 'blog', minimumRole: 'admin', confirmRequired: false,
       inputSchema: { collection: { type: 'string', enum: ['blog', 'docs'] } },
       required: ['collection'],

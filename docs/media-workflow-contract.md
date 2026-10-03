@@ -9,7 +9,7 @@ record, `media-asset-manager.ts` and `media-upload.ts` are the operations, and
 `shared/media-placement-contract.ts` says how a record is read and where it can
 be placed. MCP, the dashboard, the guest review form and onboarding are
 adapters over those — transport and auth only. This document used to name the
-dashboard's route family canonical in one section and MCP's `upload_user_media`
+dashboard's route family canonical in one section and MCP's `save_media_attachment`
 the only upload path in another, which is how four upload lifecycles came to
 exist at once.
 
@@ -77,11 +77,8 @@ does.
 - Do not treat pending assets as usable by public-site workflows.
 - AI-generated images still end as normal media assets and must be visible through the canonical media listing surface.
 - AI-generated image briefs should first resolve and review `image.generate` Agent Skill guidance through the relevant MCP surface. The review is advisory; the file transport and media persistence rules below remain enforced by tool contracts.
-- Canonical MCP generated-image contracts are split by source:
-  - ChatGPT native image-generation output: `save_generated_image_file({ organization_id, attachment_id, prompt })`
-  - Raw base64 from a non-native image source: `save_generated_image({ organization_id, image_data_base64, prompt })`
-- `upload_user_media({ organization_id, file, poster_file?, category, description })` is the ChatGPT attachment adapter over the canonical upload. It is not a second lifecycle, and it cannot serve a browser file picker — the dashboard's `POST .../media/upload` is the adapter for that. Pass the resolved native ChatGPT file argument; the content type is detected from the file bytes.
-- One `upload_user_media` call performs one download attempt. If ChatGPT attachment delivery fails, stop and ask the user to attach the file again. Do not retry with a bare file ID, fabricate a download URL, or switch transports.
+- `save_media_attachment({ organization_id, file, poster_file?, category, description })` saves any file from the conversation, an attached or a generated image included. It is the ChatGPT attachment adapter over the canonical upload. It is not a second lifecycle, and it cannot serve a browser file picker — the dashboard's `POST .../media/upload` is the adapter for that. Pass the resolved native ChatGPT file argument; the content type is detected from the file bytes.
+- One `save_media_attachment` call performs one download attempt. If ChatGPT attachment delivery fails, stop and ask the user to attach the file again. Do not retry with a bare file ID, fabricate a download URL, or switch transports.
 - ChatGPT MCP uploads use native file attachments. There are no upload widget tools in the connector; no tool whose name starts with `open_` and contains `upload` exists.
 - Do not bypass the ChatGPT file-argument rewrite by fabricating `download_url` objects or inventing attachment transport.
 - Prefer business-level image workflows over generic file handoff when the user intent is domain-specific:
@@ -90,11 +87,9 @@ does.
   - Tenant-page media belongs to content-block placements. Block JSON never stores asset IDs or delivery URLs.
 - MCP tools should be coarse-grained and business-level:
   - `get_organization_media_assets`
-  - `upload_user_media`
+  - `save_media_attachment`
   - `update_media_asset`
   - `delete_media_asset`
-  - `save_generated_image`
-  - `save_generated_image_file`
 
 ## Auth boundary
 

@@ -19,7 +19,7 @@ A bundle identifies one exact `origin`, `organization_id`, and `locale`, and con
 - `resources`: canonical `put_resource_localization` arguments for the site,
   each location, each product category, experience details, posts, and image alt
   text where the English source contains it.
-- `pages`: canonical `create_tenant_page` arguments, including the existing
+- `pages`: canonical `create_site_page` arguments, including the existing
   source `page_id`, translated metadata and blocks, and existing media placements.
 
 The publisher supports the catalog epoch's product model, where a product is

@@ -47,3 +47,5 @@ ALTER TABLE product_booking_configs ADD COLUMN calendar_group text
 ALTER TABLE organization ADD COLUMN consultation_settings_json text;
 --> statement-breakpoint
 UPDATE organization SET consultation_settings_json = json_extract(settings_json, '$.consultation') WHERE json_type(settings_json, '$.consultation') = 'object';
+--> statement-breakpoint
+UPDATE organization SET settings_json = json_remove(settings_json, '$.consultation') WHERE json_type(settings_json, '$.consultation') = 'object';
