@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:8f64aeed35f6b075110d1ee25cc31ea62b81811256f2b57cbfc53fe103abcac1",
+  "fingerprint": "sha256:590c6208d6f409ef39205eb63f806463024fc014526523cd020a631f15aa8afa",
   "tools": [
     {
       "name": "append_content_block",
@@ -1494,7 +1494,7 @@
     },
     {
       "name": "cancel_product_booking",
-      "description": "Cancel a pending or confirmed product booking or consultation when the user requests cancellation. Releases its places and emails the guest the cancellation. Call after the user approves the exact change. Records the action in the inbox history and may send email to the guest.",
+      "description": "Cancel a pending or confirmed product booking or consultation when the user requests cancellation. Releases its places and emails the guest the cancellation. cancel a Product booking through the canonical inbox operation service. Confirm/reject apply to pending review bookings. Paid rejection requires an actor-bound authenticated browser financial approval and refunds full principal. Cancellation releases capacity exactly once. Guest status messages are delivered by the same workflow as dashboard. Call after the user approves the exact change. Records the action in the inbox history and may send email to the guest.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -1556,7 +1556,7 @@
     },
     {
       "name": "confirm_product_booking",
-      "description": "Confirm a pending product booking or consultation after staff review. Keeps its existing capacity allocation and emails the guest confirmation. Call after the user approves the exact change. Records the action in the inbox history and may send email to the guest.",
+      "description": "Confirm a pending product booking or consultation after staff review. Keeps its existing capacity allocation and emails the guest confirmation. confirm a Product booking through the canonical inbox operation service. Confirm/reject apply to pending review bookings. Paid rejection requires an actor-bound authenticated browser financial approval and refunds full principal. Cancellation releases capacity exactly once. Guest status messages are delivered by the same workflow as dashboard. Call after the user approves the exact change. Records the action in the inbox history and may send email to the guest.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -2273,6 +2273,46 @@
         "required": [
           "collection"
         ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "create_payment_checkout",
+      "description": "Create Stripe-hosted one-time seller checkout for an active canonical Product/Variant. Booking checkout reserves durable capacity before Stripe. Operator checkout leaves buyer unclaimed; typed email never proves ownership. Physical fulfillment remains merchant-arranged.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "idempotency_key": {
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "product_id": {
+            "type": "string"
+          },
+          "quantity": {
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "session_id": {
+            "type": "string"
+          },
+          "variant_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "product_id",
+          "variant_id",
+          "quantity",
+          "idempotency_key"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
         "type": "object"
       }
     },
@@ -3747,7 +3787,7 @@
     },
     {
       "name": "create_product_booking",
-      "description": "Create a guest booking or consultation for a published product and an existing session. Requires an available numeric price; specify variant_id when the product has multiple active variants. Staff-review bookings remain pending; instant bookings are confirmed. Paid offerings may allow payment later. For paid sessions requiring online payment, returns payment_required without creating a booking. Free sessions remain bookable. Does not collect payment. Sends owner alerts and sends the guest an acknowledgement only when guest_acknowledgement is true. Call after the user approves the exact change. Records the action in the inbox history and may send email to the guest.",
+      "description": "Create an ordinary Product→Variant→Session booking using the public booking service. Review offerings arrive pending; instant offerings arrive confirmed. Positive prices may be pay-later. Required positive online collection reserves an expiring hold and hands off to hosted Stripe Checkout; authenticated native capture alone creates the Booking. No import, paid assertion or direct charge is performed by the tool. Call after the user approves the exact change. Records the action in the inbox history and may send email to the guest.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -7047,6 +7087,94 @@
       }
     },
     {
+      "name": "get_payment",
+      "description": "Read one seller Payment, immutable purchase snapshot, refund and dispute projections.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "payment_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "payment_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "type": "object"
+      }
+    },
+    {
+      "name": "get_payment_payouts",
+      "description": "Read connected Stripe balance and payouts with source and retrieval time. Does not transfer funds.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "outputSchema": {
+        "type": "object"
+      }
+    },
+    {
+      "name": "get_payment_summary",
+      "description": "Report seller captured volume, refunds and disputes separately by currency in a UTC period. Trust receipts are not labeled earned revenue. Existing records remain serviceable after downgrade.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "from": {
+            "description": "Inclusive UTC ISO instant",
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "to": {
+            "description": "Exclusive UTC ISO instant",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "type": "object"
+      }
+    },
+    {
+      "name": "get_payments_usage",
+      "description": "Read Metronome Payments invoices, accrued usage and undelivered provider-cost events separately from Better Auth subscription billing.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "outputSchema": {
+        "type": "object"
+      }
+    },
+    {
       "name": "get_post",
       "description": "Read a short website post before editing or publishing it. Returns its caption, call to action, ordered media, website status, draft preview link and stored Facebook or Instagram publication receipts. Use get_channel_post for current provider content.",
       "inputSchema": {
@@ -8795,6 +8923,29 @@
       }
     },
     {
+      "name": "issue_payment_refund",
+      "description": "Execute a seller refund only with an unexpired authorization approved by this operator in the authenticated browser. A model cannot mint the authorization. Uses connected-account native refunds, stable idempotency and current refundable principal.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "authorization_id": {
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "authorization_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "type": "object"
+      }
+    },
+    {
       "name": "list_article_categories",
       "description": "List categories and subcategories in one site blog or documentation collection, in public display order, with article and child-category counts. Published articles require a category in their collection.",
       "inputSchema": {
@@ -10269,6 +10420,38 @@
       }
     },
     {
+      "name": "list_payments",
+      "description": "List tenant customer Payments with canonical payable links and currency minor amounts. Cursor pages seller records, never platform subscription transactions.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "after": {
+            "type": "string"
+          },
+          "from": {
+            "description": "Inclusive UTC ISO instant",
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "to": {
+            "description": "Exclusive UTC ISO instant",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "type": "object"
+      }
+    },
+    {
       "name": "list_posts",
       "description": "List draft or published short website posts when the user wants to find announcements to review or edit. Results are paginated, newest change first. Filter by location_id for one location. Use list_channel_posts for live Facebook or Instagram posts.",
       "inputSchema": {
@@ -11092,6 +11275,24 @@
           "entity",
           "id"
         ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "open_payments_onboarding",
+      "description": "Open authenticated merchant Stripe Payments integration management. Stripe-native onboarding collects KYC and bank details; never collect these in chat.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "outputSchema": {
         "type": "object"
       }
     },
@@ -12205,7 +12406,7 @@
     },
     {
       "name": "reassign_product_booking",
-      "description": "Explicitly reassign the entire provider-led Session to the offering’s currently assigned member. All attendees keep Booking IDs and Session time; Checks member hours/time off/busy data/overlap atomically and audits actor/old/new assignment. Guest notifications use the existing inbox delivery workflow. Retry the same key after a notification failure.",
+      "description": "Explicitly reassign the entire provider-led Session to the offering’s currently assigned member. All attendees keep Booking IDs and Session time; active checkout holds refuse the change. Checks member hours/time off/busy data/overlap atomically and audits actor/old/new assignment. Guest notifications use the existing inbox delivery workflow. Retry the same key after a notification failure.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -13348,7 +13549,7 @@
     },
     {
       "name": "reject_product_booking",
-      "description": "Decline a pending product booking or consultation after staff review. Cancels the booking, releases its places and emails the guest the decision. Call after the user approves the exact change. Records the action in the inbox history and may send email to the guest.",
+      "description": "Decline a pending product booking or consultation after staff review. Cancels the booking, releases its places and emails the guest the decision. reject a Product booking through the canonical inbox operation service. Confirm/reject apply to pending review bookings. Paid rejection requires an actor-bound authenticated browser financial approval and refunds full principal. Cancellation releases capacity exactly once. Guest status messages are delivered by the same workflow as dashboard. Call after the user approves the exact change. Records the action in the inbox history and may send email to the guest.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -15267,6 +15468,35 @@
           "resource_type",
           "updated_resource_ids"
         ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "request_payment_refund",
+      "description": "Prepare full or partial direct-charge refund for explicit authenticated browser approval. Returns a bound approval handoff; this request does not refund principal. Never treat model confirm=true as financial authorization.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "description": "Refund principal in the Payment currency minor units",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "payment_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "payment_id",
+          "amount"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
         "type": "object"
       }
     },

@@ -42,7 +42,7 @@ const settings = {
   capacity: { title: 'Guest limit', lead: 'How many guests can book the same session? Existing appointments keep their saved guest limit.' },
   confirmation: { title: 'Confirmation', lead: 'Confirm bookings as soon as guests reserve, or review each request before confirming.' },
   assignment: { title: 'Who guests meet', lead: 'Assign a team member to use their working hours, time off and calendar availability. Existing bookings retain their assignment.' },
-  payment: { title: 'Payment', lead: 'Online checkout is not available yet. Requiring payment prevents guests from booking paid sessions; free sessions remain bookable.' },
+  payment: { title: 'Payment', lead: 'Require guests to pay through hosted Checkout before a paid booking is created. Free sessions remain bookable.' },
   location: { title: 'Meeting location', lead: 'Choose a city for your online schedule; times follow its time zone and daylight saving is handled automatically.' },
   calendar: { title: 'Shared availability', lead: 'Use the same calendar name for online services that cannot run at the same time. Leave it empty for an independent schedule.' },
   website: { title: 'Website booking', lead: 'This applies to all services on your website. Guests can choose times for published online services with a weekly schedule.' },

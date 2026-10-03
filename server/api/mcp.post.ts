@@ -30,6 +30,7 @@ import {
 import { logMcpToolCallEvent } from "~/server/utils/mcp-telemetry";
 import { describeErrorForTelemetry, errorChainForTelemetry } from "~/server/utils/error-telemetry";
 import { getRequestDataMetrics, recordRequestPhase } from "~/server/utils/request-metrics";
+import { mcpFinancialApprovalErrorResult } from "~/server/utils/mcp-financial-handoff";
 
 const TENANT_CATALOG_FINGERPRINT = catalogFingerprint(MCP_PUBLIC_TOOLS);
 
@@ -67,6 +68,7 @@ create_post makes a draft short website/social post. create_blog_post makes a dr
 
 For whole-document or collection replacement, read the latest state and preserve everything outside the requested change. Use the supplied concurrency tokens and deletion confirmations. Read all pages before claiming a complete collection or replacing it. Prices belong to variants; location offerings and website visibility are separate. Weekly schedules use Product duration/capacity; saved Sessions retain their actual facts and any Booking history protects them.
 
+Product bookings and consultations use the shared session allocator and confirmation/payment policy. Required positive collection reserves an expiring hold and hands off to hosted Checkout; authenticated capture alone creates the Booking. Paid review rejection requires an actor-bound authenticated browser financial approval and full-principal refund. Payments reads and existing servicing remain available after downgrade; operating subscription billing stays separate.
 
 Contact submissions and table reservations can be read here; response/status work uses the dashboard inbox. Reviews and imported Google Q&A are managed in Google. Authored Q&A has dedicated create, update, delete and reorder tools. Language tools manage exact authored representations rather than automatic translation.
 
@@ -253,7 +255,8 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
       // to classifying as kind:'transport') must still resolve as a
       // graceful isError:true CallToolResult, not a JSON-RPC error — MCP
       // clients can't act on a transport-level error mid-tool-call.
-      return { isError: true, content: [{ type: "text", text: mcpErr.message }] };
+      return mcpFinancialApprovalErrorResult(toolError, cfEnv.NUXT_PUBLIC_PLATFORM_DOMAIN, mcpErr.message)
+        ?? { isError: true, content: [{ type: "text", text: mcpErr.message }] };
     }
 
     recordRequestPhase(event, "mcp_execute", executionStartedAt);

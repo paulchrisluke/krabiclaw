@@ -1,4 +1,5 @@
 import { PROVIDERS_TOOLS } from './providers'
+import { PAYMENTS_TOOLS } from './payments'
 import type { McpToolDefinition } from './shared'
 import { TOOL_ANNOTATIONS_BY_NAME } from './shared'
 import { ANALYTICS_TOOLS } from './analytics'
@@ -18,6 +19,7 @@ import { SUBMISSIONS_TOOLS } from './submissions'
 
 export const MCP_PUBLIC_TOOLS: McpToolDefinition[] = [
   ...PROVIDERS_TOOLS,
+  ...PAYMENTS_TOOLS,
   ...ANALYTICS_TOOLS,
   ...BLOG_TOOLS,
   ...CONTENT_TOOLS,

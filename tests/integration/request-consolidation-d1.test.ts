@@ -136,7 +136,10 @@ test('a thread and the record it refers to commit and cancel as one', { timeout:
     const cancellations = await Promise.all([1, 2].map(() => cancelBookingRequest(db, {
       id: reservationThread, organizationId: ORG, kind: 'reservation', tokenHash: 'hash', now: '2098-01-01T00:00:00.000Z',
     })))
-    assert.equal(cancellations.filter(Boolean).length, 1)
+    // Both authorized retries observe success; only one spends the capability
+    // and changes the record. This also lets failed notification delivery retry.
+    assert.equal(cancellations.filter(value => value?.changed).length, 1)
+    assert.equal(cancellations.filter(value => value && !value.changed).length, 1)
     assert.equal(await db.prepare('SELECT status FROM reservations WHERE request_id=?').bind(reservationThread).first('status'), 'cancelled')
     const cancelledThread = await getGuestRequest(db, reservationThread)
     assert.equal(cancelledThread?.payload.cancellation.used_at, '2098-01-01T00:00:00.000Z')

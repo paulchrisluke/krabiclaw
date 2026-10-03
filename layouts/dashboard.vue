@@ -416,6 +416,7 @@ const navTargets = computed<DashboardMobileNavItem[]>(() => {
     { key: 'calendar', label: 'Calendar', icon: 'i-lucide-calendar-days', to: `${routeOrgBase}/calendar` },
     ...(dashboard.organization.value?.vertical === 'service' ? [{ key: 'products', label: requireProductPresentation('service', dashboard.organization.value.theme_id).collectionLabel, icon: 'i-lucide-package', to: `${routeOrgBase}/products` }] : []),
     { key: 'locations', label: 'Locations', icon: 'i-lucide-map-pin', to: `${routeOrgBase}/locations` },
+    { key: 'payments', label: 'Payments', icon: 'i-lucide-credit-card', to: `${routeOrgBase}/payments` },
     { key: 'messages', label: 'Messages', icon: 'i-lucide-message-square', to: `${routeOrgBase}/messages` },
   ]
   return items
