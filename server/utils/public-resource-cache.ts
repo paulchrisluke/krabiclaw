@@ -133,6 +133,10 @@ export async function drainPublicResourceCacheInvalidations(
     const claimedAttemptCount = row.attempt_count + 1
     try {
       await purgeOrganizationCaches(db, kv, row.organization_id, freeOrganizationDomain)
+      // Off production a row's whole work is the purge that just succeeded, so
+      // the site has converged. In production it converges only when a search
+      // sync completes.
+      let converged = !productionSearch
       if (productionSearch && !syncedOrganizations.has(row.organization_id)) {
         const synced = await syncOrganizationSearchIndex(env as CloudflareEnv, db, row.organization_id)
         syncedOrganizations.add(row.organization_id)
@@ -151,17 +155,19 @@ export async function drainPublicResourceCacheInvalidations(
                ${scopedRows}
           `, [nowIso, row.organization_id, SEARCH_SYNC_CONTINUE, nowIso, ...scopeParams])
         } else {
-          // This complete reconciliation rebuilt the organization's desired
-          // state from D1. It also repairs changes behind older terminal rows,
-          // which the retry selector can no longer claim. Do not clear a failure
-          // created after this drain began or one belonging to another site.
-          await execute(db, `
-            UPDATE public_resource_cache_invalidations
-               SET status = 'processed', processed_at = ?, last_error = NULL
-             WHERE organization_id = ? AND status = 'failed' AND created_at < ?
-               ${scopedRows}
-          `, [nowIso, row.organization_id, nowIso, ...scopeParams])
+          converged = true
         }
+      }
+      if (converged) {
+        // A converged site has done the work behind older terminal rows, which
+        // the retry selector can no longer claim. Do not clear a failure created
+        // after this drain began or one belonging to another site.
+        await execute(db, `
+          UPDATE public_resource_cache_invalidations
+             SET status = 'processed', processed_at = ?, last_error = NULL
+           WHERE organization_id = ? AND status = 'failed' AND created_at < ?
+             ${scopedRows}
+        `, [nowIso, row.organization_id, nowIso, ...scopeParams])
       }
       const finalized = await execute(db, `
         UPDATE public_resource_cache_invalidations
