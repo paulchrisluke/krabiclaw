@@ -116,8 +116,7 @@ export async function getPublicConsultationSettings(db: DbClient, organizationId
            json_extract(consultation_settings_json, '$.schedule_path') AS schedule_path,
            json_extract(consultation_settings_json, '$.confirmation_path') AS confirmation_path,
            json_extract(consultation_settings_json, '$.tracking_enabled') AS tracking_enabled,
-           COALESCE(json_extract(consultation_settings_json, '$.metadata_json'), json_extract(consultation_settings_json, '$.metadata')) AS metadata_json,
-           json_extract(consultation_settings_json, '$.contact_form_enabled') AS contact_form_enabled
+           json_extract(consultation_settings_json, '$.metadata_json') AS metadata_json
       FROM organization
      WHERE id = ? AND json_type(consultation_settings_json) = 'object'
      LIMIT 1
@@ -139,7 +138,7 @@ export async function getPublicConsultationSettings(db: DbClient, organizationId
     schedule_path: schedulePath,
     confirmation_path: confirmationPath,
     tracking_enabled: row.tracking_enabled == null ? true : asBoolean(row.tracking_enabled),
-    contact_form_enabled: row.contact_form_enabled == null ? (metadata.contact_form_enabled == null ? true : asBoolean(metadata.contact_form_enabled)) : asBoolean(row.contact_form_enabled),
+    contact_form_enabled: metadata.contact_form_enabled == null ? true : asBoolean(metadata.contact_form_enabled),
     metadata,
   }
 }

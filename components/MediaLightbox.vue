@@ -230,11 +230,10 @@ function onScroll() {
   }
 }
 
-async function navigate(index: number) {
+function navigate(index: number) {
   if (index < 0 || index >= items.value.length) return
   indexModel.value = index
-  await nextTick()
-  scroller.value?.scrollTo({ top: index * getPageHeight(), behavior: 'smooth' })
+  scroller.value?.scrollTo({ top: index * getPageHeight(), behavior: 'instant' })
 }
 function onKeydown(e: KeyboardEvent) {
   if (!props.open) return
