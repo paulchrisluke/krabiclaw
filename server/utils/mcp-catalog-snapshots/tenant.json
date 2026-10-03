@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:9cab879bee9e18632e7121993b59b7cad3e539eddd495c5c2298cb19bd18b456",
+  "fingerprint": "sha256:ff87695091fe1099245b95c486e41e9a262d88395e8e0ea1803cc7b355135d60",
   "tools": [
     {
       "name": "append_content_block",
@@ -8035,7 +8035,7 @@
     },
     {
       "name": "get_social_connections",
-      "description": "Read the site’s saved website, Facebook Page and Instagram publishing connections before selecting a publication target. Returns target_id, connection_revision, supported formats and operations, stored connection problems and setup links. Live provider access is checked by channel operations; a saved connection does not establish current Page or account access. Credentials are not returned.",
+      "description": "Read the site’s website, Facebook Page and Instagram publishing connections before selecting a publication target. Returns target_id, connection_revision, supported formats and operations, setup links, and problems, including whether Meta currently accepts each connection’s access; a rejected one names Meta’s error code. Credentials are not returned.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {

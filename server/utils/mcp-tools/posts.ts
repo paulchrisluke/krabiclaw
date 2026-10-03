@@ -62,7 +62,7 @@ const channelPostObject = {
 export const POSTS_TOOLS: McpToolDefinition[] = [
   organizationTool({
     name: 'get_social_connections',
-    description: "Read the site’s saved website, Facebook Page and Instagram publishing connections before selecting a publication target. Returns target_id, connection_revision, supported formats and operations, stored connection problems and setup links. Live provider access is checked by channel operations; a saved connection does not establish current Page or account access. Credentials are not returned.",
+    description: "Read the site’s website, Facebook Page and Instagram publishing connections before selecting a publication target. Returns target_id, connection_revision, supported formats and operations, setup links, and problems, including whether Meta currently accepts each connection’s access; a rejected one names Meta’s error code. Credentials are not returned.",
     domain: 'posts',
     minimumRole: 'admin',
     confirmRequired: false,

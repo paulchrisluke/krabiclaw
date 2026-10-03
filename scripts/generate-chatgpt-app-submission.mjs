@@ -46,7 +46,7 @@ const effects = {
   list_contact_inquiries: 'Reads authorized customer contact inquiries, including personal contact information.',
   get_location: 'Reads the selected location, including operational contact and notification settings.',
   get_post: 'Reads the selected short post and the state of its external publications.',
-  get_social_connections: 'Reads which website, Facebook Page and Instagram account the organization can publish to, without any token.',
+  get_social_connections: 'Reads which website, Facebook Page and Instagram account the organization can publish to, and whether Meta currently accepts each connection, without returning any token.',
   get_product: 'Reads the selected product and its price and content.',
   get_product_catalog_localization: 'Reads product catalog translations for the selected organization and locale.',
   list_reservation_inquiries: 'Reads authorized reservation inquiries, including guest contact and reservation information.',
@@ -136,6 +136,7 @@ const openWorldEffects = {
   get_channel_post: 'Reads one post from Meta belonging to the explicitly selected connected Facebook Page or Instagram account.',
   reconcile_post_publication: 'Reads Meta for an existing publication and updates its receipt in the selected workspace; it does not publish.',
   delete_media_asset: 'Deletes the stored file from the Cloudflare media account when no other asset references it.',
+  get_social_connections: 'Asks Meta whether each saved Facebook Page and Instagram connection still has access; it reads only the connected accounts.',
 }
 
 function justifications(tool) {

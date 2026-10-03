@@ -22,7 +22,13 @@ export class MetaGraphError extends Error {
   readonly failure: MetaGraphFailure
   readonly details: MetaGraphErrorDetails
   constructor(failure: MetaGraphFailure, message: string, details: MetaGraphErrorDetails = { status: null, code: null, subcode: null, fbtraceId: null }, options?: { cause?: unknown }) {
-    super(message, options)
+    // Meta's code, subcode and trace id are what tell an expired token from a
+    // revoked permission, so they travel with the message to logs and callers.
+    const identifiers = [
+      details.code !== null ? `code ${details.code}${details.subcode !== null ? `/${details.subcode}` : ''}` : null,
+      details.fbtraceId ? `fbtrace_id ${details.fbtraceId}` : null,
+    ].filter(Boolean)
+    super(identifiers.length ? `${message} (Meta ${identifiers.join(', ')})` : message, options)
     this.name = 'MetaGraphError'
     this.failure = failure
     this.details = details

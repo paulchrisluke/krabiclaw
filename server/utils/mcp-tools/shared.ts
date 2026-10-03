@@ -896,7 +896,8 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   list_location_reviews: R,
   list_locations: R,
   list_posts: R,
-  get_social_connections: R,
+  // Asks Meta whether each saved connection's access still works.
+  get_social_connections: { ...R, openWorldHint: true },
   // Reads Meta, and records what the read proves about one publication.
   reconcile_post_publication: { ...D, openWorldHint: true },
   list_channel_posts: { ...R, openWorldHint: true },
