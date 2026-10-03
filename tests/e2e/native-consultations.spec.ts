@@ -6,6 +6,7 @@ import { blawbyTestExtraHeaders } from './test-env'
 test.use({ timezoneId: 'America/New_York' })
 
 test('native online review uses canonical Products, holds capacity, and releases it once', async ({ page, request, baseURL }) => {
+  test.setTimeout(90_000)
   test.skip(process.env.NATIVE_CONSULTATION_PROOF !== 'true' || !['localhost', '127.0.0.1'].includes(new URL(baseURL!).hostname), 'Explicit opt-in in an isolated disposable checkout only; never mutate shared suite fixtures')
   const analyticsFailures: string[] = []
   page.on('response', response => {
@@ -50,7 +51,67 @@ test('native online review uses canonical Products, holds capacity, and releases
   expect(mcpData<{ settings: { mode: string } }>(await activate.json()).settings.mode).toBe('native')
   expect((await (await page.request.get(`${editor}/consultation`)).json()).mode).toBe('native')
     await page.goto(`/dashboard/north-carolina-legal-services/products/${products[0]!.id}/booking`)
-    await expect(page.getByLabel('Online timezone', { exact: true })).toHaveValue('UTC')
+    const bookingPath = `/dashboard/north-carolina-legal-services/products/${products[0]!.id}/booking`
+    await expect(page.getByRole('link', { name: 'Guest limit One guest per session' })).toBeVisible()
+    await page.getByRole('link', { name: 'Duration 45 minutes', exact: true }).click()
+    await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeDisabled()
+    await page.getByLabel('Duration in minutes', { exact: true }).fill('50')
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(page.getByRole('link', { name: 'Duration 50 minutes', exact: true })).toBeVisible()
+    const readConfig = async () => {
+      const result = await mcpRequest(page.request, baseURL!, { method: 'tools/call', toolName: 'get_product', args: { organization_id: org, product_id: products[0]!.id } })
+      expect(result.status()).toBe(200)
+      return mcpData<{ product: { booking: Record<string, unknown> } }>(await result.json()).product.booking
+    }
+    expect(await readConfig()).toMatchObject({ duration_minutes: 50, default_capacity: 1, confirmation_mode: 'review', online_payment_required: true, online_timezone: 'UTC', calendar_group: `local-${stamp}` })
+    expect((await (await page.request.get(`${editor}/consultation`)).json()).mode).toBe('native')
+    const retainedSchedule = await page.request.get(`${editor}/products/${products[0]!.id}/availability?location_id=online`)
+    expect(retainedSchedule.status()).toBe(200)
+    expect((await retainedSchedule.json()).rules).toHaveLength(1)
+    await page.getByRole('link', { name: 'Duration 50 minutes', exact: true }).click()
+    await page.getByLabel('Duration in minutes', { exact: true }).fill('45')
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(page.getByRole('link', { name: 'Duration 45 minutes', exact: true })).toBeVisible()
+    await page.getByRole('link', { name: /^Meeting location Online · UTC · GMT(?:\+0)?$/ }).click()
+    const timeZone = page.getByRole('button', { name: 'Time zone', exact: true })
+    await expect(timeZone).toContainText('UTC · GMT')
+    await timeZone.click()
+    await page.getByPlaceholder('Search by city, e.g. Bangkok').fill('New York')
+    await page.getByRole('option', { name: /^New York · GMT/ }).click()
+    await expect(timeZone).toContainText('New York')
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(page.getByRole('link', { name: /^Meeting location Online · New York · GMT/ })).toBeVisible()
+    expect(await readConfig()).toMatchObject({ online_timezone: 'America/New_York', duration_minutes: 45, calendar_group: `local-${stamp}` })
+    // Restore the explicit UTC schedule used by the public booking assertions below.
+    await page.request.put(`${editor}/products/${products[0]!.id}/booking`, { data: { online_timezone: 'UTC' } })
+    await page.goto(`${bookingPath}/capacity`)
+    await expect(page.getByRole('radio', { name: 'One guest', exact: true })).toBeChecked()
+    await page.getByRole('radio', { name: 'A group of guests', exact: true }).click()
+    await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeDisabled()
+    await page.getByLabel('Maximum guests per session', { exact: true }).fill('2')
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(page.getByRole('link', { name: 'Guest limit Up to 2 guests per session', exact: true })).toBeVisible()
+    expect(await readConfig()).toMatchObject({ default_capacity: 2, duration_minutes: 45, online_timezone: 'UTC', online_payment_required: true })
+    await page.getByRole('link', { name: 'Guest limit Up to 2 guests per session', exact: true }).click()
+    await page.getByRole('radio', { name: 'One guest', exact: true }).click()
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(page.getByRole('link', { name: 'Guest limit One guest per session', exact: true })).toBeVisible()
+    await page.getByRole('link', { name: 'Guest limit One guest per session', exact: true }).click()
+    await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeDisabled()
+    await page.screenshot({ path: '/tmp/pr1211-booking-setup.png', fullPage: true })
+    const desktopViewport = page.viewportSize()!
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.getByRole('radio', { name: 'A group of guests', exact: true }).click()
+    await page.getByLabel('Maximum guests per session', { exact: true }).fill('3')
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await expect(page).toHaveURL(`${baseURL}${bookingPath}`)
+    await expect(page.getByRole('link', { name: 'Guest limit One guest per session', exact: true })).toBeVisible()
+    await page.getByRole('link', { name: 'Guest limit One guest per session', exact: true }).click()
+    await expect(page.getByRole('radio', { name: 'One guest', exact: true })).toBeChecked()
+    await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeDisabled()
+    expect(await readConfig()).toMatchObject({ default_capacity: 1 })
+    await page.screenshot({ path: '/tmp/pr1211-booking-mobile.png', fullPage: true })
+    await page.setViewportSize(desktopViewport)
     const bindViaMcp = async (productId?: string | null) => {
       const current = (await (await page.request.get(`${editor}/pages/${service.id}`)).json()).page
       const response = await mcpRequest(page.request, baseURL!, { method: 'tools/call', toolName: 'update_site_page', args: {

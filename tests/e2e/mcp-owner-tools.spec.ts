@@ -608,8 +608,9 @@ test.describe('stateless MCP server', () => {
       try {
         await call('set_product_publication', { product_id: created.id, published: true })
         await call('set_product_location', { product_id: created.id, location_id: 'loc-demo', active: true, published: true })
-        await call('set_product_booking_config', { product_id: created.id, duration_minutes: 120, default_capacity: 10 })
+        await call('set_product_booking_config', { product_id: created.id, duration_minutes: 120, default_capacity: 10, online_timezone: 'UTC' })
         await call('replace_product_weekly_schedule', { product_id: created.id, location_id: 'loc-demo', slots })
+        await call('replace_product_weekly_schedule', { product_id: created.id, location_id: null, slots: [{ weekday: 1, start_time: '10:00' }] })
         await loginAs(page.request, baseURL!, MCP_GROWTH_USER_ID)
         const collectionResponse = await page.request.get(`${baseURL}/api/editor/organizations/${organizationId}/collections?location_id=loc-demo`)
         expect(collectionResponse.status()).toBe(200)
@@ -617,16 +618,18 @@ test.describe('stateless MCP server', () => {
         expect(collectionId).toBeTruthy()
         await page.goto(`${baseURL}/dashboard/ember-slice-demo/locations/brooklyn/products/experiences/${collectionId}/${created.id}/booking`)
         await waitForNuxtHydration(page)
-        await expect(page.getByText('Session length (minutes)', { exact: true })).toBeVisible()
-        await expect(page.getByText('Places per session', { exact: true })).toBeVisible()
-        await expect(page.locator('input[type="time"]')).toHaveCount(1)
-        await expect(page.getByLabel('Places for this time')).toHaveCount(0)
+        await expect(page.getByRole('link', { name: 'Duration 120 minutes', exact: true })).toBeVisible()
+        await expect(page.getByRole('link', { name: 'Guest limit Up to 10 guests per session', exact: true })).toBeVisible()
+        await page.getByRole('link', { name: /^Weekly schedule / }).click()
+        await page.getByRole('link', { name: 'Sunday 2:00 PM', exact: true }).click()
+        await expect(page.getByLabel('Start time 1', { exact: true })).toHaveValue('14:00')
+        await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeDisabled()
         const read = async () => {
           const response = await request.get(`${url}/sessions`)
           expect(response.status(), await response.text()).toBe(200)
-          return (await response.json()).sessions as Array<{ id: string; source_occurrence_key: string; timezone: string; starts_at: string; ends_at: string; capacity: number; status: string; claimed: number; remaining: number }>
+          return (await response.json()).sessions as Array<{ id: string; location_id: string | null; source_occurrence_key: string; timezone: string; starts_at: string; ends_at: string; capacity: number; status: string; claimed: number; remaining: number }>
         }
-        const target = (await read()).find(row => row.starts_at > new Date().toISOString())
+        const target = (await read()).find(row => row.location_id === 'loc-demo' && row.starts_at > new Date().toISOString())
         expect(target).toBeTruthy()
         const booked = await request.post(`${baseURL}/api/public/products/${created.slug}/book`, {
           headers: tenantTestExtraHeaders(),
@@ -635,7 +638,16 @@ test.describe('stateless MCP server', () => {
         expect(booked.status(), await booked.text()).toBe(201)
         const before = (await read()).find(row => row.id === target!.id)!
         expect(before).toMatchObject({ capacity: 10, claimed: 6, remaining: 4 })
-        expect((await request.put(`${url}/availability`, { data: { location_id: 'loc-demo', slots: [] } })).status()).toBe(200)
+        await page.getByRole('button', { name: 'Remove start time 1', exact: true }).click()
+        await page.getByRole('button', { name: 'Save', exact: true }).click()
+        await expect(page.getByRole('link', { name: 'Sunday No sessions', exact: true })).toBeVisible()
+        const cleared = await request.get(`${url}/availability?location_id=loc-demo`)
+        expect(cleared.status()).toBe(200)
+        expect((await cleared.json()).rules).toEqual([])
+        const online = await request.get(`${url}/availability?location_id=online`)
+        expect(online.status()).toBe(200)
+        expect((await online.json()).rules).toHaveLength(1)
+        expect(mcpData<{ product: { booking: { online_timezone: string } } }>(await call('get_product', { product_id: created.id })).product.booking.online_timezone).toBe('UTC')
         await call('set_product_booking_config', { product_id: created.id, duration_minutes: 30, default_capacity: 2 })
         await call('replace_product_weekly_schedule', { product_id: created.id, location_id: 'loc-demo', slots })
         const after = (await read()).find(row => row.id === target!.id)!
@@ -646,6 +658,7 @@ test.describe('stateless MCP server', () => {
       } finally {
         // Preserve Booking history while withdrawing this test-owned schedule and listing.
         await call('replace_product_weekly_schedule', { product_id: created.id, location_id: 'loc-demo', slots: [] })
+        await call('replace_product_weekly_schedule', { product_id: created.id, location_id: null, slots: [] })
         await call('set_product_location', { product_id: created.id, location_id: 'loc-demo', active: false, published: false })
         await call('set_product_publication', { product_id: created.id, published: false })
         const rules = await request.get(`${url}/availability?location_id=loc-demo`)

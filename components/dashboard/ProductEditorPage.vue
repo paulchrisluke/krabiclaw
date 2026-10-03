@@ -36,6 +36,7 @@ import type { ComputedRef, InjectionKey, Ref } from 'vue'
 
 export const SECTION_KEYS = ['photo', 'name', 'price', 'description', 'options', 'order-url', 'tags', 'attributes', 'publication', 'booking'] as const
 export type SectionKey = typeof SECTION_KEYS[number]
+export type BookingConcern = 'enabled' | 'duration' | 'capacity' | 'confirmation' | 'payment' | 'location' | 'calendar' | 'website' | number
 
 export interface ScheduleSlotDraft { weekday: number; start_time: string }
 
@@ -97,6 +98,7 @@ export interface ProductEditor {
   currency: string
   organizationId: string
   locationId: ComputedRef<string | null>
+  websiteBooking: ComputedRef<boolean>
   definitions: Ref<MetafieldDefinition[]>
   isNew: ComputedRef<boolean>
   /** The product this route names has loaded, or it is being created. Until then a leaf has nothing to show or save. */
@@ -119,6 +121,8 @@ export interface ProductEditor {
   booleanValue: (definition: MetafieldDefinition) => boolean
   weekdays: ReadonlyArray<{ value: number; label: string }>
   scheduleLoading: Ref<boolean>
+  scheduleError: Ref<string | null>
+  savedSlotsFor: (weekday: number) => ScheduleSlotDraft[]
   slotsFor: (weekday: number) => ScheduleSlotDraft[]
   addSlot: (weekday: number) => void
   removeSlot: (slot: ScheduleSlotDraft) => void
@@ -128,7 +132,7 @@ export interface ProductEditor {
    * (one option, one combination's price) names its own parent, so the save
    * lands where its Close would rather than back on the product.
    */
-  save: (closeTo?: string) => Promise<void>
+  save: (closeTo?: string, bookingConcern?: BookingConcern) => Promise<void>
 }
 
 export const productEditorKey = Symbol('product-editor') as InjectionKey<ProductEditor>
@@ -144,7 +148,7 @@ import { isCurrencyCode } from '~/shared/currencies'
 import { majorAmountToMinor, minorAmountToMajor, selectPrice, type Price } from '~/shared/prices'
 import { formatProductMoney } from '~/utils/product-money'
 import { presentationForProduct, productSurfaceOf, requireProductPresentation } from '~/utils/product-presentation'
-import { isValidTimezone } from '~/utils/timezone'
+import { MINUTE_TIME_PATTERN } from '~/utils/timezone'
 import { getErrorMessage, isNotFoundError } from '~/utils/errors'
 
 const route = useRoute()
@@ -274,6 +278,7 @@ async function load(options: { force?: boolean } = {}) {
     loadedKey = ''
     if (isNotFoundError(error)) return showError(createError({ statusCode: 404, statusMessage: `${presentation.value.itemLabel} not found` }))
     loadError.value = getErrorMessage(error, `Failed to load this ${presentation.value.itemLabel.toLowerCase()}`)
+    if (options.force) throw error
   }
 }
 
@@ -462,11 +467,6 @@ const sectionValid = computed(() => {
   if (editorKey.value === 'options') {
     return form.options.every(option => option.name.trim() && option.values.length > 0)
   }
-  if (editorKey.value === 'booking') {
-    if (!form.bookable) return true
-    return Number.isSafeInteger(Number(form.booking_duration)) && Number(form.booking_duration) > 0
-      && (!form.online_schedule || isValidTimezone(form.online_timezone))
-  }
   return true
 })
 
@@ -492,8 +492,8 @@ function priceSummary(): string {
 
 function bookingSummary(): string {
   const minutes = `${form.booking_duration || '?'} minutes`
-  const id = form.online_schedule ? null : locationId.value
-  if ((!id && !form.online_schedule) || scheduleLoadedFor.value !== `${productId.value}:${id}`) return minutes
+  const id = locationId.value
+  if ((!id && !product.value?.booking?.online_timezone) || scheduleLoadedFor.value !== `${productId.value}:${id}`) return minutes
   const count = schedule.value.filter(slot => slot.start_time.trim()).length
   return `${minutes} · ${count === 1 ? '1 time' : `${count} times`} a week`
 }
@@ -688,12 +688,12 @@ const { createActionLabel, saveLabel: createSaveLabel, saveDisabled, save: saveC
 const saveLabel = computed(() => createSaveLabel.value ?? 'Publish')
 
 const closeTo = ref<string | null>(null)
-async function save(target?: string) {
+async function save(target?: string, bookingConcern?: BookingConcern) {
   closeTo.value = target ?? null
-  try { await saveCurrentEditor() } finally { closeTo.value = null }
+  try { if (bookingConcern !== undefined) await commit(bookingConcern); else await saveCurrentEditor() } finally { closeTo.value = null }
 }
 
-async function commit() {
+async function commit(bookingConcern?: BookingConcern) {
   const id = locationId.value
   if (!id && !organizationOnly.value) return
   saving.value = true
@@ -717,11 +717,14 @@ async function commit() {
       await navigateTo(`${collectionPath.value}/${created.product.id}`, { replace: true })
       return
     }
-    await dashboardApi(`/api/editor/organizations/${organizationId}/products/${productId.value}`, {
-      method: 'PATCH', body: payload(), validate: isOne,
-    })
-    if (editorKey.value === 'publication') await savePublication(id)
-    if (editorKey.value === 'booking') await saveBooking()
+    if (bookingConcern !== undefined) {
+      await saveBooking(bookingConcern)
+    } else {
+      await dashboardApi(`/api/editor/organizations/${organizationId}/products/${productId.value}`, {
+        method: 'PATCH', body: payload(), validate: isOne,
+      })
+      if (editorKey.value === 'publication') await savePublication(id)
+    }
     await load({ force: true })
     await (closeTo.value ? navigateTo(closeTo.value) : level.close())
   } catch (error) {
@@ -764,54 +767,44 @@ async function savePublication(id: string | null) {
   })
 }
 
-/**
- * Write the capability the merchant is looking at.
- *
- * Unticking the box used to return here and let the save report success while
- * the product stayed bookable. Removing the capability takes the schedule with
- * it, so the writer refuses while anything is booked and says so.
- */
-async function saveBooking() {
-  if (!form.bookable) {
-    if (!product.value?.booking) return
-    await dashboardApi(`/api/editor/organizations/${organizationId}/products/${productId.value}/booking`, {
-      method: 'DELETE', validate: isRecord,
+/** Each focused editor writes only the setting its caller named. */
+async function saveBooking(concern: BookingConcern) {
+  if (typeof concern === 'number') return saveSchedule(concern)
+  if (concern === 'website') {
+    await dashboardApi(`/api/editor/organizations/${organizationId}/consultation`, {
+      method: 'PUT', body: { mode: form.native_consultations ? 'native' : form.consultation_mode === 'native' ? 'native_disabled' : form.consultation_mode }, validate: isRecord,
     })
     return
   }
-  await dashboardApi(`/api/editor/organizations/${organizationId}/products/${productId.value}/booking`, {
-    method: 'PUT',
-    body: {
-      duration_minutes: Number(form.booking_duration) || null,
-      default_capacity: form.booking_capacity.trim() ? Number(form.booking_capacity) : null,
-      confirmation_mode: form.confirmation_mode, online_payment_required: form.online_payment_required,
-      online_timezone: form.online_schedule ? form.online_timezone.trim() || null : null,
-      calendar_group: form.online_schedule ? form.calendar_group.trim() || null : null,
-    },
-    validate: isRecord,
-  })
-  // The schedule is saved with the capability it belongs to. A product that
-  // has just become bookable has no schedule loaded yet, and none to save.
-  await saveSchedule()
-  if (organizationOnly.value && vertical === 'service') {
-    try {
-    await dashboardApi(`/api/editor/organizations/${organizationId}/consultation`, { method: 'PUT', body: { mode: form.native_consultations ? 'native' : form.consultation_mode === 'native' ? 'native_disabled' : form.consultation_mode }, validate: isRecord })
-    } catch (error) {
-      throw new Error('The service and schedule were saved, but the website booking mode could not be saved. Try saving again.', { cause: error })
-    }
+  const url = `/api/editor/organizations/${organizationId}/products/${productId.value}/booking`
+  if (concern === 'enabled' && !form.bookable) {
+    await dashboardApi(url, { method: 'DELETE', validate: isRecord })
+    schedule.value = []
+    savedSchedule.value = []
+    scheduleLoadedFor.value = null
+    return
   }
+  const body = concern === 'duration' ? { duration_minutes: Number(form.booking_duration) }
+    : concern === 'capacity' ? { default_capacity: form.booking_capacity.trim() ? Number(form.booking_capacity) : null }
+    : concern === 'confirmation' ? { confirmation_mode: form.confirmation_mode }
+    : concern === 'payment' ? { online_payment_required: form.online_payment_required }
+    : concern === 'location' ? { online_timezone: form.online_timezone }
+    : concern === 'calendar' ? { calendar_group: form.calendar_group.trim() || null }
+    : {}
+  await dashboardApi(url, { method: 'PUT', body, validate: isRecord })
 }
 
 // ── The weekly schedule ─────────────────────────────────
-// One draft slot per (weekday, time) at this branch. Capacity is kept as the
-// merchant typed it and read as a number, or the product's default, on save.
-interface ScheduleSlotDraft { weekday: number; start_time: string }
+// Product owns duration and guest limits; the weekly schedule owns start times.
 const WEEKDAYS = [
   { value: 1, label: 'Monday' }, { value: 2, label: 'Tuesday' }, { value: 3, label: 'Wednesday' },
   { value: 4, label: 'Thursday' }, { value: 5, label: 'Friday' }, { value: 6, label: 'Saturday' }, { value: 0, label: 'Sunday' },
 ]
 const schedule = ref<ScheduleSlotDraft[]>([])
+const savedSchedule = ref<ScheduleSlotDraft[]>([])
+const scheduleError = ref<string | null>(null)
 const scheduleLoading = ref(false)
+function savedSlotsFor(weekday: number) { return savedSchedule.value.filter(slot => slot.weekday === weekday) }
 const scheduleLoadedFor = ref<string | null>(null)
 const isRuleList = (value: unknown): value is { success: true; rules: Array<{ weekday: number; start_time: string }> } =>
   isRecord(value) && Array.isArray(value.rules)
@@ -827,34 +820,44 @@ function removeSlot(slot: ScheduleSlotDraft) {
 }
 
 async function loadSchedule() {
-  const id = form.online_schedule ? null : locationId.value
-  if ((!id && !form.online_schedule) || !product.value?.booking) return
+  const id = locationId.value
+  if (!product.value?.booking) return
+  if (!id && !product.value.booking.online_timezone) {
+    scheduleError.value = 'Choose a time zone in Meeting location before adding start times.'
+    return
+  }
   const key = `${productId.value}:${id}`
   if (scheduleLoadedFor.value === key) return
   scheduleLoading.value = true
+  scheduleError.value = null
   try {
     const { rules } = await dashboardApi(`/api/editor/organizations/${organizationId}/products/${productId.value}/availability?location_id=${encodeURIComponent(id ?? 'online')}`, { validate: isRuleList })
     // The reader moved on while this loaded; that location's own load owns the draft.
-    if (`${productId.value}:${form.online_schedule ? null : locationId.value}` !== key) return
-    schedule.value = rules.map(rule => ({ weekday: rule.weekday, start_time: rule.start_time }))
+    if (`${productId.value}:${locationId.value}` !== key) return
+    savedSchedule.value = rules.map(rule => ({ weekday: rule.weekday, start_time: rule.start_time.slice(0, 5) }))
+    schedule.value = savedSchedule.value.map(slot => ({ ...slot }))
     scheduleLoadedFor.value = key
+  } catch (error) {
+    scheduleError.value = getErrorMessage(error, 'Could not load the weekly schedule')
   } finally {
     scheduleLoading.value = false
   }
 }
-watch([editorKey, product, locationId, () => form.online_schedule], ([key]) => { if (key === 'booking') void loadSchedule() }, { immediate: true })
+watch([editorKey, product, locationId], ([key]) => { if (key === 'booking') void loadSchedule() }, { immediate: true })
 
-/** The schedule as the writer takes it: every filled weekly slot; Product owns duration and capacity. */
-async function saveSchedule() {
-  const id = form.online_schedule ? null : locationId.value
-  if ((!id && !form.online_schedule) || scheduleLoadedFor.value !== `${productId.value}:${id}`) return
-  const slots = schedule.value
-    .filter(slot => slot.start_time.trim())
-    .map(slot => ({ weekday: slot.weekday, start_time: slot.start_time.trim().slice(0, 5) }))
-  await dashboardApi(`/api/editor/organizations/${organizationId}/products/${productId.value}/availability`, {
-    method: 'PUT', body: { location_id: id, slots }, validate: isRecord,
-  })
+/** Replace this weekday while retaining the other days read from the canonical writer. */
+async function saveSchedule(weekday: number) {
+  const id = locationId.value
+  if ((!id && !product.value?.booking?.online_timezone) || scheduleLoadedFor.value !== `${productId.value}:${id}`) throw new Error('Load the schedule before saving times.')
+  const times = slotsFor(weekday).map(slot => slot.start_time.trim())
+  if (times.some(time => !MINUTE_TIME_PATTERN.test(time)) || new Set(times).size !== times.length) throw new Error('Choose a different, valid start time for each session.')
+  const url = `/api/editor/organizations/${organizationId}/products/${productId.value}/availability`
+  const { rules } = await dashboardApi(`${url}?location_id=${encodeURIComponent(id ?? 'online')}`, { validate: isRuleList })
+  const slots = [...rules.filter(rule => rule.weekday !== weekday).map(rule => ({ weekday: rule.weekday, start_time: rule.start_time.slice(0, 5) })), ...times.map(start_time => ({ weekday, start_time }))]
+  await dashboardApi(url, { method: 'PUT', body: { location_id: id, slots }, validate: isRecord })
   scheduleLoadedFor.value = null
+  await loadSchedule()
+  if (scheduleError.value) throw new Error(scheduleError.value)
 }
 
 /** A cancelled leaf puts the loaded product back before it closes. */
@@ -862,8 +865,8 @@ function revert() {
   saveError.value = null
   photoError.value = null
   if (product.value) loadForm(product.value)
-  // The schedule draft goes with the form: reopening Bookings reloads the saved rules.
-  scheduleLoadedFor.value = null
+  form.native_consultations = form.consultation_mode === 'native'
+  schedule.value = savedSchedule.value.map(slot => ({ ...slot }))
 }
 
 async function setPrimaryImage(assetId: string | null) {
@@ -959,6 +962,7 @@ provide(productEditorKey, {
   currency,
   organizationId,
   locationId,
+  websiteBooking: computed(() => organizationOnly.value && vertical === 'service'),
   definitions,
   isNew,
   ready,
@@ -980,6 +984,8 @@ provide(productEditorKey, {
   booleanValue,
   weekdays: WEEKDAYS,
   scheduleLoading,
+  scheduleError,
+  savedSlotsFor,
   slotsFor,
   addSlot,
   removeSlot,
