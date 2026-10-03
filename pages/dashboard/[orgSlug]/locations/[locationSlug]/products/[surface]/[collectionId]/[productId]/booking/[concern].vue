@@ -13,7 +13,7 @@
     <URadioGroup v-else-if="concern === 'confirmation'" v-model="p.form.confirmation_mode" :items="[{ value: 'instant', label: 'Confirm automatically' }, { value: 'review', label: 'Review each request' }]" variant="card" />
     <UFormField v-else-if="concern === 'assignment'" label="Who guests meet">
       <p v-if="membersError" role="alert" class="mb-3 text-error">Team members could not be loaded.</p>
-      <USelect v-else v-model="p.form.assigned_member_id" :items="memberOptions" :loading="membersStatus === 'pending'" class="w-full" @update:model-value="p.form.scheduling_mode = $event ? 'provider' : 'legacy'" />
+      <USelect v-else v-model="assignedMember" :items="memberOptions" :loading="membersStatus === 'pending'" class="w-full" />
     </UFormField>
     <SettingRow v-else-if="concern === 'payment'" v-model="p.form.online_payment_required" label="Require online payment for paid sessions" />
     <LocationTimezoneField v-else-if="concern === 'location'" v-model="onlineTimezone" />
@@ -49,7 +49,8 @@ const settings = {
 }
 const dashboard = useDashboardOrganization()
 const { data: members, error: membersError, status: membersStatus } = await useFetch<{ members: { id: string; name: string }[] }>(() => `/api/organizations/${dashboard.organization.value?.id}/members/scheduling`, { server: false })
-const memberOptions = computed(() => [{ label: 'Tenant organization', value: '' }, ...(members.value?.members.map(member => ({ label: member.name, value: member.id })) ?? [])])
+const assignedMember = computed({ get: () => p.form.assigned_member_id || null, set: (value: string | null) => { p.form.assigned_member_id = value ?? ''; p.form.scheduling_mode = value ? 'provider' : 'legacy' } })
+const memberOptions = computed(() => [{ label: 'Tenant organization', value: null }, ...(members.value?.members.map(member => ({ label: member.name, value: member.id })) ?? [])])
 const setting = computed(() => settings[concern.value as keyof typeof settings] ?? { title: '', lead: '' })
 watchEffect(() => {
   if (level.mode.value === 'yield') return
