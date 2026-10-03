@@ -13,9 +13,11 @@ export interface VideoMetadata {
  * asset whose length is unknown cannot be published to Instagram or Facebook.
  */
 export function readMp4Metadata(bytes: ArrayBuffer | Uint8Array<ArrayBuffer>): VideoMetadata {
-  const arrayBuffer = bytes instanceof Uint8Array
-    ? bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
-    : bytes
+  // A view over its whole buffer is parsed in place; only a partial view is
+  // copied, so a large upload is not held twice.
+  const arrayBuffer = !(bytes instanceof Uint8Array) ? bytes
+    : bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength ? bytes.buffer
+      : bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
   const file = createFile()
   const read: { movie?: Movie; failure?: string } = {}
   file.onReady = (movie) => { read.movie = movie }

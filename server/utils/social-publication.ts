@@ -1,6 +1,6 @@
 import { HTTPError } from 'nitro'
 import { executeBatch, execute, queryAll, queryFirst, type DbClient } from '~/server/db'
-import { readLinkedAccount, type CloudflareEnv } from '~/server/utils/auth'
+import { linkedAccountAccessToken, readLinkedAccount, type CloudflareEnv } from '~/server/utils/auth'
 import { hasOrganizationEntitlement } from '~/server/utils/billing'
 import { organizationEventQuery } from '~/server/utils/organization-events'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
@@ -152,7 +152,8 @@ async function currentAccessProblem(env: CloudflareEnv, connection: ConnectionRe
       }
       return null
     }
-    const account = await getInstagramAccount(await instagramAccessToken(env, connection.accountId!))
+    // The token as stored: a read never renews or writes it.
+    const account = await getInstagramAccount((await linkedAccountAccessToken(env, connection.accountId!)).accessToken)
     if (account.id !== connection.targetId) {
       return { code: 'account_mismatch', message: `The linked Instagram login now belongs to @${account.username}, not ${connection.targetName}. Connect Instagram again.` }
     }
