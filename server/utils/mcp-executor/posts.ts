@@ -4,7 +4,8 @@ import { HTTPError } from 'nitro'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { createPost, deletePost, getPost, listPosts, updatePost, type Post } from '~/server/utils/post-management'
 import { PostValidationError } from '~/shared/posts'
-import { getSocialConnections, parsePublishTargets, publishPost, reconcilePostPublication } from '~/server/utils/social-publication'
+import { failureOf, getSocialConnections, parsePublishTargets, publishPost, reconcilePostPublication } from '~/server/utils/social-publication'
+import { MetaGraphError } from '~/server/utils/meta-graph'
 import { listChannelPosts, getChannelPost, deleteChannelPost, parseChannelTarget } from '~/server/utils/social-channel-posts'
 import { dashboardOrigin } from '~/server/utils/dashboard-notification-links'
 import { findOrganizationById } from '~/server/utils/member-access'
@@ -106,6 +107,15 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
         return await deleteChannelPost(env, organization.organizationId, target, requiredString(args, 'provider_post_id'), organization.userId)
       } catch (error) {
         if (error instanceof HTTPError && error.statusCode === 400) throw mcpProtocolError(MCP_ERROR.invalidParams, error.message)
+        // Meta's own refusal, named the way publish_post names it, with the
+        // place to reconnect when the connection itself is what failed.
+        if (error instanceof MetaGraphError) {
+          const failure = failureOf(error)
+          const channel = typeof args.channel === 'string' ? args.channel : null
+          const record = failure.code === 'connection_error' && channel ? await findOrganizationById(env, organization.organizationId) : null
+          const reconnect = record ? ` Reconnect ${channel} at ${dashboardOrigin(env, { orgSlug: record.slug, locationSlug: null })}/settings/integrations/${channel}.` : ''
+          throw new Error(`${failure.code}: ${failure.message}${reconnect}`, { cause: error })
+        }
         throw error
       }
     }
