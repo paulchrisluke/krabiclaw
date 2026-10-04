@@ -6,7 +6,7 @@ import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-res
 import { HOUR_MS, getClientIp, hashClientIp, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 import { recordOrganizationConversionEvent, type ConversionEntityType, type ConversionStage } from '~/server/utils/organization-conversions'
 import { BROWSER_INTERACTION_EVENT_NAMES, CONVERSION_EVENT_CATALOG, type OrganizationConversionEventName } from '~/utils/organization-conversion-events'
-import { isCanonicalEventId } from '~/server/utils/pageview-tracking'
+import { isCanonicalEventId, isKnownBot } from '~/server/utils/pageview-tracking'
 import { normalizeVertical } from '~/utils/vertical-copy'
 import { getLocationReservationConfig } from '~/server/utils/reservations'
 import { defineHandler } from 'nitro'
@@ -29,6 +29,7 @@ export default defineHandler(async (event) => {
   if (!organizationId) return jsonResponse({ error: 'organizationId required' }, { status: 400 })
   const db = cloudflareEnv(event).db
   if (!db) return jsonResponse({ error: 'Database unavailable' }, { status: 503 })
+  if (isKnownBot((event.req.headers.get('user-agent') || '').slice(0, 1024))) return jsonResponse({ ok: true, ignored: true })
   let body: ApiRecord
   try { body = await readBody(event) } catch { return jsonResponse({ error: 'Invalid request body' }, { status: 400 }) }
 

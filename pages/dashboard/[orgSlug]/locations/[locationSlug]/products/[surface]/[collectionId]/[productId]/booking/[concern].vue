@@ -1,6 +1,6 @@
 <template>
   <DashboardLeafPanel :id="`booking-${concern}`" :title="setting.title" :lead="setting.lead" :ready="p.ready.value" :saving="p.saving.value" :disabled="!valid || !dirty" :error="p.saveError.value ?? ''" @cancel="p.revert" @save="save">
-    <SettingRow v-if="concern === 'enabled'" v-model="p.form.bookable" label="Accept bookings" />
+    <SettingRow v-if="concern === 'enabled'" v-model="p.form.bookable" label="Use a booking calendar" />
     <UFormField v-else-if="concern === 'duration'" label="Duration in minutes" required>
       <UInput v-model="p.form.booking_duration" inputmode="numeric" pattern="[0-9]*" class="w-full" />
     </UFormField>
@@ -37,7 +37,7 @@ const route = useRoute()
 const level = useRouteLevel()
 const concern = computed(() => String(route.params.concern))
 const settings = {
-  enabled: { title: 'Accept bookings', lead: 'Let guests choose a time and reserve. Turning this off removes the schedule and is only allowed when there is no booking history.' },
+  enabled: { title: 'Booking calendar', lead: 'Set up times for guests to book. Removing the calendar deletes its schedule and is only allowed before any bookings. To pause this offering and keep its schedule, use its Website settings.' },
   duration: { title: 'Duration', lead: 'How long does each session last? Existing appointments keep their saved duration.' },
   capacity: { title: 'Guest limit', lead: 'How many guests can book the same session? Existing appointments keep their saved guest limit.' },
   confirmation: { title: 'Confirmation', lead: 'Confirm bookings as soon as guests reserve, or review each request before confirming.' },

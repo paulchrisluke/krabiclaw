@@ -217,6 +217,10 @@
       {
         "finding": "Restrict local rate-counter reset to individual E2E actors.",
         "reason": "The reset script refuses remote environments and operates on local disposable request quotas. Public rate counters belong to the shared test IP rather than individual actors; removing them in canonical test preparation prevents earlier runs from consuming the next run’s quota. Real application limits remain unchanged."
+      },
+      {
+        "finding": "Say Website settings pause all services.",
+        "reason": "The product Website availability editor writes that product’s active flag, not the organization consultation mode. The lead now explicitly says this offering and its Website settings."
       }
     ],
     "runtime_review_fix": "Cleanup previously deleted copied customer organizations absent from an allowlist. It now removes only e2e-* organizations owned by the onboarding actor and marked guest test artifacts. Concurrent notifications use an atomic receipt insert and wait for the canonical receipt outcome, without duplicate sends or silent delivery failures.",
@@ -231,6 +235,8 @@
       "production_worker_build": "passed",
       "mcp_catalog_and_submission": "passed",
       "migration_lint_and_schema_drift": "passed"
-    }
+    },
+    "final_ui_validation": "The extra Nuxt development-server traversal exceeded its existing 120-second budget; the canonical production Worker native-consultation journey passed in 23 seconds after the calendar wording fix. No assertion or timeout was loosened.",
+    "final_ui_change": "Booking calendar setup now says Set up/Not set up instead of duplicating the Accept bookings availability switch. The existing sitemap capture uses Nuxt hydration across templates and bounded desktop/mobile route lanes for complete published-route verification."
   }
 }

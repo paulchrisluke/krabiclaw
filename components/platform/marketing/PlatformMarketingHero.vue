@@ -1,6 +1,6 @@
 <template>
   <PlatformCoastalScene v-if="page.recipe === 'products'" :block="block" :page="page" />
-  <template v-else-if="variant === 'home'">
+  <template v-else-if="page.path === '/'">
     <section
       ref="homeHero"
       class="kc-parallax-hero"
@@ -83,7 +83,7 @@
   </template>
 
   <!-- The About header: a pill, a headline, a lede. Nothing else. -->
-  <div v-else-if="variant === 'about'" class="text-center space-y-4" data-parity-section="hero">
+  <div v-else-if="page.path === '/about'" class="text-center space-y-4" data-parity-section="hero">
     <span v-if="eyebrow" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wider bg-primary/10 text-primary border border-primary/20">
       {{ eyebrow }}
     </span>
@@ -92,13 +92,13 @@
   </div>
 
   <!-- Pricing preserves the CMS headline and wording. -->
-  <section v-else-if="variant === 'pricing'" class="kc-pricing-hero" data-parity-section="hero">
+  <section v-else-if="page.path === '/pricing'" class="kc-pricing-hero" data-parity-section="hero">
     <h1>{{ title }}</h1>
     <p v-if="subtitle">{{ subtitle }}</p>
   </section>
 
   <!-- The plugin header: the app icon beside the title, the account CTA at the end of the row. -->
-  <div v-else-if="variant === 'plugin'" class="flex flex-col gap-6 md:flex-row md:items-center md:justify-between" data-parity-section="hero">
+  <div v-else-if="page.path === '/plugin'" class="flex flex-col gap-6 md:flex-row md:items-center md:justify-between" data-parity-section="hero">
     <div class="flex items-center gap-6">
       <img src="/platform/apple-touch-icon.png" alt="Krabiclaw app icon" class="size-24 rounded-[28px] border border-default shadow-lg">
       <div>
@@ -150,7 +150,7 @@ import { blockStrings, blockText, blockTextOrNull } from '~/utils/tenant-page-bl
  * About header, the Pricing header with its pinging pill, the plugin header
  * with the app icon, and the centered hero the vertical pages and Features
  * share. Each shape is the markup the page rendered before it was a document,
- * chosen by `variant` the way BlawbyPageHero chooses its own.
+ * chosen by the page path the way BlawbyPageHero chooses its own.
  *
  * `title` may carry "\n" where the original forced a line break, and
  * `accent` names the part of it rendered in the gradient. The vertical
@@ -158,20 +158,6 @@ import { blockStrings, blockText, blockTextOrNull } from '~/utils/tenant-page-bl
  * `rotating_accents` closes the headline with one phrase at a time.
  */
 const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
-
-/**
- * Which of Krabiclaw's marketing shapes this hero takes.
- *
- * The page decides, because the page is what differs — a vertical landing page
- * opens differently from Pricing. It was a prop a dispatcher computed from the
- * same path, one step further from the thing it describes.
- */
-const VARIANTS = ['home', 'about', 'pricing', 'plugin', 'features', 'restaurants', 'experiences', 'legal'] as const
-type Variant = typeof VARIANTS[number]
-const variant = computed<Variant>(() => {
-  const segment = props.page.path.replace(/^\//, '') || 'home'
-  return (VARIANTS as readonly string[]).includes(segment) ? segment as Variant : 'home'
-})
 
 type ParallaxBreakpoint = 'xxs' | 'xs' | 'sm' | 'md' | 'lg'
 
@@ -342,14 +328,14 @@ function scheduleHomeParallax() {
 }
 
 onMounted(() => {
-  if (variant.value !== 'home') return
+  if (props.page.path !== '/') return
   renderHomeParallax()
   homeHeroScrollListener = scheduleHomeParallax
   window.addEventListener('scroll', homeHeroScrollListener, { passive: true })
 })
 
 onMounted(() => {
-  if (variant.value !== 'home') return
+  if (props.page.path !== '/') return
   void loadHeroAlphaMasks()
   window.addEventListener('resize', refreshHeroActionCoverage)
 })
@@ -397,21 +383,21 @@ const titleLines = computed<TitlePart[]>(() => title.value.split('\n').map(line 
 
 
 const PILL_CLASS: Record<string, string> = {
-  features: 'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-primary/10 text-primary border border-primary/20',
-  restaurants: 'inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wider bg-primary/10 text-primary border border-primary/20',
-  experiences: 'inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wider bg-(--kc-teal)/10 text-(--kc-teal-600) border border-(--kc-teal)/20',
-  legal: 'inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wider bg-(--kc-navy)/10 text-default border border-default/30',
+  '/features': 'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-primary/10 text-primary border border-primary/20',
+  '/restaurants': 'inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wider bg-primary/10 text-primary border border-primary/20',
+  '/experiences': 'inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wider bg-(--kc-teal)/10 text-(--kc-teal-600) border border-(--kc-teal)/20',
+  '/legal': 'inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wider bg-(--kc-navy)/10 text-default border border-default/30',
 }
-const pillClass = computed(() => PILL_CLASS[variant.value] ?? PILL_CLASS.restaurants)
-const pillIconClass = computed(() => (variant.value === 'legal' ? 'size-3.5 text-primary' : 'size-3.5'))
+const pillClass = computed(() => PILL_CLASS[props.page.path] ?? PILL_CLASS['/restaurants'])
+const pillIconClass = computed(() => (props.page.path === '/legal' ? 'size-3.5 text-primary' : 'size-3.5'))
 
 const GRADIENT_CLASS: Record<string, string> = {
-  features: 'bg-gradient-to-r from-primary via-(--kc-coral) to-(--kc-teal) bg-clip-text text-transparent',
-  restaurants: 'bg-gradient-to-r from-primary via-(--kc-coral) to-(--kc-teal) bg-clip-text text-transparent',
-  experiences: 'bg-gradient-to-r from-(--kc-teal) via-(--kc-coral) to-primary bg-clip-text text-transparent',
-  legal: 'bg-gradient-to-r from-primary via-(--kc-navy-700) to-(--kc-teal) bg-clip-text text-transparent',
+  '/features': 'bg-gradient-to-r from-primary via-(--kc-coral) to-(--kc-teal) bg-clip-text text-transparent',
+  '/restaurants': 'bg-gradient-to-r from-primary via-(--kc-coral) to-(--kc-teal) bg-clip-text text-transparent',
+  '/experiences': 'bg-gradient-to-r from-(--kc-teal) via-(--kc-coral) to-primary bg-clip-text text-transparent',
+  '/legal': 'bg-gradient-to-r from-primary via-(--kc-navy-700) to-(--kc-teal) bg-clip-text text-transparent',
 }
-const gradientClass = computed(() => GRADIENT_CLASS[variant.value] ?? GRADIENT_CLASS.restaurants)
+const gradientClass = computed(() => GRADIENT_CLASS[props.page.path] ?? GRADIENT_CLASS['/restaurants'])
 </script>
 
 <style scoped>
