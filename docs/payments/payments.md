@@ -268,42 +268,45 @@ not duplicate the event or change its delivery timestamp. Evidence is
 `.tmp/commerce-native-scheduler-trigger-after-fix.json` and
 `.tmp/payments-native-commerce-scheduler-rerun-proof.json`.
 
-The same native Metronome USAGE invoice
-`d16029da-c5b5-5fc7-b237-dc60cc8bcec9` remains `DRAFT`: quantity 10,000 at rate
-0.014 gives 140 USD cents ($1.40) before tax. Its period ends November 1 at
-00:00 UTC, with native issue date November 2 at 00:00 UTC and
-`external_invoice: null`. Capture, buyer retention, delivery and rating are
-qualified; current usage collection remains unqualified until the actual Stripe
-invoice is issued and paid. No invoice-date or grace-period change was made.
-The final read-only limit is recorded in
-`.tmp/payments-metronome-current-usage-finalization-limit.json`. Native
-`all_fees` itemization remains unavailable in test mode; reconciliation reports
-`test_mode_unavailable`, and no estimated Stripe costs were ingested.
+Native collection is still unqualified. At 23:40:33 UTC on October 4, the native
+contract-end operation returned 200 for the same contract
+`66a54a7c-fffe-4bf7-8b72-f8b9ebeea38d`, setting `ending_before` to October 4 at
+11:00 UTC. Independent native read-back at 23:41:35 UTC confirms the same
+Customer, Stripe collection configuration and 1.4% rate, with the unchanged
+`MONTHLY` schedule and October 1 billing anchor. Commerce subscription
+`sub_1UMlivRBlJkGOR4xEMQRt82k` remains active at $89/month. Evidence is
+`.tmp/payments-native-short-period-end.json` and
+`.tmp/payments-native-short-period-readback.json`.
 
-A month is not required to qualify native usage collection. Metronome supports
-ending the genuine contract early, which shortens its draft usage period; the
-configured 24-hour grace period still applies before finalization and Stripe
-delivery/collection. The ordinary Commerce downgrade schedules the change at
-subscription renewal. A shorter disposable Sandbox test therefore requires an
-explicit immediate change through Better Auth Stripe, native confirmation and
-webhook read-back, then normal reconciliation and **End previous Payments
-billing**. This removes Commerce acceptance from that test organization. No
-immediate subscription change or contract end has been performed for the
-October 4 capture, and its November 2 issue date remains the unchanged schedule.
+The resulting USAGE invoice `499ebcd9-2b07-52d5-ab89-133af897e15b` is `DRAFT`
+for October 4 at 09:00–11:00 UTC. Quantity 10,000 at rate 0.014 gives 140 USD
+cents ($1.40) before tax. Its native `issued_at` is October 5 at 11:00 UTC
+(18:00 Asia/Saigon), and `external_invoice` is null. This shortens the genuine
+usage period without waiting a month or changing the Commerce subscription;
+the native 24-hour grace still precedes the scheduled issue time.
+
+A normal Better Auth credential sign-in and exact-organization billing API read
+returned 200 at 23:48:46 UTC. The application reports billing `closed`,
+`pricing: null`, no pending usage, and the same 140-cent draft invoice with
+`external_invoice` and `collection_invoice` null. This read-back is recorded in
+`.tmp/payments-native-short-period-app-readback.json`.
+
+Two issue-date update attempts returned 404: one for the previously observed
+invoice `d16029da-c5b5-5fc7-b237-dc60cc8bcec9` at 23:34:45 UTC, and one for
+the shortened-period invoice at 23:43:00 UTC. Both responses said the named
+invoice could not be found in the contract. These attempts did not qualify an
+earlier issue date. Evidence is `.tmp/payments-native-short-issue-attempt.json`
+and `.tmp/payments-native-ended-period-issue-attempt.json`.
+
+The native end intentionally pauses new payment acceptance. Keep this PR a
+draft until the actual Metronome invoice and corresponding Stripe collection
+invoice are issued and paid, with identities, totals, amount paid and amount
+remaining independently verified. Then remove the native end from this same
+contract and verify the unchanged monthly schedule and restored acceptance.
+Native `all_fees` itemization remains unavailable in test mode; reconciliation
+reports `test_mode_unavailable`, and no estimated Stripe costs were ingested.
 [Contract end semantics](https://docs.metronome.com/api-reference/contracts/update-the-contract-end-date),
 [invoice grace period](https://docs.metronome.com/guides/implement-metronome/core-concepts/how-invoicing-works).
-
-The actual immediate Better Auth request initially returned 400 because the
-intended Sandbox's default Stripe portal had subscription updates disabled.
-Its native configuration now enables price changes for the verified Growth
-and Commerce monthly Products/Prices only. Independent expanded provider
-read-back confirms the saved selection and unchanged cancellation, payment
-method, invoice, proration and timing settings. The same Better Auth request
-then returned its native hosted confirmation. The confirmation's explicit
-Terms of Service acceptance remains pending operator approval; opening it has
-not changed the subscription. Evidence is
-`.tmp/payments-native-sandbox-portal-switch-configuration-proof.json` and
-`.tmp/commerce-native-immediate-growth-confirmation.png`.
 
 ## CMS and staging release
 
