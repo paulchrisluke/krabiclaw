@@ -122,6 +122,26 @@ busy calendars and assignment through the canonical booking allocator.
 
 Current checks are recorded in the replacement PR. Google provider requests in
 D1 tests are intercepted; those checks do not grant scopes or mutate real Google
-events. Real consent and provider qualification still require an explicitly
-authorized disposable calendar. Historical review notes on the superseded PRs
-do not qualify this replacement head for deployment.
+events. Owner-authorized live verification on October 4, 2026 used the separate
+private “KrabiClaw PR 1240 verification” calendar and the built local Worker.
+Better Auth consent and Calendar/member callback routing returned the linked
+account and explicitly selected business. A guest-created Reservation projected
+the exact canonical instants; a committed note revision updated the same Google
+event without exposing the private note. The dashboard link opened its canonical
+thread and retained the configured HTTP/HTTPS protocol. Guest cancellation
+deleted its mapped event. Disconnect deleted all 13 managed identities while
+preserving an independently created event.
+
+Member free/busy reads returned that independent event's exact UTC interval.
+Google rejected the original single 94-day query as too long. The canonical read
+now uses contiguous 30-day requests, retaining the full 94-day horizon and
+committing coverage only after every window succeeds. A rejected final window
+retains the last complete cache and exposes Google's reason; availability fails
+closed. Deleting the test event and rechecking returned no busy intervals. Both
+domain connections were disconnected, test events removed, and the member's
+test hours cleared. The Google linked account and existing grants were retained.
+
+The Google app still displays its unverified-app consent notice; public OAuth
+verification and the normal review/release process remain before general rollout.
+Historical review notes on superseded PRs do not qualify this replacement head
+for deployment.

@@ -128,11 +128,19 @@ export async function refreshMemberBusy(db: DbClient, env: CloudflareEnv, member
   const ids=JSON.parse(row.calendar_ids_json) as string[]
   if(output?.calendar && ids.includes(output.calendar)) throw new Error('Busy input overlaps booking output calendar; change the selection')
   const token=await linkedAccountAccessToken(env,row.calendar_account_id)
-  const response=await fetch('https://www.googleapis.com/calendar/v3/freeBusy',{method:'POST',headers:{Authorization:`Bearer ${token.accessToken}`,'content-type':'application/json'},signal:AbortSignal.timeout(10000),body:JSON.stringify({timeMin:now,timeMax:until,items:ids.map(id=>({id}))})})
-  if(!response.ok) throw new Error(`Google busy-calendar check failed (${response.status}); reconnect or retry`)
-  const data=await response.json() as {calendars?:Record<string,{errors?:unknown[];busy?:SchedulingInterval[]}>}
   const busy:SchedulingInterval[]=[]
-  for(const id of ids) {const calendar=data.calendars?.[id];if(!calendar||calendar.errors?.length||!Array.isArray(calendar.busy))throw new Error('A selected Google calendar could not be checked'); for(const interval of calendar.busy) {if(!Number.isFinite(Date.parse(interval.start))||!Number.isFinite(Date.parse(interval.end))||Date.parse(interval.end)<=Date.parse(interval.start))throw new Error('Google returned an invalid busy interval');busy.push({start:new Date(interval.start).toISOString(),end:new Date(interval.end).toISOString()})}}
+  // Google rejects the full scheduling horizon in one freeBusy request.
+  // Commit coverage only after every contiguous window succeeds.
+  for(let from=Date.parse(now);from<Date.parse(until);from+=30*86400000) {
+   const timeMax=new Date(Math.min(from+30*86400000,Date.parse(until))).toISOString()
+   const response=await fetch('https://www.googleapis.com/calendar/v3/freeBusy',{method:'POST',headers:{Authorization:`Bearer ${token.accessToken}`,'content-type':'application/json'},signal:AbortSignal.timeout(10000),body:JSON.stringify({timeMin:new Date(from).toISOString(),timeMax,items:ids.map(id=>({id}))})})
+   if(!response.ok) {
+    const failure=await response.json() as {error?:{message?:string}}
+    throw new Error(`Google busy-calendar check failed (${response.status})${failure.error?.message?`: ${failure.error.message}`:''}`)
+   }
+   const data=await response.json() as {calendars?:Record<string,{errors?:unknown[];busy?:SchedulingInterval[]}>}
+   for(const id of ids) {const calendar=data.calendars?.[id];if(!calendar||calendar.errors?.length||!Array.isArray(calendar.busy))throw new Error('A selected Google calendar could not be checked'); for(const interval of calendar.busy) {if(!Number.isFinite(Date.parse(interval.start))||!Number.isFinite(Date.parse(interval.end))||Date.parse(interval.end)<=Date.parse(interval.start))throw new Error('Google returned an invalid busy interval');busy.push({start:new Date(interval.start).toISOString(),end:new Date(interval.end).toISOString()})}}
+  }
   if(busy.length>20000) throw new Error('Selected calendars exceed the bounded busy cache')
   await executeBatch(db,[{query:'UPDATE member_scheduling SET busy_json=?,busy_from=?,busy_until=?,busy_checked_at=?,busy_error=NULL WHERE member_id=? AND calendar_revision=?',params:[JSON.stringify(busy),now,until,new Date().toISOString(),memberId,row.calendar_revision]}])
  } catch(error) {

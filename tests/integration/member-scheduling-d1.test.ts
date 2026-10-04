@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { symmetricEncrypt } from 'better-auth/crypto'
 import { Miniflare } from 'miniflare'
 import { generateSQLiteDrizzleJson,generateSQLiteMigration } from 'drizzle-kit/api'
 import * as schema from '../../server/db/schema.ts'
@@ -11,7 +12,7 @@ import { MEMBER_BUSY_SCOPES } from '../../shared/member-scheduling.ts'
 import { roleSatisfies } from '../../server/utils/mcp-auth.ts'
 import type { CloudflareEnv } from '../../server/utils/auth.ts'
 
-test('member self-service uses Better Auth permissions, public approval is admin-only, and selected disconnected busy data fails closed for only that member', {timeout:120000},async()=>{
+test('member self-service uses Better Auth permissions, public approval is admin-only, and selected disconnected busy data fails closed for only that member', {timeout:120000},async(t)=>{
  const runtime=new Miniflare({workers:[{config:{name:'member-scheduling-proof',type:'worker',compatibilityDate:'2024-11-01',manifest:{mainModule:'index.mjs',modules:{'index.mjs':{type:'esm',contents:'export default {fetch(){return new Response("ok")}}'}}},env:{DB:{type:'d1'}}}}]})
  const db=await runtime.getD1Database('DB')
  try {
@@ -19,7 +20,7 @@ test('member self-service uses Better Auth permissions, public approval is admin
   await db.prepare(`INSERT INTO organization(id,name,slug,subdomain,settings_json,theme_id,default_currency,status,onboarding_status,url_structure,vertical,updated_at) VALUES('org','Org','org','org','{"config":{"default_timezone":"UTC"}}','theme','USD','active','complete','flat','experience','2026-10-01T00:00:00.000Z')`).run()
   for(const id of ['owner','one','two','outsider'])await db.prepare('INSERT INTO user(id,name,email,emailVerified)VALUES(?,?,?,1)').bind(id,id,`${id}@example.test`).run()
   for(const [id,role]of [['owner','owner'],['one','member'],['two','member']])await db.prepare("INSERT INTO member(id,organizationId,userId,role)VALUES(?,'org',?,?)").bind(`member-${id}`,id,role).run()
-  const env={DB:db,STRIPE_SECRET_KEY:'sk_test_local_d1_no_stripe_requests',BETTER_AUTH_URL:'https://proof.example',BETTER_AUTH_SECRET:'local-proof-secret-long-enough-for-auth',NUXT_PUBLIC_PLATFORM_DOMAIN:'https://krabiclaw.test'} as CloudflareEnv
+  const env={DB:db,STRIPE_SECRET_KEY:'sk_test_local_d1_no_stripe_requests',BETTER_AUTH_URL:'https://proof.example',BETTER_AUTH_SECRET:'local-proof-secret-long-enough-for-auth',NUXT_PUBLIC_PLATFORM_DOMAIN:'https://krabiclaw.test',GOOGLE_CLIENT_ID:'test-google-client',GOOGLE_CLIENT_SECRET:'test-google-secret'} as CloudflareEnv
   const own={env,userId:'one',organizationId:'org'},owner={...own,userId:'owner'},hours={timezone:'America/New_York',weekly:Array.from({length:7},(_,weekday)=>({weekday,start:'09:00',end:'17:00'})),time_off:[],expected_updated_at:null}
   assert.equal(await roleSatisfies('org','member','member'),true)
   assert.equal(await roleSatisfies('org','member','admin'),false)
@@ -48,6 +49,35 @@ test('member self-service uses Better Auth permissions, public approval is admin
   await disconnectCalendar(db,'org')
   await syncCalendarOrganization(env,'org')
   assert.equal(await readCalendarIntegration(db,'org'),null)
+  const accessToken=await symmetricEncrypt({key:env.BETTER_AUTH_SECRET!,data:'busy-test-token'})
+  await db.prepare("UPDATE account SET accessToken=? WHERE id='busy-linked'").bind(accessToken).run()
+  await selectBusyCalendars(own,'member-one',{account_id:'busy-linked',calendar_ids:['busy-calendar']})
+  const distant={start:new Date(Date.now()+40*86400000).toISOString(),end:new Date(Date.now()+40*86400000+3600000).toISOString()}
+  const ranges:{timeMin:string;timeMax:string}[]=[]
+  let rejectLast=false
+  t.mock.method(globalThis,'fetch',async(input,init)=>{
+   assert.equal(String(input),'https://www.googleapis.com/calendar/v3/freeBusy')
+   assert.equal(new Headers(init?.headers).get('Authorization'),'Bearer busy-test-token')
+   const body=JSON.parse(String(init?.body))
+   assert.deepEqual(body.items,[{id:'busy-calendar'}])
+   ranges.push(body)
+   const duration=Date.parse(body.timeMax)-Date.parse(body.timeMin)
+   if(duration>31*86400000)return Response.json({error:{message:'The requested time range is too long.'}},{status:400})
+   if(rejectLast&&duration<30*86400000)return Response.json({error:{message:'Provider rejected the final window'}},{status:400})
+   return Response.json({calendars:{'busy-calendar':{busy:Date.parse(distant.start)>=Date.parse(body.timeMin)&&Date.parse(distant.start)<Date.parse(body.timeMax)?[distant]:[]}}})
+  })
+  assert.equal(await refreshMemberBusy(db,env,'member-one',true),undefined)
+  assert.equal(Date.parse(ranges.at(-1)!.timeMax)-Date.parse(ranges[0]!.timeMin),94*86400000)
+  for(let i=1;i<ranges.length;i++)assert.equal(ranges[i]!.timeMin,ranges[i-1]!.timeMax,'busy coverage has no gaps')
+  const complete=await db.prepare("SELECT busy_json,busy_from,busy_until,busy_error FROM member_scheduling WHERE member_id='member-one'").first()
+  assert.deepEqual(JSON.parse(String(complete?.busy_json)),[distant])
+  assert.equal(complete?.busy_error,null)
+  rejectLast=true
+  assert.equal((await refreshMemberBusy(db,env,'member-one',true))?.error,'Google busy-calendar check failed (400): Provider rejected the final window')
+  const incomplete=await db.prepare("SELECT busy_json,busy_from,busy_until FROM member_scheduling WHERE member_id='member-one'").first()
+  assert.deepEqual(incomplete,{busy_json:complete?.busy_json,busy_from:complete?.busy_from,busy_until:complete?.busy_until},'failed final window cannot replace complete coverage')
+  t.mock.restoreAll()
+  await selectBusyCalendars(own,'member-one',{account_id:null,calendar_ids:[]})
   const day=new Date(Date.now()+3*86400000).toISOString().slice(0,10),start=`${day}T14:00:00.000Z`,end=`${day}T15:00:00.000Z`
   for(const [id,member]of [['one','member-one'],['two','member-two']]) {
    await db.prepare("INSERT INTO products(kind,id,organization_id,name,slug,created_by,updated_by)VALUES('service',?,'org',?,?,'owner','owner')").bind(id,id,id).run()
