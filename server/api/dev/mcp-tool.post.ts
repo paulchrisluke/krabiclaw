@@ -1,5 +1,5 @@
 import { assertDevRouteAllowed } from '~/server/utils/dev-route-auth'
-import { executeMcpToolCall } from '~/server/utils/mcp-executor'
+import { executeMcpToolCall } from '~/server/utils/mcp-tools'
 import { isMcpRenderResponse } from '~/server/utils/mcp-render'
 
 export default defineHandler(async (event) => {

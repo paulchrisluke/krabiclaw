@@ -241,3 +241,29 @@ test('offering addresses are withheld when tenant compliance visibility is hidde
   const service = graphByType(graph, 'LegalService')!
   assert.equal((service as Record<string, unknown>).address, undefined, 'offering address must respect tenant compliance visibility')
 })
+
+test('contact recipe correctly emits ContactPage, multi-item breadcrumbs, and FAQPage nodes', () => {
+  const graph = buildProfessionalServiceGraph({
+    recipe: 'contact',
+    origin: 'https://ncls.krabiclaw.com',
+    org: nclsOrg,
+    pageUrl: '/contact',
+    pageTitle: 'Contact Us',
+    breadcrumbs: [
+      { name: 'Home', url: '/' },
+      { name: 'Contact', url: '/contact' },
+    ],
+    faqs: [
+      { question: 'What are your hours?', answer: '9am - 5pm' },
+    ],
+  })
+  const contactPage = graphByType(graph, 'ContactPage')!
+  assert.ok(contactPage, 'ContactPage must be present')
+  const breadcrumbList = graphByType(graph, 'BreadcrumbList')!
+  assert.ok(breadcrumbList, 'BreadcrumbList must be present')
+  assert.equal((breadcrumbList as { itemListElement: unknown[] }).itemListElement.length, 2)
+  const faqPage = graphByType(graph, 'FAQPage')!
+  assert.ok(faqPage, 'FAQPage must be present')
+  assert.equal((faqPage as { mainEntity: unknown[] }).mainEntity.length, 1)
+})
+

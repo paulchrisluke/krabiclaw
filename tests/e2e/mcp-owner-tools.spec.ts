@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 import { dismissPreviewToolbar, waitForNuxtHydration } from './helpers'
 import { loginAs } from './helpers/auth'
 import { MCP_GROWTH_ORGANIZATION_ID, mcpRequest, mcpData } from './helpers/mcp'
-import { tenantTestExtraHeaders } from './test-env'
+import { E2E_POTTERY_ORGANIZATION_ID, tenantTestExtraHeaders } from './test-env'
 import { acquireTenantMutationLock } from './helpers/tenant-mutation-lock'
 
 // Split out of mcp.spec.ts (owner tool-coverage tests) — see helpers/mcp.ts
@@ -11,6 +11,28 @@ import { acquireTenantMutationLock } from './helpers/tenant-mutation-lock'
 // lifecycle, and Product/post/media workflows.
 
 test.describe('stateless MCP server', () => {
+  test('booking pagination rejects a cursor from a different member filter', async ({ request, baseURL }) => {
+    await loginAs(request, baseURL!)
+    const organizationId = E2E_POTTERY_ORGANIZATION_ID
+    const membersResponse = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'get_member_scheduling', args: { organization_id: organizationId } })
+    expect(membersResponse.status()).toBe(200)
+    const member = mcpData<{ members: Array<{ id: string; self: boolean }> }>(await membersResponse.json()).members.find(member => member.self)
+    expect(member).toBeTruthy()
+    const firstResponse = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'list_product_bookings', args: { organization_id: organizationId, limit: 1 } })
+    expect(firstResponse.status()).toBe(200)
+    const first = mcpData<{ bookings: Array<{ operational_booking_id: string }>; page_info: { next_cursor: string | null } }>(await firstResponse.json())
+    expect(first.bookings).toHaveLength(1)
+    expect(first.page_info.next_cursor).toBeTruthy()
+    const nextResponse = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'list_product_bookings', args: { organization_id: organizationId, limit: 1, cursor: first.page_info.next_cursor } })
+    expect(nextResponse.status()).toBe(200)
+    const next = mcpData<{ bookings: Array<{ operational_booking_id: string }> }>(await nextResponse.json())
+    expect(next.bookings).toHaveLength(1)
+    expect(next.bookings[0]!.operational_booking_id).not.toBe(first.bookings[0]!.operational_booking_id)
+    const filteredResponse = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'list_product_bookings', args: { organization_id: organizationId, assigned_member_id: member!.id, limit: 1, cursor: first.page_info.next_cursor } })
+    expect(filteredResponse.status()).toBe(200)
+    expect((await filteredResponse.json()).result).toMatchObject({ isError: true, content: [{ type: 'text', text: 'Pagination cursor does not belong to this resource.' }] })
+  })
+
   test('owner can use site content and settings tools', async ({ request, baseURL }) => {
     await loginAs(request, baseURL!)
     const organizationId = MCP_GROWTH_ORGANIZATION_ID
@@ -500,14 +522,14 @@ test.describe('stateless MCP server', () => {
         const enabled = await request.put(`${productUrl}/booking`, { data: { duration_minutes: 60, default_capacity: 9 } })
         expect(enabled.status(), await enabled.text()).toBe(200)
         let product = mcpData<{ product: { booking: unknown } }>(await call('get_product', { product_id: productId })).product
-        expect(product.booking).toEqual({ duration_minutes: 60, default_capacity: 9, confirmation_mode: 'instant', online_payment_required: false, online_timezone: null, calendar_group: null })
+        expect(product.booking).toEqual({ duration_minutes: 60, default_capacity: 9, confirmation_mode: 'instant', online_payment_required: false, online_timezone: null, calendar_group: null, scheduling_mode: 'legacy', assigned_member_id: null })
         expect((await call('set_product_booking_config', { product_id: productId, default_capacity: 0 })).result.isError).not.toBe(true)
         const httpProduct = await request.get(`${baseURL}/api/editor/organizations/${organizationId}/products`)
         expect(httpProduct.status(), await httpProduct.text()).toBe(200)
-        expect((await httpProduct.json()).products.find((row: { id: string }) => row.id === productId).booking).toEqual({ duration_minutes: 60, default_capacity: 0, confirmation_mode: 'instant', online_payment_required: false, online_timezone: null, calendar_group: null })
+        expect((await httpProduct.json()).products.find((row: { id: string }) => row.id === productId).booking).toEqual({ duration_minutes: 60, default_capacity: 0, confirmation_mode: 'instant', online_payment_required: false, online_timezone: null, calendar_group: null, scheduling_mode: 'legacy', assigned_member_id: null })
         expect((await call('set_product_booking_config', { product_id: productId, default_capacity: null })).result.isError).not.toBe(true)
         product = mcpData<{ product: { booking: unknown } }>(await call('get_product', { product_id: productId })).product
-        expect(product.booking).toEqual({ duration_minutes: 60, default_capacity: null, confirmation_mode: 'instant', online_payment_required: false, online_timezone: null, calendar_group: null })
+        expect(product.booking).toEqual({ duration_minutes: 60, default_capacity: null, confirmation_mode: 'instant', online_payment_required: false, online_timezone: null, calendar_group: null, scheduling_mode: 'legacy', assigned_member_id: null })
         expect((await request.put(`${productUrl}/booking`, { data: { duration_minutes: 0 } })).status()).toBe(400)
         expect((await call('set_product_booking_config', { product_id: productId, duration_minutes: 0 })).result.isError).toBe(true)
         const schedule = { location_id: locationId, slots: [{ weekday: 2, start_time: '10:00' }] }
@@ -536,7 +558,7 @@ test.describe('stateless MCP server', () => {
         expect((await call('set_product_booking_config', { product_id: productId, ...policy })).result.isError).not.toBe(true)
         const policyRead = await request.get(productUrl)
         expect(policyRead.status()).toBe(200)
-        expect((await policyRead.json()).product.booking).toEqual({ duration_minutes: 60, default_capacity: null, ...policy })
+        expect((await policyRead.json()).product.booking).toEqual({ duration_minutes: 60, default_capacity: null, ...policy, scheduling_mode: 'legacy', assigned_member_id: null })
         const online = { location_id: null, slots: [{ weekday: 3, start_time: '11:30' }] }
         const onlineRules = mcpData<{ rules: Array<{ timezone: string; location_id: null }>; sessions: { created: number } }>(await call('replace_product_weekly_schedule', { product_id: productId, ...online }))
         expect(onlineRules.rules).toHaveLength(1)
@@ -544,7 +566,7 @@ test.describe('stateless MCP server', () => {
         expect((await (await request.get(`${productUrl}/availability?location_id=online`)).json()).rules).toEqual(onlineRules.rules)
         const updatedPolicy = await request.put(`${productUrl}/booking`, { data: { confirmation_mode: 'instant', online_payment_required: false, calendar_group: null } })
         expect(updatedPolicy.status()).toBe(200)
-        expect(mcpData<{ product: { booking: unknown } }>(await call('get_product', { product_id: productId })).product.booking).toEqual({ duration_minutes: 60, default_capacity: null, confirmation_mode: 'instant', online_payment_required: false, online_timezone: policy.online_timezone, calendar_group: null })
+        expect(mcpData<{ product: { booking: unknown } }>(await call('get_product', { product_id: productId })).product.booking).toEqual({ duration_minutes: 60, default_capacity: null, confirmation_mode: 'instant', online_payment_required: false, online_timezone: policy.online_timezone, calendar_group: null, scheduling_mode: 'legacy', assigned_member_id: null })
         expect((await request.put(`${productUrl}/availability`, { data: online })).status()).toBe(200)
         expect(mcpData<{ sessions: { created: number } }>(await call('replace_product_weekly_schedule', { product_id: productId, ...online })).sessions.created).toBe(0)
         expect(mcpData<{ rules: unknown[] }>(await call('replace_product_weekly_schedule', { product_id: productId, location_id: null, slots: [] })).rules).toEqual([])

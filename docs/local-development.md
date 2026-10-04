@@ -220,7 +220,17 @@ Set `PLAYWRIGHT_PORT` to an unused local port when another checkout is running,
 for example `PLAYWRIGHT_PORT=3107 corepack yarn playwright test tests/e2e/mcp-owner-tools.spec.ts --workers=1`.
 The standard local Worker preparation and worktree-local D1 storage remain in use.
 
-The diagnostic `test:mcp:edit` script requires `--site-id`. The `test:mcp:image`
-and `test:mcp:ops` scripts require both `--site-id` and `--location-id` for
+The diagnostic `test:mcp:edit` script requires `--organization-id`. The `test:mcp:image`
+and `test:mcp:ops` scripts require both `--organization-id` and `--location-id` for
 explicit disposable fixtures provisioned through the approved setup/CMS path;
-they no longer create organizations or locations through MCP.
+they no longer create organizations or locations through MCP. `test:mcp:app`
+checks the MCP Apps contract. All four read `--base-url` (default
+`http://localhost:3000`), sign in with local credentials, and take
+`MCP_BEARER_TOKEN` or `MCP_CREDENTIAL_LOGIN=1` for a remote target.
+
+## Diagnostics
+
+- `corepack yarn audit:media-placements [local|staging|production]` reports media
+  placements whose owner is missing or belongs to another organization.
+- `corepack yarn perf:lighthouse --url <url> [--runs 3]` reports the median of
+  several Lighthouse runs against a live URL.

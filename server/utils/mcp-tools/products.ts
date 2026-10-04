@@ -4,6 +4,36 @@ import { PRODUCT_LIMITS } from '~/server/utils/product-validation'
 import { SUPPORTED_CURRENCIES } from '~/shared/currencies'
 import { PRODUCT_KINDS, PRODUCT_DETAIL_FIELDS } from '~/shared/product-details'
 import { PRICE_RECURRING_INTERVALS, PRICE_TAX_BEHAVIORS, PRICE_TYPES } from '~/shared/prices'
+import { setProductBookingConfig, deleteProductBookingConfig, replaceWeeklySchedule } from '~/server/utils/availability'
+import type { CreateProductInput, Product, ReconcileProductInput, UpdateProductInput } from '~/server/types/products'
+import {
+  createCollection,
+  createProduct,
+  createProductsBatch,
+  deleteCollection,
+  deleteProduct,
+  getProduct,
+  requireOrganizationProduct,
+  hydrateProductMedia,
+  listCollectionProducts,
+  listCollections,
+  listLocationProducts,
+  listOrganizationProducts,
+  reconcileProducts,
+  removeProductLocation,
+  reorderCollections,
+  setCollectionProducts,
+  setProductLocation,
+  setProductPublication,
+  updateCollection,
+  updateProduct,
+} from '~/server/utils/product-management'
+import { assertResourceAccess, memberAccessPrincipal } from '~/server/utils/member-access'
+import { mcpPageInfo, mcpPageWindow } from '~/server/utils/mcp-pagination'
+import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
+import { listOrganizationsForUser } from '~/server/utils/mcp-workflows'
+import type { McpExecutorContext } from './execution'
+import { NOT_HANDLED, objectArray, omit, requiredString, requiredStringArray } from './execution'
 
 /**
  * The catalog tool surface.
@@ -134,6 +164,8 @@ const collectionObject = {
 } as const
 
 const bookingPolicyFields = {
+  scheduling_mode: { type: 'string', enum: ['legacy', 'provider'] },
+  assigned_member_id: { type: ['string', 'null'], description: 'Existing organization member ID for provider scheduling; null uses organization availability.' },
   confirmation_mode: { type: 'string', enum: ['instant', 'review'] },
   online_payment_required: { type: 'boolean', description: 'Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.' },
   online_timezone: { type: ['string', 'null'], description: 'IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.' },
@@ -225,3 +257,249 @@ export const PRODUCTS_TOOLS: McpToolDefinition[] = [
   organizationTool({ name: 'reorder_collections', description: 'Change the order of whole collections. Send every collection id in the scope exactly once, in the intended order; a partial order is rejected.', domain: 'products', minimumRole: 'admin', confirmRequired: false, inputSchema: { collection_ids: { type: 'array', items: { type: 'string' }, minItems: 1 }, location_id: { type: ['string', 'null'] } }, required: ['collection_ids'], outputSchema: { type: 'object', properties: { collections: { type: 'array', items: collectionObject } }, required: ['collections'] } }),
 
 ]
+
+/**
+ * Writing to a product is an organization-wide act, and a location-scoped
+ * editor must not get there by naming a location. This authorizes the
+ * location for the rows that ARE location-scoped — offering, withdrawing, and
+ * per-location pricing.
+ */
+async function authorizeLocation(ctx: McpExecutorContext, locationId: string) {
+  await assertResourceAccess(ctx.organization.db, {
+    ...memberAccessPrincipal(ctx.organization.membership, { env: ctx.organization.env }),
+    resourceLocationId: locationId,
+  })
+}
+
+/**
+ * The Product this site carries, as an MCP error.
+ *
+ * One lookup: `requireOrganizationProduct` is the rule — the catalog is
+ * organization-owned and a site reaches a product through its publication row
+ * — and this only restates its refusal in the transport's own shape.
+ */
+async function resolveCarriedProduct(ctx: McpExecutorContext, productId: string): Promise<Product> {
+  return await requireOrganizationProduct(ctx.organization.db, {
+    organizationId: ctx.organization.organizationId, productId,
+  }).catch((error: unknown) => {
+    // A product this site does not carry is the caller's mistake; any other
+    // failure is the server's and keeps its own error.
+    if ((error as { statusCode?: number }).statusCode !== 404) throw error
+    const message = (error as { statusMessage?: string }).statusMessage
+    throw mcpProtocolError(MCP_ERROR.invalidParams, message && message !== 'Not Found' ? message : 'Product not found')
+  })
+}
+
+/** Every full MCP product response includes this site's canonical media. */
+async function productResponse(ctx: McpExecutorContext, product: Product) {
+  const [hydrated] = await hydrateProductMedia(ctx.organization.db, ctx.organization.organizationId, [product])
+  return { product: hydrated }
+}
+
+/** One page of products, with the extra row the query asked for removed. */
+function productPage(products: Product[], window: { limit: number; offset: number }) {
+  const page = products.slice(0, window.limit)
+  return {
+    products: page.map(productListItem),
+    page_info: mcpPageInfo(window, page.length, products.length > window.limit, { resource: 'products' }),
+  }
+}
+
+function productListItem(product: Product) {
+  return {
+    kind: product.kind,
+    id: product.id,
+    name: product.name,
+    slug: product.slug,
+    description: product.description,
+    active: product.active,
+    variant_count: product.variants.length,
+    publications: product.publications,
+    locations: product.locations,
+  }
+}
+
+export async function handleProductsTools(ctx: McpExecutorContext) {
+  const { toolName, args, organization } = ctx
+  const actor = { actorId: organization.userId }
+  const scope = { organizationId: organization.organizationId}
+
+  switch (toolName) {
+    case 'set_product_booking_config': {
+      const config = await setProductBookingConfig(organization.db, {
+        ...scope, productId: requiredString(args, 'product_id'), actorId: organization.userId, env: organization.env,
+        patch: { duration_minutes: args.duration_minutes, default_capacity: args.default_capacity, confirmation_mode: args.confirmation_mode, online_payment_required: args.online_payment_required, online_timezone: args.online_timezone, calendar_group: args.calendar_group, scheduling_mode: args.scheduling_mode, assigned_member_id: args.assigned_member_id },
+      })
+      return { config }
+    }
+    case 'delete_product_booking_config':
+      await deleteProductBookingConfig(organization.db, { ...scope, productId: requiredString(args, 'product_id') })
+      return { deleted: true }
+    case 'replace_product_weekly_schedule': {
+      const locationId = args.location_id === null ? null : requiredString(args, 'location_id')
+      if (locationId !== null) await authorizeLocation(ctx, locationId)
+      return await replaceWeeklySchedule(organization.db, {
+        ...scope, productId: requiredString(args, 'product_id'), locationId,
+        slots: args.slots, actorId: organization.userId,
+      })
+    }
+    // Both list tools read the window first and ask the database for exactly
+    // one page, so a catalog of four hundred is not loaded and hydrated to
+    // answer a request for fifty.
+    case 'list_products': {
+      const window = mcpPageWindow(args, { resource: 'products' })
+      const products = await listOrganizationProducts(organization.db, { ...scope, publishedOnly: args.published_only === true, window })
+      return productPage(products, window)
+    }
+    case 'list_location_products': {
+      const locationId = requiredString(args, 'location_id')
+      await authorizeLocation(ctx, locationId)
+      const window = mcpPageWindow(args, { resource: 'products' })
+      const products = await listLocationProducts(organization.db, {
+        organizationId: organization.organizationId, locationId, window,
+        publishedOnly: args.published_only === true,
+      })
+      return productPage(products, window)
+    }
+    case 'get_product': {
+      return await productResponse(ctx, await resolveCarriedProduct(ctx, requiredString(args, 'product_id')))
+    }
+
+    case 'create_product': {
+      // The site carries what it created, withheld until someone publishes it
+      // — written with the product, so the product is loaded once.
+      const product = await createProduct(organization.db, {
+        organizationId: organization.organizationId,
+        product: args as unknown as CreateProductInput, actor,
+        publication: { published: false },
+      })
+      return await productResponse(ctx, product)
+    }
+    case 'update_product': {
+      const productId = requiredString(args, 'product_id')
+      await resolveCarriedProduct(ctx, productId)
+      return await productResponse(ctx, await updateProduct(organization.db, {
+        ...scope, productId, patch: omit(args, ['product_id']) as unknown as UpdateProductInput, actor,
+      }))
+    }
+    case 'delete_product': {
+      const productId = requiredString(args, 'product_id')
+      await resolveCarriedProduct(ctx, productId)
+      await deleteProduct(organization.db, { organizationId: organization.organizationId, productId })
+      return { deleted: true }
+    }
+    case 'set_product_publication': {
+      const productId = requiredString(args, 'product_id')
+      const target = await getProduct(organization.db, organization.organizationId, productId)
+      // Attaching a product to this site is not a way in to a product the
+      // caller could not already reach. One carried by a site outside their
+      // access stays outside it — otherwise publishing it here would be the
+      // permission to edit it everywhere.
+      if (target.publications.length > 0) {
+        const visible = new Set((await listOrganizationsForUser(organization.db, organization.env, organization.userId)).map(row => String(row.id)))
+        if (target.publications.some(entry => !visible.has(entry.organization_id))) {
+          throw mcpProtocolError(MCP_ERROR.invalidParams, 'That product is carried by a site you do not have access to')
+        }
+      }
+      if (typeof args.published !== 'boolean') throw mcpProtocolError(MCP_ERROR.invalidParams, 'published must be a boolean')
+      await setProductPublication(organization.db, { ...scope, productId, published: args.published, actor })
+      return await productResponse(ctx, await getProduct(organization.db, organization.organizationId, productId))
+    }
+    case 'set_product_location': {
+      const productId = requiredString(args, 'product_id')
+      const locationId = requiredString(args, 'location_id')
+      // Both halves are checked: the location the caller may reach, and the
+      // product this site actually carries. Authorizing one says nothing
+      // about the other.
+      await resolveCarriedProduct(ctx, productId)
+      await authorizeLocation(ctx, locationId)
+      await setProductLocation(organization.db, {
+        organizationId: organization.organizationId, productId, locationId,
+        active: typeof args.active === 'boolean' ? args.active : undefined,
+        published: typeof args.published === 'boolean' ? args.published : undefined,
+        actor,
+      })
+      return await productResponse(ctx, await getProduct(organization.db, organization.organizationId, productId))
+    }
+    case 'remove_product_location': {
+      const productId = requiredString(args, 'product_id')
+      const locationId = requiredString(args, 'location_id')
+      await resolveCarriedProduct(ctx, productId)
+      await authorizeLocation(ctx, locationId)
+      await removeProductLocation(organization.db, { organizationId: organization.organizationId, productId, locationId })
+      return await productResponse(ctx, await getProduct(organization.db, organization.organizationId, productId))
+    }
+    case 'batch_create_products': {
+      // The site carries what it created, withheld until someone publishes it
+      // — written in the same batch as the products themselves.
+      const products = await createProductsBatch(organization.db, {
+        ...scope, products: objectArray(args.products, 'products') as unknown as CreateProductInput[], actor,
+        publication: { published: false },
+      })
+      return { products }
+    }
+    case 'reconcile_products':
+      return {
+        products: await hydrateProductMedia(organization.db, organization.organizationId, await reconcileProducts(organization.db, {
+          ...scope,
+          products: objectArray(args.products, 'products') as unknown as ReconcileProductInput[],
+          actor,
+          deactivateMissing: args.deactivate_missing === true,
+        })),
+      }
+
+    case 'list_collections': {
+      const locationId = args.location_id === undefined ? undefined : (args.location_id === null ? null : requiredString(args, 'location_id'))
+      return { collections: await listCollections(organization.db, { ...scope, locationId }) }
+    }
+    case 'create_collection': {
+      const locationId = typeof args.location_id === 'string' ? args.location_id : null
+      if (locationId) await authorizeLocation(ctx, locationId)
+      return {
+        collection: await createCollection(organization.db, {
+          organizationId: organization.organizationId,
+          collection: {
+            location_id: locationId,
+            name: requiredString(args, 'name'),
+            description: typeof args.description === 'string' ? args.description : null,
+            sort_order: typeof args.sort_order === 'number' ? args.sort_order : undefined,
+          },
+          actor,
+        }),
+      }
+    }
+    case 'update_collection':
+      return {
+        collection: await updateCollection(organization.db, {
+          organizationId: organization.organizationId,
+          collectionId: requiredString(args, 'collection_id'),
+          patch: omit(args, ['collection_id']),
+          actor,
+        }),
+      }
+    case 'delete_collection':
+      await deleteCollection(organization.db, {
+        organizationId: organization.organizationId, collectionId: requiredString(args, 'collection_id'),
+      })
+      return { deleted: true }
+    case 'set_collection_products': {
+      const collectionId = requiredString(args, 'collection_id')
+      await setCollectionProducts(organization.db, {
+        organizationId: organization.organizationId, collectionId,
+        productIds: requiredStringArray(args.product_ids, 'product_ids'), actor,
+      })
+      const products = await listCollectionProducts(organization.db, { organizationId: organization.organizationId, collectionId })
+      return { products: products.map(productListItem) }
+    }
+    case 'reorder_collections': {
+      const locationId = args.location_id === undefined || args.location_id === null ? null : requiredString(args, 'location_id')
+      await reorderCollections(organization.db, {
+        ...scope, locationId, collectionIds: requiredStringArray(args.collection_ids, 'collection_ids'), actor,
+      })
+      return { collections: await listCollections(organization.db, { ...scope, locationId }) }
+    }
+
+
+  }
+  return NOT_HANDLED
+}

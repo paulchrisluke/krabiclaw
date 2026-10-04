@@ -14,7 +14,7 @@ import { createAuth } from '~/server/utils/auth'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { findOrganizationMemberById, isOrganizationWideRole } from '~/server/utils/member-access'
 
-const ALLOWED_ROLES = new Set(['admin', 'owner'])
+const ALLOWED_ROLES = new Set(['admin', 'owner', 'member'])
 
 interface UpdateMemberRoleApi {
   updateMemberRole(_input: {
@@ -33,11 +33,11 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'Only owners and admins can change member roles' }, { status: 403 })
   }
 
-  const body = await readBody(event).catch(() => null) as { role?: unknown } | null
+  const body = await readBody(event) as { role?: unknown } | undefined
   const role = typeof body?.role === 'string' ? body.role.trim() : ''
 
   if (!ALLOWED_ROLES.has(role)) {
-    return jsonResponse({ error: 'Role must be admin or owner' }, { status: 400 })
+    return jsonResponse({ error: 'Role must be member, admin or owner' }, { status: 400 })
   }
   if (role === 'owner' && organization.role !== 'owner') {
     return jsonResponse({ error: 'Only an owner can grant the owner role' }, { status: 403 })
@@ -62,15 +62,11 @@ export default defineHandler(async (event) => {
   }
 
   if (!response.ok) {
-    let message = 'Failed to update member role'
-    try {
-      const data = await response.json() as { message?: string; error?: string }
-      message = data.message || data.error || message
-    } catch {
-      const text = await response.text().catch(() => '')
-      if (text) message = text
-    }
-    return jsonResponse({ error: message }, { status: response.status || 500 })
+    const text = await response.text()
+    const data = response.headers.get('content-type')?.includes('application/json')
+      ? JSON.parse(text) as { message?: string; error?: string }
+      : null
+    return jsonResponse({ error: data?.message || data?.error || text || `Member role update returned ${response.status}` }, { status: response.status })
   }
 
   return jsonResponse({ success: true, memberId: target.id, role })

@@ -1,6 +1,5 @@
 import satori, { init as initSatori } from 'satori/standalone'
 import { Resvg, type InitInput } from '@resvg/resvg-wasm'
-import type { ReactNode } from 'react'
 import { OG_IMAGE_WIDTH, OG_IMAGE_HEIGHT, type SocialCardRenderPayload } from '~/utils/social-metadata'
 import { getOgImageFonts } from './fonts.ts'
 import { resolveOgImageRenderer } from './renderers/index.ts'
@@ -75,7 +74,7 @@ export async function renderOgImagePng(
   const renderer = resolveOgImageRenderer(payload.template)
   const tree = renderer({ ...payload, backgroundImageDataUri, logoDataUri })
 
-  const svg = await satori(tree as unknown as ReactNode, {
+  const svg = await satori(tree as unknown as Parameters<typeof satori>[0], {
     width: OG_IMAGE_WIDTH,
     height: OG_IMAGE_HEIGHT,
     fonts: getOgImageFonts(),

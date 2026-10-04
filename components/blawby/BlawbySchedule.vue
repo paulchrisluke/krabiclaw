@@ -101,7 +101,7 @@ function trackConsultation(pageType: string, destination: string) {
 
 // A page about the business: its image is the organization's.
 const organizationSocialImage = useTenantOrganization().organization?.social_image ?? null
-const { canonicalUrl } = useSocialMetadata(() => ({
+useSocialMetadata(() => ({
   path: '/schedule',
   socialImage: organizationSocialImage,
   title: `${page.value.title || 'Consultation'} | ${identity.value.name}`,
@@ -109,21 +109,18 @@ const { canonicalUrl } = useSocialMetadata(() => ({
   brand: {
     organizationName: identity.value.name,
   },
-}))
-const homeUrl = useSeoUrl(() => '/')
-
-useProfessionalServiceSchema(() => ({
-  recipe: 'schedule',
-  org: org.value,
-  pageUrl: canonicalUrl.value,
-  pageTitle: page.value.title,
-  pageDescription: page.value.summary || null,
   breadcrumbs: [
-    { name: 'Home', url: homeUrl.value },
-    { name: 'Schedule', url: canonicalUrl.value },
+    { name: 'Home', url: '/' },
+    { name: page.value.title || 'Schedule', url: '/schedule' },
   ],
-  faqs: scheduleQa.value.map(item => ({ question: item.question, answer: item.answer })),
-  consultationUrl: consultation.value.mode === 'native' ? consultation.value.schedule_path : scheduleHeroDestination.value,
+  faqItems: scheduleQa.value
+    .map(item => ({ question: item.question.trim(), answer: item.answer?.trim() ?? '' }))
+    .filter(item => item.question && item.answer),
+  professionalService: {
+    recipe: 'schedule',
+    org: org.value,
+    consultationUrl: consultation.value.mode === 'native' ? consultation.value.schedule_path : scheduleHeroDestination.value,
+  },
 }))
 
 /**

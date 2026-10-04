@@ -54,6 +54,7 @@ export const DETAIL_LABELS: Record<string, string> = {
   login: 'Login & security',
   notifications: 'Notifications',
   appearance: 'Appearance',
+  calendar: 'Your availability',
 }
 
 /** The signed-in person's account, for the three leaves that edit parts of it. */
@@ -267,6 +268,7 @@ const groups = computed<EditorNavigationGroup[]>(() => [
       { id: 'personal', label: 'Personal information', summary: [sessionData.value?.user?.name, sessionData.value?.user?.phoneNumber].filter(Boolean).join(' · ') || 'Name, photo, WhatsApp number', to: `${profilePath.value}/personal` },
       { id: 'login', label: 'Login & security', summary: sessionData.value?.user?.email ?? '', to: `${profilePath.value}/login` },
       { id: 'notifications', label: 'Notifications', summary: notificationSummary.value, to: `${profilePath.value}/notifications` },
+      { id: 'calendar', label: 'Your availability', summary: 'Hours, time off and Google Calendar', to: `${profilePath.value}/calendar` },
       { id: 'appearance', label: 'Appearance', summary: `${themePreference.value.charAt(0).toUpperCase()}${themePreference.value.slice(1)} theme`, to: `${profilePath.value}/appearance` },
       { id: 'log-out', label: 'Log out', action: {} },
     ],

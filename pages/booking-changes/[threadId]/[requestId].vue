@@ -34,7 +34,14 @@ import { getErrorMessage } from '~/utils/errors'
 import type { respondToBookingChange } from '~/server/domain/guest-threads/booking-changes'
 
 definePageMeta({ layout: false })
-useSeoMeta({ title: 'Review reservation changes', robots: 'noindex, nofollow', referrer: 'no-referrer' })
+useSocialMetadata(() => ({
+  path: `/booking-changes/${encodeURIComponent(String(route.params.threadId))}/${encodeURIComponent(String(route.params.requestId))}`,
+  title: 'Review reservation changes',
+  description: 'Review reservation changes.',
+  socialImage: null,
+  discoverability: 'private',
+}))
+useHead({ meta: [{ name: 'referrer', content: 'no-referrer' }] })
 type Proposal = Awaited<ReturnType<typeof respondToBookingChange>>
 const route = useRoute()
 const endpoint = `/api/public/booking-changes/${encodeURIComponent(String(route.params.threadId))}/${encodeURIComponent(String(route.params.requestId))}`

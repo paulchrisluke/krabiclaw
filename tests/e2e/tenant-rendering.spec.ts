@@ -108,27 +108,31 @@ for (const width of [390, 1440]) {
   })
 }
 
-test('Krabiclaw social viewer keyboard navigation changes the visible picture', async ({ page }) => {
+test('Krabiclaw social viewer keyboard navigation changes the visible media', async ({ page }) => {
   const response = await openTenantPage(page, `${testBaseUrl()}/`, {})
   expect(response?.status()).toBe(200)
   await waitForNuxtHydration(page)
   const firstCard = page.locator('[data-social-posts=block] [data-social-post]').first()
-  await expect(firstCard.getByText('KrabiClaw', { exact: true })).toBeVisible()
+  // The newest post's channel decides whose account name shows; assert the
+  // unlinked mark carries one rather than naming the channel that posted last.
+  const channelMark = firstCard.getByLabel(/^Posted on (Facebook|Instagram)$/)
+  await expect(channelMark).toBeVisible()
+  await expect(channelMark).toHaveText(/\S/)
   await expect(firstCard.locator('time, a')).toHaveCount(0)
   await firstCard.click()
   const viewer = page.getByRole('dialog', { name: 'Media Lightbox' })
   await expect(viewer).toBeVisible()
   const pictures = viewer.locator('section')
-  const imageBounds = await pictures.first().locator('img:not([aria-hidden])').boundingBox()
+  const mediaBounds = await pictures.first().locator('img:not([aria-hidden]), video').boundingBox()
   const captionBounds = await pictures.first().locator('p').boundingBox()
-  expect(imageBounds).not.toBeNull()
+  expect(mediaBounds).not.toBeNull()
   expect(captionBounds).not.toBeNull()
-  expect(captionBounds!.x >= imageBounds!.x + imageBounds!.width || captionBounds!.y >= imageBounds!.y + imageBounds!.height).toBe(true)
+  expect(captionBounds!.x >= mediaBounds!.x + mediaBounds!.width || captionBounds!.y >= mediaBounds!.y + mediaBounds!.height).toBe(true)
   expect(await pictures.count()).toBeGreaterThan(1)
   const close = viewer.getByRole('button', { name: 'Close', exact: true })
   await close.press('ArrowDown')
   await expect.poll(() => pictures.nth(1).evaluate(element => Math.round(element.getBoundingClientRect().top))).toBe(0)
-  await expect.poll(() => pictures.nth(1).locator('img:not([aria-hidden])').evaluate(element => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
+  await expect.poll(() => pictures.nth(1).locator('img:not([aria-hidden]), video').evaluate(element => element instanceof HTMLVideoElement ? element.videoWidth : (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
   await close.press('ArrowUp')
   await expect.poll(() => pictures.nth(0).evaluate(element => Math.round(element.getBoundingClientRect().top))).toBe(0)
   await close.click()

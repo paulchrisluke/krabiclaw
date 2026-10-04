@@ -38,5 +38,10 @@ useSocialMetadata(() => ({
   description: t('saya.experiences.meta_description', { organization: currentLocation.title }),
   socialImage: currentLocation.social_image ?? null,
   brand: { organizationName: brandName },
+  breadcrumbs: [
+    { name: 'Locations', url: '/locations' },
+    { name: currentLocation.title, url: `/locations/${encodeURIComponent(currentLocation.slug)}` },
+    { name: 'Experiences', url: `/locations/${encodeURIComponent(currentLocation.slug)}/experiences` },
+  ],
 }))
 </script>

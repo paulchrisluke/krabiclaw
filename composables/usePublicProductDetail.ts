@@ -130,7 +130,7 @@ export async function usePublicProductDetail(routeKind: ProductSurface) {
           booking: detail.booking,
           // The calendar travels with the page, so the dates are in the bytes
           // a crawler reads rather than appearing only after hydration.
-          sessions: await loadPublicProductSessions(db, detail),
+          sessions: await loadPublicProductSessions(db, detail, env),
           // Siblings come from the collection this product actually belongs
           // to on this site. With none, there are no siblings to show — the
           // page does not fall back to "everything at this location".

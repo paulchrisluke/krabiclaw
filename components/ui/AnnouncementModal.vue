@@ -67,7 +67,6 @@
 </template>
 
 <script setup lang="ts">
-import { applicationFetch } from '~/composables/dashboardFetch'
 
 interface PublicAnnouncement {
   headline: string
@@ -88,6 +87,7 @@ const isPublicAnnouncement = (value: unknown): value is PublicAnnouncement =>
   && (value.image_url === null || typeof value.image_url === 'string')
 
 const { organizationId } = useTenantOrganization()
+const requestEvent = useRequestEvent()
 const route = useRoute()
 const { trackAnnouncementView, trackAnnouncementCtaClick } = useOrganizationConversionTracking()
 
@@ -100,14 +100,18 @@ const announcement = ref<PublicAnnouncement | null>(null)
 const isPublicSurface = !route.path.startsWith('/dashboard') && !route.path.startsWith('/api')
 
 if (organizationId && isPublicSurface) {
-  // Nuxt's own useFetch dispatches its SSR request through Nitro's internal self-fetch, which
-  // does not carry the tenant's Host header — applicationFetch is this codebase's established
-  // fix (see composables/dashboardFetch.ts): an explicit baseURL from the real request URL.
-  // useAsyncData never throws to the caller; it captures a failed request into its own `error`
-  // ref instead, which is the state this reads rather than masking failure with a try/catch.
+  // SSR uses the existing request-scoped public provider, preserving tenant and
+  // Cloudflare bindings without an HTTP request back into this same Worker.
   const { data, error } = await useAsyncData(
     `public-announcement:${organizationId}`,
-    () => applicationFetch<{ announcement: unknown }>('/api/public/config', {
+    () => loadPublicResourcePayload<{ announcement: unknown }>({
+      organizationId,
+      resourceKind: 'config',
+      url: '/api/public/config',
+      key: `public-announcement:${organizationId}`,
+      query: {},
+      requestEvent,
+      failureMessage: 'Public site configuration failed',
       validate: (value): value is { announcement: unknown } => isRecord(value),
     }),
     { server: true },

@@ -81,7 +81,7 @@ column. It is another level.
 ## Controls
 
 The inside of a leaf, measured against Airbnb's host tools (see
-`docs/design/cms-redesign-packet/airbnb-parity-audit.md`). The theme in
+`docs/design/airbnb-parity-audit.md`). The theme in
 `app.config.ts` and the two shells carry most of this; a page states the
 control and nothing about its size, radius or width.
 

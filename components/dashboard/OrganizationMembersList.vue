@@ -18,6 +18,7 @@
               <div class="min-w-0">
                 <p class="truncate text-base text-highlighted">{{ member.name || member.email }}</p>
                 <p class="truncate text-sm text-muted">{{ member.email }}</p>
+                <UButton color="neutral" variant="link" :to="`/dashboard/${dashboard.organization.value?.slug}/settings/members/${member.id}`">Profile, hours &amp; Calendar</UButton>
               </div>
             </div>
             <div class="flex shrink-0 items-center gap-2">
@@ -156,7 +157,7 @@ const currentUserRole = computed(() => {
 const isOwner = computed(() => currentUserRole.value === 'owner')
 
 const BASE_ROLE_OPTIONS = [
-  { label: 'Admin', value: 'admin' },
+  { label: 'Member', value: 'member' }, { label: 'Admin', value: 'admin' },
 ]
 // Owner is only offered as a choice to an existing owner — mirrors Better
 // Auth's own creatorRole rule (only an owner can grant/touch the owner role),

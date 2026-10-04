@@ -112,3 +112,40 @@ export const deleteConfig = async (
   )
   if (result.meta?.changes !== 1) throw new HTTPError({ statusCode: 409, statusMessage: 'Organization ownership changed. Reload before saving.' })
 }
+
+/** Canonical public site settings and announcement, shared by API and SSR. */
+export async function getPublicConfig(db: DbClient, organizationId: string) {
+  const organization = await queryFirst<{
+    id: string
+    default_currency: string
+    announcement_json: string | null
+    announcement_public_url: string | null
+  }>(db, `
+    SELECT o.id, o.default_currency,
+           json_extract(o.settings_json, '$.config.announcement') AS announcement_json,
+           ama.public_url AS announcement_public_url
+      FROM organization o
+      LEFT JOIN media_placements amp ON amp.organization_id = o.id AND amp.owner_type = 'organization'
+        AND amp.owner_id = o.id AND amp.slot = 'announcement' AND amp.sort_order = 0 AND amp.status = 'active'
+      LEFT JOIN media_assets ama ON ama.id = amp.asset_id AND ama.status = 'active'
+     WHERE o.id = ? AND o.status = 'active' AND o.onboarding_status = 'active'
+     LIMIT 1
+  `, [organizationId])
+
+  if (!organization) throw new HTTPError({ statusCode: 404, statusMessage: 'Organization not found' })
+
+  const parsedAnnouncement = organization.announcement_json ? JSON.parse(organization.announcement_json) : null
+  const announcement = parsedAnnouncement && parsedAnnouncement.enabled === true
+    ? {
+        headline: parsedAnnouncement.headline ?? null,
+        description: parsedAnnouncement.description ?? null,
+        cta_label: parsedAnnouncement.cta_label ?? null,
+        cta_url: parsedAnnouncement.cta_url ?? null,
+        dismissible: parsedAnnouncement.dismissible ?? true,
+        image_url: organization.announcement_public_url,
+      }
+    : null
+
+  const config = { ...await getConfig(db, organization.id), default_currency: organization.default_currency }
+  return { success: true, config, announcement }
+}

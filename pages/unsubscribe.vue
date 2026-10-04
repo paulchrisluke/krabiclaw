@@ -76,5 +76,11 @@ async function submit() {
   }
 }
 
-useSeoMeta({ title: 'Unsubscribe | Krabiclaw', robots: 'noindex, nofollow' })
+useSocialMetadata({
+  path: '/unsubscribe',
+  title: 'Unsubscribe | Krabiclaw',
+  description: 'Manage your email subscription preferences.',
+  socialImage: null,
+  discoverability: 'private',
+})
 </script>

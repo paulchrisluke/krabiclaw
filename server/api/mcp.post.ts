@@ -15,11 +15,10 @@ import {
 } from "@modelcontextprotocol/server";
 import { asMcpError, mcpSuccess, mcpFailure, MCP_ERROR, type JsonRpcId } from "~/server/utils/mcp-protocol";
 import { catalogFingerprint, catalogMeta } from "~/server/utils/mcp-catalog";
-import { executeMcpToolCall } from "~/server/utils/mcp-executor";
+import { executeMcpToolCall, MCP_PUBLIC_TOOLS, MCP_TOOLS } from "~/server/utils/mcp-tools";
 import { isMcpRenderResponse } from "~/server/utils/mcp-render";
 import {
   getActiveEntitlements, getVisibleOrganizationContext, requireMcpUser, roleSatisfies, type McpUserContext, } from "~/server/utils/mcp-auth";
-import { MCP_PUBLIC_TOOLS, MCP_TOOLS } from "~/server/utils/mcp-tools";
 import { MCP_PROMPTS, renderMcpPrompt } from "~/server/utils/mcp-prompts";
 import { cloudflareEnv } from "~/server/utils/api-response";
 import { createDb } from "~/server/db";
@@ -66,6 +65,7 @@ Media tools save existing attachments or assets to the selected site when the us
 create_post makes a draft short website/social post. create_blog_post makes a draft blog or documentation article. create_product makes a catalog offering with variants and prices. Publication is a separate action; changes to already published content can appear immediately. Publish only to the destinations the user requests. Connected social targets and publication states come from get_social_connections and publication reads. Report uncertain publication outcomes and reconcile them without creating a second provider post.
 
 For whole-document or collection replacement, read the latest state and preserve everything outside the requested change. Use the supplied concurrency tokens and deletion confirmations. Read all pages before claiming a complete collection or replacing it. Prices belong to variants; location offerings and website visibility are separate. Weekly schedules use Product duration/capacity; saved Sessions retain their actual facts and any Booking history protects them.
+
 
 Contact submissions and table reservations can be read here; response/status work uses the dashboard inbox. Reviews and imported Google Q&A are managed in Google. Authored Q&A has dedicated create, update, delete and reorder tools. Language tools manage exact authored representations rather than automatic translation.
 

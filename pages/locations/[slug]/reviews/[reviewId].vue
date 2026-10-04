@@ -48,7 +48,7 @@ definePageMeta({ layout: 'saya' })
 
 const route = useRoute()
 const requestEvent = useRequestEvent()
-const { organizationId } = useTenantOrganization()
+const { organizationId, organization } = useTenantOrganization()
 if (!organizationId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
@@ -138,19 +138,27 @@ useSocialMetadata(() => ({
   brand: {
     organizationName: String(review.value?.organization_name || ''),
   },
+  breadcrumbs: [
+    { name: 'Locations', url: '/locations' },
+    { name: String(review.value?.location_title || slug.value), url: `/locations/${slug.value}` },
+    { name: 'Reviews', url: `/locations/${slug.value}/reviews` },
+    { name: review.value ? `${review.value.rating}★ Review` : 'Review', url: `/locations/${slug.value}/reviews/${reviewId.value}` },
+  ],
 }))
 
-useHead(() => review.value ? {
-  script: [{
-    type: 'application/ld+json',
-    innerHTML: JSON.stringify({
-      '@context': 'https://schema.org',
+useSchemaOrg([
+  computed(() => {
+    if (!review.value) return {}
+    return {
       '@type': 'Review',
       author: { '@type': 'Person', name: review.value.author_name || 'Guest' },
       reviewRating: { '@type': 'Rating', ratingValue: review.value.rating, bestRating: 5 },
       reviewBody: review.value.content,
-      itemReviewed: { '@type': 'LocalBusiness', name: review.value.organization_name },
-    }),
-  }],
-} : {})
+      itemReviewed: {
+        '@type': getBusinessSchemaTypes((organization as ApiValue)?.vertical),
+        name: review.value.organization_name,
+      },
+    }
+  }),
+])
 </script>

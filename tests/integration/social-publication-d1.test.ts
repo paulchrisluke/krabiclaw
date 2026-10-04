@@ -5,8 +5,8 @@ import test from 'node:test'
 import { Miniflare } from 'miniflare'
 import { H3 } from 'nitro/h3'
 import { HTTPError } from 'nitro'
-import { handlePostsTools } from '../../server/utils/mcp-executor/posts.ts'
-import type { McpExecutorContext } from '../../server/utils/mcp-executor/shared.ts'
+import { handlePostsTools } from '../../server/utils/mcp-tools/posts.ts'
+import type { McpExecutorContext } from '../../server/utils/mcp-tools/execution.ts'
 import { MCP_ERROR } from '../../server/utils/mcp-protocol.ts'
 import type { CloudflareEnv } from '../../server/utils/auth.ts'
 import { createPost, deletePost, getPost, listPublicSocialPosts, postPayloadFingerprint, updatePost } from '../../server/utils/post-management.ts'
@@ -158,7 +158,10 @@ async function setUp() {
     env: { DB: { type: 'd1' }, MEDIA_BUCKET: { type: 'r2' } },
   } }] })
   const db = await runtime.getD1Database('DB')
-  for (const statement of readFileSync('migrations/0000_baseline.sql', 'utf8').split('--> statement-breakpoint').map(sql => sql.trim()).filter(Boolean)) await db.prepare(statement).run()
+  const journal = JSON.parse(readFileSync('migrations/meta/_journal.json', 'utf8')) as { entries: { tag: string }[] }
+  for (const { tag } of journal.entries) {
+    for (const statement of readFileSync(`migrations/${tag}.sql`, 'utf8').split('--> statement-breakpoint').map(sql => sql.trim()).filter(Boolean)) await db.prepare(statement).run()
+  }
   const env = {
     ...await runtime.getBindings<CloudflareEnv>(),
     BETTER_AUTH_SECRET: 'local-proof-secret-long-enough-for-auth', BETTER_AUTH_URL: 'https://proof.example', STRIPE_SECRET_KEY: 'sk_test_local_d1_no_stripe_requests',
