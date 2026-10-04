@@ -1,5 +1,5 @@
 <template>
- <DashboardLeafPanel id="booking-team-member" title="Team member" lead="Changing the team member updates everyone in this booking." :ready="Boolean(data) || Boolean(loadError)" :saving="saving" :disabled="!selected || selected === b.booking.value?.assignedMemberId || !data?.members.length" :error="error || (loadError ? getErrorMessage(loadError,'Team members could not be loaded.') : '')" @cancel="reset" @save="save">
+ <DashboardLeafPanel id="booking-team-member" title="Team member" lead="Changing the team member updates everyone in this booking." :ready="Boolean(data) || Boolean(loadError)" :saving="saving" :disabled="!selected || selected === b.booking.value?.assignedMemberId || !data?.members.length || b.booking.value?.complete || !['pending','confirmed'].includes(b.booking.value?.status ?? '')" :error="error || (loadError ? getErrorMessage(loadError,'Team members could not be loaded.') : '')" @cancel="reset" @save="save">
   <URadioGroup v-if="data?.members.length" v-model="selected" :items="data.members.map(member=>({label:member.name,value:member.id}))" variant="card" />
   <UAlert v-else-if="data" color="warning" description="Assign a team member to this service before changing this booking." />
  </DashboardLeafPanel>

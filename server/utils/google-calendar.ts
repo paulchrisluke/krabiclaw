@@ -43,7 +43,7 @@ export async function listWritableCalendars(token: string): Promise<CalendarChoi
   let next: string | undefined
   do {
     const result = await google<{ items?: CalendarChoice[]; nextPageToken?: string }>(token,
-      `/users/me/calendarList?minAccessRole=writer&maxResults=250${next ? `&pageToken=${encodeURIComponent(next)}` : ''}`)
+      `/users/me/calendarList?minAccessRole=writer&showHidden=true&maxResults=250${next ? `&pageToken=${encodeURIComponent(next)}` : ''}`)
     calendars.push(...(result.items ?? []).filter(item => ['owner', 'writer'].includes(item.accessRole)))
     next = result.nextPageToken
   } while (next)

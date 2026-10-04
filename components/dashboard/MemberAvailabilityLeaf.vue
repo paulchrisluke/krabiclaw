@@ -10,8 +10,8 @@
    </div>
    <UButton v-if="slots.length" color="neutral" variant="outline" icon="i-lucide-plus" @click="add">Add hours</UButton>
   </template>
-  <template v-else-if="concern === 'name'"><UFormField label="Name"><UInput v-model="editor.draft.value.public_name" maxlength="100" class="w-full" /></UFormField><p class="mt-2 text-right text-sm text-muted">{{ editor.draft.value.public_name.length }}/100</p></template>
-  <template v-else-if="concern === 'bio'"><UFormField label="About you"><UTextarea v-model="editor.draft.value.public_bio" maxlength="2000" :rows="8" class="w-full" /></UFormField><p class="mt-2 text-right text-sm text-muted">{{ editor.draft.value.public_bio.length }}/2000</p></template>
+  <template v-else-if="concern === 'name'"><p class="mb-2 text-sm text-muted">{{ 100 - editor.draft.value.public_name.length }}/100 available</p><UInput v-model="editor.draft.value.public_name" aria-label="Name" maxlength="100" variant="none" :ui="{ base: 'px-0 text-2xl md:text-2xl' }" class="w-full" /></template>
+  <template v-else-if="concern === 'bio'"><p class="mb-2 text-sm text-muted">{{ 2000 - editor.draft.value.public_bio.length }}/2000 available</p><UTextarea v-model="editor.draft.value.public_bio" aria-label="About you" maxlength="2000" :rows="8" class="w-full" /></template>
   <template v-else-if="concern === 'photo' && editor.self">
    <UAvatar :src="editor.draft.value.public_photo_url ?? undefined" icon="i-lucide-user" size="3xl" class="mb-6" />
    <div class="flex gap-3"><UButton color="neutral" variant="outline" :disabled="!account?.sessionData.value?.user?.image" @click="editor.draft.value.public_photo_url = account?.sessionData.value?.user?.image ?? null">Use your account photo</UButton><UButton v-if="editor.draft.value.public_photo_url" color="neutral" variant="ghost" @click="editor.draft.value.public_photo_url = null">Remove photo</UButton></div>

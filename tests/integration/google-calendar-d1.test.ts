@@ -253,13 +253,13 @@ test('scheduled Calendar sync reports thrown and event failures while projecting
 })
 
 
-test('automatic Calendar connection recovers an ambiguous creation and reuses its persisted calendar on reconnect', {timeout:120000}, async t => {
+test('automatic Calendar connection recovers a hidden calendar after ambiguous creation and reuses it on reconnect', {timeout:120000}, async t => {
  const runtime=new Miniflare({workers:[{config:{name:'calendar-setup-proof',type:'worker',compatibilityDate:'2024-11-01',manifest:{mainModule:'index.mjs',modules:{'index.mjs':{type:'esm',contents:'export default {fetch(){return new Response("ok")}}'}}},env:{DB:{type:'d1'}}}}]})
  try {
   const db=await runtime.getD1Database('DB')
   await db.batch((await generateSQLiteMigration(await generateSQLiteDrizzleJson({}),await generateSQLiteDrizzleJson(schema))).map(sql=>db.prepare(sql)))
   await db.prepare("INSERT INTO organization(id,name,slug)VALUES('org','Org','org')").run()
-  const calendars:{id:string;summary:string;description:string;accessRole:string}[]=[]
+  const calendars:{id:string;summary:string;description:string;accessRole:string;hidden:boolean}[]=[]
   let inserts=0, visible=false
   t.mock.method(globalThis,'fetch',async(input,init)=>{
    const url=new URL(String(input))
@@ -270,10 +270,10 @@ test('automatic Calendar connection recovers an ambiguous creation and reuses it
     const payload=JSON.parse(String(init.body))
     assert.deepEqual(payload,{summary:'Krabiclaw',description:'Krabiclaw bookings for organization org'})
     inserts++
-    calendars.push({...payload,id:'created-calendar',accessRole:'owner'})
+    calendars.push({...payload,id:'created-calendar',accessRole:'owner',hidden:true})
     throw new Error('Timeout after Google committed the calendar')
    }
-   if(url.pathname.endsWith('/calendarList'))return Response.json({items:visible?calendars:[]})
+   if(url.pathname.endsWith('/calendarList'))return Response.json({items:visible?calendars.filter(calendar=>!calendar.hidden || url.searchParams.get('showHidden')==='true'):[]})
    assert.equal(url.pathname,'/calendar/v3/users/me/calendarList/created-calendar')
    return Response.json(calendars[0])
   })

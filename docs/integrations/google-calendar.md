@@ -55,8 +55,11 @@ Console grants are retained on Calendar disconnect.
 Connection creates a secondary calendar through Google’s `calendars.insert` with
 `calendar.app.created`, retaining Calendar List read access for identity recovery
 and permission checks. A durable `google_calendar_setup` attempt prevents a second
-create after an ambiguous response. Retry discovers the exact business marker;
-it never guesses from the calendar name. Reconnect reuses the stored target.
+create after an ambiguous response. Retry discovers the exact business marker,
+including hidden calendars; it never guesses from the calendar name. An uncertain
+creation attempt does not expire automatically: Google provides no idempotency
+key or documented list-propagation deadline that would make another create safe.
+Reconnect reuses the stored target.
 Changing accounts requires completed cleanup first. Disconnect disables projection immediately; the worker removes
 only mapped managed events from the old calendar. Failed cleanup remains
 visible with its original account/calendar/event identity and retry action.
@@ -149,7 +152,18 @@ closed. Deleting the test event and rechecking returned no busy intervals. Both
 domain connections were disconnected, test events removed, and the member's
 test hours cleared. The Google linked account and existing grants were retained.
 
+The redesigned CMS was then exercised through real Better Auth consent on the
+built local Worker. Calendar → Settings → Availability → Google Calendar created
+the business's **Krabiclaw** calendar automatically. Its identity was read back
+from D1 and its presence verified independently in Google Calendar. Personal
+checking selected the primary calendar automatically; switching off and back on
+retained the linked account, required no further consent, and refreshed complete
+94-day coverage without an error. Desktop and mobile checks covered hours,
+Cancel restoring saved values, time-off create/edit/remove, and unpublished
+profile edits. Temporary member test data was removed afterward; the empty
+business calendar and connection remain available for local review.
+
 The Google app still displays its unverified-app consent notice; public OAuth
-verification and the normal review/release process remain before general rollout.
+verification remains outstanding before general rollout.
 Historical review notes on superseded PRs do not qualify this replacement head
 for deployment.

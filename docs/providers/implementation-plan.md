@@ -22,7 +22,7 @@ accounts, refunds and usage billing are added by the separate Payments PR.
 
 ## Staging integration review
 
-The current Calendar branch includes staging after #1211 landed. Local CodeRabbit
+The current Calendar branch includes staging through #1250. Local CodeRabbit
 review identified five issues. Required reassignment fields and Calendar actions
 are validated before mutation, notification receipts match the exact reassignment
 key and operational booking ID within the targeted tenant, and the migration test
@@ -39,8 +39,13 @@ The owner authorized and saved `http://localhost:3113/api/auth/callback/google`
 on the existing OAuth client. Live Better Auth consent, callback routing, event
 creation/update/cancellation, disconnect cleanup and member busy-calendar reads across the 94-day horizon
 were exercised on October 4, 2026 against the built local Worker and the separate
-private verification calendar. Test events, domain connections and test hours
-were removed afterward. The Google app still shows its unverified-app notice;
-public OAuth verification remains before general rollout. Exact evidence and
+private verification calendar. Those test events and connections were removed.
+The redesigned CMS subsequently created the business's Krabiclaw calendar through
+real consent, without calendar or export-policy choices. Desktop/mobile hours,
+time-off sheets, profile edits and the personal Avoid double bookings switch were
+exercised against the built Worker and read back through D1. The empty business
+calendar remains for review; temporary member data was removed. The Google app
+still shows its unverified-app notice; only public OAuth verification remains
+outstanding for provider qualification. Exact evidence and
 verification limits, including complete-cache preservation after a failed read,
 are recorded in [Google Calendar](../integrations/google-calendar.md#review-and-validation).

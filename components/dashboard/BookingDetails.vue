@@ -53,15 +53,16 @@
           <p class="mt-1 text-base text-muted">{{ formattedDate }} <span aria-hidden="true">·</span> {{ booking.resourceTitle }}</p>
 
           <template v-if="booking.type === 'booking'">
-            <NuxtLink :to="`${editorPath}/team-member`" class="mt-6 flex items-center gap-4 border-y border-default py-6">
+            <component :is="canChangeBooking ? NuxtLink : 'div'" :to="canChangeBooking ? `${editorPath}/team-member` : undefined" class="mt-6 flex items-center gap-4 border-y border-default py-6">
               <span class="min-w-0 flex-1"><span class="block text-base font-medium text-highlighted">Team member</span><span class="block text-sm text-muted">{{ booking.assignedMemberName || (booking.assignedMemberId ? 'Previously assigned member' : booking.organizationName) }}</span></span>
-              <UIcon name="i-lucide-chevron-right" class="size-5 shrink-0 text-muted" />
-            </NuxtLink>
+              <UIcon v-if="canChangeBooking" name="i-lucide-chevron-right" class="size-5 shrink-0 text-muted" />
+            </component>
             <UAlert v-if="booking.providerConflict" class="mt-4" color="warning" description="This booking overlaps a busy time. Contact your guest to change it." />
             <UAlert v-if="booking.providerCalendarStatus" class="mt-4" color="warning" :description="booking.providerCalendarStatus" />
           </template>
           <div class="mt-6 space-y-2">
             <UButton
+              v-if="canChangeBooking"
               :label="`Change ${noun}`"
               color="neutral"
               variant="soft"
@@ -238,6 +239,7 @@ export const bookingEditorKey = Symbol('booking-editor') as InjectionKey<Booking
 </script>
 
 <script setup lang="ts">
+import { NuxtLink } from '#components'
 import { formatCalendarDate, formatTime, formatTimestamp } from '~/utils/timezone'
 import DashboardListItemDialog from '~/components/dashboard/DashboardListItemDialog.vue'
 import DashboardIndexPanel from '~/lib/components/workspace/dashboard/DashboardIndexPanel.vue'
@@ -295,8 +297,9 @@ const cancellationSummary = computed(() => booking.value?.policy?.items.find(ite
   ?? 'No cancellation terms have been configured.')
 const messageTo = computed(() => {
   if (!booking.value?.threadId) return null
-  return `/dashboard/${orgSlug.value}/locations/${booking.value.locationSlug}/messages/${booking.value.threadId}`
+  return `/dashboard/${orgSlug.value}/messages/${encodeURIComponent(booking.value.threadId)}`
 })
+const canChangeBooking = computed(() => Boolean(booking.value && !booking.value.complete && ['pending', 'confirmed'].includes(booking.value.status)))
 const callTo = computed(() => booking.value?.guestPhone ? `tel:${booking.value.guestPhone}` : null)
 
 const policyOpen = ref(false)
