@@ -280,7 +280,7 @@ async function checkRoute(base, route, options = {}) {
   const { response, timer, attempts } = await fetchRouteResponseWithRetries(url, { redirect: options.redirect || 'follow' })
   let html
   try {
-    html = await response.text().catch(() => '')
+    html = await response.text()
   } finally {
     if (timer) clearTimeout(timer)
   }
@@ -312,32 +312,29 @@ async function fetchBlawbyData(base, organizationId) {
     const path = `/api/public/blawby/document?recipe=${encodeURIComponent(recipe)}`
     const { response, timer } = await fetchResponseWithTimeout(resolveUrl(base, path))
     try {
-      if (!response.ok) return null
+      if (!response.ok) return { error: `${path} returned ${response.status} ${response.statusText}` }
       const document = await response.json()
-      if (document?.success !== true || document.route?.recipe !== recipe) return null
+      if (document?.success !== true || document.route?.recipe !== recipe) return { error: `${path} did not return the ${recipe} document` }
       documents[recipe] = document
-    } catch {
-      return null
     } finally {
       if (timer) clearTimeout(timer)
     }
   }
 
-  return {
-    offerings: documents.services.route.offerings,
+  return { data: {
+    offeringPageIds: documents.services.route.page.blocks.find(block => block.type === 'page_grid')?.data?.page_ids ?? [],
     tenantPages: ['pricing', 'donate', 'privacy', 'terms'].map(recipe => documents[recipe].route.page),
     consultation: documents.home.shell.consultation,
     compliance: documents.home.shell.compliance,
     canonicalDocuments: documents,
-  }
+  } }
 }
 
 async function fetchSitemap(base) {
-  if (!base) return ''
   const { response, timer } = await fetchResponseWithTimeout(resolveUrl(base, '/sitemap.xml'))
   try {
-    if (!response.ok) return ''
-    return await response.text().catch(() => '')
+    if (!response.ok) return { text: '', error: `/sitemap.xml returned ${response.status} ${response.statusText}` }
+    return { text: await response.text() }
   } finally {
     if (timer) clearTimeout(timer)
   }
@@ -453,9 +450,10 @@ function validateArtifacts(checks, manifest) {
   }
 }
 
-function validatePublicData(checks, data, required) {
+function validatePublicData(checks, result, required) {
+  const data = result?.data
   if (!data) {
-    if (required) pushCheck(checks, false, 'Public Blawby API data is fetchable and valid')
+    if (required) pushCheck(checks, false, 'Public Blawby API data is fetchable and valid', { error: result?.error })
     return
   }
   pushCheck(checks, true, 'Public Blawby API data is fetchable and valid')
@@ -464,7 +462,7 @@ function validatePublicData(checks, data, required) {
     !containsLegacyDonationHost(data),
     `Public Blawby API data does not reference ${LEGACY_DONATION_HOST}`,
   )
-  pushCheck(checks, Array.isArray(data.offerings) && data.offerings.length > 0, 'Public Blawby API returns offerings')
+  pushCheck(checks, data.offeringPageIds.length > 0, 'Public services page lists offering pages', { offeringPageIds: data.offeringPageIds })
   pushCheck(checks, Array.isArray(data.tenantPages) && data.tenantPages.some((page) => page.path === '/pricing'), 'Public Blawby API returns /pricing')
   pushCheck(checks, data.consultation?.tracking_enabled === true, 'Public consultation tracking is enabled')
   pushCheck(checks, Boolean(data.compliance?.entity_name), 'Public compliance metadata is present')
@@ -482,13 +480,17 @@ function validatePublicData(checks, data, required) {
     pushCheck(checks, !String(page.body || '').includes('](/files/'), `Public tenant page ${page.path} does not reference legacy /files assets`)
   }
   const donationPage = (data.tenantPages ?? []).find((page) => page.path === '/donate')
-  const donationUrl = donationPage?.cta_url
-    ?? donationPage?.blocks?.find(block => block.type === 'donation_choices')?.data?.destination
+  // Donation links are donation_choices destinations or donate-page buttons; a
+  // button may prefill an amount, so compare the destination without its query.
+  const donationUrls = (donationPage?.blocks ?? []).flatMap(block =>
+    block.type === 'donation_choices' ? [block.data?.destination]
+      : block.type === 'button_group' ? (block.data?.buttons ?? []).map(button => button.url)
+        : [])
   pushCheck(
     checks,
-    donationUrl === APPROVED_DONATION_URL,
+    donationUrls.length > 0 && donationUrls.every(url => typeof url === 'string' && url.split('?')[0] === APPROVED_DONATION_URL),
     'Public donation CTA uses the approved Stripe destination',
-    { donationUrl: donationUrl ?? null },
+    { donationUrls },
   )
 
   const mediaUrls = collectArtifactMediaUrls(data)
@@ -510,7 +512,7 @@ async function validateRemoteMedia(checks, ...sources) {
   }
 }
 
-function validateSitemap(checks, sitemap, manifest, hostname) {
+function validateSitemap(checks, { text: sitemap, error }, manifest, hostname) {
   if (isNonIndexableHost(hostname)) {
     // server/plugins/sitemap.ts intentionally zeroes the sitemap for staging/workers.dev
     // hosts (server/utils/seo-policy.ts isNonIndexableHost) so they never get indexed. An empty
@@ -519,7 +521,7 @@ function validateSitemap(checks, sitemap, manifest, hostname) {
     return
   }
   if (!sitemap) {
-    pushCheck(checks, false, 'Sitemap is fetchable')
+    pushCheck(checks, false, 'Sitemap is fetchable', { error: error ?? 'empty sitemap' })
     return
   }
   pushCheck(checks, true, 'Sitemap is fetchable')
@@ -716,7 +718,7 @@ if (baseUrl) {
 validateArtifacts(checks, manifest)
 const publicData = await fetchBlawbyData(baseUrl, args.organizationId)
 validatePublicData(checks, publicData, Boolean(args.organizationId))
-if (baseUrl) await validateRemoteMedia(checks, manifest, publicData)
+if (baseUrl) await validateRemoteMedia(checks, manifest, publicData?.data)
 if (baseUrl) validateSitemap(checks, await fetchSitemap(baseUrl), manifest, new URL(baseUrl).hostname)
 validateScreenshots(checks, args.evidenceDir, args.requireScreenshots)
 

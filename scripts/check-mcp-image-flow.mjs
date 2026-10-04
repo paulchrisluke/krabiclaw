@@ -1,69 +1,6 @@
 #!/usr/bin/env node
 
-import { credentialSession } from './utils/e2e-auth.mjs'
-import { mcpToolCall } from './utils/mcp-request.mjs'
-
-const BASE_URL = (process.argv.includes('--base-url')
-  ? process.argv[process.argv.indexOf('--base-url') + 1]
-  : process.env.MCP_BASE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
-const ORGANIZATION_ID = process.argv.includes('--organization-id')
-  ? process.argv[process.argv.indexOf('--organization-id') + 1]
-  : process.env.MCP_ORGANIZATION_ID
-const LOCATION_ID = process.argv.includes('--location-id')
-  ? process.argv[process.argv.indexOf('--location-id') + 1]
-  : process.env.MCP_LOCATION_ID
-const USER_ID = process.argv.includes('--user-id')
-  ? process.argv[process.argv.indexOf('--user-id') + 1]
-  : process.env.MCP_USER_ID
-
-const isLocal = BASE_URL.includes('localhost') || BASE_URL.includes('127.0.0.1')
-let failed = false
-
-function pass(message) {
-  console.log(`ok  ${message}`)
-}
-
-function fail(message, detail) {
-  failed = true
-  console.error(`not ok  ${message}`)
-  if (detail) console.error(typeof detail === 'string' ? detail : JSON.stringify(detail, null, 2))
-}
-
-function expectValue(label, condition, detail) {
-  if (condition) pass(label)
-  else fail(label, detail)
-}
-
-function expectStatus(label, response, expected = 200) {
-  if (response.status === expected) pass(label)
-  else fail(`${label}: expected ${expected}, got ${response.status}`, response.body)
-}
-
-async function getAuthHeaders() {
-  if (process.env.MCP_BEARER_TOKEN) {
-    return { authorization: `Bearer ${process.env.MCP_BEARER_TOKEN}` }
-  }
-
-  if (!isLocal && process.env.MCP_CREDENTIAL_LOGIN !== '1') {
-    throw new Error('Set MCP_BEARER_TOKEN for remote checks, or MCP_CREDENTIAL_LOGIN=1 for a credentialed tunnel.')
-  }
-  return credentialSession(BASE_URL, { userId: USER_ID || undefined, organizationId: ORGANIZATION_ID })
-}
-
-function mcp(headers, name, args = {}) {
-  return mcpToolCall(BASE_URL, headers, name, args)
-}
-
-function data(body) {
-  if (body?.result?.structuredContent) return body.result.structuredContent
-  const text = body?.result?.content?.[0]?.text
-  if (!text) return body
-  try {
-    return JSON.parse(text)
-  } catch {
-    return text
-  }
-}
+import { authHeaders, BASE_URL, expectStatus, expectValue, LOCATION_ID, mcp, ORGANIZATION_ID, run, toolData } from './utils/mcp-check.mjs'
 
 
 // A public https image stands in for the file reference ChatGPT supplies for an
@@ -86,7 +23,7 @@ async function assertSavedImage(headers, organizationId, label) {
     description: `${label} image`,
   })
   expectStatus(`${label} save_media_attachment succeeds`, response)
-  const payload = data(response.body)
+  const payload = toolData(response.body)
   expectValue(`${label} returns asset_id`, Boolean(payload?.asset_id), payload)
   expectValue(`${label} returns public_url`, typeof payload?.public_url === 'string' && payload.public_url.startsWith('https://'), payload)
   expectValue(`${label} returns thumbnail_url`, typeof payload?.thumbnail_url === 'string' && payload.thumbnail_url.startsWith('https://'), payload)
@@ -104,7 +41,7 @@ async function createProduct(headers, organizationId, locationId) {
     variants: [{ name: 'Standard', prices: [{ unit_amount: 1200, currency: 'USD' }] }],
   })
   expectStatus('create_product succeeds', product)
-  const productId = data(product.body)?.product?.id
+  const productId = toolData(product.body)?.product?.id
   expectValue('create_product returns Product id', Boolean(productId), product.body)
   // Publication and location membership are separate rows; a Product nobody
   // published is not on the site, which is what the image checks read back.
@@ -121,7 +58,7 @@ async function createPost(headers, organizationId) {
     body: 'Post used for image tool coverage',
   })
   expectStatus('create_post succeeds', response)
-  const postId = data(response.body)?.post?.id
+  const postId = toolData(response.body)?.post?.id
   expectValue('create_post returns post id', Boolean(postId), response.body)
   return postId
 }
@@ -134,7 +71,7 @@ async function createSecondProduct(headers, organizationId) {
     variants: [{ name: 'Standard', prices: [{ unit_amount: 4500, currency: 'USD' }] }],
   })
   expectStatus('create_product (second) succeeds', response)
-  const id = data(response.body)?.product?.id
+  const id = toolData(response.body)?.product?.id
   expectValue('create_product (second) returns Product id', Boolean(id), response.body)
   // Carrying is not publishing, and the media steps below read this Product
   // through the site. The first Product publishes itself; this one did not, so
@@ -146,16 +83,15 @@ async function createSecondProduct(headers, organizationId) {
 async function assertImageAssignmentTool(headers, name, args, expectation) {
   const response = await mcp(headers, name, args)
   expectStatus(`${name} succeeds`, response)
-  const payload = data(response.body)
+  const payload = toolData(response.body)
   expectation(payload, response.body)
 }
 
 async function main() {
   console.log(`Checking MCP image flow at ${BASE_URL}`)
-  const headers = await getAuthHeaders()
+  const headers = await authHeaders()
   const organizationId = ORGANIZATION_ID
   if (!organizationId) throw new Error('Pass --organization-id for a disposable organization provisioned through local setup or the CMS.')
-  if (!organizationId) process.exit(1)
 
   const firstImage = await assertSavedImage(headers, organizationId, 'first')
   const secondImage = await assertSavedImage(headers, organizationId, 'second')
@@ -171,7 +107,7 @@ async function main() {
     location_id: locationId,
   })
   expectStatus('set_workspace_context with location succeeds', workspaceSet)
-  const workspacePayload = data(workspaceSet.body)
+  const workspacePayload = toolData(workspaceSet.body)
   expectValue('workspace context stores active location', workspacePayload?.context?.location_id === locationId, workspacePayload)
   const productId = await createProduct(headers, organizationId, locationId)
   const postId = await createPost(headers, organizationId)
@@ -243,13 +179,13 @@ async function main() {
     location_id: locationId,
   })
   expectStatus('get_location succeeds', locationRead)
-  expectValue('set_media updates location hero', data(locationRead.body)?.location?.media?.some(media => media.slot === 'hero' && media.asset_id === assetId), data(locationRead.body))
+  expectValue('set_media updates location hero', toolData(locationRead.body)?.location?.media?.some(media => media.slot === 'hero' && media.asset_id === assetId), toolData(locationRead.body))
 
   const productRead = await mcp(headers, 'get_product', {
     organization_id: organizationId,
     product_id: productId,
   })
-  const readProduct = data(productRead.body)?.product
+  const readProduct = toolData(productRead.body)?.product
   expectStatus('get_product for image verification succeeds', productRead)
   expectValue(
     'attach_media updates ordered Product gallery',
@@ -263,19 +199,15 @@ async function main() {
     post_id: postId,
   })
   expectStatus('get_post succeeds', postRead)
-  expectValue('set_media updates post cover', data(postRead.body)?.post?.media?.some(media => media.slot === 'cover' && media.asset_id === assetId), data(postRead.body))
+  expectValue('set_media updates post cover', toolData(postRead.body)?.post?.media?.some(media => media.slot === 'cover' && media.asset_id === assetId), toolData(postRead.body))
 
   const secondProductRead = await mcp(headers, 'get_product', {
     organization_id: organizationId,
     product_id: secondProductId,
   })
   expectStatus('get_product (second) succeeds', secondProductRead)
-  expectValue('attach_media updates the second Product media', data(secondProductRead.body)?.product?.gallery?.[0]?.asset_id === assetId, data(secondProductRead.body))
+  expectValue('attach_media updates the second Product media', toolData(secondProductRead.body)?.product?.gallery?.[0]?.asset_id === assetId, toolData(secondProductRead.body))
 
-  process.exit(failed ? 1 : 0)
 }
 
-main().catch((error) => {
-  console.error(error)
-  process.exit(1)
-})
+run(main)
