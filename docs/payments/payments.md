@@ -342,6 +342,15 @@ created/Back/public screenshots. An existing browser test now checks normal
 scoped creation, exact HTTP/MCP reads, public rendering and return to the
 selected list.
 
+The browser regression also exposed a pane-width mismatch: CSS used the
+canonical 992px theme value while navigation hardcoded 1024px. Navigation now
+reads that CSS value and registers its existing automatic-selection watcher
+after native Nuxt readiness, within the active component scope. The rebuilt
+application opens the actual Question editor on a fresh 1000px visit without a
+reload; at 900px, Close and Back retain Pricing. Evidence is
+`.tmp/payments-cms-pane-final-proof.json` and its screenshots. The existing
+browser test verifies both widths without changing its outcome assertions.
+
 CMS content edits are data changes, separate from schema and code deployment.
 The two published pricing FAQ answers were corrected in the local test database
 through **Reviews and Q&A → Pricing → Answer → Save**. They have not been copied

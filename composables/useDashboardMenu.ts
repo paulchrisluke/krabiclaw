@@ -19,7 +19,11 @@ export function useDashboardLeafFooters() {
  * the two shells, so the redirect and the layout cannot disagree.
  */
 export function useDashboardPane() {
-  return useMediaQuery('(min-width: 1024px)')
+  return useMediaQuery(() => {
+    const breakpoint = getComputedStyle(document.documentElement).getPropertyValue('--breakpoint-lg').trim()
+    if (!breakpoint) throw createError({ statusCode: 500, statusMessage: 'Dashboard pane breakpoint is not configured.', fatal: true })
+    return `(min-width: ${breakpoint})`
+  })
 }
 
 export function useDashboardMenu() {
