@@ -95,9 +95,11 @@ Krabiclaw exists so restaurants and local businesses can keep a polished, multil
 ## Calendar release content
 
 Prepared on 2026-10-04 for PR #1240. Calendar and member availability are qualified
-locally; this is not a production release announcement. Public Google OAuth
-verification remains outstanding. Analytics is already approved, as confirmed by
-the owner; the new verification demonstration concerns Calendar.
+locally; this is not a production release announcement. Google Cloud Console's
+branding and data access are verified. Calendar's three scopes are non-sensitive;
+the unused sensitive `calendar.events` scope was removed on 2026-10-04. Analytics
+remains approved. A new Calendar scope-verification video is not required for
+this scope set.
 
 Public content remains in the platform organization's CMS (`organization_id:
 platform`), edited through the ordinary MCP tools. The **Calendar and bookings**
@@ -132,9 +134,9 @@ and time off, with a link to the new category. The `/legal` capability sections
 should offer native consultations alongside external intake. Keep the NCLS
 showcase's Clio Grow description until that tenant's actual setup changes.
 The shared pricing comparison adds **Team availability** for both plans; it
-does not add Google availability claims before verification or alter Stripe's
-paid marketing bullets. Review the existing privacy disclosure against the final
-Calendar scopes and data handling before submitting verification.
+does not alter Stripe's paid marketing bullets. Review the existing privacy
+disclosure against the final Calendar scopes and data handling before publishing
+the release content.
 
 ## Classification
 

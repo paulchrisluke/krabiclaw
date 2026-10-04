@@ -24,8 +24,10 @@ reservations. Connecting a member's personal account can exclude busy times from
 new availability. Google event edits do not reschedule Krabiclaw bookings, and
 personal event titles and descriptions are not imported.
 
-Public Google OAuth verification remains outstanding. Calendar qualification and
-scope boundaries are recorded in [Google Calendar](docs/integrations/google-calendar.md).
+Google Cloud Console reports branding and data access verified as of 2026-10-04.
+Calendar uses non-sensitive scopes; the unused broad event scope was removed.
+Calendar qualification and scope boundaries are recorded in
+[Google Calendar](docs/integrations/google-calendar.md).
 Online payments are delivered by the separate Payments change; Calendar does
 not establish Checkout, refund or buyer-account availability.
 

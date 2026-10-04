@@ -46,29 +46,32 @@ in-flight event can be briefly visible until compensation/retry completes.
 
 ## Settings and cleanup
 
-### Public verification demonstration
+### Public scope qualification
 
-Analytics is already approved. After production deployment and its customer
-checks, record the Calendar flows against a dedicated owner-authorized account
-and calendar. Start with the full consent screen, expanding every permission.
-Compare the production request scopes with Cloud Console's submitted scopes;
-record any difference before submitting a video. Google requires the narrowest
-permissions needed by the demonstrated features:
+On 2026-10-04 the owner's Google Cloud project `kikuzuki-business-api`
+(number `799728932262`, display name **krabiclaw**) listed an unused, unverified
+sensitive `calendar.events` scope. The implementation never requests it. It was
+removed and the implemented `calendar.app.created` scope added. The Console
+classifies all three implemented Calendar scopes as non-sensitive. Verification
+Center now reports **Your branding has been verified** and **Your app's data
+access has been verified**. The existing verified `analytics.readonly` grant
+was preserved. No new scope-verification video is required for this scope set.
+
+Google requires the narrowest permissions needed by the features:
 [Calendar scopes](https://developers.google.com/workspace/calendar/api/auth).
 
-| Calendar scope | Feature to demonstrate |
+| Calendar scope | Implemented access |
 | --- | --- |
-| `calendar.app.created` | Connect the business, show its new Krabiclaw calendar in Google, then create, change and cancel a booking in Krabiclaw and show each resulting event change in Google. Demonstrate disconnect cleanup while unrelated Google events remain. |
-| `calendar.calendarlist.readonly` | Show the automatically identified business calendar and primary personal calendar. Explain the read-only calendar identity lookup used for selection, permission checks and recovering an uncertain calendar creation. |
-| `calendar.events.freebusy` | Connect the member's own account, enable Avoid double bookings, add a busy personal event in Google and show the corresponding time disappear from that member's bookable service. Turn checking off and show the time available again. |
+| `calendar.app.created` | Create the business's secondary calendar and project, update or remove its managed booking events. No event access to unrelated calendars is requested. |
+| `calendar.calendarlist.readonly` | Identify the primary personal calendar, verify business-calendar writer access and recover the exact marked calendar after an uncertain creation. Google does not permit Calendar List enumeration with `calendar.app.created` alone. |
+| `calendar.events.freebusy` | Read busy intervals from the primary calendar in the CMS or explicitly selected accessible calendars through MCP. No event names, descriptions or content are returned. |
 
 The dashboard requests personal free/busy consent separately from business output.
-MCP also supports explicit busy-calendar selection on an already-linked account;
-the video must cover that supported access if it is part of the verification
-justification. Reassess `calendar.freebusy` as the narrower alternative for
-primary-only access before submission; do not assert that broader access is
-necessary based only on the scope already configured. Neither personal event
-content nor unrelated event writes are part of this integration.
+MCP supports explicit busy-calendar selection on an already-linked account,
+including calendars the user can access. `calendar.freebusy` describes the user's
+own calendar availability, while `calendar.events.freebusy` covers accessible
+calendars; the latter matches that supported selection contract. Neither personal
+event content nor unrelated event writes are part of this integration.
 
 Better Auth owns account identity, encrypted credentials, refresh and incremental
 consent through the existing `useIntegrationConnection` / `linkedAccountAccessToken`
@@ -134,8 +137,9 @@ are sent. Provider mutations use `sendUpdates=none`.
    This PR uses `0001_calendar_member_scheduling` after the v11 foundation
    baseline, then `0002_calendar_member_integrity` and `0003_calendar_connection`. The separate Payments PR
    must generate its migration after this Calendar head when rebasing.
-2. Apply the canonical release/migration checks and deployment process. No
-   deployment or merge was authorized for this implementation.
+2. Apply the canonical release/migration checks and deployment process. On
+   October 4, 2026 the owner authorized staging and production promotion, docs
+   publication and marketing updates after qualification.
 3. Enable Google Calendar API for the existing OAuth application and configure
    its consent screen/verification for `calendar.calendarlist.readonly` and
    `calendar.app.created`. Personal checking additionally requests
@@ -187,7 +191,7 @@ Cancel restoring saved values, time-off create/edit/remove, and unpublished
 profile edits. Temporary member test data was removed afterward; the empty
 business calendar and connection remain available for local review.
 
-The Google app still displays its unverified-app consent notice; public OAuth
-verification remains outstanding before general rollout.
+The earlier unverified-app notice was traced to Cloud Console's unused sensitive
+scope and resolved on October 4; see [Public scope qualification](#public-scope-qualification).
 Historical review notes on superseded PRs do not qualify this replacement head
 for deployment.

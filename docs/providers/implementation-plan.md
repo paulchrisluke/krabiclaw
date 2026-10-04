@@ -46,8 +46,11 @@ The redesigned CMS subsequently created the business's Krabiclaw calendar throug
 real consent, without calendar or export-policy choices. Desktop/mobile hours,
 time-off sheets, profile edits and the personal Avoid double bookings switch were
 exercised against the built Worker and read back through D1. The empty business
-calendar remains for review; temporary member data was removed. The Google app
-still shows its unverified-app notice; only public OAuth verification remains
-outstanding for provider qualification. Exact evidence and
+calendar remains for review; temporary member data was removed. The earlier
+consent flow showed an unverified-app notice because Cloud Console retained an
+unused sensitive `calendar.events` scope. On October 4 that scope was removed and
+`calendar.app.created` declared to match the implementation. Console reports
+branding and data access verified; all three Calendar scopes are non-sensitive.
+No new Calendar verification video is required for this scope set. Exact evidence and
 verification limits, including complete-cache preservation after a failed read,
 are recorded in [Google Calendar](../integrations/google-calendar.md#review-and-validation).
