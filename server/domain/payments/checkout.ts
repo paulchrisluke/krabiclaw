@@ -91,7 +91,8 @@ export async function createPaymentCheckout(db: DbClient, stripe: Stripe, env: C
     const frozenPrice = snapshot.price as unknown as Price
     assertPriceShape(frozenPrice)
     if (frozenPrice.unit_amount * input.quantity !== frozen.amount || frozenPrice.currency !== frozen.currency) throw new HTTPError({statusCode:409,statusMessage:'Stored checkout snapshot does not match its payment'})
-    if (frozen.buyer_user_id !== input.buyerUserId || snapshot.product_id!==input.productId || snapshot.variant_id!==input.variantId || snapshot.quantity!==input.quantity || snapshot.session_id!==(input.sessionId??null) || snapshot.request_fingerprint!==input.requestFingerprint) throw new HTTPError({statusCode:409,statusMessage:'Checkout retry does not match its immutable purchase'})
+    if (input.buyerUserId !== null && frozen.buyer_user_id !== input.buyerUserId) throw new HTTPError({statusCode:403,statusMessage:'Checkout belongs to another buyer'})
+    if (snapshot.product_id!==input.productId || snapshot.variant_id!==input.variantId || snapshot.quantity!==input.quantity || snapshot.session_id!==(input.sessionId??null) || snapshot.request_fingerprint!==input.requestFingerprint) throw new HTTPError({statusCode:409,statusMessage:'Checkout retry does not match its immutable purchase'})
     projectionTitle=snapshot.title
     projectionTaxCode=snapshot.tax_code
     price = frozenPrice

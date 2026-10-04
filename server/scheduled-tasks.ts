@@ -80,14 +80,24 @@ export async function runScheduledTasks(
 
   const outcomes = await Promise.allSettled(names.map(async (name) => {
     const task = await loadTask(name)
-    await task.run({
+    return await task.run({
       name,
       payload: { scheduledTime },
       context: { cloudflare: { env } },
     })
   }))
-  const failures = outcomes.flatMap((outcome, index) => outcome.status === 'rejected'
-    ? [new Error(`Scheduled task "${names[index]}" failed: ${outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason)}`, { cause: outcome.reason })]
-    : [])
+  const failures = outcomes.flatMap((outcome, index) => {
+    if (outcome.status === 'fulfilled') {
+      const value = outcome.value
+      if (typeof value === 'object' && value !== null && 'result' in value) {
+        const result = value.result
+        if (typeof result === 'object' && result !== null && 'skipped' in result && typeof result.skipped === 'string') {
+          console.info('[scheduled-task-skip]', { task: names[index], skipped: result.skipped })
+        }
+      }
+      return []
+    }
+    return [new Error(`Scheduled task "${names[index]}" failed: ${outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason)}`, { cause: outcome.reason })]
+  })
   if (failures.length) throw new AggregateError(failures, `${failures.length} of ${names.length} scheduled tasks failed for "${cron}": ${failures.map(error => error.message).join('; ')}`)
 }

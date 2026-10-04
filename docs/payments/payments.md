@@ -156,14 +156,17 @@ Current free/Growth plans deliberately reject new payment acceptance.
 
 Rebased onto staging `454c1f6107b00733704f8aaaa24df9b29fb917b9`. The canonical
 local setup verified 83 tables, 77,010 copied rows, five applied migrations and
-no foreign-key errors. Current checks pass: final quality, 239 unit tests, 101 D1
+no foreign-key errors. Supporting checks pass: 239 unit tests, 101 D1
 tests, four migration tests, migration lint, schema drift, generated
-MCP/submission parity and the production Worker build. The latest full Chromium
-run passed 97 tests and timed out in the font preset case's redundant network-idle
+MCP/submission parity, final quality and the production Worker build. The earlier full local Chromium run passed 97 tests and timed out in the font preset case's redundant network-idle
 wait. That existing case then passed separately in 15.2 seconds against the built
 Worker after retaining the canonical Nuxt hydration wait and removing network
 idle. All outcome assertions stayed intact; independent settings read-back
 confirmed the original tenant font and colour were restored.
+GitHub Checks and E2E passed at `5ff09e66f`. Final local quality and the production
+Worker build also passed after the production-only scheduled cleanup and
+merchant Checkout retry corrections. The existing Payments D1 suite passed 6/6
+after the retry correction.
 
 The existing opt-in native consultation journey also passed separately against the fresh
 production Worker build, along with all four pricing presentation cases. Manual
@@ -210,14 +213,72 @@ and native reads at 09:46 UTC confirm active mapping to Metronome Customer
 uniqueness key match; the contract starts October 4 at 09:00 UTC, has no
 overrides, and its current effective rate is 1.4% of payment volume, plus Stripe
 fees. Automatic collection targets the same operating Stripe Customer and
-platform. The native USAGE invoice `d16029da-c5b5-5fc7-b237-dc60cc8bcec9` is
-`DRAFT`, total zero, for October 4–November 1, with no issued Stripe invoice.
-There are zero usage events. The saved proof is
-`.tmp/payments-native-commerce-operating-billing-proof.json`.
+platform. This setup read is recorded in
+`.tmp/payments-native-commerce-operating-billing-proof.json`; subsequent capture
+and delivery evidence below supersedes its initial zero-usage snapshot.
 
-New acceptance, guest payment capture, captured-volume delivery and Payments
-usage collection for this tenant remain unchecked pending the actual workflow.
-The paid Commerce subscription and active operating contract qualify setup only.
+After owner-completed Stripe-hosted onboarding, connected merchant
+`acct_1UMlyXRBlJfhDVPn` was Ready. The application generated a one-time order
+Checkout for the actual $100 USD test item, quantity one. Native charge time was
+10:45:12 UTC. Independent Stripe and D1 read-back at 10:48:54 UTC confirms
+payment `efc41898-6bfc-47b6-9d28-b6d585dc7fd9` is captured for 10,000 USD cents,
+with zero tax and refunds. Checkout is complete and paid; PaymentIntent
+`pi_3UMmuqRBlJfhDVPn0HWOhZwP` succeeded on that connected account in test mode,
+with `application_fee_amount=0`. This proves the merchant-generated order link,
+not a published website cart. Evidence is
+`.tmp/payments-native-commerce-actual-capture-proof.json`.
+
+The buyer browser was signed out before payment, then claimed the verified
+purchase and opened the native Stripe receipt. In that same browser, ordinary
+email sign-in retained the $100 purchase and receipt in Paul Luke — App Review's
+history. Independent read-back at 11:02:33 UTC confirms payment and order now
+belong to the named Better Auth user (`isAnonymous=0`, `emailVerified=1`), the
+old anonymous user was deleted, and the frozen price snapshot and order line
+are unchanged. The anonymous buyer had no memberships; the named account's six
+memberships, including this merchant's owner role, all predate the claim. The
+purchase granted no role. The claim remains consumed; its anonymous actor
+reference is null after native deletion, not evidence of a named claim actor.
+Hourly reconciliation completed the Checkout attempt at 10:48:21 UTC with no
+error. Evidence is `.tmp/payments-native-linked-buyer-verified.json`; actual
+screenshots are `.tmp/commerce-buyer-captured-purchase.png`,
+`.tmp/commerce-native-buyer-receipt.png` and
+`.tmp/commerce-buyer-linked-purchase.png`.
+
+The original merchant form was retried with the same offering, quantity and
+idempotency key after the named account link. This exposed a check that treated
+mutable buyer ownership as part of the immutable purchase. The canonical
+Checkout boundary now checks authenticated buyer ownership separately; authorized
+merchant requests retain the original purchase checks. After rebuilding, the
+same button returned the exact original Stripe Checkout link with no error.
+Independent native and D1 reads confirm one payment, order, attempt, line, usage
+event and consumed claim, with the original identifiers, buyer, snapshots and
+timestamps unchanged. Evidence is
+`.tmp/payments-native-merchant-replay-verified.json`; the transaction screenshot
+is `.tmp/commerce-checkout-retry-final-transactions.png`.
+
+The first native hourly invocation delivered usage but failed because
+social-card cleanup required production-only Images credentials. The corrected
+task skips copied images in known non-production environments; the canonical
+dispatcher reports its explicit skip and still rejects real task failures.
+The rebuilt hourly invocation returned `outcome: ok`, `noRetry: false`, with
+that skip visible in the Worker log. Independent read-back at 11:03:04 UTC
+confirms exactly one captured-volume event for 10,000 USD cents, delivered once
+at 10:48:28.456 UTC, with no error or dead letter. Repeating the scheduler did
+not duplicate the event or change its delivery timestamp. Evidence is
+`.tmp/commerce-native-scheduler-trigger-after-fix.json` and
+`.tmp/payments-native-commerce-scheduler-rerun-proof.json`.
+
+The same native Metronome USAGE invoice
+`d16029da-c5b5-5fc7-b237-dc60cc8bcec9` remains `DRAFT`: quantity 10,000 at rate
+0.014 gives 140 USD cents ($1.40) before tax. Its period ends November 1 at
+00:00 UTC, with native issue date November 2 at 00:00 UTC and
+`external_invoice: null`. Capture, buyer retention, delivery and rating are
+qualified; current usage collection remains unqualified until the actual Stripe
+invoice is issued and paid. No invoice-date or grace-period change was made.
+The final read-only limit is recorded in
+`.tmp/payments-metronome-current-usage-finalization-limit.json`. Native
+`all_fees` itemization remains unavailable in test mode; reconciliation reports
+`test_mode_unavailable`, and no estimated Stripe costs were ingested.
 
 ## Historical local verification — 2026-10-02
 
@@ -254,7 +315,9 @@ Anonymous purchasers retain their native Better Auth session when opening the
 ordinary login or signup forms. Only named sessions redirect away from those
 forms. Better Auth's anonymous plugin owns the account link; the existing
 `onLinkAccount` callback transfers purchases before the anonymous identity is
-deleted. Named-account retention still requires the actual buyer runtime check.
+deleted. Same-browser named-account retention was verified through ordinary
+email sign-in on October 4; the current qualification above records the native
+ownership read-back and actual purchase/receipt screenshots.
 
 This branch replaces the Payments work previously combined in #1213 and #1224.
 The separate Calendar PR owns Google projection and member scheduling. Dated
