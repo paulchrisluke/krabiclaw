@@ -10,6 +10,7 @@ import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
  */
 
 const NAMES: Record<IntegrationProvider, string> = {
+  google_calendar: 'Google Calendar connection',
   facebook: 'Facebook connection',
   instagram: 'Instagram connection',
   google_analytics: 'Google Analytics connection',
@@ -17,13 +18,14 @@ const NAMES: Record<IntegrationProvider, string> = {
 }
 
 const TARGETS: Record<IntegrationProvider, string> = {
+  google_calendar: 'That calendar',
   facebook: 'That Page',
   instagram: 'That Instagram account',
   google_analytics: 'That Google Analytics property',
   google_search_console: 'That Search Console site',
 }
 
-const COLUMNS = 'organization_id, provider, account_id, target_id, target_name, measurement_id, verified, verification_token, revision, created_at, updated_at'
+const COLUMNS = 'organization_id, provider, account_id, target_id, target_name, measurement_id, verified, verification_token, status, last_error, revision, created_at, updated_at'
 
 type Row = Omit<OrganizationIntegration, 'verified'> & { verified: number | null }
 const project = (row: Row): OrganizationIntegration => ({ ...row, verified: row.verified === null ? null : row.verified === 1 })

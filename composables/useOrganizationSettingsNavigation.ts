@@ -36,7 +36,7 @@ export function useOrganizationSettingsNavigation() {
             { id: 'qa', label: 'Reviews and Q&A', summary: 'What guests read before they visit', to: business.qa },
             { id: 'brand', label: 'Brand', summary: 'Name, logo, description, colour, font, contact', to: business.brand },
             { id: 'website', label: 'Website', summary: 'Status, domain, languages, currency', to: `${settingsPath.value}/website` },
-            { id: 'integrations', label: 'Integrations', summary: 'Google Maps, Google Analytics, Search Console, Facebook, Instagram', to: `${settingsPath.value}/integrations` },
+            { id: 'integrations', label: 'Integrations', summary: 'Google Maps, Google Analytics, Search Console, Google Calendar, Facebook, Instagram', to: `${settingsPath.value}/integrations` },
           ]
         : []),
       { id: 'members', label: 'Team', summary: 'People and access', to: `${settingsPath.value}/members` },
@@ -44,8 +44,8 @@ export function useOrganizationSettingsNavigation() {
       ...(isPlatformOrganization.value
         ? [{ id: 'people', label: 'Platform accounts', summary: 'Every account, and impersonation', to: `${settingsPath.value}/people` }]
         : []),
-      { id: 'billing', label: 'Billing', summary: 'Plans and payments', to: `${settingsPath.value}/billing` },
       { id: 'connect', label: 'Payouts', summary: 'Stripe business onboarding', to: `${settingsPath.value}/connect` },
+      { id: 'billing', label: 'Billing', summary: 'Plans and payments', to: `${settingsPath.value}/billing` },
       // The way to the account on a phone, where there is no header to carry an
       // avatar. Airbnb's mobile Menu lists "Account settings" in the same place,
       // second from last, above Log out (measured 2026-09-22).

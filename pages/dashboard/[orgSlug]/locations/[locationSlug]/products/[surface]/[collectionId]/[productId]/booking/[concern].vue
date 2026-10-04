@@ -11,6 +11,10 @@
       </UFormField>
     </div>
     <URadioGroup v-else-if="concern === 'confirmation'" v-model="p.form.confirmation_mode" :items="[{ value: 'instant', label: 'Confirm automatically' }, { value: 'review', label: 'Review each request' }]" variant="card" />
+    <UFormField v-else-if="concern === 'assignment'" label="Who guests meet">
+      <p v-if="membersError" role="alert" class="mb-3 text-error">Team members could not be loaded.</p>
+      <URadioGroup v-else v-model="assignedMember" :items="memberOptions" variant="card" class="w-full" />
+    </UFormField>
     <SettingRow v-else-if="concern === 'payment'" v-model="p.form.online_payment_required" label="Require online payment for paid sessions" />
     <LocationTimezoneField v-else-if="concern === 'location'" v-model="onlineTimezone" />
     <UFormField v-else-if="concern === 'calendar'" label="Calendar name" hint="Optional">
@@ -37,11 +41,16 @@ const settings = {
   duration: { title: 'Duration', lead: 'How long does each session last? Existing appointments keep their saved duration.' },
   capacity: { title: 'Guest limit', lead: 'How many guests can book the same session? Existing appointments keep their saved guest limit.' },
   confirmation: { title: 'Confirmation', lead: 'Confirm bookings as soon as guests reserve, or review each request before confirming.' },
+  assignment: { title: 'Who guests meet', lead: 'Choose whose availability guests can book.' },
   payment: { title: 'Payment', lead: 'Online checkout is not available yet. Requiring payment prevents guests from booking paid sessions; free sessions remain bookable.' },
   location: { title: 'Meeting location', lead: 'Choose a city for your online schedule; times follow its time zone and daylight saving is handled automatically.' },
   calendar: { title: 'Shared availability', lead: 'Use the same calendar name for online services that cannot run at the same time. Leave it empty for an independent schedule.' },
   website: { title: 'Website booking', lead: 'This applies to all services on your website. Guests can choose times for published online services with a weekly schedule.' },
 }
+const dashboard = useDashboardOrganization()
+const { data: members, error: membersError, status: membersStatus } = await useFetch<{ members: { id: string; name: string }[] }>(() => `/api/organizations/${dashboard.organization.value?.id}/members/scheduling`, { server: false })
+const assignedMember = computed({ get: () => p.form.assigned_member_id, set: (value: string | null) => { p.form.assigned_member_id = value ?? ''; p.form.scheduling_mode = value ? 'provider' : 'legacy' } })
+const memberOptions = computed(() => [{ label: 'Use the business schedule', value: '' }, ...(members.value?.members.map(member => ({ label: member.name, value: member.id })) ?? [])])
 const setting = computed(() => settings[concern.value as keyof typeof settings] ?? { title: '', lead: '' })
 watchEffect(() => {
   if (level.mode.value === 'yield') return
@@ -62,6 +71,7 @@ watch(capacityChoice, choice => {
 })
 const onlineTimezone = computed({ get: () => p.form.online_timezone, set: value => { p.form.online_timezone = value; p.form.online_schedule = Boolean(value) } })
 const valid = computed(() => {
+  if (concern.value === 'assignment') return membersStatus.value === 'success'
   if (concern.value === 'duration') return Number.isSafeInteger(Number(p.form.booking_duration)) && Number(p.form.booking_duration) > 0
   if (concern.value === 'capacity') return capacityChoice.value !== 'group' || (Number.isSafeInteger(Number(p.form.booking_capacity)) && Number(p.form.booking_capacity) >= 2)
   if (concern.value === 'location') return isValidTimezone(p.form.online_timezone)
@@ -74,6 +84,7 @@ const dirty = computed(() => {
     case 'duration': return Number(p.form.booking_duration) !== config?.duration_minutes
     case 'capacity': return (p.form.booking_capacity === '' ? null : Number(p.form.booking_capacity)) !== config?.default_capacity
     case 'confirmation': return p.form.confirmation_mode !== config?.confirmation_mode
+    case 'assignment': return p.form.assigned_member_id !== (config?.assigned_member_id ?? '') || p.form.scheduling_mode !== config?.scheduling_mode
     case 'payment': return p.form.online_payment_required !== config?.online_payment_required
     case 'location': return (p.form.online_schedule ? p.form.online_timezone : null) !== config?.online_timezone
     case 'calendar': return (p.form.calendar_group.trim() || null) !== config?.calendar_group
