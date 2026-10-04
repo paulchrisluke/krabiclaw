@@ -140,17 +140,11 @@ useSocialMetadata(() => ({
     { name: location.value?.title ?? slug.value, url: `/locations/${slug.value}` },
     { name: 'Q&A', url: `/locations/${slug.value}/qa` },
   ],
+  faqItems: sorted.value
+    .filter((q: ApiValue) => q.question && q.answer)
+    .map((q: ApiValue) => ({
+      question: String(q.question),
+      answer: String(q.answer),
+    })),
 }))
-
-useSchemaOrg([
-  computed(() => ({
-    '@type': 'FAQPage',
-    name: `${location.value?.title ?? ''} Q&A`,
-    mainEntity: sorted.value.filter((q: ApiValue) => q.answer).map((q: ApiValue) => ({
-      '@type': 'Question',
-      name: q.question,
-      acceptedAnswer: { '@type': 'Answer', text: q.answer }
-    }))
-  })),
-])
 </script>
