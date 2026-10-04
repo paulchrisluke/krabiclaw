@@ -258,3 +258,8 @@ Follow `docs/local-development.md`.
 
 Use the repository's documented setup, fixtures, authentication, and local
 runtime paths rather than recreating their individual steps manually.
+
+## Marketing execution
+
+For KrabiClaw marketing videos, use `.agents/skills/krabiclaw-marketing/SKILL.md`.
+Product facts and voice remain in `docs/marketing/product-profile.md`.
