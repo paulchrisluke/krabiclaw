@@ -16,11 +16,11 @@
         <template v-else>
           <h2 class="font-semibold">Available</h2><p v-for="(row,index) in available" :key="index">{{ paymentMoney(row.amount,String(row.currency).toUpperCase()) }}</p>
           <h2 class="mt-6 font-semibold">Pending</h2><p v-for="(row,index) in held" :key="index">{{ paymentMoney(row.amount,String(row.currency).toUpperCase()) }}</p>
-          <h2 class="mt-6 font-semibold">Payouts</h2><section v-for="row in payouts" :key="String(row.id)" class="border-b border-default py-6"><p>{{ paymentMoney(row.amount,String(row.currency).toUpperCase()) }} · {{ row.status }}</p><p class="text-sm text-muted">{{ row.id }} · {{ new Date(Number(row.arrival_date)*1000).toISOString().slice(0,10) }}</p></section><p v-if="!payouts.length">No payouts yet.</p>
+          <h2 class="mt-6 font-semibold">Payouts</h2><section v-for="row in payouts" :key="String(row.id)" class="border-b border-default py-6"><p>{{ paymentMoney(row.amount,String(row.currency).toUpperCase()) }} · {{ row.status }}</p><p class="text-sm text-muted">{{ row.id }} · {{ new Date(Number(row.arrival_date)*1000).toISOString().slice(0,10) }}</p></section><p v-if="!payouts.length">{{ after?'No payouts on this page.':'No payouts yet.' }}</p>
         </template>
       </template>
       <template v-else>
-        <p v-if="!rows.length">No {{ view }} on this page.</p>
+        <p v-if="!rows.length">{{ after?`No ${view} on this page.`:`No ${view} yet.` }}</p>
         <section v-for="row in rows" :key="String(row.id)" class="border-b border-default py-6">
           <p class="font-medium">{{ row.stripe_refund_id ?? row.stripe_dispute_id ?? row.id }}</p><p>{{ paymentMoney(row.amount,row.currency) }} · {{ row.status }}</p>
           <p class="text-sm text-muted">{{ row.subject_type }} {{ row.subject_id }}</p><p v-if="row.error" class="mt-2 text-error">{{ row.error }}</p><p v-if="view==='disputes'" class="mt-2">{{ row.reason }}<span v-if="row.evidence_due_at"> · Evidence due {{ new Date(String(row.evidence_due_at)).toLocaleString() }}</span></p>
