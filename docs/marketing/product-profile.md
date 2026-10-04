@@ -49,6 +49,8 @@ Use first-person experience only when sourced; admit changed thinking when real.
 
 Owner direction (2026-10-04): use direct, concrete, commercially minded scripts that show the feature. “Need to get your menu online? Take a picture of your menu, give it to KrabiClaw, done!” illustrates the desired cadence, not a verified end-to-end capability claim. Verify the supported photo/request/result workflow before using that promise. Avoid teaching elementary concepts or telling viewers what is useful; show the task and its outcome.
 
+Owner-stated avatar stature (2026-10-04): Paul is 6 feet tall (182.88cm, approximately 183cm). Preserve natural head/body/leg proportions and upright posture. Establish stature with full-body or sufficiently wide framing, a shared visible ground plane and comparable camera distance in two-person shots. Use a neutral or slightly low camera rather than a downward angle or foreground scaling that diminishes him. Do not infer another character's height, require Paul to tower over them, or stretch existing footage to simulate height. Keep stature and proportions consistent across cuts/extensions; review against this owner-stated direction before accepting a take.
+
 Feature blogs/docs also need relevant images, GIFs or short clips of the actual process, with existing media placement/provenance, descriptive alt text/captions and required posters. Choose chat or CMS footage according to the feature; an avatar is optional. Any avatar prompt must define setting, outfit, action and framing. Use purposeful HyperFrames animation to focus on authentic interaction and sharp results, not a static screenshot slideshow. Use the canonical logo symbol without redundant KrabiClaw text beside it.
 
 ## Founder story
