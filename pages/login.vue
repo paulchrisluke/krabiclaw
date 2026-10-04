@@ -63,10 +63,11 @@ else if (route.query.reset === 'success') notice.value = 'Your password was upda
 // cookie during SSR: Better Auth's client resolves an absolute base URL on the
 // server, and useFetch does not forward cookies to one, so the server never saw
 // the session and the redirect only ever happened after hydration.
-const session = await applicationFetch<{ user?: { id?: string } } | null>('/api/auth/get-session', {
-  validate: (value): value is { user?: { id?: string } } | null => value === null || typeof value === 'object',
+const session = await applicationFetch<typeof authClient.$Infer.Session | null>('/api/auth/get-session', {
+  validate: (value): value is typeof authClient.$Infer.Session | null => value === null || typeof value === 'object',
 })
-const isAuthenticated = computed(() => Boolean(session?.user?.id))
+// Keep an anonymous session while signing in so Better Auth can link its purchases.
+const isAuthenticated = computed(() => Boolean(session?.user?.id && !session.user.isAnonymous))
 if (isAuthenticated.value) await navigateTo(postLoginUrl.value, { external: true, redirectCode: 302 })
 
 function showVerification(email: string) {

@@ -250,6 +250,12 @@ Native end/reopen/rating proof remains part of the provider configuration verifi
 
 ## Replacement review
 
+Anonymous purchasers retain their native Better Auth session when opening the
+ordinary login or signup forms. Only named sessions redirect away from those
+forms. Better Auth's anonymous plugin owns the account link; the existing
+`onLinkAccount` callback transfers purchases before the anonymous identity is
+deleted. Named-account retention still requires the actual buyer runtime check.
+
 This branch replaces the Payments work previously combined in #1213 and #1224.
 The separate Calendar PR owns Google projection and member scheduling. Dated
 sandbox and review documents in this directory retain historical evidence.
