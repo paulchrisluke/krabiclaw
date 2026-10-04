@@ -121,7 +121,7 @@ test.describe('dashboard pane hierarchy', () => {
       await expect(page.getByText(view === 'transactions' ? 'No transactions in this UTC period.' : `No ${view} yet.`, { exact: true })).toBeVisible()
     }
     await open(page, `${ORG}/settings/payments-billing`)
-    await expect(page.getByText('No undelivered usage.', { exact: true })).toBeVisible()
+    await expect(page.getByText('No usage waiting to be reported.', { exact: true })).toBeVisible()
     const account = page.waitForResponse(response => new URL(response.url()).pathname === '/api/account' && response.request().method() === 'GET')
     await open(page, '/account')
     await expect(page).toHaveURL('/dashboard/account/profile/purchases')

@@ -1,7 +1,7 @@
 <template>
  <DashboardLeafPanel id="approve-refund" title="Approve refund" :footer="false">
   <UAlert v-if="error" color="error" :description="error.message" /><USkeleton v-else-if="pending" class="h-20" />
-  <template v-else-if="data"><p class="font-semibold">{{ data.action==='reject_booking'?'Reject booking and refund':'Refund' }} {{ paymentMoney(data.amount,data.currency) }}?</p><p class="mt-2">Payment {{ data.payment_id }}. Stripe debits the merchant’s connected balance. The captured-volume usage fee is retained.</p><UButton class="mt-4" color="error" :loading="working" :disabled="done" @click="approve">{{ data?.action==='reject_booking'?'Approve rejection and full refund':'Approve and issue refund' }}</UButton><p v-if="done" class="mt-3">Refund submitted to Stripe.</p></template>
+  <template v-else-if="data"><p class="font-semibold">{{ data.action==='reject_booking'?'Reject booking and refund':'Refund' }} {{ paymentMoney(data.amount,data.currency) }}?</p><p class="mt-2">Payment {{ data.payment_id }}. The refund comes from your Stripe balance. KrabiClaw Payments fees aren’t returned after a refund or dispute.</p><UButton class="mt-4" color="error" :loading="working" :disabled="done" @click="approve">{{ data?.action==='reject_booking'?'Approve rejection and full refund':'Approve and issue refund' }}</UButton><p v-if="done" class="mt-3">Refund submitted to Stripe.</p></template>
   <UAlert v-if="failure" class="mt-4" color="error" :description="failure" />
  </DashboardLeafPanel>
 </template>

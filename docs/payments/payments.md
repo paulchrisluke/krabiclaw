@@ -87,6 +87,11 @@ relationships without retaining merchant credentials or recreating the tenant.
 
 ## Metronome operating billing
 
+KrabiClaw Payments: **1.337% of payment volume, plus Stripe fees.** Billed after
+use. KrabiClaw Payments fees aren't returned after a refund or dispute. The
+subscription is billed separately. Public pricing follows the Stripe and
+Metronome wording standard in `AGENTS.md`.
+
 The seller-scoped buyer/connected account and the tenant's operating Stripe Customer
 are different identities. Metronome collection requires the latter Customer's
 invoice_settings.default_payment_method; a subscription-only default is insufficient.

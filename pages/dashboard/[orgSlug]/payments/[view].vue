@@ -6,10 +6,10 @@
       <template v-if="view==='overview'">
         <section v-for="row in amounts" :key="String(row.currency)" class="border-b border-default py-6">
           <h2 class="font-semibold">{{ row.currency }}</h2>
-          <dl class="mt-3 grid grid-cols-2 gap-2"><dt>Captured volume</dt><dd>{{ paymentMoney(row.captured_amount,row.currency) }}</dd><dt>Refunds</dt><dd>{{ paymentMoney(row.refunded_amount,row.currency) }}</dd><dt>Disputes</dt><dd>{{ paymentMoney(row.disputed_amount,row.currency) }}</dd><dt>Net payment activity</dt><dd>{{ paymentMoney(Number(row.captured_amount)-Number(row.refunded_amount)-Number(row.disputed_amount),row.currency) }}</dd></dl>
+          <dl class="mt-3 grid grid-cols-2 gap-2"><dt>Payment volume</dt><dd>{{ paymentMoney(row.captured_amount,row.currency) }}</dd><dt>Refunds</dt><dd>{{ paymentMoney(row.refunded_amount,row.currency) }}</dd><dt>Disputes</dt><dd>{{ paymentMoney(row.disputed_amount,row.currency) }}</dd><dt>Net payment activity</dt><dd>{{ paymentMoney(Number(row.captured_amount)-Number(row.refunded_amount)-Number(row.disputed_amount),row.currency) }}</dd></dl>
         </section>
         <p v-if="!amounts.length">No captured payment activity in this UTC period.</p>
-        <p class="mt-4 text-sm text-muted">Payments usage: 1.337% of captured volume plus attributable Stripe costs.</p>
+        <p class="mt-4 text-sm text-muted">1.337% of payment volume, plus Stripe fees.</p>
       </template>
       <template v-else-if="view==='payouts'">
         <p v-if="data.configured===false">Connect Stripe in Settings → Integrations.</p>
@@ -38,7 +38,7 @@ definePageMeta({layout:'dashboard',validate:route=>['overview','refunds','disput
 const route=useRoute(),api=useDashboardApi(),after=ref('')
 const view=computed(()=>String(route.params.view))
 const title=computed(()=>view.value[0]!.toUpperCase()+view.value.slice(1))
-const lead=computed(()=>view.value==='overview'?'Payment activity this month, using UTC.':view.value==='payouts'?'Your Stripe balances and payouts.':'Captured payments, refunds and disputes are separate activity.')
+const lead=computed(()=>view.value==='overview'?'Payment activity this month, using UTC.':view.value==='payouts'?'Your Stripe balances and payouts.':'Payments, refunds and disputes are shown separately.')
 type Row=Record<string,unknown>
 type ViewResponse={configured?:boolean;balance?:{available:Row[];pending:Row[]};payouts?:Row[];rows?:Row[];next_cursor?:string|null;summary?:{amounts:Row[];refreshed_at:string};refreshed_at?:string}
 const moneyRow=(value:unknown):value is Row=>isRecord(value)&&Number.isSafeInteger(value.amount)&&typeof value.currency==='string'&&isCurrencyCode(value.currency.toUpperCase())
