@@ -106,6 +106,7 @@ export async function refreshWorkingWindows(db: DbClient) {
  for(const row of rows) { const windows=workingWindows(row.timezone,JSON.parse(row.weekly_json)); await executeBatch(db,[{query:'UPDATE member_scheduling SET windows_json=?,windows_until=? WHERE member_id=? AND updated_at=?',params:[JSON.stringify(windows.intervals),windows.until,row.member_id,row.updated_at]}]) }
 }
 export async function selectBusyCalendars(actor: SchedulingActor, memberId: string, input: {account_id: string | null; calendar_ids: string[]}) {
+ if(!input || (input.account_id!==null && (typeof input.account_id!=='string' || !input.account_id)))throw new HTTPError({statusCode:400,message:'Choose a linked account or explicitly disconnect it'})
  const member=await requireSchedulingAccess(actor,memberId)
  if(input.account_id && member.userId!==actor.userId) throw new HTTPError({statusCode:403,message:'Only the member may select their linked Google account'})
  if(!Array.isArray(input.calendar_ids)||input.calendar_ids.length>10||input.calendar_ids.some(id=>typeof id!=='string'||!id||id.length>1024)||Boolean(input.account_id)!==Boolean(input.calendar_ids.length)) throw new HTTPError({statusCode:400,message:'Choose an account and 1–10 calendars, or disconnect both'})

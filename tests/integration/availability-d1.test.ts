@@ -35,7 +35,7 @@ async function boot(legacy = false) {
   } }] })
   const db = await runtime.getD1Database('DB')
   const statements = legacy
-    ? ['0000_baseline', '0001_calendar_member_scheduling'].flatMap(name => readFileSync(`migrations/${name}.sql`, 'utf8').split('--> statement-breakpoint').map(sql => sql.trim()).filter(Boolean))
+    ? ['0000_baseline'].flatMap(name => readFileSync(`migrations/${name}.sql`, 'utf8').split('--> statement-breakpoint').map(sql => sql.trim()).filter(Boolean))
     : await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))
   await db.batch(statements.map(statement => db.prepare(statement)))
   await db.prepare(`INSERT INTO organization (id, name, slug, subdomain, settings_json, theme_id, default_currency, status, onboarding_status, url_structure, vertical, updated_at)
@@ -393,6 +393,7 @@ test('provider additive migration keeps the separately held weekly columns and t
   try {
     await addRule(db, 'held-rule')
     await db.prepare("UPDATE product_availability_rules SET end_time='16:00',interval_minutes=30,interval_weeks=2,effective_from_date='2026-01-01',effective_until_date='2030-01-01',duration_minutes=30,capacity=0 WHERE id='held-rule'").run()
+    await db.batch(readFileSync('migrations/0001_calendar_member_scheduling.sql', 'utf8').split('--> statement-breakpoint').map(sql => sql.trim()).filter(Boolean).map(sql => db.prepare(sql)))
     const row = await db.prepare("SELECT end_time,interval_minutes,interval_weeks,effective_from_date,effective_until_date,duration_minutes,capacity FROM product_availability_rules WHERE id='held-rule'").first()
     assert.deepEqual(row, { end_time: '16:00', interval_minutes: 30, interval_weeks: 2, effective_from_date: '2026-01-01', effective_until_date: '2030-01-01', duration_minutes: 30, capacity: 0 })
     assert.deepEqual((await db.prepare('PRAGMA foreign_key_check').all()).results, [])

@@ -7,6 +7,7 @@ import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-ev
 
 /** Explicitly moves the whole occurrence; attendee identities remain. */
 export async function reassignBookingProvider(actor: SchedulingActor, input: {booking_id:string;member_id:string;expected_updated_at:string;idempotency_key:string}) {
+ if(!input || (['booking_id','member_id','expected_updated_at','idempotency_key'] as const).some(field=>typeof input[field]!=='string' || !input[field]))throw new HTTPError({statusCode:400,message:'Booking, member, current revision and idempotency key are required'})
  await requireSchedulingAccess(actor,input.member_id,true)
  const db=actor.env.DB
  if(!input.idempotency_key || input.idempotency_key.length>120)throw new HTTPError({statusCode:400,message:'A durable idempotency key is required'})
@@ -33,7 +34,7 @@ export async function reassignBookingProvider(actor: SchedulingActor, input: {bo
   const result=await executeBatch(db,queries,{operation:'Reassign provider-led Session'})
   if(!result[0]?.meta.changes)throw new HTTPError({statusCode:409,message:'Reassignment refused: reload the booking, check the offering assignment and member availability, and retry'})
  }
- const threads=await queryAll<{request_id:string}>(db,"SELECT request_id FROM activity_entries WHERE event_name='booking.reassign' AND scope_kind='request' AND substr(dedupe_key,1,length(?)+1)=?||':'",[key,key])
+ const threads=await queryAll<{request_id:string}>(db,"SELECT a.request_id FROM activity_entries a JOIN requests r ON r.id=a.request_id AND r.organization_id=? WHERE a.event_name='booking.reassign' AND a.scope_kind='request' AND a.dedupe_key=?||':'||json_extract(a.payload_json,'$.operational_booking_id')",[actor.organizationId,key])
  const name=await queryFirst<{name:string|null}>(db,'SELECT public_name name FROM member_scheduling WHERE member_id=? AND organization_id=? AND public_approved=1',[input.member_id,actor.organizationId])
  for(const thread of threads) {
   const outcome=await executeGuestThreadOperation(db,{threadId:thread.request_id,organizationId:actor.organizationId,action:'reply',actorUserId:actor.userId,idempotencyKey:`${key}:notice`,env:actor.env,body:`Your scheduled session will now be delivered by ${name?.name || 'the assigned team member'}. Its time and booking remain unchanged.`})

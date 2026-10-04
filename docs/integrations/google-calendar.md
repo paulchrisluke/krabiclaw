@@ -44,8 +44,8 @@ in-flight event can be briefly visible until compensation/retry completes.
 ## Settings and cleanup
 
 Better Auth owns account identity, encrypted credentials, refresh and incremental
-consent through the existing `useLinkedAccounts` / `linkedAccountAccessToken`
-boundary. Organization JSON holds only account/calendar/group selection,
+consent through the existing `useIntegrationConnection` / `linkedAccountAccessToken`
+boundary. `organization_integrations` holds only account/calendar/group selection,
 revision/status and a readable failure. The Google account and Analytics/Search
 Console grants are retained on Calendar disconnect.
 
@@ -96,9 +96,8 @@ are sent. Provider mutations use `sendUpdates=none`.
 
 ## Deployment and owner setup
 
-1. Rebase on final consultation foundation and regenerate the Calendar migration
-   through `yarn db:generate` in the agreed merge order. The independently
-   generated Calendar migration is not a dependency on Payments or a reserved number.
+1. Keep this PR based on current `staging`, which includes the consultation
+   foundation (#1211). Calendar is reviewed before the separate Payments PR.
    This PR uses `0001_calendar_member_scheduling` after the v11 foundation
    baseline. The separate Payments PR follows with `0002_payments_commerce`.
 2. Apply the canonical release/migration checks and deployment process. No
@@ -117,8 +116,8 @@ are sent. Provider mutations use `sendUpdates=none`.
 
 ## Review and validation
 
-This Calendar-only change builds on the native consultation and typed catalog
-foundation (#1211). It includes member working hours, time off, selected Google
+This Calendar-only change targets staging after the native consultation and typed
+catalog foundation (#1211) landed. It includes member working hours, time off, selected Google
 busy calendars and assignment through the canonical booking allocator.
 
 Current checks are recorded in the replacement PR. Google provider requests in

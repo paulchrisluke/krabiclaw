@@ -60,6 +60,13 @@ test('native online review uses canonical Products, holds capacity, and releases
     expect(membersResponse.status(), await membersResponse.text()).toBe(200)
     const self = (await membersResponse.json()).members.find((member: { self: boolean }) => member.self)
     expect(self).toBeTruthy()
+    for (const data of [{}, { action: 'unknown' }, { action: 'select', calendar_ids: [] }]) {
+      const invalidCalendar = await page.request.post(`/api/organizations/${org}/members/${self.id}/calendar`, { data })
+      expect(invalidCalendar.status(), await invalidCalendar.text()).toBe(400)
+    }
+    const unchangedSchedule = await page.request.get(`/api/organizations/${org}/members/${self.id}/scheduling`)
+    expect(unchangedSchedule.status(), await unchangedSchedule.text()).toBe(200)
+    expect((await unchangedSchedule.json()).scheduling).toEqual(self.scheduling)
     await page.getByRole('link', { name: 'Who guests meet Tenant organization', exact: true }).click()
     await page.getByRole('combobox').click()
     await page.getByRole('option', { name: self.name, exact: true }).click()
@@ -361,6 +368,11 @@ test('native online review uses canonical Products, holds capacity, and releases
     const details = await page.request.get(`/api/dashboard/bookings/booking/${pending.request_id}?org=north-carolina-legal-services`)
     expect(details.status(), await details.text()).toBe(200)
     expect((await details.json()).booking).toMatchObject({ locationId: null, locationTitle: 'Online', status: 'pending', operationalBookingId: pending.operational_booking_id })
+    const invalidReassignment = await page.request.post(`/api/dashboard/bookings/booking/${pending.operational_booking_id}/provider?org=north-carolina-legal-services`, { data: { member_id: 42, expected_updated_at: new Date().toISOString(), idempotency_key: `invalid-${stamp}` } })
+    expect(invalidReassignment.status(), await invalidReassignment.text()).toBe(400)
+    const unchangedBooking = await page.request.get(`/api/dashboard/bookings/booking/${pending.request_id}?org=north-carolina-legal-services`)
+    expect(unchangedBooking.status(), await unchangedBooking.text()).toBe(200)
+    expect((await unchangedBooking.json()).booking).toMatchObject({ status: 'pending', operationalBookingId: pending.operational_booking_id, assignedMemberId: null })
     const key = `reject-${stamp}`
     for (let replay = 0; replay < 2; replay++) {
       const reject = await page.request.post(`/api/dashboard/organizations/${org}/guest-threads/${pending.request_id}/operations/reject`, { data: { idempotencyKey: key } })

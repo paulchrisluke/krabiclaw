@@ -21,6 +21,7 @@
    <div class="flex gap-2"><UButton v-if="scheduling?.calendar_account_id" color="neutral" variant="soft" @click="refreshCalendar">Recheck busy data</UButton><UButton v-if="scheduling?.calendar_account_id" color="neutral" variant="soft" @click="disconnectCalendar">Use internal scheduling</UButton></div>
   </section>
   </template>
+  <UButton v-else-if="error" color="neutral" variant="soft" @click="load">Retry loading availability</UButton>
   <p v-else-if="saving" class="text-sm text-muted">Loading availability…</p>
  </div>
 </template>
@@ -50,5 +51,6 @@ async function calendar(body:Record<string,unknown>){await run(async()=>apply((a
 async function selectCalendar(){await calendar({action:'select',account_id:accountId.value,calendar_ids:calendarIds.value})}
 async function disconnectCalendar(){await calendar({action:'select',account_id:null,calendar_ids:[]})}
 async function refreshCalendar(){await calendar({action:'refresh'})}
-onMounted(()=>run(async()=>{apply((await $fetch<{scheduling:Scheduling}>(`${base.value}/scheduling`)).scheduling);loaded.value=true}))
+async function load(){await run(async()=>{apply((await $fetch<{scheduling:Scheduling}>(`${base.value}/scheduling`)).scheduling);loaded.value=true})}
+onMounted(load)
 </script>
