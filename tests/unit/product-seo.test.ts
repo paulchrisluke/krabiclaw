@@ -129,3 +129,16 @@ test('the sibling window rotates and stays bounded so a large collection is full
     ['Dish 0', 'Dish 1', 'Dish 2', 'Dish 3', 'Dish 4', 'Dish 5', 'Dish 6', 'Dish 7'],
   )
 })
+
+test('dietary notes map to standard Schema.org diet enumeration URLs', () => {
+  const DIETARY_SCHEMA_MAP: Record<string, string> = {
+    V: 'https://schema.org/VegetarianDiet',
+    VG: 'https://schema.org/VeganDiet',
+    GF: 'https://schema.org/GlutenFreeDiet',
+  }
+
+  assert.equal(DIETARY_SCHEMA_MAP['V'], 'https://schema.org/VegetarianDiet')
+  assert.equal(DIETARY_SCHEMA_MAP['VG'], 'https://schema.org/VeganDiet')
+  assert.equal(DIETARY_SCHEMA_MAP['GF'], 'https://schema.org/GlutenFreeDiet')
+})
+
