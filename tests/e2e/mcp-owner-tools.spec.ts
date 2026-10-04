@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 import { dismissPreviewToolbar, waitForNuxtHydration } from './helpers'
 import { loginAs } from './helpers/auth'
 import { MCP_GROWTH_ORGANIZATION_ID, mcpRequest, mcpData } from './helpers/mcp'
-import { tenantTestExtraHeaders } from './test-env'
+import { E2E_POTTERY_ORGANIZATION_ID, tenantTestExtraHeaders } from './test-env'
 import { acquireTenantMutationLock } from './helpers/tenant-mutation-lock'
 
 // Split out of mcp.spec.ts (owner tool-coverage tests) — see helpers/mcp.ts
@@ -13,7 +13,7 @@ import { acquireTenantMutationLock } from './helpers/tenant-mutation-lock'
 test.describe('stateless MCP server', () => {
   test('booking pagination rejects a cursor from a different member filter', async ({ request, baseURL }) => {
     await loginAs(request, baseURL!)
-    const organizationId = 'org-user-pottery-house'
+    const organizationId = E2E_POTTERY_ORGANIZATION_ID
     const membersResponse = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'get_member_scheduling', args: { organization_id: organizationId } })
     expect(membersResponse.status()).toBe(200)
     const member = mcpData<{ members: Array<{ id: string; self: boolean }> }>(await membersResponse.json()).members.find(member => member.self)
