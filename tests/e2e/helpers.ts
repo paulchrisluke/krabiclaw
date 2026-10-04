@@ -77,8 +77,8 @@ export async function openTenantPage(page: Page, url: string, headers: Record<st
     const announcement = page.getByRole('dialog').filter({
       has: page.getByRole('button', { name: 'Close', exact: true }),
     })
+    await waitForNuxtHydration(page)
     if (await announcement.isVisible()) {
-      await waitForNuxtHydration(page)
       await announcement.getByRole('button', { name: 'Close', exact: true }).click()
       await expect(announcement).toBeHidden()
     }
