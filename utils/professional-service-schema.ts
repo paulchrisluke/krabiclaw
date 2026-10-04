@@ -3,7 +3,7 @@
  * tenants (Blawby template, NCLS being the first proof tenant).
  *
  * This module is intentionally framework-free (no Nuxt composables, no DOM):
- * - `composables/useProfessionalServiceSchema.ts` wraps it for Vue rendering.
+ * - `composables/useSocialMetadata.ts` wraps it for Vue rendering.
  * - site settings carry `compliance.nonprofit_status` (see `server/utils/professional-services.ts`)
  *   to reject/normalize invalid values at the canonical write layer.
  * - `tests/unit/professional-service-schema.test.ts` exercises it directly.

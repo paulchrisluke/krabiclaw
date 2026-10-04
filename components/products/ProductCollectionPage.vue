@@ -233,7 +233,9 @@ import { formatProductMoney } from '~/utils/product-money'
 import { minorAmountToMajor, selectPrice, type Price } from '~/shared/prices'
 import { PRICING_NOTE_HANDLE } from '~/shared/product-details'
 import { groupProductsByCollection, productLocationCollectionPath } from '~/utils/product-presentation'
+import { extractDietarySchemaUrls } from '~/utils/product-seo'
 import { getVerticalCopy } from '~/utils/vertical-copy'
+import { resolveSeoUrl } from '~/composables/useSeoUrls'
 
 interface LocationSummary { id: string; slug: string; title: string }
 
@@ -241,6 +243,7 @@ interface LocationSummary { id: string; slug: string; title: string }
 // <NuxtLink> element that no browser follows, so the card looked linked in the
 // markup and was not.
 const NuxtLinkComponent = resolveComponent('NuxtLink')
+const requestURL = useRequestURL()
 
 const props = defineProps<{
   products: Product[]
@@ -444,29 +447,42 @@ useSchemaOrg(computed(() => props.presentation.structuredDataType === 'MenuItem'
       hasMenuSection: groups.value.map(group => ({
         '@type': 'MenuSection',
         name: group.category,
-        hasMenuItem: group.products.map(product => ({
-          '@type': 'MenuItem',
-          name: product.name,
-          description: product.description,
-          // The same branch the card is priced for: a menu section belongs to
-          // one location, and structured data that disagreed with the visible
-          // price would be the page contradicting itself.
-          offers: offerFor(product, group.location_id),
-        })),
+        hasMenuItem: group.products.map(product => {
+          const dietUrls = extractDietarySchemaUrls(product)
+          return {
+            '@type': 'MenuItem',
+            name: product.name,
+            description: product.description,
+            ...(dietUrls.length ? { suitableForDiet: dietUrls } : {}),
+            // The same branch the card is priced for: a menu section belongs to
+            // one location, and structured data that disagreed with the visible
+            // price would be the page contradicting itself.
+            offers: offerFor(product, group.location_id),
+          }
+        }),
       })),
     }
   : {
       '@type': 'ItemList',
       name: props.title,
-      itemListElement: props.products.map((product, index) => ({
-        '@type': 'ListItem',
-        position: index + 1,
-        item: {
-          '@type': 'Product',
-          name: product.name,
-          description: product.description,
-          offers: offerFor(product),
-        },
-      })),
+      itemListElement: props.products.map((product, index) => {
+        const href = productHref(product)
+        const absoluteProductUrl = href ? resolveSeoUrl(href, requestURL.origin) : null
+        return {
+          '@type': 'ListItem',
+          position: index + 1,
+          item: {
+            '@type': 'Product',
+            ...(absoluteProductUrl ? {
+              '@id': `${absoluteProductUrl}#product`,
+              url: absoluteProductUrl,
+            } : {}),
+            name: product.name,
+            description: product.description,
+            image: product.image?.public_url ? resolveSeoUrl(product.image.public_url, requestURL.origin) : undefined,
+            offers: offerFor(product),
+          },
+        }
+      }),
     }))
 </script>

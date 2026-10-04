@@ -40,7 +40,6 @@
 import sayaCriticalCss from '~/assets/css/saya-critical.css?raw'
 import '~/assets/css/saya-entry.css'
 import { MALI_FONT_CSS, resolveOrganizationFontPreset, organizationFontStyles } from '~/shared/organization-fonts'
-import { isDemoHost, isDemoOrg } from '~/shared/demo'
 
 const route = useRoute()
 const hydrated = ref(false)
@@ -138,13 +137,6 @@ const footerLocations = computed(() => (scopedLocationSlug.value === null
   ? locations.value
   : locations.value.filter(location => location.slug === scopedLocationSlug.value)))
 
-
-// Request-scoped URL state must be captured eagerly during setup. Tenant routing
-// already 301s alternate subdomains to the configured custom domain, so the
-// rendered request origin is the canonical origin for every indexable tenant page.
-const requestURL = useRequestURL()
-const requestHostname = requestURL.hostname
-
 if (import.meta.client) {
   const sayaTheme = usePlatformTheme()
   const prefersDark = window.matchMedia('(prefers-color-scheme: dark)')
@@ -159,29 +151,6 @@ if (import.meta.client) {
     stopThemeWatch()
   })
 }
-
-// Shared demo check: the synthetic "Ember & Slice" showcase site isn't a
-// real business collecting real visitor data, so it's excluded from search
-// (see the discoverability below) and skips the cookie-consent banner rather
-// than asking demo visitors to accept/reject tracking that isn't happening.
-const { organizationId } = useTenantOrganization()
-const isDemo = isDemoHost(requestHostname) || isDemoOrg(organizationId)
-
-// A page about the business: its image is the organization's.
-const organizationSocialImage = useTenantOrganization().organization?.social_image ?? null
-useSocialMetadata(() => ({
-  path: route.path,
-  socialImage: organizationSocialImage,
-  title: config.value?.seo_title || config.value?.name || resolvedOrganization.value?.name || '',
-  description: config.value?.seo_description || config.value?.brand_description || '',
-  brand: {
-    organizationName: config.value?.name || resolvedOrganization.value?.name || '',
-  },
-  // Everything a live site serves is offered to discovery; the showcase site
-  // is not a real business and is offered to nobody. A page that is itself
-  // unlisted, and any preview render, says so over this.
-  discoverability: isDemo ? 'private' : 'listed',
-}))
 </script>
 
 <style>

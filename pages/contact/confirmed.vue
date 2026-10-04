@@ -47,8 +47,11 @@ const isBlawby = themeId === 'blawby-theme-v1'
 // handoff — a missing handoff (private browsing, storage quota, etc.) doesn't
 // mean the message wasn't actually sent, and this page has nothing to show
 // beyond the generic copy either way.
-useSeoMeta({
+useSocialMetadata(() => ({
+  path: '/contact/confirmed',
   title: isBlawby ? 'Message received' : t('saya.contact_page.confirmed_title'),
-  robots: 'noindex',
-})
+  description: 'Your message has been received.',
+  socialImage: null,
+  discoverability: 'private',
+}))
 </script>

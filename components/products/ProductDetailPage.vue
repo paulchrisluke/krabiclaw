@@ -324,7 +324,7 @@ import { minorAmountToMajor, selectPrice, type Price } from '~/shared/prices'
 import { formatProductMoney } from '~/utils/product-money'
 import { ga4Major } from '~/utils/ga4-projection'
 import { productLocationCollectionPath } from '~/utils/product-presentation'
-import type { ProductCollectionSibling } from '~/utils/product-seo'
+import { extractDietarySchemaUrls, type ProductCollectionSibling } from '~/utils/product-seo'
 import type { ProductDetailValue } from '~/shared/product-details'
 import { EXPERIENCE_ATTRIBUTE_HANDLES, productDetailFields, productDetailKey, PRICING_NOTE_HANDLE } from '~/shared/product-details'
 import type { PublicProductBooking, PublicProductLocationPayload, PublicProductReview, PublicProductSession } from '~/server/utils/public-products'
@@ -679,6 +679,7 @@ useSchemaOrg(computed(() => {
   const list = schemaSessions.value
   const first = list[0]
   const last = list[list.length - 1]
+  const dietUrls = extractDietarySchemaUrls(props.product)
   return {
     // Without a context this node names no vocabulary and no parser reads it.
     '@context': 'https://schema.org',
@@ -686,6 +687,7 @@ useSchemaOrg(computed(() => {
     name: props.product.name,
     description: props.product.description,
     image: props.product.image?.public_url,
+    ...(dietUrls.length ? { suitableForDiet: dietUrls } : {}),
     ...(first && last
       ? {
           url: canonicalProductUrl.value,

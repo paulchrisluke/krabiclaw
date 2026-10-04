@@ -41,5 +41,8 @@ useSocialMetadata(() => ({
   description: t('social_posts.meta_description', { organization: organizationName.value }),
   brand: { organizationName: organizationName.value },
   socialImage: organization?.social_image ?? null,
+  breadcrumbs: [
+    { name: t('social_posts.title'), url: '/posts' },
+  ],
 }))
 </script>

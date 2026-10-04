@@ -2,6 +2,9 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import type Stripe from 'stripe'
 import { assertGrowthStripeCatalogPrices, selectStripeCatalogPrice } from '../../server/utils/stripe-catalog.ts'
+import { PRICING_COMPARISON, comparisonValue } from '../../shared/pricing-comparison.ts'
+import { renderPlansMarkdown } from '../../server/routes/pricing.md.get.ts'
+import type { Plan } from '../../server/utils/billing-plans.ts'
 
 const product = { id: 'prod-existing', metadata: { plan_id: 'growth', monthly_price_id: 'price-month', annual_price_id: 'price-year' } } as unknown as Stripe.Product
 const price = (id: string, interval: 'month' | 'year', amount: number) => ({
@@ -34,8 +37,6 @@ test('display rename preserves provider identities and metadata selects one cano
   assert.throws(() => selectStripeCatalogPrice(ambiguous, [monthly, price('price-other', 'month', 4900)], 'month'), /exactly one canonical/)
 })
 
-import { PRICING_COMPARISON, comparisonValue } from '../../shared/pricing-comparison.ts'
-
 test('comparison rejects unknown capabilities and preserves current review-request policy', () => {
   assert.throws(() => comparisonValue({ entitlement: 'invented_capability' }, 'growth'), /Unknown capability/)
   assert.throws(() => comparisonValue({ entitlement: 'messaging' }, 'invented_plan'), /Unsupported runtime billing plan/)
@@ -44,4 +45,38 @@ test('comparison rejects unknown capabilities and preserves current review-reque
   assert.equal(comparisonValue(review, 'growth'), 'Included with setup')
   const onboarding = PRICING_COMPARISON.flatMap(group => [...group.rows]).find(row => row.id === 'places.onboarding')!
   assert.equal(comparisonValue(onboarding, 'free'), 'Included')
+})
+
+test('renderPlansMarkdown generates accurate, machine-readable markdown specifications', () => {
+  const dummyPlans: Plan[] = [
+    {
+      id: 'free',
+      name: 'Free',
+      tagline: 'Start building for free',
+      highlighted: false,
+      prices: [],
+      features: ['Basic templates', 'AI site generation'],
+      limits: { customDomain: false, googlePlaces: false, support: 'Community' },
+      cta: { label: 'Start Free', href: '/signup' },
+    },
+    {
+      id: 'growth',
+      name: 'Growth',
+      tagline: 'Scale your business',
+      highlighted: true,
+      prices: [{ id: 'p_month', amount: 4900, currency: 'usd', interval: 'month' }],
+      features: ['Custom domains', 'Google Places', 'Direct booking'],
+      limits: { customDomain: true, googlePlaces: true, support: 'Priority' },
+      cta: { label: 'Upgrade', href: '/signup' },
+    },
+  ]
+
+  const md = renderPlansMarkdown(dummyPlans)
+  assert.ok(md.includes('# Krabiclaw Pricing & Plans'))
+  assert.ok(md.includes('## Free'))
+  assert.ok(md.includes('Free ($0/month)'))
+  assert.ok(md.includes('## Growth'))
+  assert.ok(md.includes('$49/month'))
+  assert.ok(md.includes('Custom Domain: Included'))
+  assert.ok(md.includes('Custom Domain: Not included'))
 })
