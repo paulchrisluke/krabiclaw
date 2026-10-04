@@ -1,6 +1,6 @@
 import { expect, request as playwrightRequest, test } from '@playwright/test'
 import { loginAs } from './helpers/auth'
-import { waitForNuxtHydration } from './helpers'
+import { openTenantPage, waitForNuxtHydration } from './helpers'
 import { mcpData, mcpRequest } from './helpers/mcp'
 import { blawbyTestExtraHeaders } from './test-env'
 
@@ -199,7 +199,7 @@ test('native online review uses canonical Products, holds capacity, and releases
     }))).flat()
     expect(storedGallery).toHaveLength(8)
     expect(publishedService.media.filter((media: { slot: string }) => ['cover', 'gallery'].includes(media.slot)).map((media: { asset_id: string }) => media.asset_id)).toEqual(storedGallery.map(media => media.id))
-    await page.goto('/schedule')
+    await openTenantPage(page, new URL('/schedule', baseURL).href, {})
     const serviceSelector = page.getByRole('combobox', { name: 'Service', exact: true })
     await expect(serviceSelector).toContainText(service.title)
     const chevronInset = await serviceSelector.evaluate(element => element.getBoundingClientRect().right - element.querySelector('[data-slot="trailingIcon"]')!.getBoundingClientRect().right)
