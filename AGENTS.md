@@ -263,3 +263,5 @@ runtime paths rather than recreating their individual steps manually.
 
 For KrabiClaw marketing videos, use `.agents/skills/krabiclaw-marketing/SKILL.md`.
 Product facts and voice remain in `docs/marketing/product-profile.md`.
+
+The relevant official HyperFrames skills are tracked in `.agents/skills/hyperframes*/`, `.agents/skills/product-launch-video/` and `.agents/skills/media-use/`; load their `SKILL.md` through the marketing wrapper as needed. Upstream provenance and licenses accompany each.
