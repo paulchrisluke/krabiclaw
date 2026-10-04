@@ -1,19 +1,19 @@
 <template>
   <span v-if="sessionError" role="alert" class="text-sm text-error">Unable to load account</span>
-  <div v-else-if="account" v-bind="$attrs" class="flex items-center gap-2">
+  <div v-else-if="account" v-bind="$attrs" class="flex shrink-0 items-center gap-2">
     <!-- Signed in: the avatar is the whole control, the way it is on every
          consumer app an owner already uses. No label, because a word in English
          is not something a Thai-speaking owner can act on; their own face is. -->
-    <details v-if="user" ref="accountMenu" class="relative">
+    <details v-if="user" ref="accountMenu" class="relative shrink-0">
       <summary
-        class="flex cursor-pointer list-none items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 [&::-webkit-details-marker]:hidden"
+        class="flex size-8 shrink-0 cursor-pointer list-none items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 [&::-webkit-details-marker]:hidden"
         :aria-label="`Account: ${user.name}`"
       >
         <img
           v-if="user.image"
           :src="user.image"
           :alt="user.name"
-          class="size-8 shrink-0 rounded-full object-cover"
+          class="size-8 shrink-0 aspect-square rounded-full object-cover"
           width="32"
           height="32"
         >
