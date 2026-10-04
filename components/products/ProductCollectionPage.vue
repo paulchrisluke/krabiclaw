@@ -235,6 +235,7 @@ import { PRICING_NOTE_HANDLE } from '~/shared/product-details'
 import { groupProductsByCollection, productLocationCollectionPath } from '~/utils/product-presentation'
 import { extractDietarySchemaUrls } from '~/utils/product-seo'
 import { getVerticalCopy } from '~/utils/vertical-copy'
+import { resolveSeoUrl } from '~/composables/useSeoUrls'
 
 interface LocationSummary { id: string; slug: string; title: string }
 
@@ -242,6 +243,7 @@ interface LocationSummary { id: string; slug: string; title: string }
 // <NuxtLink> element that no browser follows, so the card looked linked in the
 // markup and was not.
 const NuxtLinkComponent = resolveComponent('NuxtLink')
+const requestURL = useRequestURL()
 
 const props = defineProps<{
   products: Product[]
@@ -463,15 +465,22 @@ useSchemaOrg(computed(() => props.presentation.structuredDataType === 'MenuItem'
   : {
       '@type': 'ItemList',
       name: props.title,
-      itemListElement: props.products.map((product, index) => ({
-        '@type': 'ListItem',
-        position: index + 1,
-        item: {
-          '@type': 'Product',
-          name: product.name,
-          description: product.description,
-          offers: offerFor(product),
-        },
-      })),
+      itemListElement: props.products.map((product, index) => {
+        const productUrl = props.presentation.productPath(props.locations[0]?.slug ?? '', product.slug)
+        const absoluteProductUrl = resolveSeoUrl(productUrl, requestURL.origin)
+        return {
+          '@type': 'ListItem',
+          position: index + 1,
+          item: {
+            '@type': 'Product',
+            '@id': `${absoluteProductUrl}#product`,
+            name: product.name,
+            description: product.description,
+            image: product.image?.public_url ? resolveSeoUrl(product.image.public_url, requestURL.origin) : undefined,
+            url: absoluteProductUrl,
+            offers: offerFor(product),
+          },
+        }
+      }),
     }))
 </script>
