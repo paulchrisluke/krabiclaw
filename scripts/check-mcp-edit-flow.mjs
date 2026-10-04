@@ -1,74 +1,14 @@
 #!/usr/bin/env node
 
-import { credentialSession } from './utils/e2e-auth.mjs'
-import { mcpToolCall } from './utils/mcp-request.mjs'
-
-const BASE_URL = (process.argv.includes('--base-url')
-  ? process.argv[process.argv.indexOf('--base-url') + 1]
-  : process.env.MCP_BASE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
-const ORGANIZATION_ID = process.argv.includes('--organization-id')
-  ? process.argv[process.argv.indexOf('--organization-id') + 1]
-  : process.env.MCP_ORGANIZATION_ID
-const USER_ID = process.argv.includes('--user-id')
-  ? process.argv[process.argv.indexOf('--user-id') + 1]
-  : process.env.MCP_USER_ID
-
-const isLocal = (() => { try { const h = new URL(BASE_URL).hostname; return h === 'localhost' || h === '127.0.0.1'; } catch { return false; } })()
-let failed = false
-
-function pass(message) {
-  console.log(`ok  ${message}`)
-}
-
-function fail(message, detail) {
-  failed = true
-  console.error(`not ok  ${message}`)
-  if (detail) console.error(typeof detail === 'string' ? detail : JSON.stringify(detail, null, 2))
-}
-
-async function getAuthHeaders() {
-  if (process.env.MCP_BEARER_TOKEN) {
-    return { authorization: `Bearer ${process.env.MCP_BEARER_TOKEN}` }
-  }
-
-  if (!isLocal && process.env.MCP_CREDENTIAL_LOGIN !== '1') {
-    throw new Error('Set MCP_BEARER_TOKEN for remote checks, or MCP_CREDENTIAL_LOGIN=1 for a credentialed tunnel.')
-  }
-  return credentialSession(BASE_URL, { userId: USER_ID || undefined, organizationId: ORGANIZATION_ID })
-}
-
-function mcp(headers, name, args = {}) {
-  return mcpToolCall(BASE_URL, headers, name, args)
-}
-
-function resultData(body) {
-  if (body?.result?.structuredContent) return body.result.structuredContent
-  const text = body?.result?.content?.[0]?.text
-  if (!text) return body
-  try {
-    return JSON.parse(text)
-  } catch {
-    return text
-  }
-}
-
-function expectStatus(label, response, expected = 200) {
-  if (response.status === expected) pass(label)
-  else fail(`${label}: expected ${expected}, got ${response.status}`, response.body)
-}
-
-function expectValue(label, condition, detail) {
-  if (condition) pass(label)
-  else fail(label, detail)
-}
+import { authHeaders, BASE_URL, expectStatus, expectValue, fail, mcp, ORGANIZATION_ID, pass, run, toolData } from './utils/mcp-check.mjs'
 
 async function main() {
   console.log(`Checking MCP edit flow at ${BASE_URL}`)
-  const headers = await getAuthHeaders()
+  const headers = await authHeaders()
 
   const welcome = await mcp(headers, 'list_organizations')
   expectStatus('list_organizations succeeds', welcome)
-  const welcomeData = resultData(welcome.body)
+  const welcomeData = toolData(welcome.body)
   if (Array.isArray(welcomeData?.organizations)) pass('list_organizations returns organizations array')
   else fail('list_organizations did not return organizations array', welcome.body)
 
@@ -77,32 +17,32 @@ async function main() {
 
   const list = await mcp(headers, 'list_organizations')
   expectStatus('list_organizations succeeds', list)
-  const organizations = resultData(list.body)?.organizations ?? []
+  const organizations = toolData(list.body)?.organizations ?? []
   if (organizations.some(entry => entry?.id === organizationId)) pass('list_organizations includes the editable organization')
   else fail('list_organizations does not include the editable organization', { organizationId, organizations })
 
   const setWorkspace = await mcp(headers, 'set_workspace_context', { organization_id: organizationId })
   expectStatus('set_workspace_context succeeds', setWorkspace)
-  const setWorkspaceData = resultData(setWorkspace.body)
+  const setWorkspaceData = toolData(setWorkspace.body)
   expectValue('set_workspace_context stores the active organization', setWorkspaceData?.context?.organization_id === organizationId, setWorkspaceData)
 
   const getWorkspace = await mcp(headers, 'get_workspace_context')
   expectStatus('get_workspace_context succeeds', getWorkspace)
-  const workspaceData = resultData(getWorkspace.body)
+  const workspaceData = toolData(getWorkspace.body)
   expectValue('get_workspace_context returns the active organization', workspaceData?.context?.organization_id === organizationId, workspaceData)
   expectValue('get_workspace_context marks one active organization', Array.isArray(workspaceData?.organizations) && workspaceData.organizations.filter(entry => entry?.active === true).length === 1 && workspaceData.organizations.find(entry => entry?.active === true)?.id === organizationId, workspaceData)
 
   const draftTitle = `MCP edit check ${Date.now()}`
   const pageList = await mcp(headers, 'list_site_pages', { locale: 'en' })
   expectStatus('list_site_pages succeeds', pageList)
-  const homeVariant = resultData(pageList.body)?.pages?.find(page => page?.path === '/')
+  const homeVariant = toolData(pageList.body)?.pages?.find(page => page?.path === '/')
   if (!homeVariant?.id) {
     fail('list_site_pages did not return the home variant', pageList.body)
     process.exit(1)
   }
   const contentBefore = await mcp(headers, 'get_site_page', { variant_id: homeVariant.id })
   expectStatus('get_site_page succeeds before update', contentBefore)
-  const pageBefore = resultData(contentBefore.body)?.page
+  const pageBefore = toolData(contentBefore.body)?.page
   const blocks = pageBefore?.blocks
   if (!Array.isArray(blocks)) {
     fail('get_site_page did not return canonical blocks', contentBefore.body)
@@ -129,19 +69,15 @@ async function main() {
     })),
   })
   expectStatus('update_site_page succeeds', save)
-  const saveData = resultData(save.body)
+  const saveData = toolData(save.body)
   expectValue('update_site_page preserves the home variant', saveData?.page?.id === homeVariant.id, saveData)
 
   const content = await mcp(headers, 'get_site_page', { variant_id: homeVariant.id })
   expectStatus('get_site_page succeeds', content)
-  const hero = resultData(content.body)?.page?.blocks?.find(block => block?.type === 'hero')
+  const hero = toolData(content.body)?.page?.blocks?.find(block => block?.type === 'hero')
   if (hero?.data?.title === draftTitle) pass('canonical content includes updated hero title')
   else fail('canonical content did not include updated hero title', hero)
 
-  process.exit(failed ? 1 : 0)
 }
 
-main().catch((error) => {
-  console.error(error)
-  process.exit(1)
-})
+run(main)

@@ -159,7 +159,6 @@ import BookingLocationStep from '@/components/booking/BookingLocationStep.vue'
 import BookingModal from '@/components/booking/BookingModal.vue'
 import BookingRecap from '@/components/booking/BookingRecap.vue'
 import BookingTimeStep, { type RawDateAvailability, type TimeSlotSelection } from '@/components/booking/BookingTimeStep.vue'
-import { useBreadcrumbSchema } from '~/composables/useSchemaOrg'
 import { getTodayHoursLabel, isOpenNow, schemaOpeningHours } from '~/shared/reservation-hours'
 import { formatTime, localDateTimeToInstant } from '~/utils/timezone'
 import { setBookingConfirmation } from '~/composables/useBookingHandoff'
@@ -445,11 +444,6 @@ async function handleReservation() {
 // ── SEO ───────────────────────────────────────────────────────────────────
 const requestUrl = useRequestURL()
 
-useBreadcrumbSchema([
-  { name: 'Home', url: `/` },
-  { name: 'Reservations', url: `/reservations` }
-])
-
 const brandName = computed(() => String((organization as ApiValue)?.name ?? '').trim())
 // A page about the business: its image is the organization's.
 const organizationSocialImage = useTenantOrganization().organization?.social_image ?? null
@@ -461,10 +455,14 @@ useSocialMetadata(() => ({
   brand: {
     organizationName: brandName.value,
   },
+  breadcrumbs: [
+    { name: 'Home', url: '/' },
+    { name: 'Reservations', url: '/reservations' },
+  ],
   // An experience site has no reservations page: the server redirects to
   // /experiences, but a client-side navigation can render this briefly during
-  // hydration, so the intent says noindex rather than relying on the redirect.
-  robots: isExperienceOrganization.value ? 'noindex,follow' : 'index,follow',
+  // hydration, so the intent says unlisted rather than relying on the redirect.
+  discoverability: isExperienceOrganization.value ? 'unlisted' : 'listed',
 }))
 
 /**

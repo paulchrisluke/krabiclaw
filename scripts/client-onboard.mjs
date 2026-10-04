@@ -14,17 +14,15 @@
  *   1. dry-run  → fetch Places data, scan images, write manifests
  *   2. GATE     → print manifest paths, wait for "yes" before proceeding
  *   3. approve  → hash and sign the manifests
- *   4. apply    → execute seed SQL against D1, print row-count diff
- *   5. verify   → smoke test live site, write report
- *   6. print    → report path and next steps
+ *   4. apply    → client:import --apply: seed D1, generate social cards, run client:verify
+ *
+ * Remote targets need --remote and --base-url <platform origin>.
  */
 
 import { parseArgs } from 'node:util'
 import { spawnSync } from 'node:child_process'
 import { join, relative } from 'node:path'
 import { existsSync, readFileSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
-import { createHash } from 'node:crypto'
 import { createInterface } from 'node:readline'
 
 // ── Minimal YAML parser for intake files ──────────────────────────────────────
@@ -106,10 +104,8 @@ const { values: rawArgs } = parseArgs({
     'maps-url':        { type: 'string', multiple: true, default: [] },
     images:            { type: 'string' },
     'images-place-id': { type: 'string' },
-    'live-url':        { type: 'string' },
-    url:               { type: 'string' },  // alias for --live-url
+    'base-url':        { type: 'string' },  // platform origin; required with --remote
     remote:            { type: 'boolean', default: false },
-    'non-interactive': { type: 'boolean', default: false },
     from:              { type: 'string' },  // path to client-intake YAML
   },
   allowPositionals: false,
@@ -126,8 +122,6 @@ if (args.from) {
   if (!args['brand-name'] && intake.brand_name) args['brand-name'] = intake.brand_name
   if (!args.slug     && intake.slug)       args.slug = intake.slug
   if (!args.vertical && intake.vertical)   args.vertical = intake.vertical
-  if (!args['live-url'] && intake.live_url) args['live-url'] = intake.live_url
-  if (!args['organization-id'] && intake.organization_id) args['organization-id'] = intake.organization_id
   if (!args['organization-id'] && intake.organization_id) args['organization-id'] = intake.organization_id
   if (!args.images      && intake.images_dir) args.images = intake.images_dir
   if (!args['images-place-id'] && intake.images_place_id) args['images-place-id'] = intake.images_place_id
@@ -153,7 +147,6 @@ if (!args['organization-id']) {
 const SLUG            = args.slug
 const VERTICAL        = args.vertical
 const REMOTE          = args.remote
-const NON_INTERACTIVE = args['non-interactive']
 const OUT_DIR         = join(process.cwd(), 'client-imports', SLUG)
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -187,10 +180,6 @@ async function prompt(question) {
 }
 
 async function gate(message) {
-  if (NON_INTERACTIVE) {
-    console.log(`\n  → Non-interactive: skipping review gate`)
-    return
-  }
   console.log(`\n  ┌─ REVIEW REQUIRED ${'─'.repeat(46)}`)
   console.log(`  │  ${message}`)
   console.log(`  └${'─'.repeat(63)}`)
@@ -210,101 +199,39 @@ if (args.images) importArgs.push('--images', args.images)
 if (args['images-place-id']) importArgs.push('--images-place-id', args['images-place-id'])
 if (REMOTE) importArgs.push('--remote')
 
-const organizationId = args['organization-id'] ?? `org-${SLUG}`
-const baseUrl = args['live-url'] ?? args.url ?? (REMOTE ? `https://${SLUG}.krabiclaw.com` : 'http://localhost:3000')
-
-const verifyArgs = [
-  'scripts/client-verify.mjs',
-  '--url', baseUrl,
-  '--vertical', VERTICAL,
-  '--organization-id', organizationId,
-  '--slug', SLUG,
-]
-
-// ── Non-interactive pre-check ─────────────────────────────────────────────────
-
-if (NON_INTERACTIVE) {
-  const approvedPath = join(OUT_DIR, 'approved.json')
-  if (!existsSync(approvedPath)) {
-    console.error('Error: --non-interactive requires an already-valid approved.json.')
-    console.error(`  Run interactively first: yarn client:onboard --slug ${SLUG} --organization-id ${args['organization-id']} --vertical ${VERTICAL}`)
-    process.exit(1)
-  }
-  const approved = JSON.parse(await import('node:fs').then(m => m.readFileSync(approvedPath, 'utf8')))
-  if (!approved.approved || approved.invalidated) {
-    console.error('Error: approved.json is invalid or has been invalidated.')
-    console.error('  Re-run the interactive flow to re-approve before using --non-interactive.')
-    process.exit(1)
-  }
-  console.log(`  Using existing approval: approved by ${approved.approved_by} at ${approved.approved_at}`)
-  
-  // Run dry-run to generate current manifests
-  step(1, 'Dry run — fetch Google Places data, scan images, generate manifests')
-  run('dry-run', [...importArgs, '--dry-run'])
-  
-  // Verify hash matches approved.json
-  const manifestPath = join(OUT_DIR, 'client-manifest.json')
-  const seedPath = join(OUT_DIR, 'seed-preview.sql')
-  if (!existsSync(manifestPath) || !existsSync(seedPath)) {
-    console.error('Error: Dry-run failed to generate manifests.')
-    process.exit(1)
-  }
-  
-  const manifestContent = await readFile(manifestPath, 'utf8')
-  const seedContent = await readFile(seedPath, 'utf8')
-  const currentHash = createHash('sha256')
-    .update(manifestContent)
-    .update(seedContent)
-    .update(await readFile(join(OUT_DIR, 'media-manifest.json'), 'utf8'))
-    .digest('hex')
-  
-  if (currentHash !== approved.manifest_hash) {
-    console.error('Error: Manifest hash mismatch — the dry-run output has changed since approval.')
-    console.error(`  Re-run interactively for human review: yarn client:onboard --slug ${SLUG} --organization-id ${args['organization-id']} --vertical ${VERTICAL}`)
-    process.exit(1)
-  }
-  
-  console.log('  Hash verified — proceeding with apply')
-}
+if (args['base-url']) importArgs.push('--base-url', args['base-url'])
 
 // ── Step 1: Dry run ───────────────────────────────────────────────────────────
 
-if (!NON_INTERACTIVE) {
-  step(1, 'Dry run — fetch Google Places data, scan images, generate manifests')
-  run('dry-run', [...importArgs, '--dry-run'])
+step(1, 'Dry run — fetch Google Places data, scan images, generate manifests')
+run('dry-run', [...importArgs, '--dry-run'])
 
-  // Print manifest paths for review
-  const reviewFiles = [
-    'client-manifest.json',
-    'seed-preview.sql',
-    'route-manifest.json',
-    'media-manifest.json',
-    'missing-fields.json',
-    'copy-scan.txt',
-  ]
-  console.log(`\n  Review these files before continuing:\n`)
-  for (const f of reviewFiles) {
-    const p = join(OUT_DIR, f)
-    if (existsSync(p)) console.log(`    ${relative(process.cwd(), p)}`)
-  }
-
-  await gate('Review the manifests above. Check locations, seed SQL, copy scan, and images.')
-
-  // ── Step 2: Approve ───────────────────────────────────────────────────────────
-
-  step(2, 'Approve — sign manifest hash to gate the apply step')
-  run('approve', [...importArgs, '--approve'])
+// Print manifest paths for review
+const reviewFiles = [
+  'client-manifest.json',
+  'seed-preview.sql',
+  'route-manifest.json',
+  'media-manifest.json',
+  'missing-fields.json',
+  'copy-scan.txt',
+]
+console.log(`\n  Review these files before continuing:\n`)
+for (const f of reviewFiles) {
+  const p = join(OUT_DIR, f)
+  if (existsSync(p)) console.log(`    ${relative(process.cwd(), p)}`)
 }
+
+await gate('Review the manifests above. Check locations, seed SQL, copy scan, and images.')
+
+// ── Step 2: Approve ───────────────────────────────────────────────────────────
+
+step(2, 'Approve — sign manifest hash to gate the apply step')
+run('approve', [...importArgs, '--approve'])
 
 // ── Step 3: Apply ─────────────────────────────────────────────────────────────
 
-step(3, `Apply — execute seed against ${REMOTE ? 'remote' : 'local'} D1`)
+step(3, `Apply — seed ${REMOTE ? 'remote' : 'local'} D1, generate social cards, verify`)
 run('apply', [...importArgs, '--apply'])
-
-// ── Step 4: Verify ────────────────────────────────────────────────────────────
-
-step(4, 'Verify — smoke test live site routes, copy, and media')
-run('verify', verifyArgs)
 
 // ── Done ──────────────────────────────────────────────────────────────────────
 
@@ -315,8 +242,7 @@ if (existsSync(reportPath)) {
   console.log(`  Verify report: ${relative(process.cwd(), reportPath)}`)
 }
 if (!REMOTE) {
-  console.log(`\n  To deploy and verify production:`)
-  console.log('    Merge through staging to main; CI deploys and verifies each environment')
-  console.log(`    yarn client:verify --url https://${SLUG}.krabiclaw.com --vertical ${VERTICAL} --organization-id ${organizationId} --slug ${SLUG}`)
+  console.log(`\n  To apply this approved import to a remote environment:`)
+  console.log(`    node ${importArgs.join(' ')} --apply --remote --base-url <platform origin>`)
 }
 console.log(hr('═'))

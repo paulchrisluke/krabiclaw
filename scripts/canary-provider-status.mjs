@@ -18,7 +18,11 @@ async function main() {
   const res = await fetch(`${baseUrl}/api/canary/provider-status`, {
     headers: { 'x-canary-secret': secret },
   })
-  const body = await res.json().catch(() => ({}))
+  const text = await res.text()
+  if (!(res.headers.get('content-type') ?? '').includes('application/json')) {
+    throw new Error(`Provider status returned ${res.status} ${res.headers.get('content-type')}: ${text.slice(0, 500)}`)
+  }
+  const body = JSON.parse(text)
 
   const status = body?.ok ? 'pass' : 'fail'
   const details = {

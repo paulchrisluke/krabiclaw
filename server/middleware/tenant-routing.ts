@@ -4,6 +4,7 @@
 import { HTTPError, defineHandler  } from 'nitro';
 import { redirect } from 'nitro/h3';
 import { cloudflareEnv } from "~/server/utils/api-response";
+import { isTenantOnlySeoPath } from '~/server/utils/seo-policy'
 import { platformHostname } from "~/server/utils/domains";
 import { TENANT_TYPES } from "~/utils/tenant-routing";
 
@@ -12,6 +13,16 @@ export default defineHandler(async (event) => {
   const onboardingStatus = event.context.onboardingStatus as string | undefined;
   const url = event.url;
   const pathname = url.pathname;
+
+  if (tenantType === TENANT_TYPES.PLATFORM) {
+    if (isTenantOnlySeoPath(pathname)) {
+      throw new HTTPError({
+        statusCode: 404,
+        statusMessage: "Page not found",
+      });
+    }
+    return;
+  }
 
   // Only process tenant requests
   if (!tenantType?.startsWith("tenant")) {

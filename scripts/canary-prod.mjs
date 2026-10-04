@@ -150,9 +150,7 @@ async function main() {
 
     console.log(JSON.stringify(summary, null, 2))
   } finally {
-    await page.close().catch(() => {})
-    await context.close().catch(() => {})
-    await browser.close().catch(() => {})
+    await browser.close()
   }
 }
 

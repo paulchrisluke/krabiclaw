@@ -224,7 +224,7 @@ async function main() {
     // A seeded E2E user by id, or an explicit account (the production canary).
     const sessionCookie = await credentialCookie(BASE_URL, process.env.MCP_LOGIN_EMAIL
       ? { email: process.env.MCP_LOGIN_EMAIL, password: process.env.MCP_LOGIN_PASSWORD }
-      : process.env.MCP_E2E_USER_ID ? { userId: process.env.MCP_E2E_USER_ID } : {});
+      : process.env.MCP_USER_ID ? { userId: process.env.MCP_USER_ID } : {});
     pass(`Got session cookie (${sessionCookie.split("=")[0]})`);
 
     section("Signed-in homepage routing");

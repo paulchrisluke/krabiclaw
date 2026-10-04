@@ -22,9 +22,9 @@ The tenant sitemap contains only that site's public static routes and its publis
 
 Tenant canonical tags and breadcrumb/schema URLs resolve against the rendered request origin. Because noncanonical tenant domains redirect first, the request origin is the canonical origin.
 
-### Non-production hosts
+### Non-production and demo hosts
 
-Staging, `pages.dev`, and `workers.dev` hosts are globally non-indexable.
+Staging, `pages.dev`, `workers.dev`, and demo showcase hosts (`demo.krabiclaw.com`, `demo.localhost`, and organization `org-demo`) are globally non-indexable.
 
 These hosts receive:
 
@@ -93,7 +93,7 @@ Operators retry failed projections through the tenant or platform regeneration a
 
 ## Route behavior
 
-Tenant-only routes return an intentional 404 on the platform host through `server/middleware/zz-seo-route-boundaries.ts`. They must never render generic `Our Site`, loading, or empty-state content on `krabiclaw.com`.
+Tenant-only routes return an intentional 404 on the platform host through `server/middleware/tenant-routing.ts`. They must never render generic `Our Site`, loading, or empty-state content on `krabiclaw.com`.
 
 `/billing` is a legacy duplicate and permanently redirects to `/pricing`. It is intentionally crawlable so search engines can process the redirect, but it is never emitted in a sitemap.
 

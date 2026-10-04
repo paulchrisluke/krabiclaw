@@ -40,6 +40,7 @@
 import sayaCriticalCss from '~/assets/css/saya-critical.css?raw'
 import '~/assets/css/saya-entry.css'
 import { MALI_FONT_CSS, resolveOrganizationFontPreset, organizationFontStyles } from '~/shared/organization-fonts'
+import { isDemoHost, isDemoOrg } from '~/shared/demo'
 
 const route = useRoute()
 const hydrated = ref(false)
@@ -159,16 +160,12 @@ if (import.meta.client) {
   })
 }
 
-// Shared demo-host check: the synthetic "Ember & Slice" showcase site isn't a
+// Shared demo check: the synthetic "Ember & Slice" showcase site isn't a
 // real business collecting real visitor data, so it's excluded from search
 // (see the discoverability below) and skips the cookie-consent banner rather
 // than asking demo visitors to accept/reject tracking that isn't happening.
-// Matches these exact hosts (see seed-definitions/demo.ts organizationDomains) rather
-// than a "demo." prefix — a real tenant's own custom domain (e.g.
-// demo.example.com) can legitimately start with "demo." and must not be
-// treated as our internal showcase site.
-const DEMO_HOSTS = new Set(['demo.krabiclaw.com', 'demo.localhost'])
-const isDemoHost = DEMO_HOSTS.has(requestHostname)
+const { organizationId } = useTenantOrganization()
+const isDemo = isDemoHost(requestHostname) || isDemoOrg(organizationId)
 
 // A page about the business: its image is the organization's.
 const organizationSocialImage = useTenantOrganization().organization?.social_image ?? null
@@ -183,7 +180,7 @@ useSocialMetadata(() => ({
   // Everything a live site serves is offered to discovery; the showcase site
   // is not a real business and is offered to nobody. A page that is itself
   // unlisted, and any preview render, says so over this.
-  discoverability: isDemoHost ? 'private' : 'listed',
+  discoverability: isDemo ? 'private' : 'listed',
 }))
 </script>
 
