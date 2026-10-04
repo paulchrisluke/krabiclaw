@@ -49,7 +49,7 @@
 <script setup lang="ts">
 import { authClient } from '~/lib/auth-client'
 import { buildPostLoginUrl } from '~/shared/auth/return-target'
-import { NEW_SALE_PLAN_ID } from '~/shared/billing-model'
+import { isNewSalePlan } from '~/shared/billing-model'
 
 // No organization scope yet, so no dashboard chrome and no scoped context.
 definePageMeta({ layout: 'standalone' })
@@ -66,7 +66,11 @@ const entering = ref<string | null>(null)
 
 // The plan rides through the chooser so the billing destination stays decided
 // in one place — `/api/post-login` — rather than being rebuilt here.
-const plan = computed(() => (route.query.plan === NEW_SALE_PLAN_ID ? NEW_SALE_PLAN_ID : undefined))
+const plan = computed(() => {
+  if (route.query.plan === undefined) return undefined
+  if (!isNewSalePlan(route.query.plan)) throw createError({ statusCode: 400, statusMessage: 'Unknown checkout plan' })
+  return route.query.plan
+})
 
 async function enter(organization: { id: string }) {
   if (entering.value) return

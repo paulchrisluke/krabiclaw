@@ -56,9 +56,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     env:
-      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY_TEST }}
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY_E2E }}
       STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET_STAGING }}
-      NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
+      NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_E2E }}
       NUXT_PUBLIC_WHATSAPP_NUMBER: "16197200000"
       # The onboarding draft endpoints sign their preview tokens with it and
       # answer 503 without it, so the wizard never got past its first save.

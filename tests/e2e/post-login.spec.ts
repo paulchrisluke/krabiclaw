@@ -117,14 +117,15 @@ test('invitation account switching updates the reactive session without reloadin
   await expect(page.getByRole('link', { name: 'Sign in with email', exact: true })).toBeVisible()
 })
 
-test('signed-in Growth CTA retains its plan through the canonical billing redirect', async ({ page, baseURL }) => {
+test('signed-in paid CTAs retain their selected plan through the canonical billing redirect', async ({ page, baseURL }) => {
   await loginAs(page.request, baseURL!, 'user-e2e-demo-owner')
   await page.goto('/pricing')
-  const growth = page.getByRole('link', { name: 'Get Grow', exact: true })
-  await expect(growth).toHaveAttribute('href', '/api/post-login?plan=growth')
-  const destination = await page.request.get('/api/post-login?plan=growth', { maxRedirects: 0 })
-  expect(destination.status()).toBe(302)
-  expect(destination.headers().location).toBe('/dashboard/ember-slice-demo/settings/billing?plan=growth')
+  for (const [plan, label] of [['growth', 'Get Grow'], ['commerce', 'Get Commerce']] as const) {
+    await expect(page.getByRole('link', { name: label, exact: true })).toHaveAttribute('href', `/api/post-login?plan=${plan}`)
+    const destination = await page.request.get(`/api/post-login?plan=${plan}`, { maxRedirects: 0 })
+    expect(destination.status()).toBe(302)
+    expect(destination.headers().location).toBe(`/dashboard/ember-slice-demo/settings/billing?plan=${plan}`)
+  }
   const invalid = await page.request.get('/api/post-login?plan=unknown', { maxRedirects: 0 })
   expect(invalid.status()).toBe(400)
 })

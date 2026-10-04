@@ -24,8 +24,9 @@
       </div>
 
       <!--
-        Two value rows, the Personal information shape. The plan row says what the
-        business is on and what happens next; everything else about money — the
+        The plan row says what the business is on and what happens next.
+        Available plan choices use Better Auth's native subscription flow;
+        everything else about money — the
         card, receipts, invoices, cancelling — is Stripe's hosted portal, which is
         the only surface the Better Auth Stripe plugin exposes for it.
       -->
@@ -38,7 +39,7 @@
 <script setup lang="ts">
 import EditorNavigationList from '~/components/dashboard/EditorNavigationList.vue'
 import type { EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
-import { NEW_SALE_PLAN_ID, STARTER_PLAN_ID, isKnownBillingPlan } from '~/shared/billing-model'
+import { STARTER_PLAN_ID, isKnownBillingPlan, isNewSalePlan } from '~/shared/billing-model'
 
 definePageMeta({ layout: 'dashboard' })
 
@@ -103,8 +104,13 @@ const groups = computed<EditorNavigationGroup[]>(() => [{
       id: 'plan',
       label: currentPlan.value?.name ?? 'Plan',
       summary: planSummary.value,
-      action: { label: onStarter.value ? 'Upgrade' : 'Manage' },
+      ...(!onStarter.value ? { action: { label: 'Manage' } } : {}),
     },
+    ...(billing.value ? plans.value.filter(plan => isNewSalePlan(plan.id) && plan.id !== billing.value?.plan).map(plan => {
+      const price = displayPrice(plan, false)
+      if (!price) throw new Error(`Monthly price is unavailable for ${plan.id}`)
+      return { id: `plan:${plan.id}`, label: `Switch to ${plan.name}`, summary: `${price}/mo`, action: { label: 'Choose' } }
+    }) : []),
     ...(billing.value?.stripeCustomerId
       ? [{ id: 'portal', label: 'Payment and invoices', summary: 'Card, receipts and invoices at Stripe', action: { label: 'Open' } }]
       : []),
@@ -116,8 +122,12 @@ async function onRowAction(id: string) {
   busy.value = true
   errorMessage.value = ''
   try {
-    if (id === 'plan' && onStarter.value) await upgrade(NEW_SALE_PLAN_ID)
-    else await openBillingPortal()
+    if (id.startsWith('plan:')) {
+      const plan = id.slice('plan:'.length)
+      if (!isNewSalePlan(plan)) throw new Error('Unknown checkout plan')
+      await upgrade(plan)
+    } else if (id === 'plan' || id === 'portal') await openBillingPortal()
+    else throw new Error('Unknown billing action')
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Billing is unavailable right now'
   } finally {
@@ -148,7 +158,7 @@ onMounted(async () => {
   if (success || plan || canceled) await router.replace({ query: restQuery })
 
   // Stripe sends the plan back with success or canceled: that checkout is
-  // over. Only /api/post-login?plan=growth arrives with the plan still to buy.
+  // over. Only /api/post-login?plan=... arrives with the plan still to buy.
   if (success || canceled) return
   const planId = Array.isArray(plan) ? plan[0] : plan
   if (typeof planId === 'string' && planId && !busy.value) {

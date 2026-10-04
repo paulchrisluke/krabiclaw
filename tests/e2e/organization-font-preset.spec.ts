@@ -54,10 +54,8 @@ test('Mali saves through Brand and renders for its tenant before hydration', asy
     // openTenantPage accepts it; plain goto left every click on this page blocked
     // in CI while passing locally, where Zaraz is absent.
     await openTenantPage(cms, brandPath, {})
-    // 'load' and consent both resolve before Nuxt hydrates, and an unhydrated
-    // Select trigger swallows the click silently: measured 0 options opened
-    // without this wait, 2 with it, three runs each.
-    await cms.waitForLoadState('networkidle')
+    // openTenantPage waits for Nuxt's isHydrating=false before returning;
+    // the Select trigger must have its handler before it is clicked.
     // The config sets no actionTimeout or navigationTimeout, so an unbounded click
     // on a control the page never rendered burns the whole test cap and reports
     // nothing. Every wait below names what it was waiting for instead.

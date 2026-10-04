@@ -1,7 +1,10 @@
 # Stripe catalog operator plan
 
-`scripts/seed-stripe.mjs` reconciles the new-sale recurring catalog for Starter
-(free, with no Stripe product) and Growth (`$49` per month or `$588` per year). Managed (`$149`)
+`scripts/seed-stripe.mjs` reconciles the new-sale recurring catalog for Basic
+(free, with no Stripe product), Growth (`$49` per month, with an optional existing
+`$588` annual price), and Commerce (`$89` per month). Commerce includes Growth's
+features and Payments and has no annual price. `shared/billing-model.ts` owns the
+fixed USD subscription amounts. Managed (`$149`)
 and SEO Accelerator (`$349`) are retired from new offers. Every product and
 price, including already-archived products and inactive or one-time prices, is
 read into the reviewed snapshot. Only products whose metadata explicitly names
@@ -13,7 +16,7 @@ the product, including duplicates. Inactive products are never cleared or
 archived. Retired products are never created, updated, or marketed, and an absent retired product
 produces no operation. Retired plan
 identities are not valid runtime entitlements; the runtime sale model accepts
-only Starter and Growth. Historical fulfillment rows remain raw read-only audit
+only Basic, Growth and Commerce. Historical fulfillment rows remain raw read-only audit
 history, while archiving a product or price prevents new purchases.
 
 The script does not create one-time credit, add-on, or auto-top-up products, and
@@ -82,8 +85,10 @@ the journal and resume the same signed plan only after the named action is
 safe. The journal never claims compensation or completion when a provider
 mutation may have succeeded without a durable result.
 
-The signed operation order creates or reconciles the canonical Growth product,
-required monthly price, any unambiguous existing annual price, and image first.
+The signed operation order creates or reconciles each offered plan's canonical
+product, required monthly price, any supported unambiguous existing annual price,
+and configured image first. Commerce does not require a product image. The full
+planner also reconciles the existing Site Language catalog family.
 For active retired products, it clears a signed active default price before
 deactivating prices and archiving the product. The planner never invents an
 annual amount when no annual price exists. The operator re-reads the provider
@@ -94,22 +99,22 @@ when the provider state matches the journal evidence. On completion, a fresh
 provider snapshot must produce zero remaining operations against the same desired model;
 otherwise the journal remains `incomplete` and a new reviewed plan is required.
 
-If the read-only snapshot contains more than one active Growth product, plan
+If the read-only snapshot contains more than one active product for an offered plan, plan
 generation fails closed and prints every conflicting product ID. Resolve the
-ambiguity explicitly when regenerating the plan with a Growth-only override:
+ambiguity explicitly when regenerating the plan with that plan's override:
 
 ```bash
 STRIPE_SECRET_KEY=rk_test_... yarn stripe:catalog:plan -- \
   --canonical-product growth=prod_...
 ```
 
-The override must name Growth and an active product whose `metadata.plan_id`
+The override must name an offered paid plan and an active product whose `metadata.plan_id`
 matches exactly; retired Managed/SEO overrides are rejected. The signed plan
 records its resolved `canonicalProductIds` selection. For every non-canonical
-Growth duplicate, and for every active retired product, the plan deactivates
+offered-plan duplicate, and for every active retired product, the plan deactivates
 all active prices (recurring or one-time) and archives the product, each guarded by the
 reviewed provider snapshot. An active retired default price is cleared first;
-the canonical Growth product and inactive products are not cleared. There is no
+canonical offered products and inactive products are not cleared. There is no
 automatic first-product selection.
 
 For an existing canonical product, monthly and annual base prices are resolved

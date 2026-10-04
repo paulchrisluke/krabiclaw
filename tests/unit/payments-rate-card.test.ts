@@ -28,7 +28,7 @@ test('usage billing uses the full native 34-day backdating window without retimi
 test('Payments usage quantities preserve exact signed USD cents and reject unsupported currency or precision',()=>{
  assert.equal(metronomeCurrencyAmount(10000,'USD'),'10000')
  assert.equal(metronomeCurrencyAmount(-100,'USD'),'-100')
- assert.throws(()=>metronomeCurrencyAmount(1.337,'USD'),/exact integer minor units/u)
+ assert.throws(()=>metronomeCurrencyAmount(1.25,'USD'),/exact integer minor units/u)
  assert.throws(()=>metronomeCurrencyAmount(Number.MAX_SAFE_INTEGER+1,'USD'),/exact integer minor units/u)
  assert.throws(()=>metronomeCurrencyAmount(10000,'THB'),/requires USD cents/u)
 })

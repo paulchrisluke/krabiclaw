@@ -47,8 +47,8 @@ p { max-width: 65ch; color: #646878; line-height: 1.7; }
 table { border-collapse: collapse; width: 100%; min-width: 38rem; text-align: left; }
 thead th { font-size: 1.2rem; padding: 1.4rem 1rem; }
 th, td { border-bottom: 1px solid #d6d8de; padding: 1.4rem 1rem; vertical-align: top; }
-tbody th { width: 50%; font-weight: 600; }
-td { width: 25%; font-size: .9rem; }
+tbody th { width: 40%; font-weight: 600; }
+td { font-size: .9rem; }
 .kc-pricing-comparison__detail p { display: block; font-weight: 400; color: #646878; line-height: 1.5; margin: .75rem 0 0; font-size: .85rem; }
 .kc-pricing-comparison__detail summary { cursor: pointer; display: flex; gap: .5rem; align-items: center; list-style: none; }
 .kc-pricing-comparison__detail summary::-webkit-details-marker { display: none; }

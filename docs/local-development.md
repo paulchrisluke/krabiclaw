@@ -45,6 +45,15 @@ AI Search runs only in production. Local and CI E2E use the native `e2e`
 Wrangler environment, which has local D1/KV/DO bindings and no AI Search
 binding. Site writes still await cache purges.
 
+Cloudflare [Quick Tunnels](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/)
+expose a local Worker through a temporary `*.trycloudflare.com` development
+hostname. Configure the application origins to that exact HTTPS URL and run
+Wrangler with `--upstream-protocol https` so it preserves the HTTPS origin
+sent to Better Auth. Set `MEDIA_BASE_URL` to `<HTTPS origin>/__media` for local
+uploads; keep `NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN` on the configured localhost
+fixture domain. These hosts skip production AI Search and public caches;
+they do not enable tenant headers, trusted origins, or development routes.
+
 Local `.env` sets `ZARAZ_ANALYTICS=absent` and leaves `CF_ZONE_ID` unset, and
 the Playwright runner sets the same. The only Zaraz zone is production's, so a
 local reconcile would rewrite production's tags. With Zaraz declared absent,
@@ -188,6 +197,13 @@ The subdomain is the tenant's public address, not a dashboard segment: Kikuzuki
 serves its website at `kikuzuki-krabi-thailand.localhost:3000`.
 
 ## Before pushing
+
+Pull-request E2E uses the isolated Stripe Sandbox credentials in
+`STRIPE_SECRET_KEY_E2E` and `NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_E2E`. The workflow
+binds these to the ordinary application variables. Staging's configured account
+and its existing customers remain separate. Native Payments qualification uses
+the same isolated Sandbox, the reviewed catalog, dedicated local webhook
+listeners and the normal Better Auth subscription flow.
 
 ```sh
 corepack yarn quality && corepack yarn test:unit && corepack yarn test:d1 && corepack yarn test:migrations && corepack yarn test:mcp

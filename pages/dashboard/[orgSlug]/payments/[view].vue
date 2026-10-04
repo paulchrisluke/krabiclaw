@@ -9,7 +9,8 @@
           <dl class="mt-3 grid grid-cols-2 gap-2"><dt>Payment volume</dt><dd>{{ paymentMoney(row.captured_amount,row.currency) }}</dd><dt>Refunds</dt><dd>{{ paymentMoney(row.refunded_amount,row.currency) }}</dd><dt>Disputes</dt><dd>{{ paymentMoney(row.disputed_amount,row.currency) }}</dd><dt>Net payment activity</dt><dd>{{ paymentMoney(Number(row.captured_amount)-Number(row.refunded_amount)-Number(row.disputed_amount),row.currency) }}</dd></dl>
         </section>
         <p v-if="!amounts.length">No captured payment activity in this UTC period.</p>
-        <p class="mt-4 text-sm text-muted">1.337% of payment volume, plus Stripe fees.</p>
+        <p v-if="data.pricing" class="mt-4 text-sm text-muted">{{ data.pricing.livemode?'Billing rate':'Sandbox billing rate' }}: {{ data.pricing.captured_volume_rate_percent }}% of payment volume, plus Stripe fees.</p>
+        <p v-else class="mt-4 text-sm text-muted">No active Payments billing rate.</p>
       </template>
       <template v-else-if="view==='payouts'">
         <p v-if="data.configured===false">Connect Stripe in Settings → Integrations.</p>
@@ -40,11 +41,12 @@ const view=computed(()=>String(route.params.view))
 const title=computed(()=>view.value[0]!.toUpperCase()+view.value.slice(1))
 const lead=computed(()=>view.value==='overview'?'Payment activity this month, using UTC.':view.value==='payouts'?'Your Stripe balances and payouts.':'Payments, refunds and disputes are shown separately.')
 type Row=Record<string,unknown>
-type ViewResponse={configured?:boolean;balance?:{available:Row[];pending:Row[]};payouts?:Row[];rows?:Row[];next_cursor?:string|null;summary?:{amounts:Row[];refreshed_at:string};refreshed_at?:string}
+type Pricing={captured_volume_rate_percent:string;livemode:boolean}
+type ViewResponse={configured?:boolean;balance?:{available:Row[];pending:Row[]};payouts?:Row[];rows?:Row[];next_cursor?:string|null;summary?:{amounts:Row[];refreshed_at:string};pricing?:Pricing|null;refreshed_at?:string}
 const moneyRow=(value:unknown):value is Row=>isRecord(value)&&Number.isSafeInteger(value.amount)&&typeof value.currency==='string'&&isCurrencyCode(value.currency.toUpperCase())
 function validResponse(value:unknown):value is ViewResponse {
  if(!isRecord(value))return false
- if(view.value==='overview')return isRecord(value.summary)&&typeof value.summary.refreshed_at==='string'&&Array.isArray(value.summary.amounts)&&value.summary.amounts.every(row=>isRecord(row)&&isCurrencyCode(row.currency)&&['captured_amount','refunded_amount','disputed_amount'].every(field=>Number.isSafeInteger(row[field])))
+ if(view.value==='overview')return (value.pricing===null||isRecord(value.pricing)&&typeof value.pricing.captured_volume_rate_percent==='string'&&/^\d+(?:\.\d+)?$/.test(value.pricing.captured_volume_rate_percent)&&typeof value.pricing.livemode==='boolean')&&isRecord(value.summary)&&typeof value.summary.refreshed_at==='string'&&Array.isArray(value.summary.amounts)&&value.summary.amounts.every(row=>isRecord(row)&&isCurrencyCode(row.currency)&&['captured_amount','refunded_amount','disputed_amount'].every(field=>Number.isSafeInteger(row[field])))
  if(value.next_cursor!==null&&(typeof value.next_cursor!=='string'||!value.next_cursor))return false
  if(view.value==='payouts')return typeof value.configured==='boolean'&&Array.isArray(value.payouts)&&(value.configured===false||isRecord(value.balance)&&Array.isArray(value.balance.available)&&value.balance.available.every(moneyRow)&&Array.isArray(value.balance.pending)&&value.balance.pending.every(moneyRow)&&typeof value.refreshed_at==='string'&&value.payouts.every(row=>moneyRow(row)&&typeof row.id==='string'&&typeof row.status==='string'&&Number.isSafeInteger(row.arrival_date)))
  return typeof value.refreshed_at==='string'&&Array.isArray(value.rows)&&value.rows.every(row=>moneyRow(row)&&isCurrencyCode(row.currency)&&typeof row.id==='string'&&typeof row.status==='string'&&typeof row.subject_type==='string'&&(row.subject_id===null||typeof row.subject_id==='string'))

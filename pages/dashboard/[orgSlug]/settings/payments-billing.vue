@@ -1,7 +1,8 @@
 <template>
- <DashboardLeafPanel id="payments-billing" title="Payments billing" lead="1.337% of payment volume, plus Stripe fees. Billed after use." :footer="false">
+ <DashboardLeafPanel id="payments-billing" title="Payments billing" lead="Billed after use." :footer="false">
   <UAlert v-if="error" color="error" :description="error.message" /><USkeleton v-else-if="pending" class="h-24" />
   <template v-else-if="data">
+   <p v-if="data.pricing" class="mb-3 text-sm text-muted">{{ data.pricing.livemode?'Billing rate':'Sandbox billing rate' }}: {{ data.pricing.captured_volume_rate_percent }}% of payment volume, plus Stripe fees.</p>
    <p class="text-sm text-muted">KrabiClaw Payments fees aren’t returned after a refund or dispute.</p>
    <UAlert v-if="data.configured===false" class="mt-4" color="warning" description="Payments billing is not set up. Payment activity is saved for billing." /><UButton v-if="data.configured===false" class="mt-4" :loading="working" @click="provision">Set up Payments billing</UButton>
    <p v-else-if="account" class="mt-4">Billing status: {{ account.status }}. Charges from earlier payments still apply after a plan change.</p>
@@ -32,10 +33,12 @@ const creditOpen=computed({get:()=>creditId.value!==null,set:(open:boolean)=>{if
 const ratedMoney=new Intl.NumberFormat(undefined,{style:'currency',currency:'USD',maximumFractionDigits:20})
 type CollectionInvoice={id:string;status:string;currency:string;total:number;amount_due:number;amount_paid:number;amount_remaining:number;hosted_invoice_url:string|null;invoice_pdf:string|null}
 type Invoice={id:string;status:string;total:number;credit_type:{id:string;name:'USD (cents)'};start_timestamp:string;end_timestamp:string;collection_invoice:CollectionInvoice|null}
-type Billing = {configured:boolean;account?:Record<string,unknown>;pending:Record<string,unknown>[];invoices:Invoice[];credits:Record<string,unknown>[]}
+type Pricing={captured_volume_rate_percent:string;livemode:boolean}
+type Billing = {configured:boolean;account?:Record<string,unknown>;pricing:Pricing|null;pending:Record<string,unknown>[];invoices:Invoice[];credits:Record<string,unknown>[]}
 function isCollection(value:unknown):value is CollectionInvoice{return isRecord(value)&&typeof value.id==='string'&&typeof value.status==='string'&&isCurrencyCode(value.currency)&&['total','amount_due','amount_paid','amount_remaining'].every(field=>Number.isSafeInteger(value[field]))&&['hosted_invoice_url','invoice_pdf'].every(field=>value[field]===null||typeof value[field]==='string')}
 const {data,pending,error,refresh}=await useAsyncData(()=>`payments-billing:${route.params.orgSlug}`,()=>api<Billing>('/api/dashboard/payments/billing',{validate:(v:unknown):v is Billing=>
  isRecord(v)&&typeof v.configured==='boolean'
+ &&(v.pricing===null||isRecord(v.pricing)&&typeof v.pricing.captured_volume_rate_percent==='string'&&/^\d+(?:\.\d+)?$/.test(v.pricing.captured_volume_rate_percent)&&typeof v.pricing.livemode==='boolean')
  &&(!v.configured||(isRecord(v.account)&&typeof v.account.metronome_contract_id==='string'&&!!v.account.metronome_contract_id&&typeof v.account.status==='string'))
  &&Array.isArray(v.pending)&&v.pending.every(row=>isRecord(row)&&isCurrencyCode(row.currency)&&Number.isSafeInteger(row.amount)&&typeof row.kind==='string'&&Number.isSafeInteger(row.event_count)&&(row.error===null||typeof row.error==='string'))
  &&Array.isArray(v.invoices)&&v.invoices.every(row=>isRecord(row)&&typeof row.id==='string'&&typeof row.status==='string'&&typeof row.total==='number'&&Number.isFinite(row.total)&&isRecord(row.credit_type)&&typeof row.credit_type.id==='string'&&row.credit_type.name==='USD (cents)'&&typeof row.start_timestamp==='string'&&Number.isFinite(Date.parse(row.start_timestamp))&&typeof row.end_timestamp==='string'&&Number.isFinite(Date.parse(row.end_timestamp))&&(row.collection_invoice===null||isCollection(row.collection_invoice)))

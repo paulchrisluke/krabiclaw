@@ -152,11 +152,20 @@ export async function provisionPaymentsBilling(db:DbClient,stripe:Stripe,env:Clo
  if(contractWrite.meta.changes!==1)throw new Error('Payments contract mapping changed during native setup')
  return await queryFirst<BillingAccount>(db,'SELECT * FROM payment_billing_accounts WHERE organization_id=?',[principal.organizationId])
 }
-export async function paymentsUsageStatus(db:DbClient,env:CloudflareEnv,organizationId:string) {
+export async function paymentsBillingPricing(db:DbClient,env:CloudflareEnv,organizationId:string) {
  const account=await queryFirst<BillingAccount>(db,'SELECT * FROM payment_billing_accounts WHERE organization_id=?',[organizationId])
+ if(!account?.metronome_customer_id||!account.metronome_contract_id)return {account,contract:null,pricing:null}
+ const contract=await getPaymentsBillingContract(env,account)
+ const at=new Date().toISOString()
+ const pricing=Date.parse(String(contract.starting_at))<=Date.parse(at)&&(typeof contract.ending_before!=='string'||Date.parse(contract.ending_before)>Date.parse(at))
+  ?{...await validatePaymentsRateCard(env,at,{customer_id:account.metronome_customer_id,contract_id:account.metronome_contract_id}),livemode:stripeLivemodeFromKey(env.STRIPE_SECRET_KEY!)}:null
+ return {account,contract,pricing}
+}
+export async function paymentsUsageStatus(db:DbClient,env:CloudflareEnv,organizationId:string) {
+ const {account,contract:native,pricing}=await paymentsBillingPricing(db,env,organizationId)
  const pending=await queryAll(db,`SELECT currency,kind,COUNT(*) AS event_count,SUM(amount) AS amount,MAX(error) AS error FROM payment_usage_events WHERE organization_id=? AND delivery_at IS NULL GROUP BY currency,kind`,[organizationId])
- if(!account?.metronome_customer_id||!account.metronome_contract_id) return {configured:false,pending,invoices:[],credits:[],source:'Metronome configuration missing; durable accrued events retained'}
- const native=await getPaymentsBillingContract(env,account),stripe=getStripe(env)
+ if(!account?.metronome_customer_id||!account.metronome_contract_id||!native)return {configured:false,pending,pricing:null,invoices:[],credits:[],source:'Metronome configuration missing; durable accrued events retained'}
+ const stripe=getStripe(env)
  const invoices=await metronomeInvoices(env,account.metronome_customer_id,account.metronome_contract_id)
  const negative=await queryAll<{id:string;source_id:string;kind:string;currency:string;amount:number;provider_occurred_at:string;error:string|null}>(db,"SELECT id,source_id,kind,currency,amount,provider_occurred_at,error FROM payment_usage_events WHERE organization_id=? AND kind IN ('stripe_cost','stripe_cost_adjustment') AND amount<0 AND delivery_at IS NULL AND billing_timestamp IS NULL",[organizationId])
  const credits=negative.filter(event=>usageBillingDecision(event,invoices,undefined,account.contract_start_at).requiresCredit)
@@ -174,7 +183,7 @@ export async function paymentsUsageStatus(db:DbClient,env:CloudflareEnv,organiza
   collected.push({...invoice,collection_invoice})
  }
  const status=typeof native.ending_before==='string'?(Date.parse(native.ending_before)<=Date.now()?'closed':'closing'):['closed','closing'].includes(account.status)?'servicing':account.status
- return {configured:true,pending,account:{...account,status},invoices:collected,credits,source:'Metronome',refreshed_at:new Date().toISOString()}
+ return {configured:true,pending,pricing,account:{...account,status},invoices:collected,credits,source:'Metronome',refreshed_at:new Date().toISOString()}
 }
 export async function deliverPaymentsUsage(db:DbClient,env:CloudflareEnv,organizationId:string) {
  const events=await queryAll<{id:string;kind:string;currency:CurrencyCode;amount:number;source_id:string;provider_occurred_at:string;created_at:string;billing_timestamp:string|null}>(db,`SELECT * FROM payment_usage_events WHERE organization_id=? AND delivery_at IS NULL AND dead_letter_at IS NULL ORDER BY created_at LIMIT 100`,[organizationId])

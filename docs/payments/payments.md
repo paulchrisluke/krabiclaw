@@ -15,10 +15,9 @@ servicing relationships afterward.
 
 Required online collection is an explicit offering policy. Positive pay-later Prices
 remain bookable without Checkout. Valid zero Prices use the canonical free flow;
-missing Prices cannot authorize a charge. Current free/Growth runtime entitlements
-set Payments false; historical Basic/Starter catalog names do not grant it. The
-owner intends a separate higher-priced Payments plan; its name, price and feature
-split must be selected before activation. Existing transaction,
+missing Prices cannot authorize a charge. Commerce is $89/month and includes
+Growth's features and Payments. Free and Growth do not include Payments;
+historical Basic/Starter catalog names do not grant it. Existing transaction,
 refund, dispute, receipt and usage servicing is independent of new-sale entitlement.
 
 ## Native financial contract
@@ -87,7 +86,7 @@ relationships without retaining merchant credentials or recreating the tenant.
 
 ## Metronome operating billing
 
-KrabiClaw Payments: **1.337% of payment volume, plus Stripe fees.** Billed after
+KrabiClaw Payments: **1.4% of payment volume, plus Stripe fees.** Billed after
 use. KrabiClaw Payments fees aren't returned after a refund or dispute. The
 subscription is billed separately. Public pricing follows the Stripe and
 Metronome wording standard in `AGENTS.md`.
@@ -98,8 +97,11 @@ invoice_settings.default_payment_method; a subscription-only default is insuffic
 Provisioning verifies native rate-card units/rates, SUM pricing_amount filters,
 collection Customer, platform account and native contract uniqueness before use.
 
-Captured-volume events rate at 0.01337 per USD cent; attributable Stripe-cost events
-rate at 1 per cost cent. Refunds/disputes do not reverse captured-volume usage.
+Metronome owns the effective captured-volume rate. The selected commercial rate
+is 0.014 per USD cent (1.4%); attributable Stripe-cost events rate at 1 per cost
+cent. The 1.337% in October 1–2 sandbox evidence was an internal test rate;
+those dated historical proofs retain it and do not describe the approved price.
+Refunds/disputes do not reverse captured-volume usage.
 Integer minor units are explicit. Acceptance and billing use US/USD; incompatible
 currency usage remains visibly undelivered rather than being converted or billed.
 
@@ -154,13 +156,16 @@ Current free/Growth plans deliberately reject new payment acceptance.
 
 Rebased onto staging `454c1f6107b00733704f8aaaa24df9b29fb917b9`. The canonical
 local setup verified 83 tables, 77,010 copied rows, five applied migrations and
-no foreign-key errors. Quality, 236 unit tests, 101 D1 tests, four migration tests,
-migration lint, schema drift and generated MCP/submission parity pass. The full
-Chromium suite passed 97 tests with one existing opt-in native consultation
-test skipped. This covers the current policy and existing local journeys;
-enabled native Payments acceptance remains a separate qualification.
+no foreign-key errors. Current checks pass: final quality, 239 unit tests, 101 D1
+tests, four migration tests, migration lint, schema drift, generated
+MCP/submission parity and the production Worker build. The latest full Chromium
+run passed 97 tests and timed out in the font preset case's redundant network-idle
+wait. That existing case then passed separately in 15.2 seconds against the built
+Worker after retaining the canonical Nuxt hydration wait and removing network
+idle. All outcome assertions stayed intact; independent settings read-back
+confirmed the original tenant font and colour were restored.
 
-The opt-in native consultation journey then passed separately against the fresh
+The existing opt-in native consultation journey also passed separately against the fresh
 production Worker build, along with all four pricing presentation cases. Manual
 normal-sign-in review verified the current Payments panes, invalid UTC ranges,
 mobile navigation, fractional-quantity blocking and persisted buyer bookings.
@@ -170,6 +175,49 @@ The intended Stripe sandbox catalog was applied through its canonical reviewed
 plan and journal. Fresh native read-back shows no remaining catalog operations,
 and the pricing, billing and OAuth browser journeys pass with that configuration.
 The existing unrecognized sandbox product was preserved.
+
+Final targeted source review found no blocking defect in the shared native
+Payments pricing reader, Overview's use of that reader, Quick Tunnel host
+classification and its security callers, the validated subscription success
+return URL, or the font test's native hydration readiness. Overview reads current
+contract pricing without depending on billing invoices or credits. Better Auth
+owns subscription confirmation; the success URL preserves the requested plan,
+and Billing removes the return query before considering another upgrade.
+
+The new disposable site `commerce-payments-sandbox-october-4`, organization
+`K7nV9Zn1JYJK8gXLceb9haThizkvBRmX`, was created through the normal dashboard
+onboarding flow. Normal authenticated Commerce selection completed native Stripe
+subscription Checkout in test mode. Independent native and Better Auth read-back
+agree on Customer `cus_VNWeaZSkNWO7pu`, active monthly subscription
+`sub_1UMlivRBlJkGOR4xEMQRt82k`, and the exact organization reference. Its first
+subscription invoice `in_1UMlitRBlJkGOR4x4sdULvw8` is paid: $89 total and paid,
+zero outstanding. The canonical billing decision is Commerce with
+Payments enabled, for October 4–November 4. Proof was recorded at 09:32–09:34 UTC
+in `.tmp/payments-native-commerce-subscription-proof.json` and
+`.tmp/payments-commerce-better-auth-subscription-proof.json`.
+
+The operating card was then set through Stripe's hosted customer portal. Native
+read-back at 09:36 UTC confirms the same test Customer's
+`invoice_settings.default_payment_method` is a card attached to that exact
+Customer on platform `acct_1ULcs2RBlJkGOR4x`; the card and Customer are both in
+test mode. This is recorded in
+`.tmp/payments-native-commerce-customer-default-proof.json`.
+
+Payments billing was provisioned through the application. Independent persisted
+and native reads at 09:46 UTC confirm active mapping to Metronome Customer
+`e70a8fe1-914a-455f-86b4-413637a7224d` and contract
+`66a54a7c-fffe-4bf7-8b72-f8b9ebeea38d`. The exact tenant alias and contract
+uniqueness key match; the contract starts October 4 at 09:00 UTC, has no
+overrides, and its current effective rate is 1.4% of payment volume, plus Stripe
+fees. Automatic collection targets the same operating Stripe Customer and
+platform. The native USAGE invoice `d16029da-c5b5-5fc7-b237-dc60cc8bcec9` is
+`DRAFT`, total zero, for October 4–November 1, with no issued Stripe invoice.
+There are zero usage events. The saved proof is
+`.tmp/payments-native-commerce-operating-billing-proof.json`.
+
+New acceptance, guest payment capture, captured-volume delivery and Payments
+usage collection for this tenant remain unchecked pending the actual workflow.
+The paid Commerce subscription and active operating contract qualify setup only.
 
 ## Historical local verification — 2026-10-02
 
@@ -208,5 +256,5 @@ sandbox and review documents in this directory retain historical evidence.
 
 Dated screenshots and review notes are historical observations, not evidence for
 this PR's revised head. The current PR records checks against its final staging
-base. Commercial Payments entitlement activation, merge and deployment remain
-separate decisions.
+base. Commerce and its sandbox qualification are part of this change; merge and
+deployment remain separate decisions.

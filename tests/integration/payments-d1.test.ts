@@ -51,7 +51,7 @@ test('Stripe cost report replay and correction bill attributable deltas while co
   assert.equal(events.length,2);assert.equal(events.reduce((sum,row)=>sum+Number(row.amount),0),220)
   assert.equal(await db.prepare('SELECT COUNT(*) n FROM payment_cost_snapshots WHERE organization_id IS NULL').first('n'),2)
   assert.equal(await db.prepare("SELECT organization_id FROM payment_cost_snapshots WHERE incurred_by='acct_seller'").first('organization_id'),null)
-  assert.throws(()=>stripeFeeMinor('1.3370','USD'), /precision exceeds/u)
+  assert.throws(()=>stripeFeeMinor('1.2340','USD'), /precision exceeds/u)
  }finally{await runtime.dispose()}
 })
 

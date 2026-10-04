@@ -3,14 +3,16 @@ import { buildPostLoginUrl } from '~/shared/auth/return-target'
 import { createStripeClient } from '~/server/utils/stripe-client'
 import { getPlanEntitlements } from './billing-entitlements'
 import {
-  assertGrowthStripeCatalogPrices,
-  GROWTH_MONTHLY_AMOUNT_CENTS,
+  assertStripeCatalogPrices,
   selectStripeCatalogPrice,
 } from './stripe-catalog'
 import {
   isNewSalePlan,
   isKnownRecurringPlan,
-  NEW_SALE_PLAN_ID,
+  GROWTH_PLAN_ID,
+  COMMERCE_PLAN_ID,
+  NEW_SALE_PAID_PLAN_IDS,
+  PAID_PLAN_PRICES,
   STARTER_PLAN_ID,
 } from '~/shared/billing-model'
 
@@ -83,7 +85,8 @@ const STARTER_PLAN: Plan = {
 
 // CTA labels and hrefs are app config — not Stripe data.
 const PLAN_CTA: Record<string, { label: string; href: string }> = {
-  [NEW_SALE_PLAN_ID]: { label: 'Get Grow', href: `/signup?plan=${NEW_SALE_PLAN_ID}&redirect=${encodeURIComponent(buildPostLoginUrl({ plan: NEW_SALE_PLAN_ID }))}` },
+  [GROWTH_PLAN_ID]: { label: 'Get Grow', href: `/signup?plan=${GROWTH_PLAN_ID}&redirect=${encodeURIComponent(buildPostLoginUrl({ plan: GROWTH_PLAN_ID }))}` },
+  [COMMERCE_PLAN_ID]: { label: 'Get Commerce', href: `/signup?plan=${COMMERCE_PLAN_ID}&redirect=${encodeURIComponent(buildPostLoginUrl({ plan: COMMERCE_PLAN_ID }))}` },
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -93,7 +96,7 @@ function publicPlanLimits(planId: string): PlanLimits {
   return {
     customDomain: entitlements.custom_domains === true,
     googlePlaces: entitlements.google_places === true,
-    support: planId === NEW_SALE_PLAN_ID ? 'Priority' : 'Community',
+    support: 'Documentation and help form',
   }
 }
 
@@ -182,44 +185,40 @@ function parseCachedPlans(value: unknown): Plan[] {
     )
   }
 
-  const expectedIds: readonly string[] = [STARTER_PLAN_ID, NEW_SALE_PLAN_ID]
+  const expectedIds: readonly string[] = [STARTER_PLAN_ID, ...NEW_SALE_PAID_PLAN_IDS]
   if (ids.length !== expectedIds.length || ids.some((id) => !expectedIds.includes(id))) {
     throw new BillingPlansError(
       'BILLING_PLANS_CACHE_INVALID',
-      'Billing plans cache must contain exactly Starter and Growth',
+      'Billing plans cache must contain every current plan',
     )
   }
 
   const starter = value.find((plan) => plan.id === STARTER_PLAN_ID)
-  const growth = value.find((plan) => plan.id === NEW_SALE_PLAN_ID)
-  if (!starter || !growth || starter.prices.length !== 0) {
+  if (!starter || starter.prices.length !== 0) {
     throw new BillingPlansError(
       'BILLING_PLANS_CACHE_INVALID',
       'Billing plans cache contains an invalid Starter price set',
     )
   }
-  const monthlyPrices = growth.prices.filter((price) => price.interval === 'month')
-  const annualPrices = growth.prices.filter((price) => price.interval === 'year')
-  const monthly = monthlyPrices[0]
-  const annual = annualPrices[0]
-  if (
-    monthlyPrices.length !== 1
-    || annualPrices.length > 1
-    || growth.prices.length !== monthlyPrices.length + annualPrices.length
-    || monthly === undefined
-    || monthly.amount !== GROWTH_MONTHLY_AMOUNT_CENTS
-    || monthly.currency.toLowerCase() !== 'usd'
-    || (annual !== undefined && (annual.amount <= 0 || annual.currency.toLowerCase() !== 'usd'))
-  ) {
-    throw new BillingPlansError(
-      'BILLING_PLANS_CACHE_INVALID',
-      'Billing plans cache contains an invalid Growth price set',
-    )
-  }
+  const paid = NEW_SALE_PAID_PLAN_IDS.map(planId => {
+    const plan = value.find(plan => plan.id === planId)
+    const amounts = PAID_PLAN_PRICES[planId]
+    const monthlyPrices = plan?.prices.filter(price => price.interval === 'month') ?? []
+    const annualPrices = plan?.prices.filter(price => price.interval === 'year') ?? []
+    const monthly = monthlyPrices[0]
+    const annual = annualPrices[0]
+    if (!plan || monthlyPrices.length !== 1 || annualPrices.length > 1
+      || plan.prices.length !== monthlyPrices.length + annualPrices.length
+      || monthly?.amount !== amounts.monthly || monthly.currency.toLowerCase() !== 'usd'
+      || (annual && (amounts.annual === undefined || annual.amount !== amounts.annual || annual.currency.toLowerCase() !== 'usd'))) {
+      throw new BillingPlansError('BILLING_PLANS_CACHE_INVALID', `Billing plans cache contains an invalid ${planId} price set`)
+    }
+    return plan
+  })
 
   // Keep the public response order stable even if a valid cache was written
   // by an older worker that serialized plans in a different order.
-  return [starter, growth]
+  return [starter, ...paid]
 }
 
 // ── Stripe fetch ─────────────────────────────────────────────────────────────
@@ -305,7 +304,7 @@ export async function fetchStripeProducts(
     try {
       monthly = selectStripeCatalogPrice(product, priceLookup[product.id] ?? [], 'month')
       yearly = selectStripeCatalogPrice(product, priceLookup[product.id] ?? [], 'year')
-      assertGrowthStripeCatalogPrices(monthly, yearly)
+      assertStripeCatalogPrices(planId, monthly, yearly)
     } catch (error) {
       throw new BillingPlansError(
         'BILLING_PLANS_INVALID_CATALOG',
@@ -351,10 +350,10 @@ export async function fetchStripeProducts(
     return aPrice - bPrice
   })
 
-  if (plans.length !== 1 || plans[0]?.id !== NEW_SALE_PLAN_ID) {
+  if (plans.length !== NEW_SALE_PAID_PLAN_IDS.length || NEW_SALE_PAID_PLAN_IDS.some(id => !plans.some(plan => plan.id === id))) {
     throw new BillingPlansError(
       'BILLING_PLANS_INVALID_CATALOG',
-      'Stripe public catalog must contain exactly one active Growth product',
+      'Stripe public catalog must contain exactly one active product for every current paid plan',
     )
   }
 
