@@ -423,6 +423,7 @@ export function buildLlmsTxt(
     '',
     '## Optional',
     `- [Full LLM context](${absoluteUrl(origin, '/llms-full.txt')}): ${options.fullContextDescription || 'Aggregated export of published docs and blog posts.'}`,
+    ...(options.title ? [] : [`- [Pricing](${absoluteUrl(origin, '/pricing.md')}): Plain markdown specification of plans, features, and limits.`]),
     ...(options.includeDocsOptionalLinks === false || !includeDocsSection
       ? []
       : [`- [Docs index JSON](${absoluteUrl(origin, '/docs/index.json')}): Machine-readable manifest of published docs.`]),

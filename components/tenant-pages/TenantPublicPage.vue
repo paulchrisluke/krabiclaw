@@ -190,20 +190,49 @@ const schemaRecipe = computed<'home' | 'about' | 'contact' | 'pricing' | 'donate
   return (pathRecipes.get(page.value.path) || 'tenant-page') as 'home' | 'about' | 'contact' | 'pricing' | 'donate' | 'schedule' | 'tenant-page'
 })
 
+const pageFaqBlock = computed(() => page.value?.blocks.find(block => block.type === 'faq'))
+const pageFaqItems = computed<Array<{ question: string; answer: string }>>(() => {
+  if (!pageFaqBlock.value || !Array.isArray(pageFaqBlock.value.data.items)) return []
+  return pageFaqBlock.value.data.items
+    .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object' && !Array.isArray(item)))
+    .map(item => ({
+      question: typeof item.title === 'string' ? item.title.trim() : '',
+      answer: typeof item.description === 'string' ? item.description.trim() : '',
+    }))
+    .filter(item => item.question && item.answer)
+})
+
+const pageHowToBlock = computed(() => page.value?.blocks.find(block => block.type === 'how_to'))
+const pageHowToNode = computed<ApiRecord | null>(() => {
+  if (!pageHowToBlock.value || !Array.isArray(pageHowToBlock.value.data.steps) || !canonicalUrl.value) return null
+  const steps = pageHowToBlock.value.data.steps
+    .filter((step): step is Record<string, unknown> => Boolean(step && typeof step === 'object'))
+    .map(step => ({
+      name: typeof step.name === 'string' ? step.name.trim() : '',
+      text: typeof step.text === 'string' ? step.text.trim() : '',
+    }))
+    .filter(step => step.name || step.text)
+  if (!steps.length) return null
+  return {
+    '@type': 'HowTo',
+    '@id': `${canonicalUrl.value}#howto`,
+    name: blockTextOrNull(pageHowToBlock.value.data.title) || page.value?.title || '',
+    step: steps.map((step, index) => ({
+      '@type': 'HowToStep',
+      position: index + 1,
+      name: step.name || undefined,
+      text: step.text || undefined,
+    })),
+  }
+})
+
 useProfessionalServiceSchema(() => {
   if (!page.value || !isBlawby.value || !schemaContext) return null
-  const faqBlock = page.value.blocks.find(block => block.type === 'faq')
   // The services this page lists are pages, and the page renders them from its
   // page_grid. Reading a product_grid here described a block these pages do not
   // carry, so the schema listed no services at all.
   const servicesBlock = page.value.blocks.find(block => block.type === 'page_grid')
   const donationBlock = page.value.blocks.find(block => block.type === 'donation_choices')
-  const faqItems = Array.isArray(faqBlock?.data.items)
-    ? faqBlock.data.items.filter(item => item && typeof item === 'object' && !Array.isArray(item)).map(item => {
-        const record = item as Record<string, unknown>
-        return { question: typeof record.title === 'string' ? record.title : null, answer: typeof record.description === 'string' ? record.description : null }
-      })
-    : []
   const serviceItems = Array.isArray(servicesBlock?.data.items)
     ? servicesBlock.data.items.filter(item => item && typeof item === 'object' && !Array.isArray(item)).map(item => {
         const record = item as Record<string, unknown>
@@ -221,11 +250,12 @@ useProfessionalServiceSchema(() => {
     pageUrl: page.value.path,
     pageTitle: page.value.title,
     pageDescription: page.value.summary,
-    faqs: faqItems,
+    faqs: pageFaqItems.value,
     items: serviceItems,
     donationUrl,
   }
 })
+
 const { canonicalUrl } = useSocialMetadata(() => page.value && ({
   path: page.value.path,
   // Krabiclaw's own brand name is the platform name: its layout's title
@@ -235,6 +265,14 @@ const { canonicalUrl } = useSocialMetadata(() => page.value && ({
   description: page.value.summary || '',
   ...(isPlatform ? {} : { brand: { organizationName: organization?.name || '' } }),
   socialImage: page.value.social_image,
+  faqItems: pageFaqItems.value.length ? pageFaqItems.value : undefined,
+  schemaNodes: pageHowToNode.value ? [pageHowToNode.value] : undefined,
+  schemaPageType: isPlatform && page.value.path === '/' ? 'SoftwareApplication' : undefined,
+  softwareApplication: isPlatform && page.value.path === '/' ? {
+    applicationCategory: 'BusinessApplication',
+    operatingSystem: 'All (Web / Cloud-based)',
+  } : undefined,
+  schema: !isBlawby.value,
 }))
 
 useVideoSchema(() => page.value?.blocks, canonicalUrl)

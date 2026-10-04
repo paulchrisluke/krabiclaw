@@ -437,6 +437,12 @@ function offerFor(product: Product, collectionLocationId: string | null = null) 
   return price ? { '@type': 'Offer', price: minorAmountToMajor(price.unit_amount, price.currency), priceCurrency: price.currency } : undefined
 }
 
+const DIETARY_SCHEMA_MAP: Record<string, string> = {
+  V: 'https://schema.org/VegetarianDiet',
+  VG: 'https://schema.org/VeganDiet',
+  GF: 'https://schema.org/GlutenFreeDiet',
+}
+
 useSchemaOrg(computed(() => props.presentation.structuredDataType === 'MenuItem'
   ? {
       '@type': 'Menu',
@@ -444,15 +450,19 @@ useSchemaOrg(computed(() => props.presentation.structuredDataType === 'MenuItem'
       hasMenuSection: groups.value.map(group => ({
         '@type': 'MenuSection',
         name: group.category,
-        hasMenuItem: group.products.map(product => ({
-          '@type': 'MenuItem',
-          name: product.name,
-          description: product.description,
-          // The same branch the card is priced for: a menu section belongs to
-          // one location, and structured data that disagreed with the visible
-          // price would be the page contradicting itself.
-          offers: offerFor(product, group.location_id),
-        })),
+        hasMenuItem: group.products.map(product => {
+          const dietUrls = dietaryTags(product).map(tag => DIETARY_SCHEMA_MAP[tag]).filter(Boolean)
+          return {
+            '@type': 'MenuItem',
+            name: product.name,
+            description: product.description,
+            ...(dietUrls.length ? { suitableForDiet: dietUrls } : {}),
+            // The same branch the card is priced for: a menu section belongs to
+            // one location, and structured data that disagreed with the visible
+            // price would be the page contradicting itself.
+            offers: offerFor(product, group.location_id),
+          }
+        }),
       })),
     }
   : {

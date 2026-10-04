@@ -166,7 +166,15 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
     if (!normalized.value) return null
     const { value, origin, template, tags } = normalized.value
     const isArticleCollection = value.schemaPageType === 'CollectionPage' && value.schemaNodes?.some(node => node['@type'] === 'ItemList')
-    if ((template !== 'platform' && !isArticleCollection) || value.schema === false) return null
+    const shouldEmitSchema = value.schema !== false && (
+      template === 'platform'
+      || isArticleCollection
+      || value.schema === true
+      || Boolean(value.faqItems?.length)
+      || Boolean(value.schemaNodes?.length)
+      || Boolean(value.softwareApplication)
+    )
+    if (!shouldEmitSchema) return null
     const organizationRoot = resolveSeoUrl('/', origin).replace(/\/$/, '')
     const websiteId = `${organizationRoot}/#website`
     const organizationId = `${organizationRoot}/#organization`
@@ -175,7 +183,7 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
     const breadcrumbId = `${url}#breadcrumb`
     const graph: ApiRecord[] = []
     const publisherName = template === 'platform' ? PLATFORM_NAME : tenant.organization?.name?.trim()
-    if (!publisherName) throw new Error('Collection schema requires the site publisher name')
+    if (!publisherName) throw new Error('Structured schema requires the organization or platform name')
     const publisherDescription = template === 'platform' ? PLATFORM_DESCRIPTION : tenant.organization?.brand_description || undefined
     const publisherLogo = template === 'platform' ? `${organizationRoot}/krabi-claw-logo.png` : tenant.organization?.media?.find(item => item.slot === 'logo')?.public_url
 

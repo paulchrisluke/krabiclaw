@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { renderContentBlocksForLlm } from '../../server/utils/platform-llm.ts'
+import { buildLlmsTxt, renderContentBlocksForLlm } from '../../server/utils/platform-llm.ts'
 
 test('LLM video rendering uses a plain watch URL without a name and keeps descriptions', () => {
   const url = 'https://youtu.be/abc123DEF45'
@@ -12,3 +12,9 @@ test('LLM video rendering uses a plain watch URL without a name and keeps descri
 
   assert.equal(renderContentBlocksForLlm(blocks), `${watchUrl}\n\nFirst description\n\n[Walkthrough](${watchUrl})\n\nSecond description`)
 })
+
+test('buildLlmsTxt includes pricing.md link on platform site', () => {
+  const result = buildLlmsTxt('https://krabiclaw.com', [], [])
+  assert.ok(result.includes('- [Pricing](https://krabiclaw.com/pricing.md): Plain markdown specification of plans, features, and limits.'))
+})
+
