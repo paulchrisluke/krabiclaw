@@ -59,7 +59,7 @@ export async function getPaymentsBillingContract(env:CloudflareEnv,account:Billi
  }
  const collection=native.customer_billing_provider_configuration as Record<string,unknown>|undefined,configuration=collection?.configuration as Record<string,unknown>|undefined,delivery=collection?.delivery_method_configuration as Record<string,unknown>|undefined
  const platform=await getStripe(env).accounts.retrieveCurrent()
- if(!collection||collection.archived_at||collection.customer_id!==account.metronome_customer_id||collection.billing_provider!=='stripe'||collection.delivery_method!=='direct_to_billing_provider'||configuration?.stripe_customer_id!==account.stripe_billing_customer_id||configuration.stripe_collection_method!=='charge_automatically'||delivery?.stripe_account_id!==platform.id||delivery.leave_invoices_in_draft!==false)throw new Error('Native Payments collection requires automatic invoices for its operating Stripe customer and platform')
+ if(!collection||collection.archived_at||collection.customer_id!==account.metronome_customer_id||collection.billing_provider!=='stripe'||collection.delivery_method!=='direct_to_billing_provider'||configuration?.stripe_customer_id!==account.stripe_billing_customer_id||configuration.stripe_collection_method!=='charge_automatically'||delivery?.stripe_account_id!==platform.id)throw new Error('Native Payments collection requires automatic invoices for its operating Stripe customer and platform')
  return native
 }
 function providerId(result:Record<string,unknown>):string {

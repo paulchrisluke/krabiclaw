@@ -16,8 +16,9 @@ servicing relationships afterward.
 Required online collection is an explicit offering policy. Positive pay-later Prices
 remain bookable without Checkout. Valid zero Prices use the canonical free flow;
 missing Prices cannot authorize a charge. Current free/Growth runtime entitlements
-set Payments false; historical Basic/Starter catalog names do not grant it. A future
-paid tier name/price remains a separate commercial decision. Existing transaction,
+set Payments false; historical Basic/Starter catalog names do not grant it. The
+owner intends a separate higher-priced Payments plan; its name, price and feature
+split must be selected before activation. Existing transaction,
 refund, dispute, receipt and usage servicing is independent of new-sale entitlement.
 
 ## Native financial contract
@@ -131,14 +132,39 @@ invoice `7a30b370-ea2e-5fd7-b432-77f925eeb7ee` collected through Stripe invoice
 `in_1UMNvzRBlJkGOR4xdrITU49a`: test mode, USD 751 cents total and paid, no balance
 credit. This differs from the scheduled synthetic invoice and earlier credit
 exercise. Existing native partial capture, refund and dispute objects also remain
-readable. These observations verify historical provider outcomes; they do not
-qualify the revised application head.
+readable. The current canonical contract, rate-card and invoice readers passed
+against these native objects. The intended Stripe integration's native "Leave
+invoices as drafts" setting is off; that global setting is managed in Metronome
+and is not returned by the contract API. These reads verify historical provider
+outcomes and the current reader boundary; they do not qualify new acceptance or
+create an application billing mapping.
 
 Actual fee itemization requires live Stripe data and is unavailable in test mode.
 Reconciliation reports that limitation explicitly. Current enabled acceptance,
 hosted capture and provider delivery must be qualified through the application
 with the intended sandbox configuration and an authorized commercial entitlement.
 Current free/Growth plans deliberately reject new payment acceptance.
+
+## Current local qualification — 2026-10-04
+
+Rebased onto staging `454c1f6107b00733704f8aaaa24df9b29fb917b9`. The canonical
+local setup verified 83 tables, 77,010 copied rows, five applied migrations and
+no foreign-key errors. Quality, 236 unit tests, 101 D1 tests, four migration tests,
+migration lint, schema drift and generated MCP/submission parity pass. The full
+Chromium suite passed 97 tests with one existing opt-in native consultation
+test skipped. This covers the current policy and existing local journeys;
+enabled native Payments acceptance remains a separate qualification.
+
+The opt-in native consultation journey then passed separately against the fresh
+production Worker build, along with all four pricing presentation cases. Manual
+normal-sign-in review verified the current Payments panes, invalid UTC ranges,
+mobile navigation, fractional-quantity blocking and persisted buyer bookings.
+Empty financial history cannot qualify older-page pagination or native collection.
+
+The intended Stripe sandbox catalog was applied through its canonical reviewed
+plan and journal. Fresh native read-back shows no remaining catalog operations,
+and the pricing, billing and OAuth browser journeys pass with that configuration.
+The existing unrecognized sandbox product was preserved.
 
 ## Historical local verification — 2026-10-02
 
