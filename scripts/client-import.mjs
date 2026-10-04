@@ -438,6 +438,11 @@ function generateSeedSql(places, mediaManifest) {
 
   const brandName = BRAND_NAME;
 
+  const unresolved = places.filter((place) => place.error);
+  if (unresolved.length) {
+    throw new Error(`Cannot generate a seed with unresolved places: ${unresolved.map((place) => place.error).join("; ")}`);
+  }
+
   const locationInserts = places
     .map((place, idx) => {
       const locId = `loc-${SLUG}-${idx}`;
