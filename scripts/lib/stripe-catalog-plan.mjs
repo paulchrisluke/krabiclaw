@@ -43,20 +43,20 @@ const CANONICAL_PRODUCT_METADATA_KEYS = Object.freeze([
 export const PLAN_DEFINITIONS = Object.freeze([
   {
     name: 'Growth',
-    description: 'Your site, your domain — go live in minutes and edit everything through ChatGPT.',
+    description: 'Your website, your domain — manage supported content through your dashboard and ChatGPT.',
     planId: 'growth',
     amountCents: PAID_PLAN_PRICES.growth.monthly,
     highlighted: true,
     badge: 'Most Popular',
     imagePath: 'scripts/assets/stripe/growth.jpg',
     features: [
-      'Restaurant, experience, or legal / professional site live in minutes',
+      'Business websites for restaurants, experiences and professional services',
       'Your own domain (yourbusiness.com)',
-      'Edit menus, practice areas, content & photos through ChatGPT',
-      'Bookings, ticketed experiences & consultation requests',
-      'Messaging booking & reservation notifications',
-      'Facebook & Instagram publishing',
-      'Google Places imports',
+      'Update supported content, menus and photos through ChatGPT',
+      'Bookings, consultation requests and ticketed experiences',
+      'WhatsApp booking and reservation notifications — setup required',
+      'Publish to connected Facebook and Instagram channels',
+      'Google Places re-imports and weekly Google review refresh',
     ],
   },
   {

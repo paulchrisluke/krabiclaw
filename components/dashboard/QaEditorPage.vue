@@ -57,6 +57,7 @@ import { isQaResponse, isQaCreated, isQaUpdated, qaCreateBlockers, type QaRow } 
 const props = defineProps<{ locationId?: string }>()
 
 const route = useRoute()
+const router = useRouter()
 const dashboardApi = useDashboardApi()
 
 const qaId = computed(() => String(route.params.qaId ?? ''))
@@ -64,6 +65,7 @@ const qaPath = computed(() => props.locationId
   ? `/dashboard/${String(route.params.orgSlug)}/locations/${String(route.params.locationSlug)}/qa`
   : `/dashboard/${String(route.params.orgSlug)}/qa`)
 const recordPath = computed(() => `${qaPath.value}/${qaId.value}`)
+const sectionUrl = (section: SectionKey) => router.resolve({ path: `${recordPath.value}/${section}`, query: route.query }).fullPath
 const level = useRouteLevel()
 
 const organizationId = await useDashboardOrganizationId()
@@ -127,9 +129,9 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => [
   {
     id: 'question',
     items: [
-      { id: 'question', label: 'Question', summary: form.question.trim() || 'Not written yet', icon: 'i-lucide-circle-help', to: `${recordPath.value}/question` },
-      { id: 'answer', label: 'Answer', summary: form.answer.trim() || 'No answer yet', icon: 'i-lucide-message-square', to: `${recordPath.value}/answer` },
-      { id: 'visibility', label: 'Visibility', summary: form.published ? 'Published' : 'Hidden', icon: 'i-lucide-eye', to: `${recordPath.value}/visibility` },
+      { id: 'question', label: 'Question', summary: form.question.trim() || 'Not written yet', icon: 'i-lucide-circle-help', to: sectionUrl('question') },
+      { id: 'answer', label: 'Answer', summary: form.answer.trim() || 'No answer yet', icon: 'i-lucide-message-square', to: sectionUrl('answer') },
+      { id: 'visibility', label: 'Visibility', summary: form.published ? 'Published' : 'Hidden', icon: 'i-lucide-eye', to: sectionUrl('visibility') },
     ],
   },
 ])
@@ -157,12 +159,16 @@ async function commit() {
   saving.value = true
   errorMessage.value = ''
   try {
+    const pagePath = route.query.page_path
+    if (!props.locationId && isNew.value && pagePath !== undefined && (typeof pagePath !== 'string' || !pagePath.trim() || !pagePath.startsWith('/') || pagePath.startsWith('//'))) {
+      throw new Error('Choose one page for this question before creating it.')
+    }
     const body = {
       // A site question is filed under the page the list was showing, and an
       // existing one keeps the page it already carries.
       ...(props.locationId
         ? {}
-        : { page_path: isNew.value ? (typeof route.query.page_path === 'string' ? route.query.page_path : null) : record.value?.page_path ?? null }),
+        : { page_path: isNew.value ? pagePath ?? null : record.value?.page_path ?? null }),
       question: form.question.trim(),
       answer: form.answer.trim() || null,
       status: form.published ? 'published' : 'hidden',
@@ -172,7 +178,7 @@ async function commit() {
       Object.assign(form, emptyDraft())
       // The record it became, not the `new` form it was, so Back from a saved
       // question goes to the list and never to an empty Add screen.
-      await navigateTo(`${qaPath.value}/${created.id}`, { replace: true })
+      await navigateTo({ path: `${qaPath.value}/${created.id}`, query: route.query }, { replace: true })
       return
     }
     await dashboardApi(`${qaEndpoint.value}/${qaId.value}`, { method: 'PATCH', body, validate: isQaUpdated })

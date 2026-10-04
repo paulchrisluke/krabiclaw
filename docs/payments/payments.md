@@ -328,18 +328,50 @@ publication and subscription state were preserved. Evidence is
 invariants. The missing-plan UI branch fails visibly rather than inventing a
 plan.
 
+The normal new-question flow previously dropped its selected page during
+Question/Answer navigation. Q&A now uses the supplied route query as the single
+page selection source and carries it through creation, the saved-record redirect
+and Back. Invalid supplied scope produces a visible 400 error. Actual CMS
+creation published `Which plan includes online payments?` and `Can I take
+bookings without online payment?` under `/pricing`. Create and Back retain the
+Pricing selection; independent D1, rendered answers and FAQPage JSON-LD
+read-back agree, and all 55 existing root Q&A records are unchanged. The new
+answers refer to Commerce and the plans above rather than duplicating prices.
+Evidence is `.tmp/payments-cms-qa-scope-final-proof.json` and the final
+created/Back/public screenshots. An existing browser test now checks normal
+scoped creation, exact HTTP/MCP reads, public rendering and return to the
+selected list.
+
 CMS content edits are data changes, separate from schema and code deployment.
 The two published pricing FAQ answers were corrected in the local test database
 through **Reviews and Q&A → Pricing → Answer → Save**. They have not been copied
-to staging or production. For each target, read its actual published questions,
-edit those exact answers through the same CMS path, preserve publication, and
-verify rendered answers and FAQPage JSON-LD. Public plan prices and the Payments
-fee phrase remain in their canonical pricing sources rather than duplicated CMS
-fields. Existing customer product prices and publication are preserved.
+to staging or production. For each target, select **Reviews and Q&A → Q&A →
+Pricing** and read both published and hidden questions before editing. Update the exact existing
+question when present. If the reviewed question is absent, use **Add a question**,
+complete **Question** and **Answer**, then set **Visibility → Published** and
+choose **Create question**. The target creates its own record ID; never copy
+local IDs or substitute an unrelated question. Publish the reviewed FAQ through
+**Visibility** while preserving other questions' publication. Verify the saved
+`/pricing` scope, rendered answers and FAQPage JSON-LD. Public plan prices and
+the Payments fee phrase remain in their canonical pricing sources rather than
+duplicated CMS fields. Existing customer product prices and publication are
+preserved.
 
-Staging's deployed `/api/billing/plans` read on October 4 publishes Basic and
-Growth only. Before deploying this three-plan reader, verify staging's own
-configured Stripe catalog using the reviewed plan/apply/read-back workflow in
+The canonical Growth catalog description and feature wording now match the
+current staging copy. The reviewed Sandbox catalog plan applied one Product
+metadata update, without changing Prices or subscriptions. Native read-back has
+zero remaining operations; after the new application build, public plan and
+Markdown reads show that wording and Commerce at $89/month with `1.4% of payment
+volume, plus Stripe fees.` Evidence is
+`.tmp/payments-catalog-copy-public-read.json` and the catalog plan/apply/read-back
+journals.
+
+Staging's deployed `/api/billing/plans` and actual public `/pricing` page reads
+on October 4 show two plans only. Its six published FAQs do not include the
+two local price/fee question titles; this public read does not establish whether
+hidden target records exist. Inspect the target CMS before creating anything.
+Before deploying this three-plan reader, verify staging's own configured Stripe
+catalog using the reviewed plan/apply/read-back workflow in
 [stripe-catalog.md](../operations/stripe-catalog.md). The isolated E2E Sandbox
 catalog does not qualify staging's account. Then use the canonical schema and
 release workflow, apply the target's exact CMS copy edits, and verify public

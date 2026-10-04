@@ -43,8 +43,22 @@ const props = defineProps<{ locationId?: string }>()
 
 const dashboardApi = useDashboardApi()
 const level = useRouteLevel()
+const route = useRoute()
+const router = useRouter()
 const organizationId = await useDashboardOrganizationId()
-const selectedPagePath = ref('general')
+const selectedPagePath = computed({
+  get() {
+    if (props.locationId || route.query.page_path === undefined) return 'general'
+    const pagePath = route.query.page_path
+    if (typeof pagePath !== 'string' || !pagePath.trim() || !pagePath.startsWith('/') || pagePath.startsWith('//')) {
+      throw createError({ statusCode: 400, statusMessage: 'Choose one page for these questions.', fatal: true })
+    }
+    return pagePath
+  },
+  set(value: string) {
+    void router.replace({ query: { ...route.query, page_path: value === 'general' ? undefined : value } })
+  },
+})
 
 const qaEndpoint = computed(() => props.locationId
   ? `/api/editor/organizations/${organizationId}/locations/${props.locationId}/qa`
@@ -128,7 +142,7 @@ const listItems = computed(() => qaRows.value.map(row => ({
   id: row.id,
   title: row.question,
   removable: row.source !== 'import',
-  to: `${level.path.value}/${row.id}`,
+  to: router.resolve({ path: `${level.path.value}/${row.id}`, query: route.query }).fullPath,
   row,
 })))
 
