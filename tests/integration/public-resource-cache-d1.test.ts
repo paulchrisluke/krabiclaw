@@ -4,7 +4,10 @@ import test, { type TestContext } from 'node:test'
 import { Miniflare } from 'miniflare'
 
 import { drainPublicResourceCacheInvalidations, purgePublicResourceCacheNow, type OrganizationChangeDrainEnv } from '../../server/utils/public-resource-cache.ts'
-import { buildOrganizationDocuments, expandDocumentsForSurfaces, indexItemPayload, syncOrganizationSearchIndex } from '../../server/utils/public-search.ts'
+import { buildOrganizationDocuments, expandDocumentsForSurfaces, indexItemPayload, organizationKeySegment, syncOrganizationSearchIndex } from '../../server/utils/public-search.ts'
+import { createContentDocumentWithBlocks } from '../../server/utils/content/documents.ts'
+import { articleCategoryMembershipQuery, createArticleCategory } from '../../server/utils/content/article-categories.ts'
+import { updateBlogLifecycle } from '../../server/utils/content/publishing.ts'
 import type { CloudflareEnv } from '../../server/utils/auth.ts'
 
 const searchEnv: OrganizationChangeDrainEnv = {
@@ -109,6 +112,52 @@ test('a scoped sync returns current pending work after its queued item finishes 
   })
   assert.equal(lists, 3)
   assert.equal(uploads, 0)
+})
+
+test('publishing a platform guide indexes its public pages and preserves another business’s items', async (t) => {
+  const { db, kv } = await migratedCacheD1(t)
+  await db.prepare("INSERT INTO user (id, name, email) VALUES ('author', 'Author', 'author@example.test')").run()
+  await db.prepare("INSERT INTO organization_locales (id, organization_id, locale, is_source, status) VALUES ('platform-en', 'platform', 'en', 1, 'published')").run()
+  const category = await createArticleCategory(db, { organizationId: 'platform', collection: 'docs', name: 'Calendar and bookings', actorId: 'author' })
+  const { document } = await createContentDocumentWithBlocks(db, {
+    id: 'calendar-guide', organizationId: 'platform', kind: 'article', rowRole: 'root', locale: 'en',
+    title: 'Connect Google Calendar', slug: 'connect-google-calendar', status: 'draft', visibility: 'listed', metadata: { collection: 'docs' },
+  }, [{ id: 'calendar-body', type: 'markdown', data: { markdown: 'See your bookings in Google Calendar.', editor_mode: 'rich' } }], {
+    additionalQueriesAfter: [await articleCategoryMembershipQuery(db, { organizationId: 'platform', collection: 'docs', articleId: 'calendar-guide', categoryId: category.id })],
+  })
+  await updateBlogLifecycle(db, document.id, { expected_updated_at: document.updated_at }, 'platform')
+  const otherKey = `dashboard/${organizationKeySegment('org')}/route/other.md`
+  const items = new Map<string, { id: string; key: string; status: string; metadata: Record<string, string>; content?: string }>([
+    [otherKey, { id: 'other', key: otherKey, status: 'completed', metadata: {} }],
+  ])
+  const env: OrganizationChangeDrainEnv = {
+    ...searchEnv,
+    AI_SEARCH: { get: () => ({
+      update: async () => ({}),
+      stats: async () => ({ queued: 0, running: 0, outdated: 0 }),
+      items: {
+        list: async ({ page, per_page, search }: { page: number; per_page: number; search?: string }) => {
+          const selected = [...items.values()].filter(item => !search || item.key.includes(search))
+          return { result: selected.slice((page - 1) * per_page, page * per_page), result_info: { per_page, total_count: selected.length } }
+        },
+        upload: async (key: string, content: string, options: { metadata: Record<string, string> }) => {
+          items.set(key, { id: key, key, status: 'completed', metadata: options.metadata, content })
+        },
+        delete: async (id: string) => {
+          const item = [...items.values()].find(item => item.id === id)
+          if (item) items.delete(item.key)
+        },
+      },
+    }) } as unknown as NonNullable<OrganizationChangeDrainEnv['AI_SEARCH']>,
+  }
+  await drainPublicResourceCacheInvalidations(db, kv, env, { organizationId: 'platform' })
+  const guide = [...items.values()].filter(item => item.metadata.record_id === 'doc:calendar-guide')
+  assert.deepEqual(guide.map(item => item.metadata.surface).sort(), ['blog', 'chowbot', 'dashboard', 'docs', 'help', 'public'])
+  for (const item of guide) {
+    assert.equal(JSON.parse(item.metadata.display!).path, '/docs/connect-google-calendar')
+    assert.match(item.content!, /See your bookings in Google Calendar/)
+  }
+  assert.equal(items.get(otherKey)?.id, 'other')
 })
 
 test('cache invalidation drain enforces the durable work lifecycle', async (t) => {
