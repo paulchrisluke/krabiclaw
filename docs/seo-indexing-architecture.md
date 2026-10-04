@@ -93,7 +93,7 @@ Operators retry failed projections through the tenant or platform regeneration a
 
 ## Route behavior
 
-Tenant-only routes return an intentional 404 on the platform host through `server/middleware/zz-seo-route-boundaries.ts`. They must never render generic `Our Site`, loading, or empty-state content on `krabiclaw.com`.
+Tenant-only routes return an intentional 404 on the platform host through `server/middleware/tenant-routing.ts`. They must never render generic `Our Site`, loading, or empty-state content on `krabiclaw.com`.
 
 `/billing` is a legacy duplicate and permanently redirects to `/pricing`. It is intentionally crawlable so search engines can process the redirect, but it is never emitted in a sitemap.
 

@@ -1,5 +1,3 @@
-import { sha256 } from '@noble/hashes/sha2.js'
-import { bytesToHex } from '@noble/hashes/utils.js'
 
 import { robotsDirective, type RobotsVisibility } from '~/shared/robots-directive'
 import { mediaStillUrl, resolveOwnerPicture, type MediaPlacementOwnerType } from '~/shared/media-placement-contract'
@@ -256,9 +254,6 @@ export function composeSocialMetadata(
   }
 }
 
-export function hashSocialCardGenerationInput(value: string): string {
-  return bytesToHex(sha256(new TextEncoder().encode(value)))
-}
 
 export interface SocialCardRenderPayload {
   template: SocialTemplate

@@ -66,10 +66,6 @@ export const TENANT_ONLY_ROUTE_PREFIXES = [
   '/reviews/',
 ] as const
 
-export const TECHNICAL_ASSET_ROUTE_PREFIXES = [
-  '/_next',
-] as const
-
 export interface RuntimeSeoConfig {
   url: string
   indexable: boolean
@@ -84,10 +80,6 @@ export function isPrivateSeoPath(pathname: string): boolean {
 export function isTenantOnlySeoPath(pathname: string): boolean {
   return TENANT_ONLY_EXACT_ROUTES.has(pathname)
     || TENANT_ONLY_ROUTE_PREFIXES.some(prefix => pathname.startsWith(prefix))
-}
-
-export function isTechnicalAssetSeoPath(pathname: string): boolean {
-  return TECHNICAL_ASSET_ROUTE_PREFIXES.some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`))
 }
 
 export function isNonIndexableHost(hostname: string): boolean {
