@@ -301,7 +301,6 @@ export default defineNuxtConfig({
           '/tenant-404',
           '/tenant-setup-incomplete',
           '/tenant-setup-pending',
-          '/_next',
         ],
       },
     ],

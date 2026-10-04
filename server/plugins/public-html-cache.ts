@@ -1,6 +1,6 @@
 import type { HTTPEvent } from 'nitro/h3'
 import { definePlugin } from 'nitro'
-import { isNonIndexableHost, isPrivateSeoPath, isTechnicalAssetSeoPath } from '~/server/utils/seo-policy'
+import { isNonIndexableHost, isPrivateSeoPath } from '~/server/utils/seo-policy'
 import { hostnameOf, isNonProductionHost } from '~/server/utils/tenant-hosts'
 import { PREVIEW_COOKIE_NAME, PREVIEW_TOKEN_QUERY } from '~/server/utils/preview-token'
 import { isDemoHost, isDemoOrg } from '~/shared/demo'
@@ -23,7 +23,7 @@ export default definePlugin((nitroApp) => {
     const requestHost = hostnameOf(request.headers.get('host') || '')
     const organizationId = (event as { context?: { organizationId?: string } }).context?.organizationId
     const isDemo = isDemoHost(url.hostname) || isDemoHost(requestHost) || isDemoOrg(organizationId)
-    if (isNonIndexableHost(url.hostname) || isNonIndexableHost(requestHost) || isDemo || privatePath || isTechnicalAssetSeoPath(pathname)) {
+    if (isNonIndexableHost(url.hostname) || isNonIndexableHost(requestHost) || isDemo || privatePath) {
       response.headers.set('x-robots-tag', 'noindex, nofollow, noarchive')
     }
     if (privatePath) response.headers.set('cache-control', NON_PRODUCTION_CACHE_CONTROL)

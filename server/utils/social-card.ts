@@ -9,8 +9,9 @@ import { uploadResolvedMediaToAssetStore, type UploadResolvedMediaInput } from '
 import { cloudflareImagesConfigured } from '~/server/utils/cloudflare-images'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 import { renderOgImagePng } from '~/server/utils/og-image/render'
+import { sha256 } from '@noble/hashes/sha2.js'
+import { bytesToHex } from '@noble/hashes/utils.js'
 import {
-  hashSocialCardGenerationInput,
   OG_IMAGE_HEIGHT,
   OG_IMAGE_WIDTH,
   truncateForSeo,
@@ -20,6 +21,10 @@ import {
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { mediaStillUrl, resolveOwnerPicture, type MediaPlacementOwnerType } from '~/shared/media-placement-contract'
 import { platformHomeSocialCardCopy } from '~/server/utils/platform-home-social-card'
+
+export function hashSocialCardGenerationInput(value: string): string {
+  return bytesToHex(sha256(new TextEncoder().encode(value)))
+}
 
 const SOCIAL_CARD_OWNERS = {
   organization: { table: 'organization', tenant: 'o.id', filter: "o.status = 'active'" },

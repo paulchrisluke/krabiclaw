@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { isNonIndexableHost, resolveRuntimeSeoConfig } from '../../server/utils/seo-policy.ts'
+import { isNonIndexableHost, isPrivateSeoPath, isTenantOnlySeoPath, resolveRuntimeSeoConfig } from '../../server/utils/seo-policy.ts'
 import { DEMO_HOSTS, DEMO_ORG_ID, isDemoHost, isDemoOrg } from '../../shared/demo.ts'
 import { TENANT_TYPES } from '../../utils/tenant-routing.ts'
 
@@ -77,4 +77,29 @@ test('resolveRuntimeSeoConfig produces non-indexable configuration for demo host
   })
   assert.equal(platformResult.indexable, true)
   assert.equal(platformResult.name, 'Krabiclaw')
+})
+
+test('isTenantOnlySeoPath correctly isolates tenant-specific paths from platform', () => {
+  assert.equal(isTenantOnlySeoPath('/reservations'), true)
+  assert.equal(isTenantOnlySeoPath('/reservations/123'), true)
+  assert.equal(isTenantOnlySeoPath('/menu'), true)
+  assert.equal(isTenantOnlySeoPath('/contact'), true)
+  assert.equal(isTenantOnlySeoPath('/bookings/abc'), true)
+  assert.equal(isTenantOnlySeoPath('/locations/branch-1'), true)
+
+  assert.equal(isTenantOnlySeoPath('/'), false)
+  assert.equal(isTenantOnlySeoPath('/blog'), false)
+  assert.equal(isTenantOnlySeoPath('/docs'), false)
+  assert.equal(isTenantOnlySeoPath('/pricing'), false)
+})
+
+test('isPrivateSeoPath accurately identifies non-indexable application and admin routes', () => {
+  assert.equal(isPrivateSeoPath('/api/health'), true)
+  assert.equal(isPrivateSeoPath('/dashboard'), true)
+  assert.equal(isPrivateSeoPath('/auth/login'), true)
+  assert.equal(isPrivateSeoPath('/tenant-setup-pending'), true)
+
+  assert.equal(isPrivateSeoPath('/'), false)
+  assert.equal(isPrivateSeoPath('/blog'), false)
+  assert.equal(isPrivateSeoPath('/docs/guide'), false)
 })
