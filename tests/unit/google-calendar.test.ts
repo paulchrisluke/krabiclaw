@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { calendarEvent, listWritableCalendars } from '../../server/utils/google-calendar.ts'
+import { composeOwnerThreadInboxUrl } from '../../server/utils/dashboard-notification-links.ts'
 
 test('calendar selection paginates and only offers writer calendars with the narrow calendar-list boundary', async (t) => {
   const requests: string[] = []
@@ -19,6 +20,9 @@ test('calendar selection paginates and only offers writer calendars with the nar
 })
 
 test('reservation projection preserves canonical UTC instants and timezone without guest invitations', () => {
+  for (const origin of ['http://localhost:3113', 'https://staging.krabiclaw.com']) {
+    assert.equal(composeOwnerThreadInboxUrl({ NUXT_PUBLIC_PLATFORM_DOMAIN: origin }, { orgSlug: 'org', locationSlug: null }, 'thread'), `${origin}/dashboard/org/messages/thread`)
+  }
   const event = calendarEvent({ booking_kind: 'reservation', operational_id: 'reservation', request_id: 'thread', status: 'confirmed', starts_at: '2099-01-01T12:00:00.000Z', ends_at: '2099-01-01T13:00:00.000Z', timezone: 'Asia/Bangkok', guest_name: 'Guest', revision: 'committed' }, 'https://app.example/dashboard/org/messages/thread')
   assert.equal(event.summary, 'Reservation — Guest')
   assert.deepEqual(event.start, { dateTime: '2099-01-01T12:00:00.000Z', timeZone: 'Asia/Bangkok' })

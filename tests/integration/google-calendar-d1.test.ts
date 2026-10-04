@@ -69,7 +69,7 @@ test('committed consultation projection is tenant scoped, private, idempotent an
     assert.equal(event.summary, 'Pending consultation — Jane Doe')
     assert.deepEqual(event.start, { dateTime: '2099-11-01T14:00:00.000Z', timeZone: 'America/New_York' })
     assert.equal(event.attendees, undefined)
-    assert.ok(String(event.description).includes('/dashboard/org/messages/thread'))
+    assert.equal(event.description, 'Status: pending\nhttps://krabiclaw.test/dashboard/org/messages/thread')
     assert.ok(!JSON.stringify(event).includes('PRIVATE MATTER'))
     assert.ok(!JSON.stringify(event).includes('private@example.test'))
     await setBookingStatus(db, { organizationId: 'org', bookingId, status: 'confirmed' })
