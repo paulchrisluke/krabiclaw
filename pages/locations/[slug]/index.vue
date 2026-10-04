@@ -495,6 +495,10 @@ useSocialMetadata(() => ({
   brand: {
     organizationName: organizationName.value,
   },
+  breadcrumbs: [
+    { name: t('saya.header.locations'), url: '/locations' },
+    { name: location.value?.title ?? slug.value, url: `/locations/${slug.value}` },
+  ],
 }))
 
 useSchemaOrg([
@@ -515,13 +519,5 @@ useSchemaOrg([
       ...(loc.rating ? { aggregateRating: { '@type': 'AggregateRating', ratingValue: loc.rating, reviewCount: loc.review_count ?? 0 } } : {})
     }
   }),
-  computed(() => ({
-    '@type': 'BreadcrumbList',
-    itemListElement: [
-      { '@type': 'ListItem', position: 1, name: organizationName.value, item: `${tenantOrigin}${localePath('/')}` },
-      { '@type': 'ListItem', position: 2, name: t('saya.header.locations'), item: `${tenantOrigin}${localePath('/locations')}` },
-      { '@type': 'ListItem', position: 3, name: location.value?.title ?? slug.value, item: `${tenantOrigin}${localePath(`/locations/${slug.value}`)}` }
-    ]
-  }))
 ])
 </script>

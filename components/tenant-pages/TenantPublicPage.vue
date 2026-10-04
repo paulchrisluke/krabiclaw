@@ -273,6 +273,9 @@ const { canonicalUrl } = useSocialMetadata(() => page.value && ({
     operatingSystem: 'All (Web / Cloud-based)',
   } : undefined,
   schema: !isBlawby.value,
+  breadcrumbs: page.value.path === '/' ? undefined : [
+    { name: page.value.title, url: page.value.path },
+  ],
 }))
 
 useVideoSchema(() => page.value?.blocks, canonicalUrl)

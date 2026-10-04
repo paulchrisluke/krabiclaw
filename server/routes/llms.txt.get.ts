@@ -16,12 +16,48 @@ export default defineHandler(async (event) => {
   if (isTenant && organizationId && !organizationName) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant brand name is not configured' })
 
   if (isTenant && organizationId) {
+    const orgRecord = event.context.organization as { name?: string | null; vertical?: string | null } | undefined
+    const vertical = orgRecord?.vertical
+    const coreLinks: Array<{ title: string; path: string; description: string }> = []
+    if (vertical === 'restaurant') {
+      coreLinks.push(
+        { title: 'Menu', path: '/menu', description: 'Current food and drink menu, pricing, and dietary details.' },
+        { title: 'Reservations', path: '/reservations', description: 'Table bookings and online reservation availability.' },
+        { title: 'Locations', path: '/locations', description: 'Physical branch locations, opening hours, and contact details.' },
+      )
+    } else if (vertical === 'service') {
+      coreLinks.push(
+        { title: 'Contact', path: '/contact', description: 'Office location, consultation inquiry, and contact details.' },
+        { title: 'Schedule', path: '/schedule', description: 'Book an appointment or consultation.' },
+      )
+    } else {
+      coreLinks.push(
+        { title: 'Locations', path: '/locations', description: 'Locations, opening hours, and contact details.' },
+        { title: 'Contact', path: '/contact', description: 'Get in touch with our team.' },
+      )
+    }
+
     const [docs, posts] = await Promise.all([
-      listPublishedDocsForLlm(db, organizationId), listPublishedTenantBlogPostsForLlm(db, organizationId, env, 'blog')])
+      listPublishedDocsForLlm(db, organizationId),
+      listPublishedTenantBlogPostsForLlm(db, organizationId, env, 'blog'),
+    ])
     return textResponse(
       buildLlmsTxt(
-        origin, buildPlatformDocLinkEntries(docs, origin), buildTenantBlogLinkEntries(posts ?? [], origin, { themeId: String(event.context.themeId ?? '') }), {
-          title: `${organizationName} Blog`, intro: `${organizationName} publishes blog content available as HTML and Markdown mirrors.`, includeDocsOptionalLinks: false, blogIndexDescription: 'Machine-readable manifest of published tenant blog posts.', blogRssDescription: 'Chronological feed for published tenant blog posts.', blogJsonFeedDescription: 'JSON Feed export for published tenant blog posts.', fullContextDescription: 'Aggregated export of published tenant blog posts.', }, ), )
+        origin,
+        buildPlatformDocLinkEntries(docs, origin),
+        buildTenantBlogLinkEntries(posts ?? [], origin, { themeId: String(event.context.themeId ?? '') }),
+        {
+          title: organizationName,
+          intro: `${organizationName} website, offerings, and public content available for machine retrieval and citation.`,
+          coreLinks,
+          includeDocsOptionalLinks: false,
+          blogIndexDescription: 'Machine-readable manifest of published tenant blog posts.',
+          blogRssDescription: 'Chronological feed for published tenant blog posts.',
+          blogJsonFeedDescription: 'JSON Feed export for published tenant blog posts.',
+          fullContextDescription: 'Aggregated export of published tenant blog posts.',
+        },
+      ),
+    )
   }
 
   const [docs, posts] = await Promise.all([
