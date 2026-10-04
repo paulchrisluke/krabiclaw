@@ -113,7 +113,11 @@ test('Krabiclaw social viewer keyboard navigation changes the visible picture', 
   expect(response?.status()).toBe(200)
   await waitForNuxtHydration(page)
   const firstCard = page.locator('[data-social-posts=block] [data-social-post]').first()
-  await expect(firstCard.getByText('KrabiClaw', { exact: true })).toBeVisible()
+  // The newest post's channel decides whose account name shows; assert the
+  // unlinked mark carries one rather than naming the channel that posted last.
+  const channelMark = firstCard.getByLabel(/^Posted on (Facebook|Instagram)$/)
+  await expect(channelMark).toBeVisible()
+  await expect(channelMark).toHaveText(/\S/)
   await expect(firstCard.locator('time, a')).toHaveCount(0)
   await firstCard.click()
   const viewer = page.getByRole('dialog', { name: 'Media Lightbox' })
