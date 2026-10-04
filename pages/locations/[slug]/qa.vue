@@ -127,9 +127,6 @@ function formatQaDate(ts: string | null) {
   return formatDate(ts)
 }
 
-
-const organizationUrl = useRequestURL().origin
-
 useSocialMetadata(() => ({
   path: `/locations/${slug.value}/qa`,
   title: `Questions and answers · ${location.value?.title || slug.value}`,
@@ -138,6 +135,11 @@ useSocialMetadata(() => ({
   brand: {
     organizationName: organizationName.value,
   },
+  breadcrumbs: [
+    { name: 'Locations', url: '/locations' },
+    { name: location.value?.title ?? slug.value, url: `/locations/${slug.value}` },
+    { name: 'Q&A', url: `/locations/${slug.value}/qa` },
+  ],
 }))
 
 useSchemaOrg([
@@ -150,14 +152,5 @@ useSchemaOrg([
       acceptedAnswer: { '@type': 'Answer', text: q.answer }
     }))
   })),
-  computed(() => ({
-    '@type': 'BreadcrumbList',
-    itemListElement: [
-      { '@type': 'ListItem', position: 1, name: organizationName.value, item: `${organizationUrl}/` },
-      { '@type': 'ListItem', position: 2, name: 'Locations', item: `${organizationUrl}/locations` },
-      { '@type': 'ListItem', position: 3, name: location.value?.title ?? slug.value, item: `${organizationUrl}/locations/${slug.value}` },
-      { '@type': 'ListItem', position: 4, name: 'Q&A', item: `${organizationUrl}/locations/${slug.value}/qa` }
-    ]
-  }))
 ])
 </script>

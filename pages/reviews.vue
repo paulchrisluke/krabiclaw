@@ -112,6 +112,13 @@ useSchemaOrg([
   computed(() => ({
     '@type': getBusinessSchemaTypes(organization?.vertical),
     name: organizationName.value,
+    ...(googleReviewSummary.value ? {
+      aggregateRating: {
+        '@type': 'AggregateRating',
+        ratingValue: Number(googleReviewSummary.value.average),
+        reviewCount: Number(googleReviewSummary.value.count),
+      },
+    } : {}),
     review: allReviews.value.map(r => ({
       '@type': 'Review',
       author: { '@type': 'Person', name: r.author_name || t('saya.qa.guest') },

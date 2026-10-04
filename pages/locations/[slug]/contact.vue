@@ -216,6 +216,11 @@ useSocialMetadata(() => ({
   brand: {
     organizationName: organizationName.value,
   },
+  breadcrumbs: [
+    { name: 'Locations', url: '/locations' },
+    { name: location.value?.title ?? slug.value, url: `/locations/${slug.value}` },
+    { name: 'Visit', url: `/locations/${slug.value}/contact` },
+  ],
 }))
 
 useSchemaOrg([
@@ -233,14 +238,5 @@ useSchemaOrg([
       ...(loc.latitude && loc.longitude ? { geo: { '@type': 'GeoCoordinates', latitude: loc.latitude, longitude: loc.longitude } } : {})
     }
   }),
-  computed(() => ({
-    '@type': 'BreadcrumbList',
-    itemListElement: [
-      { '@type': 'ListItem', position: 1, name: organizationName.value, item: '/' },
-      { '@type': 'ListItem', position: 2, name: 'Locations', item: '/locations' },
-      { '@type': 'ListItem', position: 3, name: location.value?.title ?? slug.value, item: `/locations/${slug.value}` },
-      { '@type': 'ListItem', position: 4, name: 'Visit', item: `/locations/${slug.value}/contact` }
-    ]
-  }))
 ])
 </script>
