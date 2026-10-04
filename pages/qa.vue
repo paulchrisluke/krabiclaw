@@ -22,7 +22,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 definePageMeta({ layout: 'saya' })
 
 const { organizationId, organization } = useTenantOrganization()
@@ -37,6 +37,7 @@ useSocialMetadata(() => ({
   title: `${t('saya.qa.title')} | ${organizationName.value}`,
   description: t('saya.qa_page.meta_description', { organization: organizationName.value }),
   label: t('saya.qa.title'),
+  socialImage: organization?.social_image ?? null,
   brand: {
     organizationName: organizationName.value,
   },
@@ -45,8 +46,8 @@ useSocialMetadata(() => ({
   ],
   faqItems: Array.isArray(qaList.value)
     ? qaList.value
-        .filter((item: any) => item?.question && item?.answer)
-        .map((item: any) => ({
+        .filter((item): item is { question: unknown; answer: unknown } => Boolean(item && typeof item === 'object' && 'question' in item && 'answer' in item && item.question && item.answer))
+        .map(item => ({
           question: String(item.question),
           answer: String(item.answer),
         }))
