@@ -503,6 +503,8 @@ test.describe('stateless MCP server', () => {
     try {
       const before = await openTenantPage(publicPage, `${blawbyBaseURL}${pagePath}`, blawbyExtraHeaders)
       expect(before?.status()).toBe(200)
+      expect(before?.headers()['cache-control']).toBe('private, no-store, max-age=0')
+      expect(before?.headers()['x-edge-cache']).toBeUndefined()
       await expect(publicPage.getByRole('heading', { name: question, exact: true })).toHaveCount(0)
       await loginAs(page.request, baseURL!, 'user-e2e-ncls-owner')
       const organizationRead = await mcpRequest(page.request, baseURL!, { method: 'tools/call', toolName: 'get_organization', args: { organization_id: qaOrganizationId } })
@@ -557,6 +559,8 @@ test.describe('stateless MCP server', () => {
       await expect(page.getByTestId('dashboard-navbar-close')).not.toBeVisible()
       const published = await publicPage.reload()
       expect(published?.status()).toBe(200)
+      expect(published?.headers()['cache-control']).toBe('private, no-store, max-age=0')
+      expect(published?.headers()['x-edge-cache']).toBeUndefined()
       await expect(publicPage.locator('[data-parity-section="qa"]').getByRole('heading', { name: question, exact: true })).toBeVisible()
       await expect(publicPage.locator('[data-parity-section="qa"]').getByText(answer, { exact: true })).toBeVisible()
     } finally {

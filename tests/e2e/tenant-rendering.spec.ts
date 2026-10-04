@@ -85,7 +85,7 @@ test('Krabiclaw pricing retains its billing plans after hydration', async ({ pag
   const paid = plans.find(plan => plan.id === 'growth')
   expect(paid).toBeDefined()
   await expect(page.getByRole('heading', { name: paid!.name, exact: true })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Get Grow', exact: true })).toHaveAttribute('href', '/signup?plan=growth&redirect=%2Fapi%2Fpost-login%3Fplan%3Dgrowth')
+  await expect(page.getByRole('link', { name: 'Get Growth', exact: true })).toHaveAttribute('href', '/signup?plan=growth&redirect=%2Fapi%2Fpost-login%3Fplan%3Dgrowth')
 })
 
 for (const width of [390, 1440]) {

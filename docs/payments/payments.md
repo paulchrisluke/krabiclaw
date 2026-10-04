@@ -335,7 +335,8 @@ and Back. Invalid supplied scope produces a visible 400 error. Actual CMS
 creation published `Which plan includes online payments?` and `Can I take
 bookings without online payment?` under `/pricing`. Create and Back retain the
 Pricing selection; independent D1, rendered answers and FAQPage JSON-LD
-read-back agree, and all 55 existing root Q&A records are unchanged. The new
+read-back agree, and all 55 existing root Q&A records were unchanged during
+creation. The new
 answers refer to Commerce and the plans above rather than duplicating prices.
 Evidence is `.tmp/payments-cms-qa-scope-final-proof.json` and the final
 created/Back/public screenshots. An existing browser test now checks normal
@@ -350,6 +351,27 @@ application opens the actual Question editor on a fresh 1000px visit without a
 reload; at 900px, Close and Back retain Pricing. Evidence is
 `.tmp/payments-cms-pane-final-proof.json` and its screenshots. The existing
 browser test verifies both widths without changing its outcome assertions.
+
+After that creation proof, the domain and hosting pricing FAQ answers had their
+legacy `Grow` references corrected to `Growth` through the same CMS. Only the
+two answers and their update timestamps changed; their publication and scope,
+and all 55 other root Q&A rows, were preserved. Independent D1, rendered answers
+and FAQPage JSON-LD agree. Evidence is
+`.tmp/payments-cms-plan-name-proof.json` and its public screenshot. The canonical
+Growth CTA also uses `Get Growth`; existing signup destination and redirect
+assertions remain unchanged.
+
+The public-read regression found that the HTML KV cache stored and served
+preview responses despite their existing `private, no-store` policy. The shared
+key now applies the canonical non-production/non-indexable host policy before
+reads and writes, and the writer also rejects private/no-store/no-cache response
+directives. Production public keys retain their build identity and TTL. The
+rebuilt anonymous `/pricing` response is 200 with `private, no-store, max-age=0`,
+no edge-cache hit, `Get Growth`, Commerce at $89/month and all four edited/created
+FAQ answers in FAQPage JSON-LD. Evidence is
+`.tmp/payments-cms-cache-public-proof.json` and its rendered public screenshot.
+The existing normal CMS creation regression asserts these exact cache headers
+as well as the saved question and answer becoming public.
 
 CMS content edits are data changes, separate from schema and code deployment.
 The two published pricing FAQ answers were corrected in the local test database
