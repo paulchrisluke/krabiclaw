@@ -17,6 +17,7 @@ import { listPublicLocaleRepresentations } from '~/server/utils/public-locale-re
 import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
 import { parsePostalAddress, type PostalAddress } from '~/utils/postal-address'
 import { publicTenantVisibilitySql } from '~/server/utils/public-base'
+import { refreshProductBusy } from '~/server/domain/member-scheduling'
 
 interface PublicProductOrganizationRow {
   id: string
@@ -367,15 +368,17 @@ export async function loadPublicProductApiDetail(
 export async function loadPublicProductSessions(
   db: DbClient,
   detail: PublicProductDetail,
+  env: CloudflareEnv,
 ): Promise<PublicProductSession[]> {
   if (!detail.booking) return []
   // A branch with no zone cannot state when anything starts, so it offers
   // nothing here rather than a time in a zone nobody chose.
   if (!detail.location) {
     const { listPublicBookingSessions } = await import('~/server/utils/public-session-booking')
-    return (await listPublicBookingSessions(db, detail.organization.id, detail.product.slug, 'online')).sessions.filter(session => !session.is_full)
+    return (await listPublicBookingSessions(db, detail.organization.id, detail.product.slug, env, 'online')).sessions.filter(session => !session.is_full)
   }
   if (!detail.location.timezone) return []
+  await refreshProductBusy(db,env,detail.organization.id,detail.product.id)
   const window = bookingWindow(detail.location.timezone)
   const sessions = await listSessions(db, {
     organizationId: detail.organization.id,

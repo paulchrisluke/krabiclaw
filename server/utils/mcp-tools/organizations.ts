@@ -218,7 +218,7 @@ export async function handleOrganizationsTools(ctx: McpExecutorContext): Promise
         settings: await loadSettingsPayload(
           organization.db,
           organization.organizationId,
-          
+
         ),
       };
     case "update_organization_settings": {

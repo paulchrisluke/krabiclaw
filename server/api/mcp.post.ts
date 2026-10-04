@@ -66,6 +66,7 @@ create_post makes a draft short website/social post. create_blog_post makes a dr
 
 For whole-document or collection replacement, read the latest state and preserve everything outside the requested change. Use the supplied concurrency tokens and deletion confirmations. Read all pages before claiming a complete collection or replacing it. Prices belong to variants; location offerings and website visibility are separate. Weekly schedules use Product duration/capacity; saved Sessions retain their actual facts and any Booking history protects them.
 
+
 Contact submissions and table reservations can be read here; response/status work uses the dashboard inbox. Reviews and imported Google Q&A are managed in Google. Authored Q&A has dedicated create, update, delete and reorder tools. Language tools manage exact authored representations rather than automatic translation.
 
 Report the affected site and actual result, including a returned public or preview URL when useful. Distinguish draft content, published content and unresolved external publication. Tool availability, authorization and entitlements are enforced by the server.`;

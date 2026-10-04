@@ -233,6 +233,7 @@ function integrationsSummary(integrations: Awaited<ReturnType<typeof listIntegra
   const connected = (provider: typeof integrations[number]['provider']) => integrationSummary(integrations.find(integration => integration.provider === provider) ?? null)
   return {
     google_maps: locations.map(location => ({ ...location, address: formatPostalAddress(parsePostalAddress(location.address)) || null })),
+    google_calendar: (() => { const row = integrations.find(row => row.provider === 'google_calendar'); return row ? { account_id: row.account_id, calendar_name: row.target_name, status: row.status, connected_at: row.created_at } : null })(),
     google_analytics: connected('google_analytics'),
     google_search_console: connected('google_search_console'),
     facebook: connected('facebook'),

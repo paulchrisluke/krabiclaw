@@ -10,6 +10,8 @@ export const AGENDA_KINDS = ['reservation', 'booking', 'post'] as const
 export type AgendaKind = typeof AGENDA_KINDS[number]
 
 export interface AgendaItem {
+  assignedMemberId: string | null
+  assignedMemberName: string | null
   id: string
   kind: AgendaKind
   startsAt: string
@@ -46,6 +48,7 @@ export interface AgendaQuery {
   to: string
   organizationId?: string
   locationId?: string
+  assignedMemberId?: string
   kinds?: AgendaKind[]
   principal?: AgendaPrincipal
   organizationSlug?: string
@@ -64,6 +67,8 @@ export interface AgendaPayload {
 }
 
 interface SourceRow {
+  assigned_member_id: string | null
+  assigned_member_name: string | null
   id: string
   kind: AgendaKind
   starts_at: string | null
@@ -166,8 +171,9 @@ export async function listAgenda(
     joins?: string
     pictureOwner?: { type: string; id: string }
     resourceTitle?: string
+    assignedMember?: string
   } = {}) => `
-    SELECT ${alias}.id, '${kind}' AS kind, ${fields}, ${alias}.organization_id,
+    SELECT ${enrichment.assignedMember??'NULL'} assigned_member_id, ${enrichment.assignedMember?`(SELECT u.name FROM member m JOIN user u ON u.id=m.userId WHERE m.id=${enrichment.assignedMember} AND m.organizationId=${alias}.organization_id)`:'NULL'} assigned_member_name, ${alias}.id, '${kind}' AS kind, ${fields}, ${alias}.organization_id,
            ${alias}.location_id,
            l.slug AS location_slug, l.title AS location_title,
            CASE WHEN ${alias}.location_id IS NULL THEN json_extract(s.settings_json, '$.config.default_timezone') ELSE l.timezone END AS timezone,
@@ -196,6 +202,7 @@ export async function listAgenda(
     joins: `JOIN bookings agenda_booking ON agenda_booking.request_id = b.id
       JOIN product_sessions agenda_session ON agenda_session.id = agenda_booking.product_session_id
       LEFT JOIN products agenda_product ON agenda_product.id = agenda_booking.product_id AND agenda_product.organization_id = agenda_booking.organization_id`,
+    assignedMember:'agenda_booking.assigned_member_id',
     pictureOwner: { type: `'product'`, id: 'agenda_booking.product_id' },
     resourceTitle: 'COALESCE(agenda_product.name, l.title, s.name, s.subdomain, s.id)',
   })} AND agenda_session.starts_at BETWEEN ? AND ?`, [...params(), broadFrom, broadTo]))
@@ -213,7 +220,7 @@ export async function listAgenda(
     await loadOwnerPictures(db, organizationId, ownerType, rows.filter(row => row.picture_owner_type === ownerType).map(row => row.picture_owner_id)),
   ] as const))))
   const organizationSlug = query.organizationSlug ?? organizationId
-  const items = rows.flatMap<AgendaItem>((row) => {
+  const items = rows.filter(row=>!query.assignedMemberId || row.assigned_member_id===query.assignedMemberId).flatMap<AgendaItem>((row) => {
     const timeZone = row.timezone
     if (!isValidTimezone(timeZone)) throw new Error(`Timezone is not configured for agenda item ${row.id}`)
     if (!row.starts_at) throw new Error(`Start time is missing for agenda item ${row.id}`)
@@ -226,6 +233,7 @@ export async function listAgenda(
       ? `${organizationBase}${locationSegment}/posts`
       : `/dashboard/${organizationSlug}/bookings/${row.kind}/${encodeURIComponent(row.id)}`
     return [{
+      assignedMemberId:row.assigned_member_id,assignedMemberName:row.assigned_member_name,
       id: `${row.kind}:${row.id}`, kind: row.kind, startsAt,
       endsAt: row.ends_at === null ? null : instantDate(row.ends_at).toISOString(),
       dayKey, timeZone, showTimeZone: false, title: row.title,

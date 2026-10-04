@@ -1,3 +1,4 @@
+import { PROVIDERS_TOOLS, handleProvidersTools } from './providers'
 import type { McpToolDefinition } from './shared'
 import { TOOL_ANNOTATIONS_BY_NAME } from './shared'
 import { ANALYTICS_TOOLS, handleAnalyticsTools } from './analytics'
@@ -37,6 +38,7 @@ import {
 import type { McpExecutorContext } from './execution'
 
 export const MCP_PUBLIC_TOOLS: McpToolDefinition[] = [
+  ...PROVIDERS_TOOLS,
   ...ANALYTICS_TOOLS,
   ...BLOG_TOOLS,
   ...CONTENT_TOOLS,
@@ -86,6 +88,7 @@ export function getMcpTool(name: string) {
 // domain-handler registry instead of hand-copying it — one list of which
 // domain owns which tool, not two.
 export const DOMAIN_HANDLERS: Record<string, (_ctx: McpExecutorContext) => Promise<unknown>> = {
+  providers: handleProvidersTools,
   analytics: handleAnalyticsTools,
   blog: handleBlogTools,
   content: handleContentTools,
@@ -228,7 +231,7 @@ export async function executeMcpToolCall(
     const location = await queryFirst<{ id: string }>(organization.db, `
       SELECT id
       FROM business_locations
-      WHERE id = ? AND organization_id = ? 
+      WHERE id = ? AND organization_id = ?
       LIMIT 1
     `, [explicitLocationId, organization.organizationId]);
     if (!location) {

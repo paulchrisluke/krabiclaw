@@ -11,7 +11,7 @@ through it with the same tools.
 - Scope: `tenant`
 - Exposes: existing-tenant content management, menus, experiences, posts, articles
   (blog and, on Krabiclaw's own site, documentation), media, reviews,
-  submissions, notifications, Q&A, analytics
+  submissions, notifications, Q&A, analytics, bookings and member availability
 - Site creation and location creation, copying, and deletion are CMS-only. MCP
   retains daily content operations, including media asset and experience deletion.
 - Google Places lookup and domain setup are CMS-only. Connecting a Facebook Page or
@@ -28,6 +28,26 @@ Krabiclaw's marketing site is an ordinary organization running the platform
 template. Its blog and documentation are article collections on that
 organization and are edited with the same tools as any tenant's articles, using
 its `organization_id`.
+
+## Member availability and Google Calendar
+
+`get_member_scheduling` lists accessible members or reads an explicitly named
+member. `set_member_scheduling` saves timezone, hours, time off and public profile
+using the latest `expected_updated_at`. Members can manage only their own record;
+owners and admins can manage their team and approve public profiles. Profile edits
+revoke approval unless an admin explicitly approves them.
+
+Google consent and account linking happen through Better Auth in the dashboard.
+`set_member_busy_calendars` selects explicit calendar IDs on the member's own
+already-linked account; it never grants OAuth permission. Empty IDs pause busy
+checking, and a null account with empty IDs disconnects it. Busy results contain
+intervals, not personal event titles or descriptions. Failed or stale selected
+calendar reads block new availability rather than treating unknown time as free.
+
+The CMS selects the primary personal calendar and offers **Avoid double bookings**.
+The business connection creates or reuses its **Krabiclaw** calendar automatically.
+Neither flow requires a calendar picker. Google event edits do not change bookings.
+See [Google Calendar](integrations/google-calendar.md) for projection and cleanup.
 
 ## Auth Model
 
@@ -104,8 +124,12 @@ are managed with `list_product_booking_sessions`, `list_product_bookings`,
 `reject_product_booking`, `cancel_product_booking`, and
 `request_product_booking_change`. These require tenant admin/owner access. Select a
 real Session ID from the canonical session listing; it includes pending capacity
-and tenant-scoped cross-Product online calendar exclusion. Booking list results
-expose parsed `guest` and `provenance` objects (or null), matching booking detail
+and tenant-scoped cross-Product online calendar exclusion. `reassign_product_booking`
+changes a whole session's assigned member after atomic availability checks; it
+requires the current timestamp and a caller idempotency key. Booking list results
+include `assigned_member_id` and accept that explicit member filter.
+
+Booking list results expose parsed `guest` and `provenance` objects (or null), matching booking detail
 readback.
 
 Creation uses `server/domain/product-bookings.ts#createProductBooking`, the same

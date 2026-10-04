@@ -1,4 +1,6 @@
 import { paginationInputSchema, organizationTool, type McpToolDefinition } from './shared'
+import { reassignBookingProvider } from '~/server/domain/provider-reassignment'
+import { refreshProductBusy } from '~/server/domain/member-scheduling'
 import { HTTPError } from 'nitro'
 import { queryAll, queryFirst } from '~/server/db'
 import { listSessions } from '~/server/utils/availability'
@@ -16,13 +18,14 @@ const reservationId = { type: 'string', description: 'Reservation ID from list_r
 const description = 'Call after the user approves the exact change. Records the action in the inbox history and may send email to the guest.'
 
 export const BOOKINGS_TOOLS: McpToolDefinition[] = [
+ organizationTool({name:'reassign_product_booking',domain:'bookings',minimumRole:'admin',confirmRequired:true,description:'Explicitly reassign the entire provider-led Session to the offering’s currently assigned member. All attendees keep Booking IDs and Session time; Checks member hours/time off/busy data/overlap atomically and audits actor/old/new assignment. Guest notifications use the existing inbox delivery workflow. Retry the same key after a notification failure.',inputSchema:{operational_booking_id:bookingId,member_id:{type:'string'},expected_updated_at:{type:'string'},idempotency_key:key},required:['operational_booking_id','member_id','expected_updated_at','idempotency_key']}),
   organizationTool({ name: 'list_product_booking_sessions', domain: 'bookings', minimumRole: 'admin', confirmRequired: false,
     description: 'List scheduled sessions and remaining places for a product when the user wants to find a time for a booking or consultation. Includes conflicts with other appointments in its shared calendar. Use the returned session IDs to create or change a booking. This tool does not create sessions.',
     inputSchema: { product_id: { type: 'string' }, from: { type: 'string', description: 'Inclusive ISO UTC instant.' }, to: { type: 'string', description: 'Exclusive ISO UTC instant, at most 93 days after from.' }, ...paginationInputSchema }, required: ['product_id', 'from', 'to'],
   }),
   organizationTool({ name: 'list_product_bookings', domain: 'bookings', minimumRole: 'admin', confirmRequired: false,
-    description: 'List product bookings and consultations for the selected site when the user wants to review appointments, guests or booking status. Returns booking IDs and their inbox conversation IDs. Table reservations use list_reservation_inquiries.',
-    inputSchema: { ...paginationInputSchema },
+    description: 'List operational Product bookings in this tenant, with guest snapshots and canonical status. Returns bookings.id separately from the guest thread request_id.',
+    inputSchema: { assigned_member_id: {type: 'string'}, ...paginationInputSchema },
   }),
   organizationTool({ name: 'create_product_booking', domain: 'bookings', minimumRole: 'admin', confirmRequired: true,
     description: `Create a guest booking or consultation for a published product and an existing session. Requires an available numeric price; specify variant_id when the product has multiple active variants. Staff-review bookings remain pending; instant bookings are confirmed. Paid offerings may allow payment later. For paid sessions requiring online payment, returns payment_required without creating a booking. Free sessions remain bookable. Does not collect payment. Sends owner alerts and sends the guest an acknowledgement only when guest_acknowledgement is true. ${description}`,
@@ -72,14 +75,16 @@ export async function handleBookingsTools(ctx: McpExecutorContext): Promise<unkn
     const productId = requiredString(args, 'product_id')
     const product = await queryFirst(db, 'SELECT id FROM products WHERE id = ? AND organization_id = ?', [productId, organizationId])
     if (!product) throw new HTTPError({ statusCode: 404, message: 'Product not found in this organization' })
+    await refreshProductBusy(db,env,organizationId,productId)
     const sessions = await listSessions(db, { organizationId, productId, fromInstant: new Date(start).toISOString(), toInstant: new Date(end).toISOString() })
     const page = paginateMcpCollection(sessions, args, { resource: `booking-sessions:${organizationId}:${productId}:${from}:${to}` })
     return { sessions: page.items, page_info: page.page_info }
   }
+  if(toolName==='reassign_product_booking')return reassignBookingProvider({env,organizationId,userId:organization.userId},{booking_id:requiredString(args,'operational_booking_id'),member_id:requiredString(args,'member_id'),expected_updated_at:requiredString(args,'expected_updated_at'),idempotency_key:requiredString(args,'idempotency_key')})
   if (toolName === 'list_product_bookings') {
-    const resource = { resource: `product-bookings:${organizationId}` }
+    const resource = { resource: `product-bookings:${JSON.stringify([organizationId, args.assigned_member_id ?? null])}` }
     const window = mcpPageWindow(args, resource)
-    const rows = await queryAll<Record<string, unknown> & { guest_json: string | null; provenance_json: string | null }>(db, `SELECT b.id AS operational_booking_id, b.request_id, b.product_id, b.product_variant_id, b.product_session_id, b.status, b.party_size, b.user_id, b.updated_at, s.starts_at, s.ends_at, s.timezone, json_extract(r.payload_json, '$.guest') AS guest_json, json_extract(r.payload_json, '$.provenance') AS provenance_json FROM bookings b JOIN product_sessions s ON s.id = b.product_session_id LEFT JOIN requests r ON r.id = b.request_id AND r.organization_id = b.organization_id WHERE b.organization_id = ? ORDER BY s.starts_at, b.id LIMIT ? OFFSET ?`, [organizationId, window.limit + 1, window.offset])
+    const rows = await queryAll<Record<string, unknown> & { guest_json: string | null; provenance_json: string | null }>(db, `SELECT b.id AS operational_booking_id, b.request_id, b.product_id, b.product_variant_id, b.product_session_id, b.status, b.party_size, b.user_id, b.updated_at, b.assigned_member_id, s.starts_at, s.ends_at, s.timezone, json_extract(r.payload_json, '$.guest') AS guest_json, json_extract(r.payload_json, '$.provenance') AS provenance_json FROM bookings b JOIN product_sessions s ON s.id = b.product_session_id LEFT JOIN requests r ON r.id = b.request_id AND r.organization_id = b.organization_id WHERE b.organization_id = ? AND (? IS NULL OR b.assigned_member_id=?) ORDER BY s.starts_at, b.id LIMIT ? OFFSET ?`, [organizationId, args.assigned_member_id??null, args.assigned_member_id??null, window.limit + 1, window.offset])
     const bookings = rows.slice(0, window.limit).map(({ guest_json, provenance_json, ...booking }) => ({ ...booking, guest: guest_json === null ? null : JSON.parse(guest_json), provenance: provenance_json === null ? null : JSON.parse(provenance_json) }))
     return { bookings, page_info: mcpPageInfo(window, bookings.length, rows.length > window.limit, resource) }
   }

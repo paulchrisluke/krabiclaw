@@ -35,7 +35,7 @@ export default defineHandler(async (event) => {
       brandName: result.organization.name,
       reviews,
       booking: result.booking,
-      sessions: await loadPublicProductSessions(db, result),
+      sessions: await loadPublicProductSessions(db, result, env),
       collectionName: siblingCollection?.name ?? '',
       collectionSiblings: siblingCollection
         ? selectProductCollectionSiblings(result.products, result.product, siblingCollection.id, priceSelection)

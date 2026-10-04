@@ -1,3 +1,4 @@
+import { refreshProductBusy } from '~/server/domain/member-scheduling'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 import { CapacityUnavailableError, claimSessionCapacity, requireBookingConfig } from '~/server/utils/availability'
 import { cloudflareEnv, cleanString } from '~/server/utils/api-response'
@@ -165,6 +166,7 @@ export async function createProductBooking(event: H3Event, context: BookingCreat
     }
   }
 
+  await refreshProductBusy(db, env, organization.id, product.id)
   const cancellation = operator ? await createReplayableReservationCancelToken(env.EMAIL_REPLY_SECRET ?? '', threadId) : createReservationCancelToken()
   const cancellationTokenHash = await hashReservationCancelToken(cancellation.token)
   // The person is the Better Auth user; what they typed stays on the thread as

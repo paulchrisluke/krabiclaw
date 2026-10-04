@@ -36,7 +36,7 @@ import type { ComputedRef, InjectionKey, Ref } from 'vue'
 
 export const SECTION_KEYS = ['photo', 'kind', 'name', 'price', 'description', 'options', 'order-url', 'attributes', 'publication', 'booking'] as const
 export type SectionKey = typeof SECTION_KEYS[number]
-export type BookingConcern = 'enabled' | 'duration' | 'capacity' | 'confirmation' | 'payment' | 'location' | 'calendar' | 'website' | number
+export type BookingConcern = 'enabled' | 'duration' | 'capacity' | 'confirmation' | 'payment' | 'location' | 'calendar' | 'assignment' | 'website' | number
 
 export interface ScheduleSlotDraft { weekday: number; start_time: string }
 
@@ -81,6 +81,8 @@ export interface ProductForm {
   booking_duration: string
   booking_capacity: string
   confirmation_mode: 'instant' | 'review'
+  scheduling_mode: 'legacy' | 'provider'
+  assigned_member_id: string
   online_payment_required: boolean
   online_timezone: string
   calendar_group: string
@@ -295,7 +297,7 @@ const draft = useState<ProductForm>(draftKey, () => ({
   location_published: false,
   bookable: false,
   booking_duration: '',
-  booking_capacity: '', confirmation_mode: 'instant', online_payment_required: false, online_timezone: '', calendar_group: '', online_schedule: false, native_consultations: false, consultation_mode: 'native_disabled',
+  booking_capacity: '', scheduling_mode: 'legacy', assigned_member_id: '', confirmation_mode: 'instant', online_payment_required: false, online_timezone: '', calendar_group: '', online_schedule: false, native_consultations: false, consultation_mode: 'native_disabled',
   image_asset_id: null as string | null,
 }))
 const form = reactive(draft.value)
@@ -343,6 +345,8 @@ function loadForm(row: Product) {
   form.bookable = row.booking !== null
   form.booking_duration = row.booking?.duration_minutes === null || row.booking === null ? '' : String(row.booking.duration_minutes)
   form.confirmation_mode = row.booking?.confirmation_mode ?? 'instant'
+  form.scheduling_mode = row.booking?.scheduling_mode ?? 'legacy'
+  form.assigned_member_id = row.booking?.assigned_member_id ?? ''
   form.online_payment_required = row.booking?.online_payment_required ?? false
   form.online_timezone = row.booking?.online_timezone ?? ''
   form.calendar_group = row.booking?.calendar_group ?? ''
@@ -763,6 +767,7 @@ async function saveBooking(concern: BookingConcern) {
   const body = concern === 'duration' ? { duration_minutes: Number(form.booking_duration) }
     : concern === 'capacity' ? { default_capacity: form.booking_capacity.trim() ? Number(form.booking_capacity) : null }
     : concern === 'confirmation' ? { confirmation_mode: form.confirmation_mode }
+    : concern === 'assignment' ? { scheduling_mode: form.scheduling_mode, assigned_member_id: form.assigned_member_id || null }
     : concern === 'payment' ? { online_payment_required: form.online_payment_required }
     : concern === 'location' ? { online_timezone: form.online_timezone }
     : concern === 'calendar' ? { calendar_group: form.calendar_group.trim() || null }

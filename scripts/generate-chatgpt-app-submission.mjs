@@ -12,9 +12,14 @@ const OUTPUT_PATH = 'chatgpt-app-submission.json'
 // Reviewed effects are authored here; annotation values still come from the registry.
 // A newly exposed tool must receive an explicit review before regeneration succeeds.
 const effects = {
+  get_member_scheduling: 'Reads authorized team scheduling records; ordinary members can read only themselves. Public profile approval and interval-only Calendar status share CMS records.',
+  set_member_scheduling: 'Replaces authorized member hours, timezone, time off and approved public profile using optimistic revision. Existing Booking assignments remain fixed.',
+  set_member_busy_calendars: 'Selects already-linked Google busy calendars or disconnects input, then rechecks interval-only busy data. Grants no OAuth access.',
+  reassign_product_booking: 'Atomically reassigns every live attendee in a Session to the offering’s current member, refusing overlap and active checkout holds, retaining IDs and auditing old/new actor values, then sending the canonical guest notice.',
+
   list_product_bookings: 'Reads operational Product bookings and guest snapshots within the selected tenant.',
   list_product_booking_sessions: 'Reads existing tenant Product sessions and canonical capacity, including the shared online calendar exclusion.',
-  create_product_booking: 'Atomically creates a tenant Product booking and guest inbox thread, with caller idempotency, operator provenance and explicit guest acknowledgement choice. Uses public capacity and payment-required rules; performs no financial mutation.',
+  create_product_booking: 'Atomically creates a tenant Product booking and guest inbox thread, with caller idempotency, operator provenance and explicit guest acknowledgement choice. Uses public capacity and payment policy; payment-required sessions fail before unpaid allocation.',
   get_product_booking: 'Reads one tenant Product booking with guest snapshot, operational status, provenance and updated timestamp.',
   confirm_product_booking: 'Confirms a pending Product review booking through the canonical inbox operation, without allocating capacity again, and sends its guest status message.',
   reject_product_booking: 'Rejects a pending Product booking through the canonical inbox operation, releasing capacity and sending its guest status message.',
@@ -119,6 +124,8 @@ const effects = {
 }
 
 const openWorldEffects = {
+  set_member_busy_calendars: 'Reads free/busy intervals from the member’s selected Google calendars using existing granted scopes; writes no Google events.',
+  reassign_product_booking: 'Sends the changed-assignment notice through the existing guest delivery lifecycle after the atomic reassignment.',
   create_product_booking: 'Sends owner alerts and, when requested, an acknowledgement email to the supplied guest address.',
   confirm_product_booking: 'Sends a confirmation email to the booking guest.',
   reject_product_booking: 'Sends a decision email to the booking guest.',
