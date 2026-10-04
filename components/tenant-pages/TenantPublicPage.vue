@@ -32,6 +32,8 @@ import type { BlawbyDocumentPayload } from '~/utils/blawby-document-contract'
 import type { ProfessionalServiceRecipe } from '~/utils/professional-service-schema'
 
 const props = defineProps<{ path: string; locale?: string | null }>()
+const config = useRuntimeConfig()
+const requestURL = useRequestURL()
 const { organizationId, isPlatform, previewAuthorized, organization } = useTenantOrganization()
 const { isBlawby } = usePublicTemplate()
 const { locale: i18nLocale, localePath, t } = useI18n()
@@ -207,7 +209,7 @@ const pageFaqItems = computed<Array<{ question: string; answer: string }>>(() =>
 
 const pageHowToBlock = computed(() => page.value?.blocks.find(block => block.type === 'how_to'))
 const pageHowToNode = computed<ApiRecord | null>(() => {
-  if (!pageHowToBlock.value || !Array.isArray(pageHowToBlock.value.data.steps) || !canonicalUrl.value) return null
+  if (!pageHowToBlock.value || !Array.isArray(pageHowToBlock.value.data.steps) || !page.value) return null
   const steps = pageHowToBlock.value.data.steps
     .filter((step): step is Record<string, unknown> => Boolean(step && typeof step === 'object'))
     .map(step => ({
@@ -216,9 +218,11 @@ const pageHowToNode = computed<ApiRecord | null>(() => {
     }))
     .filter(step => step.name || step.text)
   if (!steps.length) return null
+  const origin = isPlatform ? config.public.platformUrl : requestURL.origin
+  const url = resolveSeoUrl(page.value.path, origin)
   return {
     '@type': 'HowTo',
-    '@id': `${canonicalUrl.value}#howto`,
+    '@id': `${url}#howto`,
     name: blockTextOrNull(pageHowToBlock.value.data.title) || page.value?.title || '',
     step: steps.map((step, index) => ({
       '@type': 'HowToStep',
