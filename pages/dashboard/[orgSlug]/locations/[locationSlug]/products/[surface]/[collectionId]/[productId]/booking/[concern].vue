@@ -15,7 +15,13 @@
       <p v-if="membersError" role="alert" class="mb-3 text-error">Team members could not be loaded.</p>
       <URadioGroup v-else v-model="assignedMember" :items="memberOptions" variant="card" class="w-full" />
     </UFormField>
-    <SettingRow v-else-if="concern === 'payment'" v-model="p.form.online_payment_required" label="Require online payment for paid sessions" />
+    <div v-else-if="concern === 'payment'">
+      <SettingRow v-model="p.form.online_payment_required" :disabled="!paymentEntitled && !p.form.online_payment_required" label="Require online payment for paid sessions" />
+      <template v-if="!paymentEntitled">
+        <p class="mt-4 text-sm text-muted">Online payments require Commerce. Paid sessions can be booked without online payment when this setting is off.</p>
+        <UButton class="mt-3" :to="`/dashboard/${route.params.orgSlug}/settings/billing`" variant="outline">View plans</UButton>
+      </template>
+    </div>
     <LocationTimezoneField v-else-if="concern === 'location'" v-model="onlineTimezone" />
     <UFormField v-else-if="concern === 'calendar'" label="Calendar name" hint="Optional">
       <p class="mb-3 text-sm text-muted">{{ p.form.calendar_group.length }}/64</p>
@@ -30,6 +36,7 @@ import SettingRow from '~/components/dashboard/SettingRow.vue'
 import { productEditorKey, type BookingConcern } from '~/components/dashboard/ProductEditorPage.vue'
 import LocationTimezoneField from '~/lib/components/workspace/location/LocationTimezoneField.vue'
 import { isValidTimezone } from '~/utils/timezone'
+import { getPlanEntitlements } from '~/server/utils/billing-entitlements'
 
 definePageMeta({ layout: 'dashboard' })
 const p = inject(productEditorKey)!
@@ -48,6 +55,11 @@ const settings = {
   website: { title: 'Website booking', lead: 'This applies to all services on your website. Guests can choose times for published online services with a weekly schedule.' },
 }
 const dashboard = useDashboardOrganization()
+const paymentEntitled = computed(() => {
+  const plan = dashboard.organization.value?.effective_plan
+  if (!plan) throw createError({ statusCode: 500, statusMessage: 'Organization billing status is unavailable', fatal: true })
+  return getPlanEntitlements(plan).payments === true
+})
 const { data: members, error: membersError, status: membersStatus } = await useFetch<{ members: { id: string; name: string }[] }>(() => `/api/organizations/${dashboard.organization.value?.id}/members/scheduling`, { server: false })
 const assignedMember = computed({ get: () => p.form.assigned_member_id, set: (value: string | null) => { p.form.assigned_member_id = value ?? ''; p.form.scheduling_mode = value ? 'provider' : 'legacy' } })
 const memberOptions = computed(() => [{ label: 'Use the business schedule', value: '' }, ...(members.value?.members.map(member => ({ label: member.name, value: member.id })) ?? [])])
@@ -75,6 +87,7 @@ const valid = computed(() => {
   if (concern.value === 'duration') return Number.isSafeInteger(Number(p.form.booking_duration)) && Number(p.form.booking_duration) > 0
   if (concern.value === 'capacity') return capacityChoice.value !== 'group' || (Number.isSafeInteger(Number(p.form.booking_capacity)) && Number(p.form.booking_capacity) >= 2)
   if (concern.value === 'location') return isValidTimezone(p.form.online_timezone)
+  if (concern.value === 'payment') return !p.form.online_payment_required || paymentEntitled.value
   return true
 })
 const dirty = computed(() => {

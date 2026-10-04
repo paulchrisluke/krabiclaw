@@ -125,6 +125,13 @@ export async function setProductBookingConfig(db: DbClient, input: {
   if (patch.duration_minutes === 0) badRequest('duration_minutes must be positive')
   if (patch.confirmation_mode !== undefined && patch.confirmation_mode !== 'instant' && patch.confirmation_mode !== 'review') badRequest('confirmation_mode must be instant or review')
   if (patch.online_payment_required !== undefined && typeof patch.online_payment_required !== 'boolean') badRequest('online_payment_required must be boolean')
+  if (patch.online_payment_required === true) {
+    if (!input.env) throw new HTTPError({ statusCode: 403, statusMessage: 'Payments entitlement cannot be checked without the configured environment' })
+    const { hasOrganizationEntitlement } = await import('~/server/utils/billing')
+    if (!await hasOrganizationEntitlement(input.env, input.organizationId, 'payments')) {
+      throw new HTTPError({ statusCode: 403, statusMessage: 'Commerce is required to collect online payment for paid sessions' })
+    }
+  }
   if (patch.online_timezone !== undefined && patch.online_timezone !== null && (typeof patch.online_timezone !== 'string' || !isValidTimezone(patch.online_timezone))) badRequest('online_timezone must be an IANA timezone or null')
   if (patch.calendar_group !== undefined && patch.calendar_group !== null && (typeof patch.calendar_group !== 'string' || !patch.calendar_group.trim() || patch.calendar_group.length > 64)) badRequest('calendar_group must be a nonempty string of at most 64 characters or null')
   const current = await queryFirst<{ online_timezone: string | null; calendar_group: string | null; scheduling_mode:string }>(db, 'SELECT online_timezone, calendar_group, scheduling_mode FROM product_booking_configs WHERE organization_id = ? AND product_id = ?', [input.organizationId, input.productId])

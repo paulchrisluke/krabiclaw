@@ -280,6 +280,61 @@ The final read-only limit is recorded in
 `all_fees` itemization remains unavailable in test mode; reconciliation reports
 `test_mode_unavailable`, and no estimated Stripe costs were ingested.
 
+A month is not required to qualify native usage collection. Metronome supports
+ending the genuine contract early, which shortens its draft usage period; the
+configured 24-hour grace period still applies before finalization and Stripe
+delivery/collection. The ordinary Commerce downgrade schedules the change at
+subscription renewal. A shorter disposable Sandbox test therefore requires an
+explicit immediate change through Better Auth Stripe, native confirmation and
+webhook read-back, then normal reconciliation and **End previous Payments
+billing**. This removes Commerce acceptance from that test organization. No
+immediate subscription change or contract end has been performed for the
+October 4 capture, and its November 2 issue date remains the unchanged schedule.
+[Contract end semantics](https://docs.metronome.com/api-reference/contracts/update-the-contract-end-date),
+[invoice grace period](https://docs.metronome.com/guides/implement-metronome/core-concepts/how-invoicing-works).
+
+## CMS and staging release
+
+The existing Products, Variants and Prices editor remains the canonical catalog.
+Commerce enables online collection; Free and Growth retain bookings without
+online payment. The shared booking-config writer checks the current canonical
+Payments entitlement before enabling mandatory payment. The editor uses that
+same plan policy and permits turning a previously enabled requirement off after
+a downgrade.
+
+Actual CMS verification on October 4 reproduced the unsupported save on the
+Growth site's existing $75 local consultation. After rebuilding, that same old
+editor received 403 with the visible Commerce requirement and no policy write;
+disabling succeeded and a fresh editor disabled re-enabling. The Commerce test
+item's calendar was configured through the same CMS solely to exercise payment
+policy enable and disable, both independently read back from D1. Its original
+no-calendar setup was restored through the editor. Product kind, $100 price,
+publication and subscription state were preserved. Evidence is
+`.tmp/payments-cms-final-persisted-read.json`, the enabled/disabled reads and
+`.tmp/commerce-cms-growth-server-rejection.png`. Quality, 239 unit, 102 D1 and
+4 migration tests passed, including rejected-write and downgrade-disable
+invariants. The missing-plan UI branch fails visibly rather than inventing a
+plan.
+
+CMS content edits are data changes, separate from schema and code deployment.
+The two published pricing FAQ answers were corrected in the local test database
+through **Reviews and Q&A → Pricing → Answer → Save**. They have not been copied
+to staging or production. For each target, read its actual published questions,
+edit those exact answers through the same CMS path, preserve publication, and
+verify rendered answers and FAQPage JSON-LD. Public plan prices and the Payments
+fee phrase remain in their canonical pricing sources rather than duplicated CMS
+fields. Existing customer product prices and publication are preserved.
+
+Staging's deployed `/api/billing/plans` read on October 4 publishes Basic and
+Growth only. Before deploying this three-plan reader, verify staging's own
+configured Stripe catalog using the reviewed plan/apply/read-back workflow in
+[stripe-catalog.md](../operations/stripe-catalog.md). The isolated E2E Sandbox
+catalog does not qualify staging's account. Then use the canonical schema and
+release workflow, apply the target's exact CMS copy edits, and verify public
+pricing, Markdown/LLM pricing and the actual CMS/payment journey. The migration
+does not change product prices, publish content, enable payment requirements or
+provision subscriptions. No staging deployment or content write has occurred.
+
 ## Historical local verification — 2026-10-02
 
 The following notes describe the superseded implementation. Current validation
