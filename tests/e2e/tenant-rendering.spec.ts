@@ -108,7 +108,7 @@ for (const width of [390, 1440]) {
   })
 }
 
-test('Krabiclaw social viewer keyboard navigation changes the visible picture', async ({ page }) => {
+test('Krabiclaw social viewer keyboard navigation changes the visible media', async ({ page }) => {
   const response = await openTenantPage(page, `${testBaseUrl()}/`, {})
   expect(response?.status()).toBe(200)
   await waitForNuxtHydration(page)
@@ -123,7 +123,7 @@ test('Krabiclaw social viewer keyboard navigation changes the visible picture', 
   const viewer = page.getByRole('dialog', { name: 'Media Lightbox' })
   await expect(viewer).toBeVisible()
   const pictures = viewer.locator('section')
-  const imageBounds = await pictures.first().locator('img:not([aria-hidden])').boundingBox()
+  const imageBounds = await pictures.first().locator('img:not([aria-hidden]), video').boundingBox()
   const captionBounds = await pictures.first().locator('p').boundingBox()
   expect(imageBounds).not.toBeNull()
   expect(captionBounds).not.toBeNull()
@@ -132,7 +132,7 @@ test('Krabiclaw social viewer keyboard navigation changes the visible picture', 
   const close = viewer.getByRole('button', { name: 'Close', exact: true })
   await close.press('ArrowDown')
   await expect.poll(() => pictures.nth(1).evaluate(element => Math.round(element.getBoundingClientRect().top))).toBe(0)
-  await expect.poll(() => pictures.nth(1).locator('img:not([aria-hidden])').evaluate(element => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
+  await expect.poll(() => pictures.nth(1).locator('img:not([aria-hidden]), video').evaluate(element => element instanceof HTMLVideoElement ? element.videoWidth : (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
   await close.press('ArrowUp')
   await expect.poll(() => pictures.nth(0).evaluate(element => Math.round(element.getBoundingClientRect().top))).toBe(0)
   await close.click()
