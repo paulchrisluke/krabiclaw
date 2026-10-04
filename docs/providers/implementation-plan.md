@@ -22,7 +22,9 @@ accounts, refunds and usage billing are added by the separate Payments PR.
 
 ## Staging integration review
 
-The current Calendar branch includes staging through #1250. Local CodeRabbit
+The current Calendar branch includes staging through #1252, including the
+consolidation of MCP definitions and handlers into their owning `mcp-tools`
+domain modules. Local CodeRabbit
 review identified five issues. Required reassignment fields and Calendar actions
 are validated before mutation, notification receipts match the exact reassignment
 key and operational booking ID within the targeted tenant, and the migration test

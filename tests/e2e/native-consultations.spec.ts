@@ -60,6 +60,12 @@ test('native online review uses canonical Products, holds capacity, and releases
     expect(membersResponse.status(), await membersResponse.text()).toBe(200)
     const self = (await membersResponse.json()).members.find((member: { self: boolean }) => member.self)
     expect(self).toBeTruthy()
+    const mcpScheduling = await mcpRequest(page.request, baseURL!, { method: 'tools/call', toolName: 'get_member_scheduling', args: { organization_id: org, member_id: self.id } })
+    expect(mcpScheduling.status(), await mcpScheduling.text()).toBe(200)
+    expect(mcpData<{ scheduling: Record<string, unknown> }>(await mcpScheduling.json()).scheduling).toEqual(self.scheduling)
+    const mcpMembers = await mcpRequest(page.request, baseURL!, { method: 'tools/call', toolName: 'get_member_scheduling', args: { organization_id: org } })
+    expect(mcpMembers.status(), await mcpMembers.text()).toBe(200)
+    expect(mcpData<{ members: Array<Record<string, unknown>> }>(await mcpMembers.json()).members).toContainEqual({ id: self.id, name: self.name, self: true, scheduling: self.scheduling })
     for (const data of [{}, { action: 'unknown' }, { action: 'select', calendar_ids: [] }]) {
       const invalidCalendar = await page.request.post(`/api/organizations/${org}/members/${self.id}/calendar`, { data })
       expect(invalidCalendar.status(), await invalidCalendar.text()).toBe(400)

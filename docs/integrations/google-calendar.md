@@ -46,6 +46,30 @@ in-flight event can be briefly visible until compensation/retry completes.
 
 ## Settings and cleanup
 
+### Public verification demonstration
+
+Analytics is already approved. After production deployment and its customer
+checks, record the Calendar flows against a dedicated owner-authorized account
+and calendar. Start with the full consent screen, expanding every permission.
+Compare the production request scopes with Cloud Console's submitted scopes;
+record any difference before submitting a video. Google requires the narrowest
+permissions needed by the demonstrated features:
+[Calendar scopes](https://developers.google.com/workspace/calendar/api/auth).
+
+| Calendar scope | Feature to demonstrate |
+| --- | --- |
+| `calendar.app.created` | Connect the business, show its new Krabiclaw calendar in Google, then create, change and cancel a booking in Krabiclaw and show each resulting event change in Google. Demonstrate disconnect cleanup while unrelated Google events remain. |
+| `calendar.calendarlist.readonly` | Show the automatically identified business calendar and primary personal calendar. Explain the read-only calendar identity lookup used for selection, permission checks and recovering an uncertain calendar creation. |
+| `calendar.events.freebusy` | Connect the member's own account, enable Avoid double bookings, add a busy personal event in Google and show the corresponding time disappear from that member's bookable service. Turn checking off and show the time available again. |
+
+The dashboard requests personal free/busy consent separately from business output.
+MCP also supports explicit busy-calendar selection on an already-linked account;
+the video must cover that supported access if it is part of the verification
+justification. Reassess `calendar.freebusy` as the narrower alternative for
+primary-only access before submission; do not assert that broader access is
+necessary based only on the scope already configured. Neither personal event
+content nor unrelated event writes are part of this integration.
+
 Better Auth owns account identity, encrypted credentials, refresh and incremental
 consent through the existing `useIntegrationConnection` / `linkedAccountAccessToken`
 boundary. `organization_integrations` holds only account/calendar identity,

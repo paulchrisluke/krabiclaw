@@ -15,7 +15,7 @@ Last verified: 2026-09-07. Use this file for directory listings, launch pages, p
 | Initial commitment | Full time | Confirmed by the owner on 2026-09-07 |
 | Product type | Web SaaS | Product contract and pricing model |
 | Business model | Freemium subscriptions | Free Starter plan and paid Growth plan in `PRODUCT.md` |
-| Primary audience | Restaurants, experience operators, and professional-service businesses | `PRODUCT.md` and `CONTEXT.md` |
+| Primary audience | Restaurants, experience operators, and professional-service businesses | `PRODUCT.md` |
 | MCP endpoint | https://krabiclaw.com/api/mcp | `docs/mcp.md` |
 | MCP registry name | io.github.paulchrisluke/krabiclaw | Published in the official MCP Registry |
 
@@ -91,6 +91,50 @@ Krabiclaw lets local business owners launch and manage multilingual websites thr
 ```text
 Krabiclaw exists so restaurants and local businesses can keep a polished, multilingual website current without wrestling with a traditional CMS. Owners manage real website content, bookings, inquiries, products, experiences, media, translations, and analytics through ChatGPT, while the dashboard and assistant use the same permissioned business data.
 ```
+
+## Calendar release content
+
+Prepared on 2026-10-04 for PR #1240. Calendar and member availability are qualified
+locally; this is not a production release announcement. Public Google OAuth
+verification remains outstanding. Analytics is already approved, as confirmed by
+the owner; the new verification demonstration concerns Calendar.
+
+Public content remains in the platform organization's CMS (`organization_id:
+platform`), edited through the ordinary MCP tools. The **Calendar and bookings**
+docs category is `9ec9c29e-696e-41c3-b821-d41ce1232278`. The following articles were
+created as private drafts and read back through MCP; their bodies are not copied
+into repository documentation.
+
+| Draft | CMS article ID |
+| --- | --- |
+| Connect Google Calendar | `241019f4-2176-4858-bfcd-92a11b0c461c` |
+| Set your working hours | `3283d505-4d01-4beb-b665-dd317d159b17` |
+| Add time off | `81fddbb6-4ecf-4361-833f-12fc6214c112` |
+| Avoid double bookings with your personal calendar | `60033f23-c250-4a52-97b1-a7a1b2a9897e` |
+| Choose who guests meet | `4dacfe5e-b8f4-41de-932b-a0d79b925b35` |
+| Update your public profile | `3bbee519-d084-43f4-b159-689be788b055` |
+| Manage your bookings | `1e9ee926-4794-4f93-aef2-f96edfb34f8f` |
+| Make room for your next booking (blog) | `043d5238-1e65-42bd-baba-afbef1985843` |
+
+Use short task titles, one clear outcome and numbered steps matching the actual
+CMS labels. [Airbnb's Calendar and bookings topic](https://www.airbnb.com/help/topic/1330)
+is the editorial reference. Explain our Google connection rather than copying
+Airbnb's ICS import/export instructions or its two-way booking claims.
+
+After deployment and release qualification, publish the guides and launch article
+through MCP. Update the existing **Invite your team**, **Connect your accounts to
+KrabiClaw**, and **What AI assistants can and cannot do** guides to include Member
+self-service, Calendar connection and scheduling tools. Preserve their existing
+content and media when editing.
+
+Update the existing `/products` booking section to include services, working hours
+and time off, with a link to the new category. The `/legal` capability sections
+should offer native consultations alongside external intake. Keep the NCLS
+showcase's Clio Grow description until that tenant's actual setup changes.
+The shared pricing comparison adds **Team availability** for both plans; it
+does not add Google availability claims before verification or alter Stripe's
+paid marketing bullets. Review the existing privacy disclosure against the final
+Calendar scopes and data handling before submitting verification.
 
 ## Classification
 

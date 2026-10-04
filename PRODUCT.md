@@ -11,6 +11,24 @@ inbox. Authorized MCP operations manage existing tenant resources on the same
 backend. A tool name alone does not establish plan availability, provider
 success, a quota or a customer-facing promise.
 
+## Calendar and bookings
+
+Services can use the business schedule or one assigned Better Auth organization
+member's working hours, timezone and time off. Existing bookings keep their
+assignment until an explicit reassignment. Approved member profiles introduce
+the person guests will meet on the service page.
+
+Google Calendar is optional. Connecting the business creates or reuses its
+Krabiclaw calendar and projects upcoming pending and confirmed bookings and
+reservations. Connecting a member's personal account can exclude busy times from
+new availability. Google event edits do not reschedule Krabiclaw bookings, and
+personal event titles and descriptions are not imported.
+
+Public Google OAuth verification remains outstanding. Calendar qualification and
+scope boundaries are recorded in [Google Calendar](docs/integrations/google-calendar.md).
+Online payments are delivered by the separate Payments change; Calendar does
+not establish Checkout, refund or buyer-account availability.
+
 ## Plans
 
 Runtime identities are `free` and `growth`; one organization subscription covers
