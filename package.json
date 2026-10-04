@@ -124,10 +124,10 @@
     "wrangler": "4.129.1"
   },
   "dependencies": {
-    "@better-auth/cimd": "1.7.4",
-    "@better-auth/core": "1.7.4",
-    "@better-auth/oauth-provider": "1.7.4",
-    "@better-auth/stripe": "1.7.4",
+    "@better-auth/cimd": "1.7.5",
+    "@better-auth/core": "1.7.5",
+    "@better-auth/oauth-provider": "1.7.5",
+    "@better-auth/stripe": "1.7.5",
     "@internationalized/date": "^3.12.3",
     "@modelcontextprotocol/core": "2.0.0",
     "@modelcontextprotocol/server": "2.0.0",
@@ -151,7 +151,7 @@
     "@vue-email/section": "0.0.3",
     "@vue-email/style": "0.0.3",
     "@vue-email/text": "0.0.3",
-    "better-auth": "1.7.4",
+    "better-auth": "1.7.5",
     "cookie-es": "^3.1.1",
     "drizzle-orm": "^0.45.2",
     "email-reply-parser": "2.3.9",
