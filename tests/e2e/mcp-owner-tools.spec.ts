@@ -554,7 +554,21 @@ test.describe('stateless MCP server', () => {
         expect(mcpData<{ rules: unknown[] }>(await call('replace_product_weekly_schedule', { product_id: productId, location_id: locationId, slots: [] })).rules).toEqual([])
         expect((await (await request.get(`${productUrl}/availability?location_id=${locationId}`)).json()).rules).toEqual([])
 
-        const policy = { confirmation_mode: 'review', online_payment_required: true, online_timezone: 'America/New_York', calendar_group: `parity-${productId}` }
+        const policy = { confirmation_mode: 'review', online_payment_required: false, online_timezone: 'America/New_York', calendar_group: `parity-${productId}` }
+        const beforePaymentPolicy = mcpData<{ product: { booking: unknown } }>(await call('get_product', { product_id: productId })).product.booking
+        const paymentRequiredPolicy = { ...policy, online_payment_required: true }
+        const httpPaymentPolicy = await request.put(`${productUrl}/booking`, { data: paymentRequiredPolicy })
+        expect(httpPaymentPolicy.status()).toBe(403)
+        expect((await httpPaymentPolicy.json()).message).toBe('Commerce is required to collect online payment for paid sessions')
+        const httpRejectedPolicyReadback = await request.get(productUrl)
+        expect(httpRejectedPolicyReadback.status()).toBe(200)
+        expect((await httpRejectedPolicyReadback.json()).product.booking).toEqual(beforePaymentPolicy)
+        const mcpPaymentPolicy = await call('set_product_booking_config', { product_id: productId, ...paymentRequiredPolicy })
+        expect(mcpPaymentPolicy.result.isError).toBe(true)
+        expect(mcpPaymentPolicy.result.content).toEqual([{ type: 'text', text: 'Commerce is required to collect online payment for paid sessions' }])
+        const mcpRejectedPolicyReadback = await request.get(productUrl)
+        expect(mcpRejectedPolicyReadback.status()).toBe(200)
+        expect((await mcpRejectedPolicyReadback.json()).product.booking).toEqual(beforePaymentPolicy)
         expect((await call('set_product_booking_config', { product_id: productId, ...policy })).result.isError).not.toBe(true)
         const policyRead = await request.get(productUrl)
         expect(policyRead.status()).toBe(200)

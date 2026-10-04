@@ -64,6 +64,21 @@ real test-mode checkout journey, while catalog drift is planned, reviewed, and
 applied separately with the commands below. This prevents unrelated product
 metadata copy from blocking an application or incident release.
 
+Paid-plan changes also require the target account's native Stripe customer
+portal configuration. Better Auth Stripe uses `subscription_update_confirm` for
+its hosted confirmation. Enable subscription updates, allow price changes, and
+select only the canonical offered Product/Price IDs from that account's verified
+catalog. Read the saved products with
+`expand=['features.subscription_update.products']`; the ordinary configuration
+response omits them. Preserve existing cancellation, payment-method, invoice,
+proration and timing settings unless the operator explicitly changes them.
+Verify an actual Better Auth plan-change confirmation and its signed webhook
+read-back. New subscription Checkout alone does not qualify an existing
+subscription's plan-change flow. The catalog planner does not configure this
+portal, and the isolated E2E Sandbox configuration does not qualify staging.
+[Stripe portal configuration](https://docs.stripe.com/api/customer_portal/configurations/update),
+[native confirmation flows](https://docs.stripe.com/customer-management/portal-deep-links).
+
 Review the plan and its `providerSnapshotSha256`, `operations`, and fixed
 amounts. Apply only the reviewed file, with the exact hash copied from its
 `planSha256` field:

@@ -293,6 +293,18 @@ October 4 capture, and its November 2 issue date remains the unchanged schedule.
 [Contract end semantics](https://docs.metronome.com/api-reference/contracts/update-the-contract-end-date),
 [invoice grace period](https://docs.metronome.com/guides/implement-metronome/core-concepts/how-invoicing-works).
 
+The actual immediate Better Auth request initially returned 400 because the
+intended Sandbox's default Stripe portal had subscription updates disabled.
+Its native configuration now enables price changes for the verified Growth
+and Commerce monthly Products/Prices only. Independent expanded provider
+read-back confirms the saved selection and unchanged cancellation, payment
+method, invoice, proration and timing settings. The same Better Auth request
+then returned its native hosted confirmation. The confirmation's explicit
+Terms of Service acceptance remains pending operator approval; opening it has
+not changed the subscription. Evidence is
+`.tmp/payments-native-sandbox-portal-switch-configuration-proof.json` and
+`.tmp/commerce-native-immediate-growth-confirmation.png`.
+
 ## CMS and staging release
 
 The existing Products, Variants and Prices editor remains the canonical catalog.
