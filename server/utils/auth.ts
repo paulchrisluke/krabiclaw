@@ -304,7 +304,7 @@ export function createAuth(env: CloudflareEnv) {
         // Only a successful integration link continues to resource selection.
         if (new URL(location, authBaseUrl).href !== callback.href) return
         const integration = callback.pathname.match(/^\/dashboard\/[^/]+\/settings\/integrations\/(facebook|instagram|google-analytics|google-search-console|google-calendar)$/)?.[1]
-          ?? (callback.pathname === '/dashboard/account/profile/calendar' ? 'google-calendar' : undefined)
+          ?? (/^\/dashboard\/[^/]+\/calendar\/settings\/availability\/google-calendar$/.test(callback.pathname) || /^\/dashboard\/account\/profile\/calendar\/[^/]+\/google-calendar$/.test(callback.pathname) ? 'google-calendar' : undefined)
         if (!integration) return
         const provider = integration.startsWith('google-') ? 'google' : integration
         if (ctx.params?.id !== provider) return

@@ -39,7 +39,7 @@ test('member self-service uses Better Auth permissions, public approval is admin
   await db.prepare("INSERT INTO account(id,accountId,providerId,userId,scope)VALUES('busy-linked','google-subject','google','one',?)").bind(MEMBER_BUSY_SCOPES.join(' ')).run()
   const raced = await Promise.allSettled([
    selectBusyCalendars(own,'member-one',{account_id:'busy-linked',calendar_ids:['same-calendar']}),
-   storeCalendarSelection(db,'org',{account_id:'busy-linked',calendar_id:'same-calendar',calendar_name:'Synthetic calendar',calendar_group:null,include_reservations:false}),
+   storeCalendarSelection(db,'org',{account_id:'busy-linked',calendar_id:'same-calendar',calendar_name:'Synthetic calendar'}),
   ])
   assert.equal(raced.filter(result=>result.status==='fulfilled').length,1,'input and output selection cannot race into the same calendar')
   const inputSelection = await readMemberScheduling(db,'org','member-one')
@@ -48,7 +48,7 @@ test('member self-service uses Better Auth permissions, public approval is admin
   await selectBusyCalendars(own,'member-one',{account_id:null,calendar_ids:[]})
   await disconnectCalendar(db,'org')
   await syncCalendarOrganization(env,'org')
-  assert.equal(await readCalendarIntegration(db,'org'),null)
+  assert.equal((await readCalendarIntegration(db,'org'))?.status??null,outputSelection?'disabled':null)
   const accessToken=await symmetricEncrypt({key:env.BETTER_AUTH_SECRET!,data:'busy-test-token'})
   await db.prepare("UPDATE account SET accessToken=? WHERE id='busy-linked'").bind(accessToken).run()
   await selectBusyCalendars(own,'member-one',{account_id:'busy-linked',calendar_ids:['busy-calendar']})

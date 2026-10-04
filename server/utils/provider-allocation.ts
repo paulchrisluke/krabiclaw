@@ -13,7 +13,7 @@ export function providerUnavailableSql(s: string, replacingBooking = 'NULL', mem
       AND ms.windows_until>=${s}.ends_at
       AND EXISTS (SELECT 1 FROM json_each(ms.windows_json) w WHERE json_extract(w.value,'$.start')<=${s}.starts_at AND json_extract(w.value,'$.end')>=${s}.ends_at)
       AND NOT EXISTS (SELECT 1 FROM json_each(ms.time_off_json) t WHERE json_extract(t.value,'$.start')<${s}.ends_at AND json_extract(t.value,'$.end')>${s}.starts_at)
-      AND (ms.calendar_account_id IS NULL OR (ms.busy_error IS NULL AND ms.busy_checked_at>strftime('%Y-%m-%dT%H:%M:%fZ','now','-${BUSY_FRESHNESS_MS / 1000} seconds')
+      AND (ms.calendar_account_id IS NULL OR json_array_length(ms.calendar_ids_json)=0 OR (ms.busy_error IS NULL AND ms.busy_checked_at>strftime('%Y-%m-%dT%H:%M:%fZ','now','-${BUSY_FRESHNESS_MS / 1000} seconds')
         AND ms.busy_from<=${s}.starts_at AND ms.busy_until>=${s}.ends_at
         AND EXISTS (SELECT 1 FROM account a WHERE a.id=ms.calendar_account_id AND a.userId=m.userId AND a.providerId='google')
         AND NOT EXISTS (SELECT 1 FROM json_each(ms.busy_json) busy WHERE json_extract(busy.value,'$.start')<${s}.ends_at AND json_extract(busy.value,'$.end')>${s}.starts_at))))

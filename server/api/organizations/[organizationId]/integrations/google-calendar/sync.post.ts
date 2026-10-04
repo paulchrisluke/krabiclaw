@@ -12,5 +12,7 @@ export default defineHandler(async (event) => {
   // Explicit retry also retries failed cleanup without changing its identity.
   const { execute } = await import('~/server/db')
   await execute(env.DB, 'UPDATE google_calendar_event_links SET next_attempt_at=NULL WHERE organization_id=?', [organization.id])
-  return jsonResponse({ success: true, ...await syncCalendarOrganization(env, organization.id) })
+  const result=await syncCalendarOrganization(env,organization.id)
+  if(result.failed)return jsonResponse({error:'Your calendar could not be synced. Try again.',...result},{status:502})
+  return jsonResponse({success:true,...result})
 })

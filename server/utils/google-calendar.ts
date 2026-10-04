@@ -3,7 +3,7 @@ import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/se
 import { linkedAccountAccessToken, type CloudflareEnv } from './auth'
 import { composeOwnerThreadInboxUrl } from './dashboard-notification-links'
 
-export interface CalendarChoice { id: string; summary: string; accessRole: string }
+export interface CalendarChoice { id: string; summary: string; accessRole: string; description?: string }
 export class CalendarSelectionConflict extends Error {}
 export interface CalendarSubject {
   booking_kind: 'booking' | 'reservation'
@@ -49,6 +49,42 @@ export async function listWritableCalendars(token: string): Promise<CalendarChoi
   } while (next)
   return calendars
 }
+/** Google owns the calendar; only its domain identity is stored locally. */
+export async function connectCalendar(db: DbClient, organizationId: string, accountId: string, token: string) {
+  const current = await readCalendarIntegration(db, organizationId)
+  if (current?.account_id === accountId && current.status !== 'disabled') {
+    await requireWriter(token, current.calendar_id)
+    return
+  }
+  const pending = await queryFirst<{ n: number }>(db, "SELECT count(*) n FROM google_calendar_event_links WHERE organization_id=? AND state<>'deleted'", [organizationId])
+  if (pending?.n) throw new CalendarSelectionConflict('Your previous calendar is still disconnecting. Try again shortly.')
+  if (current?.account_id === accountId) {
+    await requireWriter(token, current.calendar_id)
+    await storeCalendarSelection(db, organizationId, current)
+    return
+  }
+  const marker = `Krabiclaw bookings for organization ${organizationId}`
+  const calendars = (await listWritableCalendars(token)).filter(item => item.description === marker)
+  if (calendars.length > 1) throw new CalendarSelectionConflict('More than one booking calendar was found. Contact support.')
+  let calendar = calendars[0]
+  if (!calendar) {
+    const claim = await execute(db, 'INSERT INTO google_calendar_setup(organization_id,account_id,started_at) VALUES(?,?,?) ON CONFLICT(organization_id) DO NOTHING', [organizationId, accountId, new Date().toISOString()])
+    if (claim.meta?.changes !== 1) throw new CalendarSelectionConflict('Calendar setup has not finished. Retry to check its progress.')
+    try {
+      calendar = await google<CalendarChoice>(token, '/calendars', { method: 'POST', body: JSON.stringify({ summary: 'Krabiclaw', description: marker }) })
+      if (!calendar?.id || !calendar.summary) throw new Error('Google did not return the new booking calendar.')
+    } catch (error) {
+      // A rejected request cannot have created a resource. A timeout or 5xx
+      // can, so its durable attempt blocks duplicate creation on retry.
+      if (error instanceof CalendarError && error.status >= 400 && error.status < 500) await execute(db, 'DELETE FROM google_calendar_setup WHERE organization_id=? AND account_id=?', [organizationId, accountId])
+      throw error
+    }
+  }
+  const attempt = await queryFirst<{ account_id: string }>(db, 'SELECT account_id FROM google_calendar_setup WHERE organization_id=?', [organizationId])
+  if (attempt && attempt.account_id !== accountId) throw new CalendarSelectionConflict('Finish connecting the previous Google account first.')
+  await storeCalendarSelection(db, organizationId, { account_id: accountId, calendar_id: calendar.id, calendar_name: calendar.summary })
+  await execute(db, 'DELETE FROM google_calendar_setup WHERE organization_id=? AND account_id=?', [organizationId, accountId])
+}
 async function requireWriter(token: string, calendarId: string) {
   const calendar = await google<CalendarChoice>(token, `/users/me/calendarList/${encodeURIComponent(calendarId)}`)
   if (!['writer', 'owner'].includes(calendar.accessRole)) throw new Error('This account no longer has calendar writer access.')
@@ -57,7 +93,7 @@ async function requireWriter(token: string, calendarId: string) {
 export function calendarEvent(subject: CalendarSubject, dashboardUrl: string | null) {
   if (!Number.isFinite(Date.parse(subject.starts_at)) || !Number.isFinite(Date.parse(subject.ends_at)) || subject.ends_at <= subject.starts_at) throw new Error('Invalid canonical booking interval')
   new Intl.DateTimeFormat('en', { timeZone: subject.timezone }).format()
-  const noun = subject.booking_kind === 'booking' ? 'Consultation' : 'Reservation'
+  const noun = subject.booking_kind === 'booking' ? 'Booking' : 'Reservation'
   return {
     summary: `${subject.status === 'pending' ? 'Pending ' + noun.toLowerCase() : noun}${subject.guest_name ? ' — ' + subject.guest_name : ''}`,
     description: `Status: ${subject.status}${dashboardUrl ? `\n${dashboardUrl}` : ''}`,
@@ -67,11 +103,7 @@ export function calendarEvent(subject: CalendarSubject, dashboardUrl: string | n
   }
 }
 export async function readCalendarIntegration(db: DbClient, organizationId: string): Promise<GoogleCalendarIntegration | null> {
-  const row = await queryFirst<Omit<GoogleCalendarIntegration, 'include_reservations'> & { include_reservations: number }>(db, "SELECT account_id, target_id AS calendar_id, target_name AS calendar_name, calendar_group, include_reservations, status, last_error, revision, created_at, updated_at FROM organization_integrations WHERE organization_id=? AND provider='google_calendar'", [organizationId])
-  return row ? { ...row, include_reservations: Boolean(row.include_reservations) } : null
-}
-export async function calendarGroups(db: DbClient, organizationId: string) {
-  return await queryAll<{ calendar_group: string }>(db, 'SELECT DISTINCT calendar_group FROM product_booking_configs WHERE organization_id = ? AND calendar_group IS NOT NULL ORDER BY calendar_group', [organizationId])
+  return (await queryFirst<GoogleCalendarIntegration>(db, "SELECT account_id, target_id AS calendar_id, target_name AS calendar_name, status, last_error, revision, created_at, updated_at FROM organization_integrations WHERE organization_id=? AND provider='google_calendar'", [organizationId])) ?? null
 }
 // The canonical subject query serves both changed-subject batches and one
 // provider identity's lifecycle fences. The database bounds each result.
@@ -86,7 +118,7 @@ export async function calendarSubjects(db: DbClient, organizationId: string, int
     FROM bookings b JOIN product_sessions s ON s.id=b.product_session_id AND s.organization_id=b.organization_id
       JOIN product_booking_configs c ON c.product_id=b.product_id AND c.organization_id=b.organization_id
       LEFT JOIN requests r ON r.id=b.request_id AND r.organization_id=b.organization_id
-    WHERE b.organization_id=? AND c.calendar_group=? AND b.status IN ('pending','confirmed')
+    WHERE b.organization_id=? AND b.status IN ('pending','confirmed')
       AND s.status='scheduled' AND s.ends_at>? AND (? IS NULL OR (?='booking' AND b.id=?))
     UNION ALL
     SELECT 'reservation', b.id, b.request_id, b.status, b.starts_at, b.ends_at, b.timezone,
@@ -95,15 +127,15 @@ export async function calendarSubjects(db: DbClient, organizationId: string, int
         (SELECT MAX(a.sequence) FROM activity_entries a WHERE a.request_id=b.request_id),
         b.status, b.starts_at, b.ends_at, b.timezone, json_extract(r.payload_json,'$.guest.name'))
     FROM reservations b LEFT JOIN requests r ON r.id=b.request_id AND r.organization_id=b.organization_id
-    WHERE b.organization_id=? AND ?=1 AND b.status IN ('pending','confirmed') AND b.ends_at>?
+    WHERE b.organization_id=? AND b.status IN ('pending','confirmed') AND b.ends_at>?
       AND (? IS NULL OR (?='reservation' AND b.id=?))
   ) SELECT subjects.* FROM subjects
     LEFT JOIN google_calendar_event_links l ON l.organization_id=? AND l.integration_revision=?
       AND l.booking_kind=subjects.booking_kind AND l.operational_id=subjects.operational_id AND l.state<>'deleted'
     WHERE ? IS NOT NULL OR l.id IS NULL OR l.booking_revision<>subjects.revision
     ORDER BY COALESCE(l.updated_at,''), subjects.booking_kind, subjects.operational_id LIMIT ?`,
-  [organizationId,integration.calendar_group,now,identity?.operational_id??null,identity?.booking_kind??null,identity?.operational_id??null,
-    organizationId,Number(integration.include_reservations),now,identity?.operational_id??null,identity?.booking_kind??null,identity?.operational_id??null,
+  [organizationId,now,identity?.operational_id??null,identity?.booking_kind??null,identity?.operational_id??null,
+    organizationId,now,identity?.operational_id??null,identity?.booking_kind??null,identity?.operational_id??null,
     organizationId,integration.revision,identity?.operational_id??null,identity?1:25])
 }
 /** Persist intents before any provider I/O, including initial upcoming backfill. */
@@ -133,14 +165,14 @@ async function reconcileIntents(db: DbClient, organizationId: string, integratio
             SELECT 1 FROM bookings b JOIN product_sessions s ON s.id=b.product_session_id AND s.organization_id=b.organization_id
               JOIN product_booking_configs c ON c.product_id=b.product_id AND c.organization_id=b.organization_id
             WHERE b.id=l.operational_id AND b.organization_id=l.organization_id AND s.status='scheduled'
-              AND ((b.status IN ('pending','confirmed') AND s.ends_at>? AND c.calendar_group=?)
+              AND ((b.status IN ('pending','confirmed') AND s.ends_at>?)
                 OR (b.status='confirmed' AND s.ends_at<=? AND l.state='synced'))))
           OR (l.booking_kind='reservation' AND EXISTS (
             SELECT 1 FROM reservations b WHERE b.id=l.operational_id AND b.organization_id=l.organization_id
-              AND ((?=1 AND b.status IN ('pending','confirmed') AND b.ends_at>?)
+              AND ((b.status IN ('pending','confirmed') AND b.ends_at>?)
                 OR (b.status='confirmed' AND b.ends_at<=? AND l.state='synced'))))))
       ORDER BY l.updated_at,l.id LIMIT 25)`,
-  [organizationId,integration.status,integration.revision,now,integration.calendar_group,now,Number(integration.include_reservations),now,now])
+  [organizationId,integration.status,integration.revision,now,now,now,now])
 }
 async function removeEvent(token: string, link: Pick<EventLink, 'calendar_id' | 'event_id'>) {
   const path = `/calendars/${encodeURIComponent(link.calendar_id)}/events/${link.event_id}`
@@ -242,9 +274,7 @@ export async function syncCalendarOrganization(env: CloudflareEnv, organizationI
     }
   }
   const remaining = await queryFirst<{ n: number }>(db, "SELECT count(*) n FROM google_calendar_event_links WHERE organization_id=? AND state IN ('pending','cleanup','error')", [organizationId])
-  if (!remaining?.n && integration.status === 'disabled') {
-    await execute(db, "DELETE FROM organization_integrations WHERE organization_id=? AND provider='google_calendar' AND revision=? AND status='disabled'", [organizationId, integration.revision])
-  } else if (!remaining?.n) await execute(db, "UPDATE organization_integrations SET status=CASE WHEN status='disabled' THEN 'disabled' ELSE 'active' END, last_error=NULL WHERE organization_id=? AND provider='google_calendar' AND revision=?", [organizationId, integration.revision])
+  if (!remaining?.n) await execute(db, "UPDATE organization_integrations SET status=CASE WHEN status='disabled' THEN 'disabled' ELSE 'active' END, last_error=NULL WHERE organization_id=? AND provider='google_calendar' AND revision=?", [organizationId, integration.revision])
   return { checked, failed, remaining: remaining?.n ?? 0 }
 }
 /** Disable first, then clean managed identities. A failed cleanup stays visible. */
@@ -252,23 +282,23 @@ export async function disconnectCalendar(db: DbClient, organizationId: string) {
   await execute(db, "UPDATE organization_integrations SET status='disabled', updated_at=? WHERE organization_id=? AND provider='google_calendar'", [new Date().toISOString(), organizationId])
   await execute(db, "UPDATE google_calendar_event_links SET state='cleanup', next_attempt_at=NULL WHERE organization_id=? AND state <> 'deleted'", [organizationId])
 }
-export async function storeCalendarSelection(db: DbClient, organizationId: string, selection: Pick<GoogleCalendarIntegration, 'account_id' | 'calendar_id' | 'calendar_name' | 'calendar_group' | 'include_reservations'>) {
+export async function storeCalendarSelection(db: DbClient, organizationId: string, selection: Pick<GoogleCalendarIntegration, 'account_id' | 'calendar_id' | 'calendar_name'>) {
   const pending = await queryFirst<{ n: number }>(db, "SELECT count(*) n FROM google_calendar_event_links WHERE organization_id=? AND state <> 'deleted'", [organizationId])
   const existing = await readCalendarIntegration(db, organizationId)
   if (existing && pending?.n) throw new CalendarSelectionConflict('Disconnect and finish cleanup of the previous calendar before changing the selection.')
   const now = new Date().toISOString()
   const payload: GoogleCalendarIntegration = { ...selection, revision: crypto.randomUUID(), status: 'active', last_error: null, created_at: now, updated_at: now }
   const result = await execute(db, `INSERT INTO organization_integrations
-    (id,organization_id,provider,account_id,target_id,target_name,calendar_group,include_reservations,status,last_error,revision,created_at,updated_at)
-    SELECT ?,?,'google_calendar',?,?,?,?,?,'active',NULL,?,?,? FROM organization o WHERE o.id=?
+    (id,organization_id,provider,account_id,target_id,target_name,status,last_error,revision,created_at,updated_at)
+    SELECT ?,?,'google_calendar',?,?,?,'active',NULL,?,?,? FROM organization o WHERE o.id=?
     AND ((? IS NULL AND NOT EXISTS(SELECT 1 FROM organization_integrations i WHERE i.organization_id=o.id AND i.provider='google_calendar'))
       OR EXISTS(SELECT 1 FROM organization_integrations i WHERE i.organization_id=o.id AND i.provider='google_calendar' AND i.revision=?))
     AND NOT EXISTS(SELECT 1 FROM google_calendar_event_links WHERE organization_id=o.id AND state<>'deleted')
     AND NOT EXISTS(SELECT 1 FROM member_scheduling ms,json_each(ms.calendar_ids_json) calendar WHERE ms.organization_id=o.id AND ms.calendar_account_id IS NOT NULL AND calendar.value=?)
     ON CONFLICT(organization_id,provider) DO UPDATE SET account_id=excluded.account_id,target_id=excluded.target_id,target_name=excluded.target_name,
-    calendar_group=excluded.calendar_group,include_reservations=excluded.include_reservations,status=excluded.status,last_error=NULL,
+    status=excluded.status,last_error=NULL,
     revision=excluded.revision,created_at=excluded.created_at,updated_at=excluded.updated_at`,
-  [crypto.randomUUID(),organizationId,payload.account_id,payload.calendar_id,payload.calendar_name,payload.calendar_group,Number(payload.include_reservations),payload.revision,now,now,organizationId,existing?.revision??null,existing?.revision??null,payload.calendar_id])
+  [crypto.randomUUID(),organizationId,payload.account_id,payload.calendar_id,payload.calendar_name,payload.revision,now,now,organizationId,existing?.revision??null,existing?.revision??null,payload.calendar_id])
   if (result.meta?.changes !== 1) throw new CalendarSelectionConflict('Calendar selection changed. Reload and try again.')
 }
 

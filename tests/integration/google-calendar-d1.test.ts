@@ -4,7 +4,7 @@ import { Miniflare } from 'miniflare'
 import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api'
 import * as schema from '../../server/db/schema.ts'
 import { claimSessionCapacity, setBookingStatus, updateSession } from '../../server/utils/availability.ts'
-import { CalendarSelectionConflict, calendarSubjects, runCalendarCleanupJobs, disconnectCalendar, readCalendarIntegration, storeCalendarSelection, syncCalendarOrganization } from '../../server/utils/google-calendar.ts'
+import { CalendarSelectionConflict, connectCalendar, calendarSubjects, runCalendarCleanupJobs, disconnectCalendar, readCalendarIntegration, storeCalendarSelection, syncCalendarOrganization } from '../../server/utils/google-calendar.ts'
 import { requireIntegrationAccount, type CloudflareEnv } from '../../server/utils/auth.ts'
 import { cleanupOrganizationBeforeDelete } from '../../server/utils/tenant-deletion.ts'
 import { organizationAdapter } from '../../server/utils/member-access.ts'
@@ -25,7 +25,7 @@ test('committed consultation projection is tenant scoped, private, idempotent an
     await db.prepare("INSERT INTO product_sessions(id,organization_id,product_id,timezone,starts_at,ends_at,capacity,created_by,updated_by) VALUES('s','org','p','America/New_York','2099-11-01T14:00:00.000Z','2099-11-01T14:30:00.000Z',1,'actor','actor')").run()
     await db.prepare(`INSERT INTO requests(id,kind,organization_id,conversation_state,payload_json) VALUES('thread','booking','org','needs_attention','{"guest":{"name":"Jane Doe","email":"private@example.test","phone":null},"notes":"PRIVATE MATTER"}')`).run()
     const { bookingId } = await claimSessionCapacity(db, { organizationId: 'org', productId: 'p', sessionId: 's', productVariantId: 'v', partySize: 1, requestId: 'thread' })
-    await storeCalendarSelection(db, 'org', { account_id: 'linked-account', calendar_id: 'chosen', calendar_name: 'Calendar', calendar_group: 'consultations', include_reservations: false })
+    await storeCalendarSelection(db, 'org', { account_id: 'linked-account', calendar_id: 'chosen', calendar_name: 'Calendar' })
     const integration = (await readCalendarIntegration(db, 'org'))!
     assert.equal((await calendarSubjects(db, 'other', integration)).length, 0)
     await db.prepare("INSERT INTO organization_integrations(id,organization_id,provider,account_id,target_id,target_name,measurement_id,revision)VALUES('analytics','org','google_analytics','linked-account','property','Analytics','G-123','a')").run()
@@ -68,7 +68,7 @@ test('committed consultation projection is tenant scoped, private, idempotent an
     assert.equal(link?.operational_id, bookingId)
     assert.equal(link?.request_id, 'thread')
     const event = events.get(String(link?.event_id))!
-    assert.equal(event.summary, 'Pending consultation — Jane Doe')
+    assert.equal(event.summary, 'Pending booking — Jane Doe')
     assert.deepEqual(event.start, { dateTime: '2099-11-01T14:00:00.000Z', timeZone: 'America/New_York' })
     assert.equal(event.attendees, undefined)
     assert.equal(event.description, 'Status: pending\nhttps://krabiclaw.test/dashboard/org/messages/thread')
@@ -77,7 +77,7 @@ test('committed consultation projection is tenant scoped, private, idempotent an
     await setBookingStatus(db, { organizationId: 'org', bookingId, status: 'confirmed' })
     await syncCalendarOrganization(env, 'org', 25, provider)
     assert.equal(events.size, 1)
-    assert.equal(events.get(String(link?.event_id))?.summary, 'Consultation — Jane Doe')
+    assert.equal(events.get(String(link?.event_id))?.summary, 'Booking — Jane Doe')
     await updateSession(db, { organizationId: 'org', sessionId: 's', actorId: 'actor', startsAt: '2099-11-01T15:00:00.000Z', endsAt: '2099-11-01T15:30:00.000Z' })
     cancelDuringPut = true
     await syncCalendarOrganization(env, 'org', 25, provider)
@@ -88,9 +88,9 @@ test('committed consultation projection is tenant scoped, private, idempotent an
     // Cancelled subject was already deleted; create another real committed claim.
     const second = await claimSessionCapacity(db, { organizationId: 'org', productId: 'p', sessionId: 's', productVariantId: 'v', partySize: 1 })
     await syncCalendarOrganization(env, 'org', 25, provider)
-    assert.equal(await readCalendarIntegration(db, 'org'), null)
+    assert.equal((await readCalendarIntegration(db, 'org'))?.status, 'disabled')
     assert.equal((await db.prepare("SELECT measurement_id FROM organization_integrations WHERE organization_id='org' AND provider='google_analytics'").first())?.measurement_id, 'G-123')
-    await storeCalendarSelection(db, 'org', { account_id: 'linked-account', calendar_id: 'chosen', calendar_name: 'Calendar', calendar_group: 'consultations', include_reservations: false })
+    await storeCalendarSelection(db, 'org', { account_id: 'linked-account', calendar_id: 'chosen', calendar_name: 'Calendar' })
     await syncCalendarOrganization(env, 'org', 25, provider)
     assert.equal(events.size, 1)
     // Disable while a create is in flight: the late result is removed, and
@@ -98,13 +98,13 @@ test('committed consultation projection is tenant scoped, private, idempotent an
     await updateSession(db, { organizationId: 'org', sessionId: 's', actorId: 'actor', startsAt: '2099-11-01T16:00:00.000Z', endsAt: '2099-11-01T16:30:00.000Z' })
     await disconnectCalendar(db, 'org')
     await syncCalendarOrganization(env, 'org', 25, provider)
-    await storeCalendarSelection(db, 'org', { account_id: 'linked-account', calendar_id: 'chosen', calendar_name: 'Calendar', calendar_group: 'consultations', include_reservations: false })
+    await storeCalendarSelection(db, 'org', { account_id: 'linked-account', calendar_id: 'chosen', calendar_name: 'Calendar' })
     disconnectDuringPost = true
     await syncCalendarOrganization(env, 'org', 25, provider)
     assert.equal(events.size, 0, 'late create cannot survive disconnect')
     await syncCalendarOrganization(env, 'org', 25, provider)
-    assert.equal(await readCalendarIntegration(db, 'org'), null)
-    await storeCalendarSelection(db, 'org', { account_id: 'linked-account', calendar_id: 'chosen', calendar_name: 'Calendar', calendar_group: 'consultations', include_reservations: false })
+    assert.equal((await readCalendarIntegration(db, 'org'))?.status, 'disabled')
+    await storeCalendarSelection(db, 'org', { account_id: 'linked-account', calendar_id: 'chosen', calendar_name: 'Calendar' })
     await syncCalendarOrganization(env, 'org', 25, provider)
     assert.equal(events.size, 1)
     await disconnectCalendar(db, 'org')
@@ -113,13 +113,13 @@ test('committed consultation projection is tenant scoped, private, idempotent an
     assert.equal(events.size, 1)
     assert.equal((await readCalendarIntegration(db, 'org'))?.status, 'disabled')
     assert.ok((await readCalendarIntegration(db, 'org'))?.last_error)
-    await assert.rejects(storeCalendarSelection(db, 'org', { account_id: 'linked-account', calendar_id: 'new', calendar_name: 'New', calendar_group: 'consultations', include_reservations: false }), CalendarSelectionConflict)
+    await assert.rejects(storeCalendarSelection(db, 'org', { account_id: 'linked-account', calendar_id: 'new', calendar_name: 'New' }), CalendarSelectionConflict)
     denyCalendar = false
     await db.prepare('UPDATE google_calendar_event_links SET next_attempt_at=NULL').run()
     await syncCalendarOrganization(env, 'org', 25, provider)
     assert.equal(events.size, 0)
     assert.equal((await db.prepare('SELECT status FROM bookings WHERE id=?').bind(second.bookingId).first())?.status, 'pending')
-    await storeCalendarSelection(db, 'org', { account_id: 'linked-account', calendar_id: 'chosen', calendar_name: 'Calendar', calendar_group: 'consultations', include_reservations: false })
+    await storeCalendarSelection(db, 'org', { account_id: 'linked-account', calendar_id: 'chosen', calendar_name: 'Calendar' })
     await syncCalendarOrganization(env, 'org', 25, provider)
     assert.equal(events.size, 1)
     await cleanupOrganizationBeforeDelete(env, 'org')
@@ -159,7 +159,7 @@ test('bounded Calendar backfill resumes and cancelled historical Sessions are cl
     await db.batch(statements.map(statement => db.prepare(statement)))
     await db.prepare("INSERT INTO organization(id,name,slug) VALUES('org','Org','org')").run()
     await db.prepare("INSERT INTO products(kind,id,organization_id,name,slug,created_by,updated_by) VALUES('service','p','org','Consultation','consultation','actor','actor')").run()
-    await db.prepare("INSERT INTO product_booking_configs(product_id,organization_id,calendar_group,online_timezone,confirmation_mode,created_by,updated_by) VALUES('p','org','consultations','UTC','review','actor','actor')").run()
+    await db.prepare("INSERT INTO product_booking_configs(product_id,organization_id,calendar_group,online_timezone,confirmation_mode,created_by,updated_by) VALUES('p','org',NULL,'UTC','review','actor','actor')").run()
     await db.prepare("INSERT INTO product_variants(id,organization_id,product_id,name,created_by,updated_by) VALUES('v','org','p','Consultation','actor','actor')").run()
     const bookings: string[] = []
     for (let i = 0; i < 55; i++) {
@@ -168,7 +168,7 @@ test('bounded Calendar backfill resumes and cancelled historical Sessions are cl
       bookings.push((await claimSessionCapacity(db, { organizationId: 'org', productId: 'p', sessionId: `s${i.toString().padStart(2, '0')}`, productVariantId: 'v', partySize: 1 })).bookingId)
     }
     const env = { DB: db, NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://krabiclaw.test' } as CloudflareEnv
-    await storeCalendarSelection(db, 'org', { account_id: 'linked-account', calendar_id: 'chosen', calendar_name: 'Calendar', calendar_group: 'consultations', include_reservations: false })
+    await storeCalendarSelection(db, 'org', { account_id: 'linked-account', calendar_id: 'chosen', calendar_name: 'Calendar' })
     const provider = { token: async () => 'token' }
     for (const expected of [25, 50, 55]) {
       await syncCalendarOrganization(env, 'org', 0, provider)
@@ -222,7 +222,7 @@ test('scheduled Calendar sync reports thrown and event failures while projecting
       await db.prepare("INSERT INTO product_variants(id,organization_id,product_id,name,created_by,updated_by) VALUES(?,?,?,'Consultation','actor','actor')").bind(org, org, org).run()
       await db.prepare("INSERT INTO product_sessions(id,organization_id,product_id,timezone,starts_at,ends_at,capacity,created_by,updated_by) VALUES(?,?,?,'UTC','2099-11-01T10:00:00.000Z','2099-11-01T10:30:00.000Z',1,'actor','actor')").bind(org, org, org).run()
       await claimSessionCapacity(db, { organizationId: org, productId: org, sessionId: org, productVariantId: org, partySize: 1 })
-      await storeCalendarSelection(db, org, { account_id: 'linked', calendar_id: org, calendar_name: org, calendar_group: 'consultations', include_reservations: false })
+      await storeCalendarSelection(db, org, { account_id: 'linked', calendar_id: org, calendar_name: org })
     }
     await db.prepare("CREATE TRIGGER reject_broken_projection BEFORE INSERT ON google_calendar_event_links WHEN NEW.organization_id='a-broken' BEGIN SELECT RAISE(ABORT,'projection write rejected'); END").run()
     const events = new Map<string, unknown>()
@@ -246,8 +246,50 @@ test('scheduled Calendar sync reports thrown and event failures while projecting
     assert.equal(events.size, 2, 'the healthy organization created and updated its event despite other failures')
     assert([...events.keys()].every(path => path.includes('/calendars/c-healthy/events')))
     for (const event of events.values()) {
-      assert.equal((event as { summary: string }).summary, 'Consultation')
+      assert.equal((event as { summary: string }).summary, 'Booking')
       assert.deepEqual((event as { start: unknown }).start, { dateTime: '2099-11-01T10:00:00.000Z', timeZone: 'UTC' })
     }
   } finally { await mf.dispose() }
+})
+
+
+test('automatic Calendar connection recovers an ambiguous creation and reuses its persisted calendar on reconnect', {timeout:120000}, async t => {
+ const runtime=new Miniflare({workers:[{config:{name:'calendar-setup-proof',type:'worker',compatibilityDate:'2024-11-01',manifest:{mainModule:'index.mjs',modules:{'index.mjs':{type:'esm',contents:'export default {fetch(){return new Response("ok")}}'}}},env:{DB:{type:'d1'}}}}]})
+ try {
+  const db=await runtime.getD1Database('DB')
+  await db.batch((await generateSQLiteMigration(await generateSQLiteDrizzleJson({}),await generateSQLiteDrizzleJson(schema))).map(sql=>db.prepare(sql)))
+  await db.prepare("INSERT INTO organization(id,name,slug)VALUES('org','Org','org')").run()
+  const calendars:{id:string;summary:string;description:string;accessRole:string}[]=[]
+  let inserts=0, visible=false
+  t.mock.method(globalThis,'fetch',async(input,init)=>{
+   const url=new URL(String(input))
+   assert.equal(url.hostname,'www.googleapis.com')
+   assert.equal(new Headers(init?.headers).get('Authorization'),'Bearer token')
+   if(init?.method==='POST') {
+    assert.equal(url.pathname,'/calendar/v3/calendars')
+    const payload=JSON.parse(String(init.body))
+    assert.deepEqual(payload,{summary:'Krabiclaw',description:'Krabiclaw bookings for organization org'})
+    inserts++
+    calendars.push({...payload,id:'created-calendar',accessRole:'owner'})
+    throw new Error('Timeout after Google committed the calendar')
+   }
+   if(url.pathname.endsWith('/calendarList'))return Response.json({items:visible?calendars:[]})
+   assert.equal(url.pathname,'/calendar/v3/users/me/calendarList/created-calendar')
+   return Response.json(calendars[0])
+  })
+  await assert.rejects(connectCalendar(db,'org','linked','token'),/Timeout/)
+  await assert.rejects(connectCalendar(db,'org','linked','token'),CalendarSelectionConflict)
+  assert.equal(inserts,1,'an unseen provider outcome must not create a duplicate calendar')
+  visible=true
+  await connectCalendar(db,'org','linked','token')
+  const connection=await readCalendarIntegration(db,'org')
+  assert.equal(connection?.calendar_id,'created-calendar')
+  assert.equal(connection?.calendar_name,'Krabiclaw')
+  assert.equal(await db.prepare('SELECT * FROM google_calendar_setup').first(),null)
+  await disconnectCalendar(db,'org')
+  await connectCalendar(db,'org','linked','token')
+  assert.equal((await readCalendarIntegration(db,'org'))?.status,'active')
+  assert.equal((await readCalendarIntegration(db,'org'))?.calendar_id,'created-calendar')
+  assert.equal(inserts,1,'disconnect and reconnect use the same calendar')
+ } finally {await runtime.dispose()}
 })

@@ -12,7 +12,7 @@
  * scopes are fixed by its provider configuration in server/utils/auth.ts.
  */
 export const INTEGRATION_SCOPES = {
-  'google-calendar': ['https://www.googleapis.com/auth/calendar.calendarlist.readonly', 'https://www.googleapis.com/auth/calendar.events'],
+  'google-calendar': ['https://www.googleapis.com/auth/calendar.calendarlist.readonly', 'https://www.googleapis.com/auth/calendar.app.created'],
   'google-analytics': ['https://www.googleapis.com/auth/analytics.readonly'],
   'google-search-console': [
     'https://www.googleapis.com/auth/webmasters',
@@ -44,8 +44,6 @@ export interface OrganizationIntegration {
   verified: boolean | null
   /** Search Console only, while Google still requires the meta tag to be served. */
   verification_token: string | null
-  calendar_group: string | null
-  include_reservations: boolean | null
   status: 'active' | 'disabled' | 'error' | null
   last_error: string | null
   revision: string
@@ -58,8 +56,6 @@ export interface GoogleCalendarIntegration {
   account_id: string
   calendar_id: string
   calendar_name: string
-  calendar_group: string | null
-  include_reservations: boolean
   status: 'active' | 'disabled' | 'error'
   last_error: string | null
   created_at: string

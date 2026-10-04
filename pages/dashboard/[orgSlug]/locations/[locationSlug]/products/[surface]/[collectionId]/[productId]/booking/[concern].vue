@@ -13,7 +13,7 @@
     <URadioGroup v-else-if="concern === 'confirmation'" v-model="p.form.confirmation_mode" :items="[{ value: 'instant', label: 'Confirm automatically' }, { value: 'review', label: 'Review each request' }]" variant="card" />
     <UFormField v-else-if="concern === 'assignment'" label="Who guests meet">
       <p v-if="membersError" role="alert" class="mb-3 text-error">Team members could not be loaded.</p>
-      <USelect v-else v-model="assignedMember" :items="memberOptions" :loading="membersStatus === 'pending'" class="w-full" />
+      <URadioGroup v-else v-model="assignedMember" :items="memberOptions" variant="card" class="w-full" />
     </UFormField>
     <SettingRow v-else-if="concern === 'payment'" v-model="p.form.online_payment_required" label="Require online payment for paid sessions" />
     <LocationTimezoneField v-else-if="concern === 'location'" v-model="onlineTimezone" />
@@ -41,7 +41,7 @@ const settings = {
   duration: { title: 'Duration', lead: 'How long does each session last? Existing appointments keep their saved duration.' },
   capacity: { title: 'Guest limit', lead: 'How many guests can book the same session? Existing appointments keep their saved guest limit.' },
   confirmation: { title: 'Confirmation', lead: 'Confirm bookings as soon as guests reserve, or review each request before confirming.' },
-  assignment: { title: 'Who guests meet', lead: 'Assign a team member to use their working hours, time off and calendar availability. Existing bookings retain their assignment.' },
+  assignment: { title: 'Who guests meet', lead: 'Choose whose availability guests can book.' },
   payment: { title: 'Payment', lead: 'Online checkout is not available yet. Requiring payment prevents guests from booking paid sessions; free sessions remain bookable.' },
   location: { title: 'Meeting location', lead: 'Choose a city for your online schedule; times follow its time zone and daylight saving is handled automatically.' },
   calendar: { title: 'Shared availability', lead: 'Use the same calendar name for online services that cannot run at the same time. Leave it empty for an independent schedule.' },
@@ -49,8 +49,8 @@ const settings = {
 }
 const dashboard = useDashboardOrganization()
 const { data: members, error: membersError, status: membersStatus } = await useFetch<{ members: { id: string; name: string }[] }>(() => `/api/organizations/${dashboard.organization.value?.id}/members/scheduling`, { server: false })
-const assignedMember = computed({ get: () => p.form.assigned_member_id || null, set: (value: string | null) => { p.form.assigned_member_id = value ?? ''; p.form.scheduling_mode = value ? 'provider' : 'legacy' } })
-const memberOptions = computed(() => [{ label: 'Tenant organization', value: null }, ...(members.value?.members.map(member => ({ label: member.name, value: member.id })) ?? [])])
+const assignedMember = computed({ get: () => p.form.assigned_member_id, set: (value: string | null) => { p.form.assigned_member_id = value ?? ''; p.form.scheduling_mode = value ? 'provider' : 'legacy' } })
+const memberOptions = computed(() => [{ label: 'Use the business schedule', value: '' }, ...(members.value?.members.map(member => ({ label: member.name, value: member.id })) ?? [])])
 const setting = computed(() => settings[concern.value as keyof typeof settings] ?? { title: '', lead: '' })
 watchEffect(() => {
   if (level.mode.value === 'yield') return

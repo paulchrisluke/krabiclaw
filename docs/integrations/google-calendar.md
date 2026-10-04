@@ -1,12 +1,16 @@
 # Outbound Google Calendar
 
-Krabiclaw owns scheduling and capacity. This integration projects pending and
-confirmed operational Bookings in the selected `product_booking_configs.calendar_group`
-to one calendar. Enrollment is the foundation allocation policy; settings do
-not maintain another Product list. Reservations are a separate explicit opt-in.
-Other classes/experience Products, checkout holds, cancelled records and
-historical records are excluded from upcoming backfill. No office, attorney,
-resource, import, Google free/busy or inbound event policy is introduced.
+Krabiclaw owns scheduling and capacity. Connect Google Calendar to create or reuse
+one **Krabiclaw** calendar for the business. All upcoming pending and confirmed
+Bookings and Reservations are included automatically. Calendar-group allocation
+rules govern booking availability, not which bookings appear in Google.
+Cancelled records and payment holds are excluded. Changes to Google events do
+not change the canonical booking.
+
+Personal conflict checking is separate: each member connects their own Google
+account and turns **Avoid double bookings** on to check their primary calendar.
+Turning it off retains the linked account and releases personal busy exclusions.
+The CMS shows no calendar picker, group picker, or reservation opt-in.
 
 ## Committed lifecycle contract
 
@@ -15,8 +19,7 @@ and activity through the foundation. The projection worker reads those committed
 rows, canonical Session instants/timezone and the committed activity sequence.
 It never calls MCP and never participates in a guest booking transaction. A
 provider failure cannot roll back a booking or alter the guest response.
-The scheduled task runs on the existing five-minute cron; **Sync upcoming / retry
-cleanup** also reconciles immediately. SQL selects at most 25 missing or changed
+The scheduled task runs on the existing five-minute cron; the contextual **Retry** action also reconciles immediately. SQL selects at most 25 missing or changed
 subjects per invocation. Unchanged subjects receive no intent writes. Cleanup
 selects at most 25 stale identities at the database boundary, and each lifecycle
 fence reads only its operational identity. Later passes resume through the
@@ -45,16 +48,19 @@ in-flight event can be briefly visible until compensation/retry completes.
 
 Better Auth owns account identity, encrypted credentials, refresh and incremental
 consent through the existing `useIntegrationConnection` / `linkedAccountAccessToken`
-boundary. `organization_integrations` holds only account/calendar/group selection,
+boundary. `organization_integrations` holds only account/calendar identity,
 revision/status and a readable failure. The Google account and Analytics/Search
 Console grants are retained on Calendar disconnect.
 
-Selecting a calendar verifies its writer/owner role and schedules upcoming
-active backfill. Calendar changes deliberately require disconnect and completed
-cleanup first. Disconnect disables projection immediately; the worker removes
+Connection creates a secondary calendar through Google’s `calendars.insert` with
+`calendar.app.created`, retaining Calendar List read access for identity recovery
+and permission checks. A durable `google_calendar_setup` attempt prevents a second
+create after an ambiguous response. Retry discovers the exact business marker;
+it never guesses from the calendar name. Reconnect reuses the stored target.
+Changing accounts requires completed cleanup first. Disconnect disables projection immediately; the worker removes
 only mapped managed events from the old calendar. Failed cleanup remains
 visible with its original account/calendar/event identity and retry action.
-The selection is cleared only once all managed identities are deleted.
+The calendar identity remains after cleanup so reconnect uses the same calendar.
 A 404/410 event delete is accepted only after writer access to its calendar is
 verified again; a lost calendar grant is not treated as completed cleanup.
 Synced confirmed historical consultation events remain only while their
@@ -99,17 +105,18 @@ are sent. Provider mutations use `sendUpdates=none`.
 1. Keep this PR based on current `staging`, which includes the consultation
    foundation (#1211). Calendar is reviewed before the separate Payments PR.
    This PR uses `0001_calendar_member_scheduling` after the v11 foundation
-   baseline, then `0002_calendar_member_integrity`. The separate Payments PR
+   baseline, then `0002_calendar_member_integrity` and `0003_calendar_connection`. The separate Payments PR
    must generate its migration after this Calendar head when rebasing.
 2. Apply the canonical release/migration checks and deployment process. No
    deployment or merge was authorized for this implementation.
 3. Enable Google Calendar API for the existing OAuth application and configure
-   its consent screen/verification for `calendar.calendarlist.readonly` plus
-   `calendar.events`. Events scope is needed for writer access to an existing
-   shared calendar; owned-only/app-created scopes do not cover that policy.
-4. The owner explicitly grants incremental Calendar scopes on the linked Google
-   account, chooses a writable calendar and existing single-calendar group, then
-   checks upcoming backfill and retries any visible errors.
+   its consent screen/verification for `calendar.calendarlist.readonly` and
+   `calendar.app.created`. Personal checking additionally requests
+   `calendar.events.freebusy`; Better Auth owns these incremental grants.
+4. Connect Google Calendar in Calendar → Settings → Availability. The business
+   calendar is created automatically; no export policy is chosen. In My account
+   → Your availability, connect Google and use Avoid double bookings for personal
+   conflicts.
 5. Perform real consent/provider verification only against a separately
    authorized disposable Google calendar. Implementation tests intercept Google
    provider requests; they do not grant scopes or mutate real Google events.

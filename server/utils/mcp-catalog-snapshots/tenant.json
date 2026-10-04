@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:8f64aeed35f6b075110d1ee25cc31ea62b81811256f2b57cbfc53fe103abcac1",
+  "fingerprint": "sha256:bdb17abcd306aab1bc49fff026c1f0362100f9ef71998086373e5735008261b2",
   "tools": [
     {
       "name": "append_content_block",
@@ -15889,7 +15889,7 @@
     },
     {
       "name": "set_member_busy_calendars",
-      "description": "Select 1–10 Google busy-input calendars on the member’s own already-linked account with granted free/busy scopes, or disconnect with null account and empty calendar_ids. This tool never grants OAuth access. Busy input must be separate from organization booking output. Selected stale/disconnected data blocks that member’s new availability; no selection uses internal scheduling.",
+      "description": "Select 1–10 Google busy-input calendars on the member’s own already-linked account with granted free/busy scopes, pause checking with an empty calendar_ids list, or disconnect with null account and empty calendar_ids. This tool never grants OAuth access. Busy input must be separate from organization booking output. Selected stale/disconnected data blocks that member’s new availability; no selection uses internal scheduling.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {

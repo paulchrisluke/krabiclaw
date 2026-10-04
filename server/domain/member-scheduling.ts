@@ -76,7 +76,7 @@ export async function readMemberScheduling(db: DbClient, organizationId: string,
   calendar_account_id:row.calendar_account_id,calendar_ids:JSON.parse(row.calendar_ids_json) as string[],
   busy_from:row.busy_from,busy_until:row.busy_until,busy_checked_at:row.busy_checked_at,busy_error:row.busy_error,
   updated_at:row.updated_at,updated_by:row.updated_by,
-  calendar_status:!row.calendar_account_id?'internal':!linked?'disconnected':row.busy_error?'error':!row.busy_checked_at||Date.now()-Date.parse(row.busy_checked_at)>BUSY_FRESHNESS_MS?'stale':'ready',
+  calendar_status:!row.calendar_account_id || !JSON.parse(row.calendar_ids_json).length?'internal':!linked?'disconnected':row.busy_error?'error':!row.busy_checked_at||Date.now()-Date.parse(row.busy_checked_at)>BUSY_FRESHNESS_MS?'stale':'ready',
  }
 }
 export async function writeMemberScheduling(actor: SchedulingActor, memberId: string, input: {timezone: string; weekly: WorkingHours[]; time_off: SchedulingInterval[]; expected_updated_at: string | null; public_name?: string | null; public_photo_url?: string | null; public_bio?: string | null; public_approved?: boolean}) {
@@ -109,8 +109,8 @@ export async function selectBusyCalendars(actor: SchedulingActor, memberId: stri
  if(!input || (input.account_id!==null && (typeof input.account_id!=='string' || !input.account_id)))throw new HTTPError({statusCode:400,message:'Choose a linked account or explicitly disconnect it'})
  const member=await requireSchedulingAccess(actor,memberId)
  if(input.account_id && member.userId!==actor.userId) throw new HTTPError({statusCode:403,message:'Only the member may select their linked Google account'})
- if(!Array.isArray(input.calendar_ids)||input.calendar_ids.length>10||input.calendar_ids.some(id=>typeof id!=='string'||!id||id.length>1024)||Boolean(input.account_id)!==Boolean(input.calendar_ids.length)) throw new HTTPError({statusCode:400,message:'Choose an account and 1–10 calendars, or disconnect both'})
- if(input.account_id) await requireIntegrationAccount(actor.env,input.account_id,{userId:member.userId,currentAccountId:null,providerId:'google',scopes:MEMBER_BUSY_SCOPES})
+ if(!Array.isArray(input.calendar_ids)||input.calendar_ids.length>10||input.calendar_ids.some(id=>typeof id!=='string'||!id||id.length>1024)||(!input.account_id && input.calendar_ids.length>0)) throw new HTTPError({statusCode:400,message:'Choose an account and 1–10 calendars, or disconnect both'})
+ if(input.account_id) await requireIntegrationAccount(actor.env,input.account_id,{userId:member.userId,currentAccountId:null,providerId:'google',scopes:input.calendar_ids.length?MEMBER_BUSY_SCOPES:[]})
  const now=new Date().toISOString()
  const results=await executeBatch(actor.env.DB,[{query:`UPDATE member_scheduling SET calendar_account_id=?,calendar_ids_json=?,calendar_revision=?,busy_json='[]',busy_from=NULL,busy_until=NULL,busy_checked_at=NULL,busy_error=NULL,updated_at=?,updated_by=? WHERE member_id=? AND organization_id=? AND NOT EXISTS(SELECT 1 FROM organization_integrations WHERE organization_id=? AND provider='google_calendar' AND status<>'disabled' AND target_id IN (SELECT value FROM json_each(?)))`,params:[input.account_id,JSON.stringify(input.calendar_ids),crypto.randomUUID(),now,actor.userId,memberId,actor.organizationId,actor.organizationId,JSON.stringify(input.calendar_ids)]}])
  if(!results[0]?.meta.changes) throw new HTTPError({statusCode:409,message:'Save member hours first and keep busy-input calendars separate from booking output'})
@@ -118,7 +118,7 @@ export async function selectBusyCalendars(actor: SchedulingActor, memberId: stri
 }
 export async function refreshMemberBusy(db: DbClient, env: CloudflareEnv, memberId: string, force=false) {
  const row=await queryFirst<MemberScheduling>(db,'SELECT * FROM member_scheduling WHERE member_id=?',[memberId])
- if(!row?.calendar_account_id)return
+ if(!row?.calendar_account_id || !JSON.parse(row.calendar_ids_json).length)return
  if(!force && row.busy_checked_at && Date.now()-Date.parse(row.busy_checked_at)<BUSY_FRESHNESS_MS/2)return row.busy_error?{error:row.busy_error}:undefined
  const now=new Date().toISOString(), until=new Date(Date.now()+94*86400000).toISOString()
  try {
@@ -164,18 +164,24 @@ export async function memberSchedulingList(actor: SchedulingActor) {
  const members=await queryAll<{id:string;name:string;is_self:number}>(actor.env.DB,`SELECT m.id,u.name,m.userId=? AS is_self FROM member m JOIN user u ON u.id=m.userId WHERE m.organizationId=? AND (?=1 OR m.userId=?)`,[actor.userId,actor.organizationId,Number(admin),actor.userId])
  return Promise.all(members.map(async ({is_self,...member})=>({...member,self:Boolean(is_self),scheduling:await readMemberScheduling(actor.env.DB,actor.organizationId,member.id)})))
 }
-export async function memberBusyCalendarChoices(actor:SchedulingActor,memberId:string,accountId:string) {
+export async function connectPersonalCalendar(actor:SchedulingActor, memberId:string, accountId:string) {
  const member=await requireSchedulingAccess(actor,memberId)
- if(member.userId!==actor.userId)throw new HTTPError({statusCode:403,message:'Only the member may inspect their linked calendar choices'})
+ if(member.userId!==actor.userId)throw new HTTPError({statusCode:403,message:'Connect your own Google account in My account.'})
  await requireIntegrationAccount(actor.env,accountId,{userId:actor.userId,currentAccountId:null,providerId:'google',scopes:MEMBER_BUSY_SCOPES})
  const token=await linkedAccountAccessToken(actor.env,accountId)
- const calendars:{id:string;summary:string}[]=[]
  let next:string|undefined
  for(let page=0;page<4;page++) {
-  const response=await fetch(`https://www.googleapis.com/calendar/v3/users/me/calendarList?maxResults=250&fields=items(id,summary),nextPageToken${next?`&pageToken=${encodeURIComponent(next)}`:''}`,{headers:{Authorization:`Bearer ${token.accessToken}`},signal:AbortSignal.timeout(10000)})
-  if(!response.ok)throw new HTTPError({statusCode:502,message:`Google calendar selection failed (${response.status})`})
-  const data=await response.json() as {items?:{id:string;summary:string}[];nextPageToken?:string}
-  calendars.push(...(data.items??[]));next=data.nextPageToken;if(!next)return calendars
+  const response=await fetch(`https://www.googleapis.com/calendar/v3/users/me/calendarList?maxResults=250&fields=items(id,primary),nextPageToken${next?`&pageToken=${encodeURIComponent(next)}`:''}`,{headers:{Authorization:`Bearer ${token.accessToken}`},signal:AbortSignal.timeout(10000)})
+  if(!response.ok)throw new HTTPError({statusCode:502,message:'Your personal calendar could not be connected. Try again.'})
+  const data=await response.json() as {items?:{id:string;primary?:boolean}[];nextPageToken?:string}
+  const primary=data.items?.find(calendar=>calendar.primary)
+  if(primary) {
+   const current=await readMemberScheduling(actor.env.DB,actor.organizationId,memberId)
+   if(current?.calendar_account_id===accountId && current.calendar_ids.length===1 && current.calendar_ids[0]===primary.id)return current
+   return selectBusyCalendars(actor,memberId,{account_id:accountId,calendar_ids:[primary.id]})
+  }
+  next=data.nextPageToken
+  if(!next)break
  }
- throw new HTTPError({statusCode:409,message:'Calendar account exceeds the bounded selection list'})
+ throw new HTTPError({statusCode:502,message:'Google did not return your primary calendar.'})
 }

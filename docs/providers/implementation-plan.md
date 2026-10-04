@@ -2,7 +2,7 @@
 
 One existing Better Auth organization member may deliver each offering. Organization
 availability is used when no member is assigned. Member hours, timezone, time off
-and selected Google busy calendars feed the shared session allocator.
+and optional personal Google busy times feed the shared session allocator.
 
 Existing bookings retain their member assignment. Whole-session reassignment checks
 member availability and overlap atomically, audits the change and notifies guests
@@ -11,7 +11,10 @@ product pages as “Who you’ll meet with”.
 
 Better Auth owns identity, membership, linked Google accounts, scopes and tokens.
 The application stores only scheduling and selected-calendar domain state.
-Organization-selected outbound Calendar is separate from member busy input.
+The automatically managed business booking calendar is separate from each
+member’s optional primary-calendar busy input. Calendar → Settings → Availability
+uses focused shared dashboard indices and leaves for calendar connection, member
+hours, time off, and public profile.
 
 Calendar and member scheduling use the additive `0001_calendar_member_scheduling`
 migration over the consultation/catalog foundation. Payment holds, Checkout, buyer

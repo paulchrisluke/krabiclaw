@@ -1086,8 +1086,6 @@ export const organization_integrations = sqliteTable("organization_integrations"
 	// Krabiclaw serves while Google still requires it.
 	verified: integer({ mode: "boolean" }),
 	verification_token: text(),
-	calendar_group: text(),
-	include_reservations: integer({ mode: "boolean" }),
 	status: text({ enum: ["active", "disabled", "error"] }),
 	last_error: text(),
 	// A new selection writes a new revision, so a caller holding the old one is refused.
@@ -1102,7 +1100,7 @@ export const organization_integrations = sqliteTable("organization_integrations"
 	check("organization_integrations_values_check", sql`trim(account_id) <> '' AND trim(target_id) <> '' AND trim(target_name) <> '' AND trim(revision) <> ''`),
 	check("organization_integrations_measurement_check", sql`(provider = 'google_analytics') = (measurement_id IS NOT NULL)`),
 	check("organization_integrations_verification_check", sql`(provider = 'google_search_console') = (verified IS NOT NULL) AND (verification_token IS NULL OR provider = 'google_search_console') AND (verified IS NULL OR verified IN (0, 1))`),
-	check("organization_integrations_calendar_check", sql`(provider = 'google_calendar') = (include_reservations IS NOT NULL AND status IS NOT NULL) AND (include_reservations IS NULL OR include_reservations IN (0, 1)) AND (status IS NULL OR status IN ('active', 'disabled', 'error')) AND (provider = 'google_calendar' OR (calendar_group IS NULL AND include_reservations IS NULL AND status IS NULL AND last_error IS NULL))`),
+	check("organization_integrations_calendar_check", sql`(provider = 'google_calendar') = (status IS NOT NULL) AND (status IS NULL OR status IN ('active', 'disabled', 'error')) AND (provider = 'google_calendar' OR (status IS NULL AND last_error IS NULL))`),
 	check("organization_integrations_instants_check", sql`strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at AND strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at`),
 ]);
 
@@ -2296,3 +2294,11 @@ export const member_scheduling = sqliteTable("member_scheduling", {
 }, t => [index("member_scheduling_org_idx").on(t.organization_id),
  foreignKey({ columns: [t.member_id, t.organization_id], foreignColumns: [member.id, member.organizationId] }).onDelete("cascade"),
 ]);
+
+// A creation attempt survives an ambiguous provider response. Retry discovers
+// its exact organization marker before it may issue another calendars.insert.
+export const google_calendar_setup = sqliteTable("google_calendar_setup", {
+ organization_id: text().primaryKey().references(() => organization.id, { onDelete: "cascade" }),
+ account_id: text().notNull(),
+ started_at: text().notNull(),
+});
