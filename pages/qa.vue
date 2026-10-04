@@ -40,5 +40,16 @@ useSocialMetadata(() => ({
   brand: {
     organizationName: organizationName.value,
   },
+  breadcrumbs: [
+    { name: t('saya.qa.title'), url: '/qa' },
+  ],
+  faqItems: Array.isArray(qaList.value)
+    ? qaList.value
+        .filter((item: any) => item?.question && item?.answer)
+        .map((item: any) => ({
+          question: String(item.question),
+          answer: String(item.answer),
+        }))
+    : undefined,
 }))
 </script>
