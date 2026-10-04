@@ -276,7 +276,7 @@
 <script setup lang="ts">
 import SocialPosts from '~/components/social/SocialPosts.vue'
 import { formatOpeningHours, getIsOpenNow, getActiveSpecialClosure, formatClosureMessage } from '~/utils/formatters'
-import { getTodayHoursLabel } from '~/shared/reservation-hours'
+import { getTodayHoursLabel, schemaOpeningHours } from '~/shared/reservation-hours'
 import { formatProductMoney } from '~/utils/product-money'
 import { productLocationCollectionPath, resolveProductPresentation } from '~/utils/product-presentation'
 import { selectPrice, type Price } from '~/shared/prices'
@@ -508,6 +508,7 @@ useSchemaOrg([
     // nodes before building the graph, so undefined is the correct, filtered "no schema" value
     // here — the vendored UseSchemaOrgInput type just doesn't include it in its union.
     if (!loc) return undefined as unknown as Record<string, unknown>
+    const isRestaurant = (organization as ApiValue)?.vertical === 'restaurant'
     return {
       '@type': getBusinessSchemaTypes((organization as ApiValue)?.vertical),
       name: `${organizationName.value} — ${loc.title}`,
@@ -515,6 +516,18 @@ useSchemaOrg([
       address: schemaPostalAddress((location.value?.address ?? null) as PostalAddress | null),
       telephone: loc.phone,
       url: `${tenantOrigin}${localePath(`/locations/${loc.slug}`)}`,
+      ...(loc.maps_url ? { hasMap: loc.maps_url } : {}),
+      openingHoursSpecification: schemaOpeningHours(loc.opening_hours ?? null),
+      ...(isRestaurant ? {
+        hasMenu: `${tenantOrigin}${localePath(`/locations/${loc.slug}/menu`)}`,
+        acceptsReservations: true,
+        reservationUrl: `${tenantOrigin}${localePath('/reservations')}`,
+        potentialAction: {
+          '@type': 'ReserveAction',
+          target: { '@type': 'EntryPoint', urlTemplate: `${tenantOrigin}${localePath('/reservations')}` },
+          result: { '@type': 'Reservation' },
+        },
+      } : {}),
       ...(loc.latitude && loc.longitude ? { geo: { '@type': 'GeoCoordinates', latitude: loc.latitude, longitude: loc.longitude } } : {}),
       ...(loc.rating ? { aggregateRating: { '@type': 'AggregateRating', ratingValue: loc.rating, reviewCount: loc.review_count ?? 0 } } : {})
     }
