@@ -148,3 +148,18 @@ export function composeProductSeoDescription(
   if (!composed) throw new Error('Product SEO description composed to an empty string')
   return composed
 }
+
+export const DIETARY_SCHEMA_MAP: Record<string, string> = {
+  V: 'https://schema.org/VegetarianDiet',
+  VG: 'https://schema.org/VeganDiet',
+  GF: 'https://schema.org/GlutenFreeDiet',
+}
+
+export function extractDietarySchemaUrls(product: Product): string[] {
+  const notes = product.details['dietary_notes']
+  if (!Array.isArray(notes)) return []
+  return notes
+    .filter((note): note is 'V' | 'VG' | 'GF' => note === 'V' || note === 'VG' || note === 'GF')
+    .map(tag => DIETARY_SCHEMA_MAP[tag])
+    .filter((url): url is string => Boolean(url))
+}

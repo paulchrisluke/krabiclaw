@@ -29,6 +29,7 @@ import type { PublicLocaleRepresentation } from '~/utils/public-resource-contrac
 import type { PublicBlawbyIdentity, PublicCompliance } from '~/types/blawby'
 import { normalizeTenantPagePath } from '~/utils/tenant-page-blocks'
 import type { BlawbyDocumentPayload } from '~/utils/blawby-document-contract'
+import type { ProfessionalServiceRecipe } from '~/utils/professional-service-schema'
 
 const props = defineProps<{ path: string; locale?: string | null }>()
 const { organizationId, isPlatform, previewAuthorized, organization } = useTenantOrganization()
@@ -175,11 +176,13 @@ if (data.value?.page) {
 
 const schemaContext = inject<{ identity: ComputedRef<PublicBlawbyIdentity>; compliance: ComputedRef<PublicCompliance | null> } | null>('blawby-schema-context', null)
 const schemaOrg = useBlawbyOrgIdentity(() => schemaContext?.identity.value, () => schemaContext?.compliance.value)
-const supportedSchemaRecipes = new Set(['home', 'about', 'contact', 'pricing', 'donate', 'schedule'])
-const schemaRecipe = computed<'home' | 'about' | 'contact' | 'pricing' | 'donate' | 'schedule' | 'tenant-page'>(() => {
+const supportedSchemaRecipes = new Set<string>(['home', 'about', 'contact', 'pricing', 'donate', 'schedule', 'services-index', 'service-detail'])
+const schemaRecipe = computed<ProfessionalServiceRecipe>(() => {
   if (!page.value) return 'tenant-page'
-  if (page.value.recipe && supportedSchemaRecipes.has(page.value.recipe)) return page.value.recipe as 'home' | 'about' | 'contact' | 'pricing' | 'donate' | 'schedule'
-  const pathRecipes = new Map([
+  if (page.value.recipe && supportedSchemaRecipes.has(page.value.recipe)) return page.value.recipe as ProfessionalServiceRecipe
+  if (page.value.path === '/services') return 'services-index'
+  if (page.value.path.startsWith('/services/')) return 'service-detail'
+  const pathRecipes = new Map<string, ProfessionalServiceRecipe>([
     ['/', 'home'],
     ['/about', 'about'],
     ['/contact', 'contact'],
@@ -187,7 +190,7 @@ const schemaRecipe = computed<'home' | 'about' | 'contact' | 'pricing' | 'donate
     ['/donate', 'donate'],
     ['/schedule', 'schedule'],
   ])
-  return (pathRecipes.get(page.value.path) || 'tenant-page') as 'home' | 'about' | 'contact' | 'pricing' | 'donate' | 'schedule' | 'tenant-page'
+  return pathRecipes.get(page.value.path) || 'tenant-page'
 })
 
 const pageFaqBlock = computed(() => page.value?.blocks.find(block => block.type === 'faq'))
@@ -250,8 +253,16 @@ useProfessionalServiceSchema(() => {
     pageUrl: page.value.path,
     pageTitle: page.value.title,
     pageDescription: page.value.summary,
+    breadcrumbs: page.value.path === '/' ? undefined : [
+      { name: page.value.title, url: page.value.path },
+    ],
     faqs: pageFaqItems.value,
     items: serviceItems,
+    offering: schemaRecipe.value === 'service-detail' ? {
+      name: page.value.title,
+      description: page.value.summary || null,
+      schemaType: schemaOrg.value?.entityType || 'LegalService',
+    } : undefined,
     donationUrl,
   }
 })

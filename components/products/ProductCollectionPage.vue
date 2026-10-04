@@ -233,6 +233,7 @@ import { formatProductMoney } from '~/utils/product-money'
 import { minorAmountToMajor, selectPrice, type Price } from '~/shared/prices'
 import { PRICING_NOTE_HANDLE } from '~/shared/product-details'
 import { groupProductsByCollection, productLocationCollectionPath } from '~/utils/product-presentation'
+import { extractDietarySchemaUrls } from '~/utils/product-seo'
 import { getVerticalCopy } from '~/utils/vertical-copy'
 
 interface LocationSummary { id: string; slug: string; title: string }
@@ -437,12 +438,6 @@ function offerFor(product: Product, collectionLocationId: string | null = null) 
   return price ? { '@type': 'Offer', price: minorAmountToMajor(price.unit_amount, price.currency), priceCurrency: price.currency } : undefined
 }
 
-const DIETARY_SCHEMA_MAP: Record<string, string> = {
-  V: 'https://schema.org/VegetarianDiet',
-  VG: 'https://schema.org/VeganDiet',
-  GF: 'https://schema.org/GlutenFreeDiet',
-}
-
 useSchemaOrg(computed(() => props.presentation.structuredDataType === 'MenuItem'
   ? {
       '@type': 'Menu',
@@ -451,7 +446,7 @@ useSchemaOrg(computed(() => props.presentation.structuredDataType === 'MenuItem'
         '@type': 'MenuSection',
         name: group.category,
         hasMenuItem: group.products.map(product => {
-          const dietUrls = dietaryTags(product).map(tag => DIETARY_SCHEMA_MAP[tag]).filter(Boolean)
+          const dietUrls = extractDietarySchemaUrls(product)
           return {
             '@type': 'MenuItem',
             name: product.name,
