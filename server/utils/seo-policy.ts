@@ -1,6 +1,7 @@
 import { TENANT_TYPES, type TenantType } from '../../utils/tenant-routing.ts'
 import { TENANT_NON_INDEXABLE_EXACT_PATHS } from '../../utils/template-registry.ts'
 import { isEnvironmentTenantAliasHost } from './tenant-hosts.ts'
+import { isDemoHost, isDemoOrg } from '../../shared/demo.ts'
 
 /**
  * The platform routes that hold no page document: each renders its own data.
@@ -92,6 +93,7 @@ export function isTechnicalAssetSeoPath(pathname: string): boolean {
 export function isNonIndexableHost(hostname: string): boolean {
   const host = hostname.toLowerCase().replace(/\.$/, '')
   return host === 'staging.krabiclaw.com'
+    || isDemoHost(host)
     || isEnvironmentTenantAliasHost(host)
     || host.endsWith('.pages.dev')
     || host.endsWith('.workers.dev')
@@ -102,14 +104,22 @@ export function resolveRuntimeSeoConfig(input: {
   origin: string
   hostname: string
   tenantName?: string | null
+  organizationId?: string | null
 }): RuntimeSeoConfig {
-  const indexable = !isNonIndexableHost(input.hostname)
+  const indexable = !isNonIndexableHost(input.hostname) && !isDemoOrg(input.organizationId)
+
+  if (!indexable) {
+    return {
+      url: input.origin,
+      indexable: false,
+    }
+  }
 
   if (input.tenantType === TENANT_TYPES.TENANT) {
     const name = String(input.tenantName || '').trim()
     return {
       url: input.origin,
-      indexable,
+      indexable: true,
       ...(name ? { name } : {}),
     }
   }
@@ -118,7 +128,7 @@ export function resolveRuntimeSeoConfig(input: {
     return {
       name: 'Krabiclaw',
       url: input.origin,
-      indexable,
+      indexable: true,
     }
   }
 

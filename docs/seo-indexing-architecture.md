@@ -22,9 +22,9 @@ The tenant sitemap contains only that site's public static routes and its publis
 
 Tenant canonical tags and breadcrumb/schema URLs resolve against the rendered request origin. Because noncanonical tenant domains redirect first, the request origin is the canonical origin.
 
-### Non-production hosts
+### Non-production and demo hosts
 
-Staging, `pages.dev`, and `workers.dev` hosts are globally non-indexable.
+Staging, `pages.dev`, `workers.dev`, and demo showcase hosts (`demo.krabiclaw.com`, `demo.localhost`, and organization `org-demo`) are globally non-indexable.
 
 These hosts receive:
 

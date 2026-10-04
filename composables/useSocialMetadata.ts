@@ -10,6 +10,7 @@ import {
 } from '~/utils/social-metadata'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
+import { isDemoHost, isDemoOrg } from '~/shared/demo'
 
 export interface PageBreadcrumb {
   name: string
@@ -104,10 +105,13 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
       pageType: value.socialType || value.pageType || 'website',
       canonicalUrl,
       // A preview is the owner looking at their own unpublished work on the
-      // real host. Whatever the page would otherwise say about itself, nothing
+      // real host, and the demo showcase site is not a real business.
+      // Whatever the page would otherwise say about itself, nothing
       // reached this way is Google's to keep — and deciding it here means no
       // page can be added that forgets to.
-      discoverability: tenant.previewAuthorized ? 'private' : value.discoverability,
+      discoverability: tenant.previewAuthorized || isDemoHost(requestURL.hostname) || isDemoOrg(tenant.organizationId)
+        ? 'private'
+        : value.discoverability,
     }
     const image = value.socialImage
     const resolvedImage = image

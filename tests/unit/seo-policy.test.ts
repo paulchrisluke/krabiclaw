@@ -1,0 +1,80 @@
+import assert from 'node:assert/strict'
+import test from 'node:test'
+import { isNonIndexableHost, resolveRuntimeSeoConfig } from '../../server/utils/seo-policy.ts'
+import { DEMO_HOSTS, DEMO_ORG_ID, isDemoHost, isDemoOrg } from '../../shared/demo.ts'
+import { TENANT_TYPES } from '../../utils/tenant-routing.ts'
+
+test('demo contracts correctly identify the showcase tenant and hosts', () => {
+  assert.equal(DEMO_ORG_ID, 'org-demo')
+  assert.ok(DEMO_HOSTS.has('demo.krabiclaw.com'))
+  assert.ok(DEMO_HOSTS.has('demo.localhost'))
+
+  assert.equal(isDemoOrg('org-demo'), true)
+  assert.equal(isDemoOrg('org-other'), false)
+  assert.equal(isDemoOrg(null), false)
+  assert.equal(isDemoOrg(undefined), false)
+
+  assert.equal(isDemoHost('demo.krabiclaw.com'), true)
+  assert.equal(isDemoHost('demo.krabiclaw.com:443'), true)
+  assert.equal(isDemoHost('demo.localhost'), true)
+  assert.equal(isDemoHost('demo.localhost:3000'), true)
+  assert.equal(isDemoHost('DEMO.KRABICLAW.COM'), true)
+  assert.equal(isDemoHost('krabiclaw.com'), false)
+  assert.equal(isDemoHost('pottery-house-krabi.com'), false)
+})
+
+test('isNonIndexableHost classifies staging, cloudflare previews, and demo showcase hosts as non-indexable', () => {
+  // Demo showcase hosts
+  assert.equal(isNonIndexableHost('demo.krabiclaw.com'), true)
+  assert.equal(isNonIndexableHost('demo.localhost'), true)
+  assert.equal(isNonIndexableHost('demo.localhost:3000'), true)
+
+  // Staging and previews
+  assert.equal(isNonIndexableHost('staging.krabiclaw.com'), true)
+  assert.equal(isNonIndexableHost('pottery-house-staging.krabiclaw.com'), true)
+  assert.equal(isNonIndexableHost('preview.pages.dev'), true)
+  assert.equal(isNonIndexableHost('app.workers.dev'), true)
+
+  // Production indexable hosts
+  assert.equal(isNonIndexableHost('krabiclaw.com'), false)
+  assert.equal(isNonIndexableHost('www.krabiclaw.com'), false)
+  assert.equal(isNonIndexableHost('pottery-house-krabi.com'), false)
+  assert.equal(isNonIndexableHost('kikuzuki.krabiclaw.com'), false)
+})
+
+test('resolveRuntimeSeoConfig produces non-indexable configuration for demo hosts and demo organization', () => {
+  const demoHostResult = resolveRuntimeSeoConfig({
+    tenantType: TENANT_TYPES.TENANT,
+    origin: 'https://demo.krabiclaw.com',
+    hostname: 'demo.krabiclaw.com',
+    tenantName: 'Ember & Slice',
+  })
+  assert.equal(demoHostResult.indexable, false)
+
+  const demoOrgResult = resolveRuntimeSeoConfig({
+    tenantType: TENANT_TYPES.TENANT,
+    origin: 'https://custom-demo.com',
+    hostname: 'custom-demo.com',
+    tenantName: 'Ember & Slice',
+    organizationId: DEMO_ORG_ID,
+  })
+  assert.equal(demoOrgResult.indexable, false)
+
+  const realTenantResult = resolveRuntimeSeoConfig({
+    tenantType: TENANT_TYPES.TENANT,
+    origin: 'https://pottery-house-krabi.com',
+    hostname: 'pottery-house-krabi.com',
+    tenantName: 'Pottery House Krabi',
+    organizationId: 'org-real',
+  })
+  assert.equal(realTenantResult.indexable, true)
+  assert.equal(realTenantResult.name, 'Pottery House Krabi')
+
+  const platformResult = resolveRuntimeSeoConfig({
+    tenantType: TENANT_TYPES.PLATFORM,
+    origin: 'https://krabiclaw.com',
+    hostname: 'krabiclaw.com',
+  })
+  assert.equal(platformResult.indexable, true)
+  assert.equal(platformResult.name, 'Krabiclaw')
+})
