@@ -390,6 +390,8 @@ interface LlmsTxtOptions {
   intro?: string
   docsHeading?: string
   blogHeading?: string
+  coreHeading?: string
+  coreLinks?: Array<{ title: string; path: string; description: string }>
   includeDocsOptionalLinks?: boolean
   blogIndexDescription?: string
   blogRssDescription?: string
@@ -411,6 +413,13 @@ export function buildLlmsTxt(
     '',
     'Prefer the Markdown URLs below when you need compact machine-readable context. Canonical HTML URLs remain the source for public citation and browsing.',
     '',
+    ...(options.coreLinks?.length
+      ? [
+          `## ${options.coreHeading || 'Overview & Services'}`,
+          ...options.coreLinks.map(link => `- [${link.title}](${absoluteUrl(origin, link.path)}): ${link.description}`),
+          '',
+        ]
+      : []),
     ...(includeDocsSection
       ? [
           `## ${options.docsHeading || 'Docs'}`,
@@ -423,6 +432,7 @@ export function buildLlmsTxt(
     '',
     '## Optional',
     `- [Full LLM context](${absoluteUrl(origin, '/llms-full.txt')}): ${options.fullContextDescription || 'Aggregated export of published docs and blog posts.'}`,
+    ...(options.title ? [] : [`- [Pricing](${absoluteUrl(origin, '/pricing.md')}): Plain markdown specification of plans, features, and limits.`]),
     ...(options.includeDocsOptionalLinks === false || !includeDocsSection
       ? []
       : [`- [Docs index JSON](${absoluteUrl(origin, '/docs/index.json')}): Machine-readable manifest of published docs.`]),

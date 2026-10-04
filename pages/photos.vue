@@ -147,5 +147,8 @@ useSocialMetadata(() => ({
   brand: {
     organizationName: organizationName.value,
   },
+  breadcrumbs: [
+    { name: t('saya.subnav.photos'), url: '/photos' },
+  ],
 }))
 </script>

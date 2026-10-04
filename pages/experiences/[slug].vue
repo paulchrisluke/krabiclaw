@@ -38,5 +38,14 @@ useSocialMetadata(() => ({
   }, t),
   socialImage: detail.value.product.social_image,
   brand: { organizationName: detail.value.brandName },
+  breadcrumbs: detail.value.location ? [
+    { name: 'Locations', url: '/locations' },
+    { name: detail.value.location.title, url: `/locations/${detail.value.location.slug}` },
+    { name: 'Experiences', url: `/locations/${detail.value.location.slug}/experiences` },
+    { name: detail.value.product.name, url: presentation.value.productPath(detail.value.location.slug, detail.value.product.slug) },
+  ] : [
+    { name: 'Consultations', url: '/schedule' },
+    { name: detail.value.product.name, url: presentation.value.productPath('', detail.value.product.slug) },
+  ],
 }))
 </script>

@@ -395,5 +395,11 @@ async function optOut() {
   }
 }
 
-useSeoMeta({ title: 'Leave a review', robots: 'noindex' })
+useSocialMetadata(() => ({
+  path: `/locations/${slug.value}/review-submit`,
+  title: 'Leave a review',
+  description: `Submit a review for ${requestData.value?.location?.title || 'this location'}.`,
+  socialImage: null,
+  discoverability: 'private',
+}))
 </script>

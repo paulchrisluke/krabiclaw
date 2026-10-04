@@ -29,8 +29,11 @@ import type { PublicLocaleRepresentation } from '~/utils/public-resource-contrac
 import type { PublicBlawbyIdentity, PublicCompliance } from '~/types/blawby'
 import { normalizeTenantPagePath } from '~/utils/tenant-page-blocks'
 import type { BlawbyDocumentPayload } from '~/utils/blawby-document-contract'
+import type { ProfessionalServiceRecipe } from '~/utils/professional-service-schema'
 
 const props = defineProps<{ path: string; locale?: string | null }>()
+const config = useRuntimeConfig()
+const requestURL = useRequestURL()
 const { organizationId, isPlatform, previewAuthorized, organization } = useTenantOrganization()
 const { isBlawby } = usePublicTemplate()
 const { locale: i18nLocale, localePath, t } = useI18n()
@@ -175,11 +178,13 @@ if (data.value?.page) {
 
 const schemaContext = inject<{ identity: ComputedRef<PublicBlawbyIdentity>; compliance: ComputedRef<PublicCompliance | null> } | null>('blawby-schema-context', null)
 const schemaOrg = useBlawbyOrgIdentity(() => schemaContext?.identity.value, () => schemaContext?.compliance.value)
-const supportedSchemaRecipes = new Set(['home', 'about', 'contact', 'pricing', 'donate', 'schedule'])
-const schemaRecipe = computed<'home' | 'about' | 'contact' | 'pricing' | 'donate' | 'schedule' | 'tenant-page'>(() => {
+const supportedSchemaRecipes = new Set<string>(['home', 'about', 'contact', 'pricing', 'donate', 'schedule', 'services-index', 'service-detail'])
+const schemaRecipe = computed<ProfessionalServiceRecipe>(() => {
   if (!page.value) return 'tenant-page'
-  if (page.value.recipe && supportedSchemaRecipes.has(page.value.recipe)) return page.value.recipe as 'home' | 'about' | 'contact' | 'pricing' | 'donate' | 'schedule'
-  const pathRecipes = new Map([
+  if (page.value.recipe && supportedSchemaRecipes.has(page.value.recipe)) return page.value.recipe as ProfessionalServiceRecipe
+  if (page.value.path === '/services') return 'services-index'
+  if (page.value.path.startsWith('/services/')) return 'service-detail'
+  const pathRecipes = new Map<string, ProfessionalServiceRecipe>([
     ['/', 'home'],
     ['/about', 'about'],
     ['/contact', 'contact'],
@@ -187,23 +192,54 @@ const schemaRecipe = computed<'home' | 'about' | 'contact' | 'pricing' | 'donate
     ['/donate', 'donate'],
     ['/schedule', 'schedule'],
   ])
-  return (pathRecipes.get(page.value.path) || 'tenant-page') as 'home' | 'about' | 'contact' | 'pricing' | 'donate' | 'schedule' | 'tenant-page'
+  return pathRecipes.get(page.value.path) || 'tenant-page'
+})
+
+const pageFaqBlock = computed(() => page.value?.blocks.find(block => block.type === 'faq'))
+const pageFaqItems = computed<Array<{ question: string; answer: string }>>(() => {
+  if (!pageFaqBlock.value || !Array.isArray(pageFaqBlock.value.data.items)) return []
+  return pageFaqBlock.value.data.items
+    .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object' && !Array.isArray(item)))
+    .map(item => ({
+      question: typeof item.title === 'string' ? item.title.trim() : '',
+      answer: typeof item.description === 'string' ? item.description.trim() : '',
+    }))
+    .filter(item => item.question && item.answer)
+})
+
+const pageHowToBlock = computed(() => page.value?.blocks.find(block => block.type === 'how_to'))
+const pageHowToNode = computed<ApiRecord | null>(() => {
+  if (!pageHowToBlock.value || !Array.isArray(pageHowToBlock.value.data.steps) || !page.value) return null
+  const steps = pageHowToBlock.value.data.steps
+    .filter((step): step is Record<string, unknown> => Boolean(step && typeof step === 'object'))
+    .map(step => ({
+      name: typeof step.name === 'string' ? step.name.trim() : '',
+      text: typeof step.text === 'string' ? step.text.trim() : '',
+    }))
+    .filter(step => step.name || step.text)
+  if (!steps.length) return null
+  const origin = isPlatform ? config.public.platformUrl : requestURL.origin
+  const url = resolveSeoUrl(page.value.path, origin)
+  return {
+    '@type': 'HowTo',
+    '@id': `${url}#howto`,
+    name: blockTextOrNull(pageHowToBlock.value.data.title) || page.value?.title || '',
+    step: steps.map((step, index) => ({
+      '@type': 'HowToStep',
+      position: index + 1,
+      name: step.name || undefined,
+      text: step.text || undefined,
+    })),
+  }
 })
 
 useProfessionalServiceSchema(() => {
   if (!page.value || !isBlawby.value || !schemaContext) return null
-  const faqBlock = page.value.blocks.find(block => block.type === 'faq')
   // The services this page lists are pages, and the page renders them from its
   // page_grid. Reading a product_grid here described a block these pages do not
   // carry, so the schema listed no services at all.
   const servicesBlock = page.value.blocks.find(block => block.type === 'page_grid')
   const donationBlock = page.value.blocks.find(block => block.type === 'donation_choices')
-  const faqItems = Array.isArray(faqBlock?.data.items)
-    ? faqBlock.data.items.filter(item => item && typeof item === 'object' && !Array.isArray(item)).map(item => {
-        const record = item as Record<string, unknown>
-        return { question: typeof record.title === 'string' ? record.title : null, answer: typeof record.description === 'string' ? record.description : null }
-      })
-    : []
   const serviceItems = Array.isArray(servicesBlock?.data.items)
     ? servicesBlock.data.items.filter(item => item && typeof item === 'object' && !Array.isArray(item)).map(item => {
         const record = item as Record<string, unknown>
@@ -221,11 +257,20 @@ useProfessionalServiceSchema(() => {
     pageUrl: page.value.path,
     pageTitle: page.value.title,
     pageDescription: page.value.summary,
-    faqs: faqItems,
+    breadcrumbs: page.value.path === '/' ? undefined : [
+      { name: page.value.title, url: page.value.path },
+    ],
+    faqs: pageFaqItems.value,
     items: serviceItems,
+    offering: schemaRecipe.value === 'service-detail' ? {
+      name: page.value.title,
+      description: page.value.summary || null,
+      schemaType: schemaOrg.value?.entityType || 'LegalService',
+    } : undefined,
     donationUrl,
   }
 })
+
 const { canonicalUrl } = useSocialMetadata(() => page.value && ({
   path: page.value.path,
   // Krabiclaw's own brand name is the platform name: its layout's title
@@ -235,6 +280,17 @@ const { canonicalUrl } = useSocialMetadata(() => page.value && ({
   description: page.value.summary || '',
   ...(isPlatform ? {} : { brand: { organizationName: organization?.name || '' } }),
   socialImage: page.value.social_image,
+  faqItems: pageFaqItems.value.length ? pageFaqItems.value : undefined,
+  schemaNodes: pageHowToNode.value ? [pageHowToNode.value] : undefined,
+  schemaPageType: isPlatform && page.value.path === '/' ? 'SoftwareApplication' : undefined,
+  softwareApplication: isPlatform && page.value.path === '/' ? {
+    applicationCategory: 'BusinessApplication',
+    operatingSystem: 'All (Web / Cloud-based)',
+  } : undefined,
+  schema: !isBlawby.value,
+  breadcrumbs: page.value.path === '/' ? undefined : [
+    { name: page.value.title, url: page.value.path },
+  ],
 }))
 
 useVideoSchema(() => page.value?.blocks, canonicalUrl)
