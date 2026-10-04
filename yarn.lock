@@ -4927,15 +4927,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/react@npm:^19.2.18":
-  version: 19.2.18
-  resolution: "@types/react@npm:19.2.18"
-  dependencies:
-    csstype: "npm:^3.2.2"
-  checksum: 10c0/d04216172b4b4362b310017c210dfbe019fb4f4e7dffd0313e70b3acb3051d5c3e76e7e84e3cf4c6a3c824993ffadfe3949e589a6398a09d4200e7670e2962de
-  languageName: node
-  linkType: hard
-
 "@types/trusted-types@npm:^2.0.7":
   version: 2.0.7
   resolution: "@types/trusted-types@npm:2.0.7"
@@ -6821,7 +6812,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"csstype@npm:^3.2.2, csstype@npm:^3.2.3":
+"csstype@npm:^3.2.3":
   version: 3.2.3
   resolution: "csstype@npm:3.2.3"
   checksum: 10c0/cd29c51e70fa822f1cecd8641a1445bed7063697469d35633b516e60fe8c1bde04b08f6c5b6022136bb669b64c63d4173af54864510fbb4ee23281801841a3ce
@@ -10574,7 +10565,6 @@ __metadata:
     "@tailwindcss/typography": "npm:^0.5.20"
     "@types/html-to-text": "npm:9.0.4"
     "@types/node": "npm:^25.9.5"
-    "@types/react": "npm:^19.2.18"
     "@vue-email/body": "npm:0.0.3"
     "@vue-email/button": "npm:0.0.3"
     "@vue-email/container": "npm:0.0.3"
@@ -10609,7 +10599,6 @@ __metadata:
     nuxt-schema-org: "npm:^6.0.4"
     patch-package: "npm:^8.0.1"
     postal-mime: "npm:3.0.0"
-    react: "npm:^19.2.8"
     resend: "npm:6.25.0"
     rollup-plugin-visualizer: "npm:^7.1.1"
     satori: "npm:^0.32.0"
@@ -11759,13 +11748,6 @@ __metadata:
   bin:
     rc: ./cli.js
   checksum: 10c0/24a07653150f0d9ac7168e52943cc3cb4b7a22c0e43c7dff3219977c2fdca5a2760a304a029c20811a0e79d351f57d46c9bde216193a0f73978496afc2b85b15
-  languageName: node
-  linkType: hard
-
-"react@npm:^19.2.8":
-  version: 19.2.8
-  resolution: "react@npm:19.2.8"
-  checksum: 10c0/5f86bdb56426652fd6d989d30a6f2e603c057272c47c9ca3a3fbe190a3a39ee9ccce937d63cfc039717abed1b8891d6a499134bc35311acc07eafdacd86537cd
   languageName: node
   linkType: hard
 
