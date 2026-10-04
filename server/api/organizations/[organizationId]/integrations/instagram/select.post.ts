@@ -16,7 +16,7 @@ export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
   if (!organizationId) return jsonResponse({ error: 'Organization ID is required' }, { status: 400 })
 
-  const body = await readBody<{ account_id?: string }>(event).catch(() => null)
+  const body = await readBody<{ account_id?: string }>(event)
   const accountId = body?.account_id?.trim()
   if (!accountId) return jsonResponse({ error: 'Choose an Instagram account.' }, { status: 400 })
 

@@ -18,7 +18,7 @@ export default defineHandler(async (event) => {
   const apps = configuredMetaApps(env)
   if (!apps.length) return jsonResponse({ error: 'Meta integration is not configured' }, { status: 500 })
 
-  const body = await readBody<{ signed_request?: string }>(event).catch(() => null)
+  const body = await readBody<{ signed_request?: string }>(event)
   const signedRequest = body?.signed_request
   if (!signedRequest) return jsonResponse({ error: 'signed_request is required' }, { status: 400 })
 
