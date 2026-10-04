@@ -11,6 +11,28 @@ import { acquireTenantMutationLock } from './helpers/tenant-mutation-lock'
 // lifecycle, and Product/post/media workflows.
 
 test.describe('stateless MCP server', () => {
+  test('booking pagination rejects a cursor from a different member filter', async ({ request, baseURL }) => {
+    await loginAs(request, baseURL!)
+    const organizationId = 'org-user-pottery-house'
+    const membersResponse = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'get_member_scheduling', args: { organization_id: organizationId } })
+    expect(membersResponse.status()).toBe(200)
+    const member = mcpData<{ members: Array<{ id: string; self: boolean }> }>(await membersResponse.json()).members.find(member => member.self)
+    expect(member).toBeTruthy()
+    const firstResponse = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'list_product_bookings', args: { organization_id: organizationId, limit: 1 } })
+    expect(firstResponse.status()).toBe(200)
+    const first = mcpData<{ bookings: Array<{ operational_booking_id: string }>; page_info: { next_cursor: string | null } }>(await firstResponse.json())
+    expect(first.bookings).toHaveLength(1)
+    expect(first.page_info.next_cursor).toBeTruthy()
+    const nextResponse = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'list_product_bookings', args: { organization_id: organizationId, limit: 1, cursor: first.page_info.next_cursor } })
+    expect(nextResponse.status()).toBe(200)
+    const next = mcpData<{ bookings: Array<{ operational_booking_id: string }> }>(await nextResponse.json())
+    expect(next.bookings).toHaveLength(1)
+    expect(next.bookings[0]!.operational_booking_id).not.toBe(first.bookings[0]!.operational_booking_id)
+    const filteredResponse = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'list_product_bookings', args: { organization_id: organizationId, assigned_member_id: member!.id, limit: 1, cursor: first.page_info.next_cursor } })
+    expect(filteredResponse.status()).toBe(200)
+    expect((await filteredResponse.json()).result).toMatchObject({ isError: true, content: [{ type: 'text', text: 'Pagination cursor does not belong to this resource.' }] })
+  })
+
   test('owner can use site content and settings tools', async ({ request, baseURL }) => {
     await loginAs(request, baseURL!)
     const organizationId = MCP_GROWTH_ORGANIZATION_ID
