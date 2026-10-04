@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { resolveUserUploadedMediaFile } from '../../server/utils/mcp-executor/shared.ts'
+import { resolveUserUploadedMediaFile } from '../../server/utils/mcp-tools/execution.ts'
 
 test('ChatGPT attachment downloads reject redirects without a second network attempt', async () => {
   const originalFetch = globalThis.fetch

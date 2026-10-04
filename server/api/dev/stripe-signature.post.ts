@@ -24,7 +24,7 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'Stripe webhook secret not configured' }, { status: 503 })
   }
 
-  const body = await readBody(event).catch(() => null) as { payload?: string; timestamp?: number } | null
+  const body = await readBody(event) as { payload?: string; timestamp?: number } | undefined
   const payload = typeof body?.payload === 'string' ? body.payload : ''
   const timestamp = Number.isFinite(body?.timestamp) ? Number(body?.timestamp) : Math.floor(Date.now() / 1000)
 

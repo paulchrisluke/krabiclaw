@@ -28,7 +28,8 @@ try {
     signal: controller.signal,
   })
 
-  const payload = await response.json().catch(() => null)
+  const text = await response.text()
+  const payload = response.headers.get('content-type')?.includes('application/json') ? JSON.parse(text) : text
   console.log(`AI Search status (${response.status})`, JSON.stringify(payload, null, 2))
   if (!response.ok) process.exitCode = 1
 } catch (error) {

@@ -9,9 +9,7 @@
  * Broadcast is sent.
  *
  *   RESEND_PRODUCT_NEWS_SEGMENT_ID=<segment> RESEND_PRODUCT_NEWS_TOPIC_ID=<topic> \
- *     node --env-file-if-exists=.env --experimental-strip-types \
- *       --import ./tests/unit/support/register-aliases.mjs \
- *       scripts/sync-resend-product-news.ts --production
+ *     corepack yarn resend:product-news:sync --production
  *
  * The database is the environment's `DB` binding in wrangler.toml, reached
  * through Wrangler's remote proxy, so the reconciliation reads and writes the

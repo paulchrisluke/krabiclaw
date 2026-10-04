@@ -6,7 +6,7 @@ import { Miniflare } from 'miniflare'
 import * as schema from '../../server/db/schema.ts'
 import { recordTenantPageview, type TenantPageviewInput } from '../../server/utils/pageview-tracking.ts'
 import { measurementOutcome, recordOrganizationConversionEvent } from '../../server/utils/organization-conversions.ts'
-import { handleAnalyticsTools } from '../../server/utils/mcp-executor/analytics.ts'
+import { handleAnalyticsTools } from '../../server/utils/mcp-tools/analytics.ts'
 import type { queryOrganizationAnalytics } from '../../server/utils/analytics-query.ts'
 
 const SECRET = 'test-secret'

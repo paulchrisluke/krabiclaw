@@ -16,7 +16,7 @@ export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
   if (!organizationId) return jsonResponse({ error: 'Organization ID is required' }, { status: 400 })
 
-  const body = await readBody<{ account_id?: string; page_id?: string }>(event).catch(() => null)
+  const body = await readBody<{ account_id?: string; page_id?: string }>(event)
   const accountId = body?.account_id?.trim()
   const pageId = body?.page_id?.trim()
   if (!accountId || !pageId) return jsonResponse({ error: 'Choose a Facebook account and Page.' }, { status: 400 })
