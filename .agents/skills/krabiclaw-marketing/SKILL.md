@@ -1,6 +1,6 @@
 ---
 name: krabiclaw-marketing
-description: Prepare KrabiClaw marketing videos using authentic product captures, Google's Flow browser with Paul's saved @me identity and voice, and editable HyperFrames composition. Use for marketing videos and feature blog/document media, including authorized supervised runs, not runtime product features or generic SEO.
+description: Prepare KrabiClaw marketing videos using authentic product captures, Google's Flow browser with deliberate owner/presenter casting, and saved @me identity and voice when requested, and editable HyperFrames composition. Use for marketing videos and feature blog/document media, including authorized supervised runs, not runtime product features or generic SEO.
 ---
 
 # KrabiClaw marketing video
@@ -29,7 +29,13 @@ Directory images are Ember & Slice demos, not customer evidence. Existing produc
 
 Feature blogs and documentation should include relevant images, GIFs or short clips showing the actual process and result, rather than prose alone. Select the surface using the same chat-versus-CMS decision. Reuse the [media workflow](../../../docs/media-workflow-contract.md) and canonical placement contracts; retain capture provenance, accurate descriptive alt text/captions and a video poster. Publishing or uploading those assets still requires its applicable authorization.
 
-## Flow browser with saved @me — exercised 2026-10-04
+## Flow browser and deliberate casting
+
+Customer-first montage briefs may use diverse illustrative owners speaking natural requests in concrete business settings, with specified wardrobe, scene and action; there is no mandatory saved @me presenter. Match the requested point count and overall reference rhythm, measure actual speech before assigning cuts, and do not pad each request with a full chat loop. Use one brief UI payoff when that is the agreed format. Native-language dialogue may use fixed English captions, but verify the meaning and delivery rather than silently translating the voice. Cost-efficient paired scenes are a proposal until one paid output proves distinct characters, hard cuts and exact dialogue; quote the actual mode and total cap first, bound retries explicitly, and never treat approval for multiple generations as an unlimited budget. Reuse licensed original audio or authored cues; a style reference does not license its soundtrack.
+
+### Saved @me routine — exercised 2026-10-04
+
+Apply this routine when the owner asks for their saved identity/voice. It is not required for illustrative customer casting.
 
 The supervised one-output routine below was exercised on 2026-10-04; the resulting pilot was technically executed but creatively rejected by the owner. It is not production-quality acceptance evidence. First inventory available browser profiles and existing tabs; use the owner's established Flow project/session. A Chrome profile name is not evidence of the Google account that owns saved `@me`. A denial in one account does not establish that Flow is unavailable for the owner. If no working session is exposed or selection is ambiguous, ask the owner to open the existing Flow project in its usual Chrome profile and make that tab available to browser control. Do not guess account indexes, switch authentication, or bypass a denied account.
 
