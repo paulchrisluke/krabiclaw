@@ -68,6 +68,9 @@ const { canonicalUrl, ogImageUrl } = useSocialMetadata(() => ({
   socialImage: post.value?.social_image ?? null,
   publishedAt: post.value?.published_at || null,
   discoverability: post.value?.status === 'draft' ? 'private' : post.value?.visibility,
+  breadcrumbs: [
+    { name: seoTitle.value, url: post.value?.url || post.value?.path || `/posts/${slug.value}` },
+  ],
 }))
 
 useSchemaOrg([

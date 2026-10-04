@@ -82,6 +82,14 @@ const copy = (key: string) => t(`saya.${keyPrefix.value}.${key}`)
 const requestId = computed(() => typeof route.query.id === 'string' ? route.query.id : '')
 const token = computed(() => route.hash ? route.hash.slice(1) : '')
 
+useSocialMetadata(() => ({
+  path: route.path,
+  title: copy('title'),
+  description: copy('cancel_visit'),
+  socialImage: null,
+  discoverability: 'private',
+}))
+
 interface GuestBookingView {
   kind: 'booking' | 'reservation'
   name: string

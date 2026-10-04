@@ -136,5 +136,11 @@ async function share() {
   }
 }
 
-useSeoMeta({ title: 'Booking confirmed', robots: 'noindex' })
+useSocialMetadata({
+  path: '/bookings/confirmed',
+  title: 'Booking confirmed',
+  description: 'Your booking has been confirmed.',
+  socialImage: null,
+  discoverability: 'private',
+})
 </script>
