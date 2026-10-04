@@ -18,7 +18,7 @@ export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
   if (!organizationId) return jsonResponse({ error: 'Organization ID is required' }, { status: 400 })
 
-  const body = await readBody<{ account_id?: string; property_id?: string; property_name?: string }>(event).catch(() => null)
+  const body = await readBody<{ account_id?: string; property_id?: string; property_name?: string }>(event)
   const accountId = body?.account_id?.trim()
   const propertyId = body?.property_id?.trim()
   const propertyName = body?.property_name?.trim()

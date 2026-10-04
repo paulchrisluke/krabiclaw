@@ -23,7 +23,7 @@ export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
   if (!organizationId) return jsonResponse({ error: 'Organization ID is required' }, { status: 400 })
 
-  const body = await readBody<{ account_id?: string; site_url?: string }>(event).catch(() => null)
+  const body = await readBody<{ account_id?: string; site_url?: string }>(event)
   const accountId = body?.account_id?.trim()
   const requested = body?.site_url?.trim()
   if (!accountId || !requested) return jsonResponse({ error: 'Choose a Google account and a Search Console property.' }, { status: 400 })
