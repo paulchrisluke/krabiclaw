@@ -390,6 +390,8 @@ interface LlmsTxtOptions {
   intro?: string
   docsHeading?: string
   blogHeading?: string
+  coreHeading?: string
+  coreLinks?: Array<{ title: string; path: string; description: string }>
   includeDocsOptionalLinks?: boolean
   blogIndexDescription?: string
   blogRssDescription?: string
@@ -411,6 +413,13 @@ export function buildLlmsTxt(
     '',
     'Prefer the Markdown URLs below when you need compact machine-readable context. Canonical HTML URLs remain the source for public citation and browsing.',
     '',
+    ...(options.coreLinks?.length
+      ? [
+          `## ${options.coreHeading || 'Overview & Services'}`,
+          ...options.coreLinks.map(link => `- [${link.title}](${absoluteUrl(origin, link.path)}): ${link.description}`),
+          '',
+        ]
+      : []),
     ...(includeDocsSection
       ? [
           `## ${options.docsHeading || 'Docs'}`,

@@ -103,6 +103,9 @@ useSocialMetadata(() => ({
   brand: {
     organizationName: organizationName.value,
   },
+  breadcrumbs: [
+    { name: t('saya.footer.reviews'), url: '/reviews' },
+  ],
 }))
 
 useSchemaOrg([

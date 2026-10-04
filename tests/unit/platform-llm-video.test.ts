@@ -18,3 +18,16 @@ test('buildLlmsTxt includes pricing.md link on platform site', () => {
   assert.ok(result.includes('- [Pricing](https://krabiclaw.com/pricing.md): Plain markdown specification of plans, features, and limits.'))
 })
 
+test('buildLlmsTxt includes coreLinks when provided for tenant', () => {
+  const result = buildLlmsTxt('https://restaurant.example.com', [], [], {
+    title: 'Ember & Slice',
+    coreLinks: [
+      { title: 'Menu', path: '/menu', description: 'Current food and drink menu.' },
+      { title: 'Reservations', path: '/reservations', description: 'Table bookings.' },
+    ],
+  })
+  assert.ok(result.includes('## Overview & Services'))
+  assert.ok(result.includes('- [Menu](https://restaurant.example.com/menu): Current food and drink menu.'))
+  assert.ok(result.includes('- [Reservations](https://restaurant.example.com/reservations): Table bookings.'))
+})
+
