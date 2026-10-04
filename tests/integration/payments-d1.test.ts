@@ -74,6 +74,10 @@ test('Checkout proof attaches anonymous ownership atomically and cannot transfer
   assert.deepEqual((await buyerPayments(db,'verified')).payments.map(payment=>payment.id),['claim'])
   assert.equal((await buyerPayments(db,'other')).payments.length,0)
   await claimCheckoutReturn(db,'verified',otherToken)
+  const claimed=await db.prepare('SELECT claimed_at,claimed_user_id FROM payment_claims WHERE token_hash=?').bind(otherHash).first()
+  assert.equal(typeof claimed?.claimed_at,'string')
+  assert.equal(claimed?.claimed_user_id,'verified')
+  assert.deepEqual((await buyerPayments(db,'verified')).payments.map(payment=>payment.id),['claim'])
  }finally{await runtime.dispose()}
 })
 
@@ -87,6 +91,22 @@ test('tenant deletion retains its connected account for servicing before any cap
   assert.deepEqual(retained.results,[{organization_id:ORG,stripe_account_id:'acct_no_payments',livemode:0}])
   assert.equal(await db.prepare('SELECT COUNT(*) n FROM payments').first('n'),0)
   assert.equal(await db.prepare('SELECT COUNT(*) n FROM stripe_connected_accounts').first('n'),0)
+  await assert.rejects(()=>paymentsReconcile.run({name:'payments:reconcile',payload:{},context:{cloudflare:{env:{DB:db}}}}),/Stripe configuration is required for outstanding Payments reconciliation/u)
+ }finally{await runtime.dispose()}
+})
+
+test('tenant deletion refuses a connected account retained for another tenant without changing acceptance state', {timeout:120000},async()=>{
+ const {db,runtime}=await boot();try{
+  await payable(db,'retention-conflict')
+  await db.prepare("INSERT INTO stripe_connected_accounts(id,organization_id,stripe_account_id,country,livemode,status,card_payments_status,requirements_json,created_at,updated_at)VALUES('connected',?,'acct_seller','US',0,'ready','active','[]',?,?)").bind(ORG,NOW,NOW).run()
+  await db.prepare("INSERT INTO payment_servicing_tenants(organization_id,stripe_account_id,livemode,retained_at)VALUES('deleted-other-tenant','acct_seller',0,?)").bind(NOW).run()
+  await db.prepare("INSERT INTO payment_billing_accounts(organization_id,stripe_billing_customer_id,contract_start_at,currency,status,updated_at)VALUES(?,'cus_billing',?,'USD','active',?)").bind(ORG,NOW,NOW).run()
+  await assert.rejects(()=>retainPaymentsForTenantDeletion(db,ORG),/conflicting Payments servicing ownership/u)
+  assert.equal(await db.prepare('SELECT organization_id FROM payment_servicing_tenants WHERE stripe_account_id=? AND livemode=0').bind('acct_seller').first('organization_id'),'deleted-other-tenant')
+  assert.equal(await db.prepare('SELECT stripe_account_id FROM stripe_connected_accounts WHERE organization_id=?').bind(ORG).first('stripe_account_id'),'acct_seller')
+  assert.equal(await db.prepare('SELECT id FROM organization WHERE id=?').bind(ORG).first('id'),ORG)
+  assert.equal(await db.prepare("SELECT status FROM payment_checkout_holds WHERE payment_id='retention-conflict'").first('status'),'active')
+  assert.equal(await db.prepare('SELECT status FROM payment_billing_accounts WHERE organization_id=?').bind(ORG).first('status'),'active')
  }finally{await runtime.dispose()}
 })
 

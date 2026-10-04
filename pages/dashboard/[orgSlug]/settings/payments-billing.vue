@@ -11,7 +11,7 @@
    <section v-for="row in invoices" :key="row.id" class="border-b border-default py-6">
     <p>{{ row.status }} · {{ new Date(row.start_timestamp).toLocaleDateString() }} – {{ new Date(row.end_timestamp).toLocaleDateString() }}</p>
     <p class="mt-2">Rated usage before tax: {{ ratedMoney.format(row.total/100) }}</p>
-    <template v-if="row.collection_invoice"><p class="mt-2">Stripe invoice: {{ paymentMoney(row.collection_invoice.total,row.collection_invoice.currency) }} · {{ row.collection_invoice.status }}</p><p class="text-sm text-muted">{{ paymentMoney(row.collection_invoice.amount_paid,row.collection_invoice.currency) }} paid · {{ paymentMoney(row.collection_invoice.amount_due,row.collection_invoice.currency) }} due</p><UButton v-if="row.collection_invoice.hosted_invoice_url" class="mt-3" :to="row.collection_invoice.hosted_invoice_url" target="_blank" variant="outline">Open Stripe invoice</UButton><UButton v-if="row.collection_invoice.invoice_pdf" class="mt-3 ml-2" :to="row.collection_invoice.invoice_pdf" target="_blank" variant="outline">Invoice PDF</UButton></template>
+    <template v-if="row.collection_invoice"><p class="mt-2">Stripe invoice: {{ paymentMoney(row.collection_invoice.total,row.collection_invoice.currency) }} · {{ row.collection_invoice.status }}</p><p class="text-sm text-muted">{{ paymentMoney(row.collection_invoice.amount_paid,row.collection_invoice.currency) }} paid · {{ paymentMoney(row.collection_invoice.amount_remaining,row.collection_invoice.currency) }} outstanding</p><UButton v-if="row.collection_invoice.hosted_invoice_url" class="mt-3" :to="row.collection_invoice.hosted_invoice_url" target="_blank" variant="outline">Open Stripe invoice</UButton><UButton v-if="row.collection_invoice.invoice_pdf" class="mt-3 ml-2" :to="row.collection_invoice.invoice_pdf" target="_blank" variant="outline">Invoice PDF</UButton></template>
     <p v-else class="mt-2 text-sm text-muted">Stripe collection invoice has not been issued.</p>
    </section>
    <p v-if="!invoices.length" class="mt-2">No invoices yet.</p>
@@ -30,10 +30,10 @@ definePageMeta({layout:'dashboard'})
 const route=useRoute(),api=useDashboardApi(),working=ref(false),failure=ref(''),creditId=ref<string|null>(null),creditNote=ref('')
 const creditOpen=computed({get:()=>creditId.value!==null,set:(open:boolean)=>{if(!open){creditId.value=null;creditNote.value=''}}})
 const ratedMoney=new Intl.NumberFormat(undefined,{style:'currency',currency:'USD',maximumFractionDigits:20})
-type CollectionInvoice={id:string;status:string;currency:string;total:number;amount_due:number;amount_paid:number;hosted_invoice_url:string|null;invoice_pdf:string|null}
+type CollectionInvoice={id:string;status:string;currency:string;total:number;amount_due:number;amount_paid:number;amount_remaining:number;hosted_invoice_url:string|null;invoice_pdf:string|null}
 type Invoice={id:string;status:string;total:number;credit_type:{id:string;name:'USD (cents)'};start_timestamp:string;end_timestamp:string;collection_invoice:CollectionInvoice|null}
 type Billing = {configured:boolean;account?:Record<string,unknown>;pending:Record<string,unknown>[];invoices:Invoice[];credits:Record<string,unknown>[]}
-function isCollection(value:unknown):value is CollectionInvoice{return isRecord(value)&&typeof value.id==='string'&&typeof value.status==='string'&&isCurrencyCode(value.currency)&&['total','amount_due','amount_paid'].every(field=>Number.isSafeInteger(value[field]))&&['hosted_invoice_url','invoice_pdf'].every(field=>value[field]===null||typeof value[field]==='string')}
+function isCollection(value:unknown):value is CollectionInvoice{return isRecord(value)&&typeof value.id==='string'&&typeof value.status==='string'&&isCurrencyCode(value.currency)&&['total','amount_due','amount_paid','amount_remaining'].every(field=>Number.isSafeInteger(value[field]))&&['hosted_invoice_url','invoice_pdf'].every(field=>value[field]===null||typeof value[field]==='string')}
 const {data,pending,error,refresh}=await useAsyncData(()=>`payments-billing:${route.params.orgSlug}`,()=>api<Billing>('/api/dashboard/payments/billing',{validate:(v:unknown):v is Billing=>
  isRecord(v)&&typeof v.configured==='boolean'
  &&(!v.configured||(isRecord(v.account)&&typeof v.account.metronome_contract_id==='string'&&!!v.account.metronome_contract_id&&typeof v.account.status==='string'))

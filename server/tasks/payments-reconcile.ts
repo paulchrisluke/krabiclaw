@@ -19,6 +19,8 @@ export default defineScheduledTask<{skipped?:string;attempts?:number;refunds?:nu
    EXISTS(SELECT 1 FROM payment_attempts WHERE status IN ('open','creating')) OR
    EXISTS(SELECT 1 FROM payment_refunds WHERE status IN ('queued','creating','pending','requires_action')) OR
    EXISTS(SELECT 1 FROM payments WHERE captured_amount>0 AND stripe_payment_intent_id IS NOT NULL) OR
+   EXISTS(SELECT 1 FROM stripe_connected_accounts WHERE stripe_account_id IS NOT NULL) OR
+   EXISTS(SELECT 1 FROM payment_servicing_tenants) OR
    EXISTS(SELECT 1 FROM payment_billing_accounts) OR
    EXISTS(SELECT 1 FROM payment_usage_events WHERE delivery_at IS NULL) OR
    EXISTS(SELECT 1 FROM payment_fee_reports WHERE status IN ('pending','creating'))`)
@@ -63,7 +65,7 @@ export default defineScheduledTask<{skipped?:string;attempts?:number;refunds?:nu
   for(const refund of nativeRefunds.data)await reconcileRefundState(db,stripe,payment,refund.id)
   for(const dispute of nativeDisputes.data)await reconcileDisputeState(db,payment,dispute)
  }catch(error){errors.push(error instanceof Error?error:new Error(String(error)))}}
- const active=await queryFirst(db,'SELECT id FROM payments LIMIT 1')
+ const active=await queryFirst(db,`SELECT 1 WHERE EXISTS(SELECT 1 FROM payments) OR EXISTS(SELECT 1 FROM stripe_connected_accounts WHERE stripe_account_id IS NOT NULL) OR EXISTS(SELECT 1 FROM payment_servicing_tenants) OR EXISTS(SELECT 1 FROM payment_fee_reports)`)
  let stripeCosts:'test_mode_unavailable'|'live_mode'|undefined
  if(active){try{stripeCosts=(await reconcileStripeCosts(db,stripe,stripeLivemodeFromKey(env.STRIPE_SECRET_KEY),env.STRIPE_SECRET_KEY)).status}catch(error){errors.push(error instanceof Error?error:new Error(String(error)))}}
  const accounts=await queryAll<{organization_id:string}>(db,'SELECT organization_id FROM payment_billing_accounts')

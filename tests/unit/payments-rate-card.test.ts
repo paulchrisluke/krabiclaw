@@ -8,6 +8,8 @@ test('usage billing preserves draft grace and sends finalized negative adjustmen
  assert.deepEqual(usageBillingDecision(event,[draft],now),{timestamp:event.provider_occurred_at,adjustment:false,requiresCredit:false})
  assert.deepEqual(usageBillingDecision(event,[{...draft,status:'FINALIZED'}],now),{timestamp:now,adjustment:true,requiresCredit:false})
  assert.deepEqual(usageBillingDecision({...event,kind:'stripe_cost_adjustment',amount:-100},[{...draft,status:'FINALIZED'}],now),{timestamp:now,adjustment:true,requiresCredit:true})
+ assert.deepEqual(usageBillingDecision({...event,amount:-100},[{...draft,status:'FINALIZED'}],now),{timestamp:now,adjustment:true,requiresCredit:true})
+ assert.deepEqual(usageBillingDecision({...event,amount:-100},[],now,'2026-10-01T00:00:00Z'),{timestamp:now,adjustment:true,requiresCredit:true})
  assert.deepEqual(usageBillingDecision(event,[{...draft,type:'SCHEDULED',status:'FINALIZED'}],now),{timestamp:event.provider_occurred_at,adjustment:false,requiresCredit:false})
  assert.deepEqual(usageBillingDecision(event,[{...draft,status:'VOID'},draft],now),{timestamp:event.provider_occurred_at,adjustment:false,requiresCredit:false})
  assert.deepEqual(usageBillingDecision({...event,provider_occurred_at:draft.end_timestamp},[{...draft,status:'FINALIZED'}],now),{timestamp:draft.end_timestamp,adjustment:false,requiresCredit:false})

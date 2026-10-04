@@ -112,7 +112,7 @@ test.describe('dashboard pane hierarchy', () => {
     await expectPanes(page, ['organization-integrations', 'organization-payouts'])
   })
 
-  test('Payments surfaces read the migrated ledger and buyer account', async ({ page }) => {
+  test('Payments navigation and empty-state rendering include the buyer account', async ({ page }) => {
     await page.setViewportSize(WIDE)
     await open(page, `${ORG}/payments/overview`)
     await expect(page.getByText('No captured payment activity in this UTC period.', { exact: true })).toBeVisible()

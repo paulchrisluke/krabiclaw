@@ -20,12 +20,13 @@
         </template>
       </template>
       <template v-else>
-        <p v-if="!rows.length">No {{ view }} yet.</p>
+        <p v-if="!rows.length">No {{ view }} on this page.</p>
         <section v-for="row in rows" :key="String(row.id)" class="border-b border-default py-6">
           <p class="font-medium">{{ row.stripe_refund_id ?? row.stripe_dispute_id ?? row.id }}</p><p>{{ paymentMoney(row.amount,row.currency) }} · {{ row.status }}</p>
           <p class="text-sm text-muted">{{ row.subject_type }} {{ row.subject_id }}</p><p v-if="row.error" class="mt-2 text-error">{{ row.error }}</p><p v-if="view==='disputes'" class="mt-2">{{ row.reason }}<span v-if="row.evidence_due_at"> · Evidence due {{ new Date(String(row.evidence_due_at)).toLocaleString() }}</span></p>
         </section>
       </template>
+      <div v-if="view!=='overview'" class="mt-4 flex gap-3"><UButton v-if="after" variant="outline" @click="after=''">First page</UButton><UButton v-if="data.next_cursor" variant="outline" @click="after=data.next_cursor">Next page</UButton></div>
       <p v-if="refreshedAt" class="mt-4 text-xs text-muted">Updated {{ new Date(refreshedAt).toLocaleString() }}</p>
     </template>
   </DashboardLeafPanel>
@@ -34,19 +35,21 @@
 import {paymentMoney} from '~/shared/payment-display'
 import {isCurrencyCode} from '~/shared/currencies'
 definePageMeta({layout:'dashboard',validate:route=>['overview','refunds','disputes','payouts'].includes(String(route.params.view))})
-const route=useRoute(),api=useDashboardApi()
+const route=useRoute(),api=useDashboardApi(),after=ref('')
 const view=computed(()=>String(route.params.view))
 const title=computed(()=>view.value[0]!.toUpperCase()+view.value.slice(1))
 const lead=computed(()=>view.value==='overview'?'Payment activity this month, using UTC.':view.value==='payouts'?'Your Stripe balances and payouts.':'Captured payments, refunds and disputes are separate activity.')
 type Row=Record<string,unknown>
-type ViewResponse={configured?:boolean;balance?:{available:Row[];pending:Row[]};payouts?:Row[];rows?:Row[];summary?:{amounts:Row[];refreshed_at:string};refreshed_at?:string}
+type ViewResponse={configured?:boolean;balance?:{available:Row[];pending:Row[]};payouts?:Row[];rows?:Row[];next_cursor?:string|null;summary?:{amounts:Row[];refreshed_at:string};refreshed_at?:string}
 const moneyRow=(value:unknown):value is Row=>isRecord(value)&&Number.isSafeInteger(value.amount)&&typeof value.currency==='string'&&isCurrencyCode(value.currency.toUpperCase())
 function validResponse(value:unknown):value is ViewResponse {
  if(!isRecord(value))return false
  if(view.value==='overview')return isRecord(value.summary)&&typeof value.summary.refreshed_at==='string'&&Array.isArray(value.summary.amounts)&&value.summary.amounts.every(row=>isRecord(row)&&isCurrencyCode(row.currency)&&['captured_amount','refunded_amount','disputed_amount'].every(field=>Number.isSafeInteger(row[field])))
+ if(value.next_cursor!==null&&(typeof value.next_cursor!=='string'||!value.next_cursor))return false
  if(view.value==='payouts')return typeof value.configured==='boolean'&&Array.isArray(value.payouts)&&(value.configured===false||isRecord(value.balance)&&Array.isArray(value.balance.available)&&value.balance.available.every(moneyRow)&&Array.isArray(value.balance.pending)&&value.balance.pending.every(moneyRow)&&typeof value.refreshed_at==='string'&&value.payouts.every(row=>moneyRow(row)&&typeof row.id==='string'&&typeof row.status==='string'&&Number.isSafeInteger(row.arrival_date)))
  return typeof value.refreshed_at==='string'&&Array.isArray(value.rows)&&value.rows.every(row=>moneyRow(row)&&isCurrencyCode(row.currency)&&typeof row.id==='string'&&typeof row.status==='string'&&typeof row.subject_type==='string'&&(row.subject_id===null||typeof row.subject_id==='string'))
 }
-const {data,pending,error}=await useAsyncData(()=>`payments:${route.params.orgSlug}:${view.value}`,()=>api<ViewResponse>('/api/dashboard/payments',{query:{view:view.value},validate:validResponse}),{lazy:true})
+watch([()=>route.params.orgSlug,view],()=>{after.value=''})
+const {data,pending,error}=await useAsyncData(()=>`payments:${route.params.orgSlug}:${view.value}:${after.value}`,()=>api<ViewResponse>('/api/dashboard/payments',{query:{view:view.value,...(after.value?{after:after.value}:{})},validate:validResponse}),{lazy:true})
 const amounts=computed(()=>data.value?.summary?.amounts??[]),rows=computed(()=>data.value?.rows??[]),available=computed(()=>data.value?.balance?.available??[]),payouts=computed(()=>data.value?.payouts??[]),held=computed(()=>data.value?.balance?.pending??[]),refreshedAt=computed(()=>data.value?.summary?.refreshed_at??data.value?.refreshed_at)
 </script>

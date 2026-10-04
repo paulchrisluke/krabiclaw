@@ -12,6 +12,6 @@ export default defineHandler(async event=>{
  const stripe=createStripeClient(env.STRIPE_SECRET_KEY, 'payments'),principal={organizationId:organization.id,userId,role:organization.role}
  if(body.action==='finalize')return jsonResponse(await finalizePaymentsBilling(db,env,principal))
  if(body.action==='provision')return jsonResponse(await provisionPaymentsBilling(db,stripe,env,principal))
- if(body.action==='reconcile_credit'&&body.event_id&&body.credit_note_id)return jsonResponse(await reconcileNativeBillingCredit(db,stripe,principal,body.event_id,body.credit_note_id))
+ if(body.action==='reconcile_credit'&&body.event_id&&body.credit_note_id)return jsonResponse(await reconcileNativeBillingCredit(db,stripe,env,principal,body.event_id,body.credit_note_id))
  throw new HTTPError({statusCode:400,statusMessage:'Explicit billing setup or native credit reconciliation action required'})
 })

@@ -56,7 +56,8 @@ export async function createPaymentCheckout(db: DbClient, stripe: Stripe, env: C
   const [taxSettings, registrations] = await Promise.all([stripe.tax.settings.retrieve({}, {stripeAccount:connected.stripeAccountId}), stripe.tax.registrations.list({status:'active',limit:1}, {stripeAccount:connected.stripeAccountId})])
   let automaticTax = taxSettings.status==='active' && registrations.data.length>0
   const key = `checkout:${input.organizationId}:${input.idempotencyKey}`
-  const previous = await queryFirst<{id:string;payment_id:string;checkout_url:string|null;expires_at:string;return_token:string}>(db,'SELECT id,payment_id,checkout_url,expires_at,return_token FROM payment_attempts WHERE idempotency_key=?',[key])
+  const previous = await queryFirst<{id:string;payment_id:string;checkout_url:string|null;expires_at:string;return_token:string;status:string}>(db,'SELECT id,payment_id,checkout_url,expires_at,return_token,status FROM payment_attempts WHERE idempotency_key=?',[key])
+  if(previous?.status==='failed')throw new HTTPError({statusCode:409,statusMessage:'Checkout was rejected; start a new request',data:{code:'checkout_failed'}})
   const product = await queryFirst<{name:string;tax_code:string|null;currency:string}>(db,`SELECT p.name,p.tax_code,o.default_currency AS currency FROM products p JOIN organization o ON o.id=p.organization_id JOIN product_variants v ON v.product_id=p.id AND v.organization_id=p.organization_id WHERE p.organization_id=? AND p.id=? AND v.id=? AND p.active=1 AND v.active=1`,[input.organizationId,input.productId,input.variantId])
   if (!product || product.currency !== 'USD') throw new HTTPError({statusCode:409,statusMessage:'An active USD offering is required'})
   let projectionTitle=product.name,projectionTaxCode=product.tax_code
@@ -140,7 +141,17 @@ export async function createPaymentCheckout(db: DbClient, stripe: Stripe, env: C
   await execute(db,`UPDATE payment_attempts SET stripe_checkout_id=?,checkout_url=?,status='open',error=NULL,updated_at=? WHERE id=?`,[checkout.id,checkout.url,new Date().toISOString(),attemptId])
   return {payment_id:id,checkout_url:checkout.url,expires_at:expiresAt}
   } catch(error) {
-    await execute(db,'UPDATE payment_attempts SET error=?,updated_at=? WHERE id=?',[error instanceof Error?error.message.slice(0,500):'Provider checkout failed',new Date().toISOString(),attemptId])
+    // A prior attempt may have reached Stripe even when its handoff was lost.
+    // Only a first-call content/auth rejection proves no Checkout was created.
+    const rejected=!previous&&(error instanceof stripe.errors.StripeInvalidRequestError||error instanceof stripe.errors.StripeAuthenticationError||error instanceof stripe.errors.StripePermissionError)&&error.headers?.['stripe-should-retry']!=='true'
+    const failedAt=new Date().toISOString()
+    await executeBatch(db,[
+      {query:"UPDATE payment_attempts SET error=?,updated_at=?,status=CASE WHEN ? THEN 'failed' ELSE status END WHERE id=?",params:[error instanceof Error?error.message.slice(0,500):'Provider checkout failed',failedAt,Number(rejected),attemptId]},
+      ...(rejected?[
+        {query:"UPDATE payment_checkout_holds SET status='released' WHERE payment_id=? AND status='active'",params:[id]},
+        {query:"UPDATE payments SET state='failed',updated_at=? WHERE id=? AND captured_amount=0",params:[failedAt,id]},
+      ]:[]),
+    ],{operation:'Record rejected or uncertain Checkout creation'})
     throw error
   }
 }

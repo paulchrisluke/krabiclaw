@@ -388,7 +388,7 @@ async function executeSourceMutation(
   }
 
   if(input.action==='cancel' && context.thread.kind==='booking' && context.record?.status==='pending'){
-    const paid=await queryFirst(db,"SELECT id FROM payments WHERE organization_id=? AND subject_type='booking' AND subject_id=? AND captured_amount>0",[input.organizationId,context.record.id])
+    const paid=await queryFirst(db,"SELECT id FROM payments WHERE organization_id=? AND subject_type='booking' AND subject_id=? AND captured_amount>refunded_amount",[input.organizationId,context.record.id])
     if(paid) return conflict('Use Reject for a paid pending review request so the full-principal refund is authorized and committed')
   }
   const plan = sourceMutationPlan(context, input.action)

@@ -343,7 +343,7 @@ test('D1 status-email retries preserve recorded content and reject superseded bo
       env: { EMAIL_DELIVERY_MODE: 'provider', RESEND_API_KEY: 'controlled-provider-only', NUXT_PUBLIC_PLATFORM_DOMAIN: 'proof.example' },
     }
     const cancel = { ...input, action: 'cancel', idempotencyKey: 'cancel-status' }
-    assert.deepEqual(await executeGuestThreadOperation(db, cancel), { ok: false, status: 502, reason: 'delivery_failed', message: 'Internal server error. We are unable to process your request right now, please try again later.' })
+    assert.deepEqual(await executeGuestThreadOperation(db, cancel), { ok: false, status: 502, reason: 'delivery_failed', message: '503 application_error: Internal server error. We are unable to process your request right now, please try again later.' })
     assert.equal(await db.prepare("SELECT status FROM reservations WHERE id='reservation-status'").first('status'), 'cancelled')
     assert.equal(requests.length, 1)
     const deliveryId = 'guest-thread-email:booking-status:cancel-status'
