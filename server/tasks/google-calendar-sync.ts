@@ -3,6 +3,7 @@ import { queryAll } from '~/server/db'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { runCalendarCleanupJobs, syncCalendarOrganization } from '~/server/utils/google-calendar'
 import { defineScheduledTask } from '~/server/utils/scheduled-task'
+import { describeErrorForTelemetry } from '~/server/utils/error-telemetry'
 
 export default defineScheduledTask({
   meta: { name: 'google-calendar-sync', description: 'Reconcile committed bookings and retained Calendar cleanup intents' },
@@ -14,9 +15,18 @@ export default defineScheduledTask({
     for (const member of selected) { const result=await refreshMemberBusy(env.DB,env,member.member_id,true); if(result?.error)busyFailures.push(result.error) }
     const organizations = await queryAll<{ id: string }>(env.DB, "SELECT organization_id AS id FROM organization_integrations WHERE provider='google_calendar'")
     const results = []
-    for (const organization of organizations) results.push(await syncCalendarOrganization(env, organization.id))
-    if(busyFailures.length) throw new Error(busyFailures.join('; '))
-    if (cleanup.failed) throw new Error(`${cleanup.failed} retained Google Calendar cleanup job(s) remain unresolved; inspect google_calendar_cleanup_jobs.last_error`)
+    const failures = [...busyFailures]
+    for (const organization of organizations) {
+      try {
+        const result=await syncCalendarOrganization(env, organization.id)
+        results.push({organization_id:organization.id,...result})
+        if(result.failed)failures.push(`${organization.id}: ${result.failed} Google Calendar event(s) failed; inspect the integration's last_error`)
+      } catch(error) {
+        failures.push(`${organization.id}: ${describeErrorForTelemetry(error)}`)
+      }
+    }
+    if (cleanup.failed) failures.push(`${cleanup.failed} retained Google Calendar cleanup job(s) remain unresolved; inspect google_calendar_cleanup_jobs.last_error`)
+    if(failures.length)throw new Error(failures.join('; '))
     return { result: { cleanup, organizations: results } }
   },
 })

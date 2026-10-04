@@ -4,6 +4,7 @@ import { linkedAccountAccessToken, type CloudflareEnv } from './auth'
 import { composeOwnerThreadInboxUrl } from './dashboard-notification-links'
 
 export interface CalendarChoice { id: string; summary: string; accessRole: string }
+export class CalendarSelectionConflict extends Error {}
 export interface CalendarSubject {
   booking_kind: 'booking' | 'reservation'
   operational_id: string
@@ -53,13 +54,13 @@ async function requireWriter(token: string, calendarId: string) {
   if (!['writer', 'owner'].includes(calendar.accessRole)) throw new Error('This account no longer has calendar writer access.')
   return calendar
 }
-export function calendarEvent(subject: CalendarSubject, dashboardUrl: string) {
+export function calendarEvent(subject: CalendarSubject, dashboardUrl: string | null) {
   if (!Number.isFinite(Date.parse(subject.starts_at)) || !Number.isFinite(Date.parse(subject.ends_at)) || subject.ends_at <= subject.starts_at) throw new Error('Invalid canonical booking interval')
   new Intl.DateTimeFormat('en', { timeZone: subject.timezone }).format()
   const noun = subject.booking_kind === 'booking' ? 'Consultation' : 'Reservation'
   return {
     summary: `${subject.status === 'pending' ? 'Pending ' + noun.toLowerCase() : noun}${subject.guest_name ? ' — ' + subject.guest_name : ''}`,
-    description: `Status: ${subject.status}\n${dashboardUrl}`,
+    description: `Status: ${subject.status}${dashboardUrl ? `\n${dashboardUrl}` : ''}`,
     start: { dateTime: subject.starts_at, timeZone: subject.timezone },
     end: { dateTime: subject.ends_at, timeZone: subject.timezone },
     visibility: 'private',
@@ -198,7 +199,7 @@ export async function syncCalendarOrganization(env: CloudflareEnv, organizationI
       await requireWriter(token, link.calendar_id)
       const org = await queryFirst<{ slug: string }>(db, 'SELECT slug FROM organization WHERE id=?', [organizationId])
       if (!org) throw new Error('Organization disappeared')
-      const url = composeOwnerThreadInboxUrl(env, { orgSlug: org.slug, locationSlug: null }, subject.request_id ?? '')
+      const url = subject.request_id ? composeOwnerThreadInboxUrl(env, { orgSlug: org.slug, locationSlug: null }, subject.request_id) : null
       const payload = calendarEvent(subject, url)
       const path = `/calendars/${encodeURIComponent(link.calendar_id)}/events`
       if (!await ownsMutation(db, link, lease, revision)) {
@@ -254,7 +255,7 @@ export async function disconnectCalendar(db: DbClient, organizationId: string) {
 export async function storeCalendarSelection(db: DbClient, organizationId: string, selection: Pick<GoogleCalendarIntegration, 'account_id' | 'calendar_id' | 'calendar_name' | 'calendar_group' | 'include_reservations'>) {
   const pending = await queryFirst<{ n: number }>(db, "SELECT count(*) n FROM google_calendar_event_links WHERE organization_id=? AND state <> 'deleted'", [organizationId])
   const existing = await readCalendarIntegration(db, organizationId)
-  if (existing && pending?.n) throw new Error('Disconnect and finish cleanup of the previous calendar before changing the selection.')
+  if (existing && pending?.n) throw new CalendarSelectionConflict('Disconnect and finish cleanup of the previous calendar before changing the selection.')
   const now = new Date().toISOString()
   const payload: GoogleCalendarIntegration = { ...selection, revision: crypto.randomUUID(), status: 'active', last_error: null, created_at: now, updated_at: now }
   const result = await execute(db, `INSERT INTO organization_integrations
@@ -268,7 +269,7 @@ export async function storeCalendarSelection(db: DbClient, organizationId: strin
     calendar_group=excluded.calendar_group,include_reservations=excluded.include_reservations,status=excluded.status,last_error=NULL,
     revision=excluded.revision,created_at=excluded.created_at,updated_at=excluded.updated_at`,
   [crypto.randomUUID(),organizationId,payload.account_id,payload.calendar_id,payload.calendar_name,payload.calendar_group,Number(payload.include_reservations),payload.revision,now,now,organizationId,existing?.revision??null,existing?.revision??null,payload.calendar_id])
-  if (result.meta?.changes !== 1) throw new Error('Calendar selection changed. Reload and try again.')
+  if (result.meta?.changes !== 1) throw new CalendarSelectionConflict('Calendar selection changed. Reload and try again.')
 }
 
 interface CleanupJob {

@@ -476,7 +476,7 @@ export async function replaceWeeklySchedule(db: DbClient, input: {
 
 /** Explicit tenant-scoped online calendar enrollment; intervals are half open. */
 export function onlineCalendarConflictSql(sessionAlias: string, replacingBookingSql = 'NULL', excludingSessionSql = 'NULL'): string {
-  return `(${sessionMemberSql(sessionAlias)} IS NULL AND (EXISTS (
+  return `(${sessionAlias}.location_id IS NULL AND ${sessionMemberSql(sessionAlias)} IS NULL AND (EXISTS (
     SELECT 1 FROM product_booking_configs own
       JOIN product_booking_configs peer ON peer.organization_id = own.organization_id
         AND peer.calendar_group = own.calendar_group
@@ -485,7 +485,7 @@ export function onlineCalendarConflictSql(sessionAlias: string, replacingBooking
       JOIN bookings b ON b.product_session_id = occupied.id
     WHERE own.product_id = ${sessionAlias}.product_id
       AND own.organization_id = ${sessionAlias}.organization_id AND own.calendar_group IS NOT NULL
-      AND occupied.starts_at < ${sessionAlias}.ends_at AND occupied.ends_at > ${sessionAlias}.starts_at
+      AND occupied.location_id IS NULL AND occupied.starts_at < ${sessionAlias}.ends_at AND occupied.ends_at > ${sessionAlias}.starts_at
       AND b.id IS NOT ${replacingBookingSql} AND occupied.id IS NOT ${excludingSessionSql} AND ${CAPACITY_CONSUMING_SQL}
   )))`
 }

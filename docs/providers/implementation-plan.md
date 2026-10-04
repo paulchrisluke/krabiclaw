@@ -32,8 +32,12 @@ member assignment. The native browser flow checks that malformed Calendar and
 reassignment requests return 400 and leave the persisted schedule/booking unchanged.
 The shared Better Auth callback also includes organization Calendar and member
 availability screens; its return URL preserves the explicitly selected business.
-An owner-authorized isolated verification calendar has been created. Live linking
-currently fails with `redirect_uri_mismatch` because the configured Google OAuth
-client does not register `http://localhost:3113/api/auth/callback/google`.
-Real consent, busy-calendar reads, event lifecycle and disconnect cleanup remain
-pending that client configuration and the owner's incremental consent.
+The owner authorized and saved `http://localhost:3113/api/auth/callback/google`
+on the existing OAuth client. Live Better Auth consent, callback routing, event
+creation/update/cancellation, disconnect cleanup and member busy-calendar reads across the 94-day horizon
+were exercised on October 4, 2026 against the built local Worker and the separate
+private verification calendar. Test events, domain connections and test hours
+were removed afterward. The Google app still shows its unverified-app notice;
+public OAuth verification remains before general rollout. Exact evidence and
+verification limits, including complete-cache preservation after a failed read,
+are recorded in [Google Calendar](../integrations/google-calendar.md#review-and-validation).

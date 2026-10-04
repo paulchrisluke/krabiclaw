@@ -206,7 +206,7 @@ async function hydrate(db: DbClient, organizationId: string, products: Product[]
       default_capacity: row.default_capacity === null ? null : Number(row.default_capacity),
       confirmation_mode: row.confirmation_mode as 'instant' | 'review', online_payment_required: Number(row.online_payment_required) === 1,
       online_timezone: row.online_timezone === null ? null : String(row.online_timezone), calendar_group: row.calendar_group === null ? null : String(row.calendar_group),
-      scheduling_mode: row.scheduling_mode === 'provider' ? 'provider' : 'legacy', assigned_member_id: row.assigned_member_id === null ? null : String(row.assigned_member_id),
+      scheduling_mode: row.scheduling_mode as 'legacy' | 'provider', assigned_member_id: row.assigned_member_id === null ? null : String(row.assigned_member_id),
     }
   }
 

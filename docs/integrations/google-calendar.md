@@ -99,7 +99,8 @@ are sent. Provider mutations use `sendUpdates=none`.
 1. Keep this PR based on current `staging`, which includes the consultation
    foundation (#1211). Calendar is reviewed before the separate Payments PR.
    This PR uses `0001_calendar_member_scheduling` after the v11 foundation
-   baseline. The separate Payments PR follows with `0002_payments_commerce`.
+   baseline, then `0002_calendar_member_integrity`. The separate Payments PR
+   must generate its migration after this Calendar head when rebasing.
 2. Apply the canonical release/migration checks and deployment process. No
    deployment or merge was authorized for this implementation.
 3. Enable Google Calendar API for the existing OAuth application and configure

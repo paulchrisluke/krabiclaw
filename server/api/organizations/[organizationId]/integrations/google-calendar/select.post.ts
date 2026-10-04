@@ -3,7 +3,7 @@ import { getRouterParam, readBody } from 'nitro/h3'
 import { INTEGRATION_SCOPES } from '~/shared/organization-settings'
 import { jsonResponse } from '~/server/utils/api-response'
 import { linkedAccountAccessToken, requireIntegrationAccount } from '~/server/utils/auth'
-import { calendarGroups, listWritableCalendars, readCalendarIntegration, storeCalendarSelection } from '~/server/utils/google-calendar'
+import { CalendarSelectionConflict, calendarGroups, listWritableCalendars, readCalendarIntegration, storeCalendarSelection } from '~/server/utils/google-calendar'
 import { requireOrganizationAccess } from '~/server/utils/location-access'
 
 export default defineHandler(async (event) => {
@@ -21,5 +21,5 @@ export default defineHandler(async (event) => {
     if (!calendar) return jsonResponse({ error: 'Choose a calendar where this account has writer access.' }, { status: 400 })
     await storeCalendarSelection(env.DB, organization.id, { account_id: body.account_id, calendar_id: calendar.id, calendar_name: calendar.summary, calendar_group: body.calendar_group || null, include_reservations: body.include_reservations })
     return jsonResponse({ success: true, sync: 'Upcoming active bookings will be reconciled by the scheduled worker.' })
-  } catch (error) { return jsonResponse({ error: error instanceof Error ? error.message : String(error) }, { status: 502 }) }
+  } catch (error) { return jsonResponse({ error: error instanceof Error ? error.message : String(error) }, { status: error instanceof CalendarSelectionConflict ? 409 : 502 }) }
 })

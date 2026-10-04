@@ -141,7 +141,6 @@ export async function createProductBooking(event: H3Event, context: BookingCreat
   const full = await getProduct(db, organization.id, product.id)
   const presentation = resolveBookingPresentation('booking', organization.vertical)
   const config = await requireBookingConfig(db, organization.id, product.id)
-  await refreshProductBusy(db, env, organization.id, product.id)
   if (!replayState.booking) {
     if (!isCurrencyCode(organization.default_currency)) throw new Error(`Unsupported organization currency: ${organization.default_currency}`)
     const variant = full.variants.find(candidate => candidate.id === productVariantId)
@@ -167,6 +166,7 @@ export async function createProductBooking(event: H3Event, context: BookingCreat
     }
   }
 
+  await refreshProductBusy(db, env, organization.id, product.id)
   const cancellation = operator ? await createReplayableReservationCancelToken(env.EMAIL_REPLY_SECRET ?? '', threadId) : createReservationCancelToken()
   const cancellationTokenHash = await hashReservationCancelToken(cancellation.token)
   // The person is the Better Auth user; what they typed stays on the thread as

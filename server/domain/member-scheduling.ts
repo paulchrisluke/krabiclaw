@@ -118,7 +118,8 @@ export async function selectBusyCalendars(actor: SchedulingActor, memberId: stri
 }
 export async function refreshMemberBusy(db: DbClient, env: CloudflareEnv, memberId: string, force=false) {
  const row=await queryFirst<MemberScheduling>(db,'SELECT * FROM member_scheduling WHERE member_id=?',[memberId])
- if(!row?.calendar_account_id || (!force && row.busy_checked_at && Date.now()-Date.parse(row.busy_checked_at)<BUSY_FRESHNESS_MS/2 && !row.busy_error)) return
+ if(!row?.calendar_account_id)return
+ if(!force && row.busy_checked_at && Date.now()-Date.parse(row.busy_checked_at)<BUSY_FRESHNESS_MS/2)return row.busy_error?{error:row.busy_error}:undefined
  const now=new Date().toISOString(), until=new Date(Date.now()+94*86400000).toISOString()
  try {
   const member=await queryFirst<{userId:string}>(db,'SELECT userId FROM member WHERE id=? AND organizationId=?',[memberId,row.organization_id])

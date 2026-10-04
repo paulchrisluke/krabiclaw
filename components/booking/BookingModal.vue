@@ -41,6 +41,7 @@
             <label
               :for="toggleId"
               role="button"
+              :aria-label="t('saya.experience_detail.close_booking')"
               tabindex="0"
               class="flex size-9 items-center justify-center rounded-full border border-default hover:bg-muted text-default transition-colors shrink-0"
             >

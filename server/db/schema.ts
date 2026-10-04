@@ -283,6 +283,7 @@ export const member = sqliteTable("member", {
 	// Better Auth's organization adapter resolves membership by userId and organizationId.
 	index("member_userId_organizationId_idx").on(table.userId, table.organizationId),
 	index("member_organizationId_idx").on(table.organizationId),
+	uniqueIndex("member_id_organizationId_unique").on(table.id, table.organizationId),
 ]);
 
 // ---------------------------------------------------------------------------
@@ -2271,8 +2272,8 @@ export const google_calendar_cleanup_jobs = sqliteTable("google_calendar_cleanup
 // Domain settings reference existing Better Auth membership. Assignment IDs on
 // historical operational records deliberately survive membership deletion.
 export const member_scheduling = sqliteTable("member_scheduling", {
- member_id: text().primaryKey().references(() => member.id, { onDelete: "cascade" }),
- organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+ member_id: text().primaryKey(),
+ organization_id: text().notNull(),
  timezone: text().notNull(),
  weekly_json: text().notNull(),
  time_off_json: text().notNull(),
@@ -2292,4 +2293,6 @@ export const member_scheduling = sqliteTable("member_scheduling", {
  busy_error: text(),
  updated_at: text().notNull(),
  updated_by: text().notNull(),
-}, t => [index("member_scheduling_org_idx").on(t.organization_id)]);
+}, t => [index("member_scheduling_org_idx").on(t.organization_id),
+ foreignKey({ columns: [t.member_id, t.organization_id], foreignColumns: [member.id, member.organizationId] }).onDelete("cascade"),
+]);

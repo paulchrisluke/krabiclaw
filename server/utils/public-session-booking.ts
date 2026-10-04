@@ -7,7 +7,7 @@ import { listOrganizationProducts } from '~/server/utils/product-management'
 import { isCurrencyCode } from '~/shared/currencies'
 import { publicTenantVisibilitySql } from '~/server/utils/public-base'
 
-export async function listPublicBookingSessions(db: DbClient, organizationId: string, slug: string, requestedScope?: unknown, env?: CloudflareEnv) {
+export async function listPublicBookingSessions(db: DbClient, organizationId: string, slug: string, env: CloudflareEnv, requestedScope?: unknown) {
   const product = await queryFirst<{ id: string; organization_id: string; name: string; order_url: string | null; timezone: string | null }>(db, `
     SELECT p.id, p.organization_id, p.name, p.order_url,
            COALESCE(cfg.online_timezone,
@@ -38,7 +38,7 @@ export async function listPublicBookingSessions(db: DbClient, organizationId: st
     throw new HTTPError({ statusCode: 404, statusMessage: 'This product is not on sale at that location' })
   }
 
-  if(env) await refreshProductBusy(db,env,organizationId,product.id)
+  await refreshProductBusy(db,env,organizationId,product.id)
   const window = bookingWindow(product.timezone)
   const sessions = await listSessions(db, {
     organizationId: product.organization_id, productId: product.id,

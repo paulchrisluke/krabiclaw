@@ -8,7 +8,7 @@ import { writeMemberScheduling, readMemberScheduling, requireSchedulingAccess, r
 import { claimSessionCapacity, CapacityUnavailableError } from '../../server/utils/availability.ts'
 import { reassignBookingProvider } from '../../server/domain/provider-reassignment.ts'
 import { storeCalendarSelection, readCalendarIntegration, disconnectCalendar, syncCalendarOrganization } from '../../server/utils/google-calendar.ts'
-import { MEMBER_BUSY_SCOPES } from '../../shared/member-scheduling.ts'
+import { BUSY_FRESHNESS_MS, MEMBER_BUSY_SCOPES } from '../../shared/member-scheduling.ts'
 import { roleSatisfies } from '../../server/utils/mcp-auth.ts'
 import type { CloudflareEnv } from '../../server/utils/auth.ts'
 
@@ -76,9 +76,19 @@ test('member self-service uses Better Auth permissions, public approval is admin
   assert.equal((await refreshMemberBusy(db,env,'member-one',true))?.error,'Google busy-calendar check failed (400): Provider rejected the final window')
   const incomplete=await db.prepare("SELECT busy_json,busy_from,busy_until FROM member_scheduling WHERE member_id='member-one'").first()
   assert.deepEqual(incomplete,{busy_json:complete?.busy_json,busy_from:complete?.busy_from,busy_until:complete?.busy_until},'failed final window cannot replace complete coverage')
+  const requestsAfterFailure=ranges.length
+  assert.equal((await refreshMemberBusy(db,env,'member-one'))?.error,'Google busy-calendar check failed (400): Provider rejected the final window')
+  assert.equal(ranges.length,requestsAfterFailure,'public reads retain the visible failed result without calling Google again during the retry interval')
+  assert.equal((await readMemberScheduling(db,'org','member-one'))?.calendar_status,'error')
   rejectLast='invalid'
   assert.match((await refreshMemberBusy(db,env,'member-one',true))!.error,/^Google busy-calendar check failed \(502\): Invalid error response/)
   assert.deepEqual(await db.prepare("SELECT busy_json,busy_from,busy_until FROM member_scheduling WHERE member_id='member-one'").first(),incomplete)
+  assert(ranges.length>requestsAfterFailure,'explicit Recheck bypasses the retry interval')
+  rejectLast=false
+  const afterRetryInterval=Date.now()+BUSY_FRESHNESS_MS
+  t.mock.method(Date,'now',()=>afterRetryInterval)
+  assert.equal(await refreshMemberBusy(db,env,'member-one'),undefined)
+  assert.equal((await readMemberScheduling(db,'org','member-one'))?.busy_error,null,'a successful check after the interval clears the persisted error')
   t.mock.restoreAll()
   await selectBusyCalendars(own,'member-one',{account_id:null,calendar_ids:[]})
   const day=new Date(Date.now()+3*86400000).toISOString().slice(0,10),start=`${day}T14:00:00.000Z`,end=`${day}T15:00:00.000Z`
