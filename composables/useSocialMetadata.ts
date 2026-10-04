@@ -11,6 +11,10 @@ import {
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
 import { isDemoHost, isDemoOrg } from '~/shared/demo'
+import {
+  buildProfessionalServiceGraph,
+  type ProfessionalServiceSchemaInput,
+} from '~/utils/professional-service-schema'
 
 export interface PageBreadcrumb {
   name: string
@@ -29,6 +33,11 @@ export type SchemaPageType =
   | 'CollectionPage'
   | 'ItemPage'
   | 'SoftwareApplication'
+
+export type PageProfessionalServiceInput = Omit<ProfessionalServiceSchemaInput, 'origin' | 'pageUrl' | 'pageTitle'> & {
+  pageUrl?: string
+  pageTitle?: string
+}
 
 export type PageSocialMetadataInput = Omit<SocialPageMetadataInput, 'template' | 'canonicalUrl' | 'brand'> & {
   path: string
@@ -54,6 +63,7 @@ export type PageSocialMetadataInput = Omit<SocialPageMetadataInput, 'template' |
     operatingSystem?: string
     offers?: ApiRecord
   }
+  professionalService?: PageProfessionalServiceInput
   isHomepage?: boolean
   socialType?: SocialPageType
   schema?: boolean
@@ -170,11 +180,28 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
       template === 'platform'
       || isArticleCollection
       || value.schema === true
+      || Boolean(value.breadcrumbs?.length)
       || Boolean(value.faqItems?.length)
       || Boolean(value.schemaNodes?.length)
       || Boolean(value.softwareApplication)
+      || Boolean(value.professionalService)
     )
     if (!shouldEmitSchema) return null
+
+    if (value.professionalService) {
+      if (!value.professionalService.org?.name) return null
+      const serviceGraph = buildProfessionalServiceGraph({
+        ...value.professionalService,
+        origin,
+        pageUrl: value.professionalService.pageUrl ?? tags.canonicalUrl,
+        pageTitle: value.professionalService.pageTitle ?? value.title,
+        pageDescription: value.professionalService.pageDescription ?? value.description,
+        breadcrumbs: value.professionalService.breadcrumbs ?? value.breadcrumbs,
+        faqs: value.professionalService.faqs ?? value.faqItems,
+        imageUrl: value.professionalService.imageUrl ?? (value.socialImage ? resolveSeoUrl(value.socialImage.url, origin) : undefined),
+      })
+      return serviceGraph as unknown as ApiRecord
+    }
     const organizationRoot = resolveSeoUrl('/', origin).replace(/\/$/, '')
     const websiteId = `${organizationRoot}/#website`
     const organizationId = `${organizationRoot}/#organization`

@@ -21,7 +21,7 @@ const org = useBlawbyOrgIdentity(identity, compliance)
 
 // A page about the business: its image is the organization's.
 const organizationSocialImage = useTenantOrganization().organization?.social_image ?? null
-const { canonicalUrl } = useSocialMetadata(() => ({
+useSocialMetadata(() => ({
   path: '/contact',
   socialImage: organizationSocialImage,
   title: `${page.value?.title || 'Contact'} | ${identity.value.name}`,
@@ -29,21 +29,16 @@ const { canonicalUrl } = useSocialMetadata(() => ({
   brand: {
     organizationName: identity.value.name,
   },
-}))
-const homeUrl = useSeoUrl(() => '/')
-
-useProfessionalServiceSchema(() => ({
-  recipe: 'contact',
-  org: org.value,
-  pageUrl: canonicalUrl.value,
-  pageTitle: page.value?.title || '',
-  pageDescription: page.value?.summary || null,
   breadcrumbs: [
-    { name: 'Home', url: homeUrl.value },
-    { name: 'Contact', url: canonicalUrl.value },
+    { name: 'Home', url: '/' },
+    { name: page.value?.title || 'Contact', url: '/contact' },
   ],
-  faqs: routeData.value.qa
+  faqItems: routeData.value.qa
     .map(item => ({ question: item.question.trim(), answer: item.answer?.trim() ?? '' }))
     .filter(item => item.question && item.answer),
+  professionalService: {
+    recipe: 'contact',
+    org: org.value,
+  },
 }))
 </script>

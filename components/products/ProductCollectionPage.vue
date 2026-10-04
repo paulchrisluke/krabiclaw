@@ -466,18 +466,20 @@ useSchemaOrg(computed(() => props.presentation.structuredDataType === 'MenuItem'
       '@type': 'ItemList',
       name: props.title,
       itemListElement: props.products.map((product, index) => {
-        const productUrl = props.presentation.productPath(props.locations[0]?.slug ?? '', product.slug)
-        const absoluteProductUrl = resolveSeoUrl(productUrl, requestURL.origin)
+        const href = productHref(product)
+        const absoluteProductUrl = href ? resolveSeoUrl(href, requestURL.origin) : null
         return {
           '@type': 'ListItem',
           position: index + 1,
           item: {
             '@type': 'Product',
-            '@id': `${absoluteProductUrl}#product`,
+            ...(absoluteProductUrl ? {
+              '@id': `${absoluteProductUrl}#product`,
+              url: absoluteProductUrl,
+            } : {}),
             name: product.name,
             description: product.description,
             image: product.image?.public_url ? resolveSeoUrl(product.image.public_url, requestURL.origin) : undefined,
-            url: absoluteProductUrl,
             offers: offerFor(product),
           },
         }

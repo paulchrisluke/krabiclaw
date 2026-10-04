@@ -65,7 +65,6 @@ export default defineHandler(async (event) => {
   }
 
   const plans = await getCachedPlans(env as EnvWithOrganizationCache, useRuntimeConfig().app.buildId)
-  setHeader(event, 'content-type', 'text/markdown; charset=utf-8')
   setHeader(event, 'cache-control', 'public, max-age=3600, stale-while-revalidate=86400')
-  return textResponse(renderPlansMarkdown(plans))
+  return textResponse(renderPlansMarkdown(plans), {}, 'text/markdown; charset=utf-8')
 })

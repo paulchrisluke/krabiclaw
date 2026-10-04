@@ -233,14 +233,13 @@ const pageHowToNode = computed<ApiRecord | null>(() => {
   }
 })
 
-useProfessionalServiceSchema(() => {
-  if (!page.value || !isBlawby.value || !schemaContext) return null
+const serviceItems = computed(() => {
+  if (!page.value) return []
   // The services this page lists are pages, and the page renders them from its
   // page_grid. Reading a product_grid here described a block these pages do not
   // carry, so the schema listed no services at all.
   const servicesBlock = page.value.blocks.find(block => block.type === 'page_grid')
-  const donationBlock = page.value.blocks.find(block => block.type === 'donation_choices')
-  const serviceItems = Array.isArray(servicesBlock?.data.items)
+  return Array.isArray(servicesBlock?.data.items)
     ? servicesBlock.data.items.filter(item => item && typeof item === 'object' && !Array.isArray(item)).map(item => {
         const record = item as Record<string, unknown>
         return {
@@ -250,25 +249,11 @@ useProfessionalServiceSchema(() => {
         }
       }).filter(item => item.name && item.url)
     : []
-  const donationUrl = typeof donationBlock?.data.destination === 'string' ? donationBlock.data.destination : null
-  return {
-    recipe: schemaRecipe.value,
-    org: schemaOrg.value,
-    pageUrl: page.value.path,
-    pageTitle: page.value.title,
-    pageDescription: page.value.summary,
-    breadcrumbs: page.value.path === '/' ? undefined : [
-      { name: page.value.title, url: page.value.path },
-    ],
-    faqs: pageFaqItems.value,
-    items: serviceItems,
-    offering: schemaRecipe.value === 'service-detail' ? {
-      name: page.value.title,
-      description: page.value.summary || null,
-      schemaType: schemaOrg.value?.entityType || 'LegalService',
-    } : undefined,
-    donationUrl,
-  }
+})
+
+const donationUrl = computed(() => {
+  const donationBlock = page.value?.blocks.find(block => block.type === 'donation_choices')
+  return typeof donationBlock?.data.destination === 'string' ? donationBlock.data.destination : null
 })
 
 const { canonicalUrl } = useSocialMetadata(() => page.value && ({
@@ -287,10 +272,21 @@ const { canonicalUrl } = useSocialMetadata(() => page.value && ({
     applicationCategory: 'BusinessApplication',
     operatingSystem: 'All (Web / Cloud-based)',
   } : undefined,
-  schema: !isBlawby.value,
   breadcrumbs: page.value.path === '/' ? undefined : [
+    { name: isPlatform ? 'Home' : (organization?.name || 'Home'), url: '/' },
     { name: page.value.title, url: page.value.path },
   ],
+  professionalService: (isBlawby.value && schemaContext && schemaOrg.value?.name) ? {
+    recipe: schemaRecipe.value,
+    org: schemaOrg.value,
+    items: serviceItems.value,
+    offering: schemaRecipe.value === 'service-detail' ? {
+      name: page.value.title,
+      description: page.value.summary || null,
+      schemaType: schemaOrg.value?.entityType || 'LegalService',
+    } : undefined,
+    donationUrl: donationUrl.value,
+  } : undefined,
 }))
 
 useVideoSchema(() => page.value?.blocks, canonicalUrl)
