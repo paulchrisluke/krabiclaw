@@ -154,6 +154,30 @@ test.describe('dashboard pane hierarchy', () => {
     await expect(page.locator('[aria-current="page"]', { hasText: 'Today' }).first()).toBeVisible()
   })
 
+  test('Calendar can filter by a team member and return to all assigned people', async ({ page }) => {
+    const membersResponse = await page.request.get('/api/organizations/org-demo/members/scheduling')
+    expect(membersResponse.status()).toBe(200)
+    const { members } = await membersResponse.json() as { members: Array<{ id: string; name: string }> }
+    expect(members.length).toBeGreaterThan(0)
+    const member = members[0]!
+    await open(page, `${ORG}/calendar`)
+    const filter = page.getByRole('combobox', { name: 'Assigned person' })
+    await expect(filter).toContainText('All assigned people')
+    await filter.click()
+    await expect(page.getByRole('option', { name: 'All assigned people', exact: true })).toBeVisible()
+    const filtered = page.waitForResponse(response => new URL(response.url()).pathname === '/api/dashboard/agenda'
+      && new URL(response.url()).searchParams.get('assigned_member_id') === member.id)
+    await page.getByRole('option', { name: member.name, exact: true }).first().click()
+    expect((await filtered).status()).toBe(200)
+    await expect(filter).toContainText(member.name)
+    await filter.click()
+    const unfiltered = page.waitForResponse(response => new URL(response.url()).pathname === '/api/dashboard/agenda'
+      && !new URL(response.url()).searchParams.has('assigned_member_id'))
+    await page.getByRole('option', { name: 'All assigned people', exact: true }).click()
+    expect((await unfiltered).status()).toBe(200)
+    await expect(filter).toContainText('All assigned people')
+  })
+
   test('below lg every level is one screen and nothing opens itself', async ({ page }) => {
     await page.setViewportSize(NARROW)
     for (const [path, pane] of [['pages', 'organization-pages'], ['brand', 'organization-brand'], ['settings/integrations', 'organization-integrations']] as const) {

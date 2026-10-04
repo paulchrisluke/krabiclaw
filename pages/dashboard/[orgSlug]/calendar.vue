@@ -272,7 +272,7 @@ const router = useRouter()
 const dashboardApi = useDashboardApi()
 const routeKind = typeof route.query.kinds === 'string' && AGENDA_KINDS.includes(route.query.kinds as AgendaKind) ? route.query.kinds : FILTER_ALL
 const routeLocationId = typeof route.query.locationId === 'string' ? route.query.locationId : FILTER_ALL
-const providerFilter=ref('')
+const providerFilter=ref<string | null>(null)
 const filters = reactive({ locationId: routeLocationId, kind: routeKind })
 
 const weekdayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
@@ -358,7 +358,7 @@ const isLocationHours = (value: unknown): value is { location: CalendarLocation 
   && typeof value.location.updated_at === 'string' && 'opening_hours' in value.location && 'special_hours' in value.location
 const organizationId = await useDashboardOrganizationId()
 const {data:providerMembers}=await useFetch<{members:{id:string;name:string}[]}>(()=>`/api/organizations/${organizationId}/members/scheduling`,{server:false})
-const providerFilterOptions=computed(()=>[{label:'All assigned people',value:''},...(providerMembers.value?.members.map(m=>({label:m.name,value:m.id}))??[])])
+const providerFilterOptions=computed(()=>[{label:'All assigned people',value:null},...(providerMembers.value?.members.map(m=>({label:m.name,value:m.id}))??[])])
 
 const { data: chosenLocation, error: locationError, refresh: refreshLocation } = await useAsyncData(
   () => `calendar-location:${organizationId}:${filters.locationId}`,
