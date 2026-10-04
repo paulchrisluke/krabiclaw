@@ -17,6 +17,7 @@ export default definePlugin((nitroApp) => {
         origin: requestURL.origin,
         hostname: requestURL.hostname,
         tenantName: organization?.name,
+        organizationId: event.context.organizationId as string | undefined,
       }),
     })
   })
