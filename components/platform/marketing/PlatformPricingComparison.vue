@@ -1,7 +1,7 @@
 <template>
   <section class="kc-pricing-comparison" data-parity-section="comparison">
     <div class="kc-pricing-comparison__inner">
-      <h2>{{ blockText(block.data.title) || 'Compare the details.' }}</h2>
+      <h2>{{ blockText(block?.data.title) || 'Compare the details.' }}</h2>
       <p>Paid capabilities require an eligible subscription. Some features also need setup, permissions or a connected provider.</p>
       <div class="kc-pricing-comparison__scroll" tabindex="0" aria-label="Scrollable plan comparison">
         <table>
@@ -32,11 +32,10 @@
   </section>
 </template>
 <script setup lang="ts">
-import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
 import { blockText } from '~/utils/tenant-page-block-data'
 import { PRICING_COMPARISON, comparisonValue } from '~/shared/pricing-comparison'
-defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
+defineProps<{ block?: TenantPageBlock }>()
 const { plans } = await usePlans()
 </script>
 <style scoped>
