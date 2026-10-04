@@ -71,13 +71,15 @@ Read current official [quickstart](https://hyperframes.heygen.com/quickstart), [
 
 Use downloaded Flow footage as existing media; skip HeyGen presenter generation. Keep footage and exact screenshot layers local to the project, with editable captions, timing, media references, purposeful motion, branding and CTA. Choreograph the actual action/result sequence with cursor focus, readable zooms, callouts and pacing that follow the narration; avoid a static screenshot slideshow. Keep recorded interaction authentic and use animation to direct attention, not invent product behavior. Use the canonical symbol without redundant “KrabiClaw” text beside it. Refer to the profile's canonical logo master. Use variables or a small template only where the real composition benefits; add no batch framework or generic service. Preserve original pixels and readable UI labels. Do not fetch mutable remote media during rendering.
 
+Choose one fixed caption band inside the target platform’s safe area before composing scenes. Keep its position, alignment, style and width consistent across the entire video. Reserve that band in scene composition and UI framing so captions never obscure important UI, the source watermark or platform controls. Reframe the footage or adjust the composition when a collision occurs; never move captions opportunistically from scene to scene.
+
 Preview and render through the verified installed HyperFrames path. Inspect the entire actual export and decoded phone-size frames. Acceptance requires:
 
 - Each spoken feature claim matches a visible actual action and result; the chosen chat/CMS surface shows the workflow.
 - Native UI text and relevant proof remain sharp and readable through movement and cuts; unrelated cards and fabricated interactions are absent.
 - Motion, cursor focus, zooms and callouts guide the demonstration rather than decorate static slides.
 - Any avatar has a deliberate scene, outfit, action and framing; scripts are direct and action-led, and branding has no redundant wordmark beside the symbol.
-- Captions match speech; automated audio presence/non-silence/timing/transcript checks pass where available. Report concrete defects and actual inspection limits without routine owner audio sign-off.
+- Captions match speech and retain the same fixed safe-area position, alignment, style and width across all scenes and cuts; important UI, watermarks and platform controls remain unobstructed. Automated audio presence/non-silence/timing/transcript checks pass where available. Report concrete defects and actual inspection limits without routine owner audio sign-off.
 - Feature blog/document deliverables include appropriate process media, provenance, descriptive alt text/captions and required posters.
 - Claims, likeness consistency, CTA and exact publication scope are reviewed; technical success alone is not creative approval.
 
