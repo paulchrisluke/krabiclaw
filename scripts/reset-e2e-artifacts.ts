@@ -5,9 +5,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnYarn } from './utils/spawn-yarn.mjs'
 
-// The customer fixtures targeted by tenant-guest-journeys.spec.ts. Scoping by
+// The fixtures targeted by tenant guest journeys and MCP owner tools. Scoping by
 // the indexed organization column keeps the email marker queries bounded.
-const GUEST_BOOKING_ORG_IDS = ['org-user-pottery-house', 'org-bVY8SxxUuG6Ctk2CQnfCk8T2cPsj4jJX', 'org-ncls-blawby']
+const GUEST_BOOKING_ORG_IDS = ['org-user-pottery-house', 'org-bVY8SxxUuG6Ctk2CQnfCk8T2cPsj4jJX', 'org-ncls-blawby', 'org-demo']
 
 // The onboarding actor creates throwaway `e2e-*` organizations. Both the
 // owning actor and slug must match; copied customer organizations are retained.
@@ -35,7 +35,7 @@ if (process.argv.includes('--staging') || process.argv.includes('--remote')) {
   process.exit(1)
 }
 
-// No --remote: the onboarding test actor and '@playwright.example' guest marker
+// No --remote: the onboarding test actor and reserved guest-email markers
 // identify disposable local data, never data to remove from a deployed database.
 
 const ageArg = process.argv.find((arg) => arg.startsWith('--older-than-hours='))
@@ -84,14 +84,15 @@ const disposableGuestRequestIds = `
   SELECT id FROM requests
   WHERE organization_id IN (${guestBookingOrgIdList})
     AND kind IN ('contact', 'reservation', 'booking')
-    AND payload_json ->> '$.guest.email' LIKE '%@playwright.example'
+    AND (payload_json ->> '$.guest.email' LIKE '%@playwright.example'
+         OR (organization_id = 'org-demo' AND payload_json ->> '$.guest.email' LIKE '%@example.test'))
     AND created_at < '${cutoff}'
   ORDER BY id LIMIT ${batchSize}
 `
 
 const sql = `-- Sweeps E2E-generated rows from local D1 so they don't accumulate forever.
 -- Targets only e2e-* organizations owned by the onboarding test actor and the
--- '@playwright.example' guest-email marker used by guest journey tests.
+-- reserved guest-email markers used by the local tests.
 
 PRAGMA foreign_keys = ON;
 

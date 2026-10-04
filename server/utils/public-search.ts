@@ -983,6 +983,10 @@ export async function listOrganizationItems(env: CloudflareEnv, organizationId: 
  */
 export async function syncOrganizationSearchIndex(env: CloudflareEnv, db: DbClient, organizationId: string) {
   const startedAt = Date.now()
+  // Platform guides live in the shared public corpus, alongside the site's
+  // organization-scoped dashboard records. A platform write updates both.
+  const platformId = (await getPlatformOrganization(db)).id
+  const publicCorpus = organizationId === platformId ? await rebuildPlatformKnowledgeIndex(env, db) : null
   const [existingItems, baseRecords] = await Promise.all([listOrganizationItems(env, organizationId), buildOrganizationDocuments(db, organizationId)])
   const records = expandDocumentsForSurfaces(baseRecords)
   let result = await reconcileIndexItems(env, existingItems, records, { maxUploads: SYNC_UPLOADS_PER_RUN })
@@ -1000,7 +1004,13 @@ export async function syncOrganizationSearchIndex(env: CloudflareEnv, db: DbClie
     }
   }
   console.warn(`[ai-search] organization ${organizationId}: uploaded ${result.indexed}, unchanged ${result.unchanged}, pending ${result.pending}, deleted ${result.deleted} in ${((Date.now() - startedAt) / 1000).toFixed(1)}s`)
-  return { ...result, indexingUnconfirmedReason }
+  return {
+    indexed: result.indexed + (publicCorpus?.indexed ?? 0),
+    unchanged: result.unchanged + (publicCorpus?.unchanged ?? 0),
+    pending: result.pending + (publicCorpus?.pending ?? 0),
+    deleted: result.deleted + (publicCorpus?.deleted ?? 0),
+    indexingUnconfirmedReason: [publicCorpus?.indexingUnconfirmedReason, indexingUnconfirmedReason].filter(Boolean).join('; ') || null,
+  }
 }
 
 /**
