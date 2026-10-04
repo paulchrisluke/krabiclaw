@@ -54,7 +54,7 @@ test('member self-service uses Better Auth permissions, public approval is admin
   await selectBusyCalendars(own,'member-one',{account_id:'busy-linked',calendar_ids:['busy-calendar']})
   const distant={start:new Date(Date.now()+40*86400000).toISOString(),end:new Date(Date.now()+40*86400000+3600000).toISOString()}
   const ranges:{timeMin:string;timeMax:string}[]=[]
-  let rejectLast=false
+  let rejectLast:false|'provider'|'invalid'=false
   t.mock.method(globalThis,'fetch',async(input,init)=>{
    assert.equal(String(input),'https://www.googleapis.com/calendar/v3/freeBusy')
    assert.equal(new Headers(init?.headers).get('Authorization'),'Bearer busy-test-token')
@@ -63,7 +63,7 @@ test('member self-service uses Better Auth permissions, public approval is admin
    ranges.push(body)
    const duration=Date.parse(body.timeMax)-Date.parse(body.timeMin)
    if(duration>31*86400000)return Response.json({error:{message:'The requested time range is too long.'}},{status:400})
-   if(rejectLast&&duration<30*86400000)return Response.json({error:{message:'Provider rejected the final window'}},{status:400})
+   if(rejectLast&&duration<30*86400000)return rejectLast==='invalid'?new Response('not JSON',{status:502}):Response.json({error:{message:'Provider rejected the final window'}},{status:400})
    return Response.json({calendars:{'busy-calendar':{busy:Date.parse(distant.start)>=Date.parse(body.timeMin)&&Date.parse(distant.start)<Date.parse(body.timeMax)?[distant]:[]}}})
   })
   assert.equal(await refreshMemberBusy(db,env,'member-one',true),undefined)
@@ -72,10 +72,13 @@ test('member self-service uses Better Auth permissions, public approval is admin
   const complete=await db.prepare("SELECT busy_json,busy_from,busy_until,busy_error FROM member_scheduling WHERE member_id='member-one'").first()
   assert.deepEqual(JSON.parse(String(complete?.busy_json)),[distant])
   assert.equal(complete?.busy_error,null)
-  rejectLast=true
+  rejectLast='provider'
   assert.equal((await refreshMemberBusy(db,env,'member-one',true))?.error,'Google busy-calendar check failed (400): Provider rejected the final window')
   const incomplete=await db.prepare("SELECT busy_json,busy_from,busy_until FROM member_scheduling WHERE member_id='member-one'").first()
   assert.deepEqual(incomplete,{busy_json:complete?.busy_json,busy_from:complete?.busy_from,busy_until:complete?.busy_until},'failed final window cannot replace complete coverage')
+  rejectLast='invalid'
+  assert.match((await refreshMemberBusy(db,env,'member-one',true))!.error,/^Google busy-calendar check failed \(502\): Invalid error response/)
+  assert.deepEqual(await db.prepare("SELECT busy_json,busy_from,busy_until FROM member_scheduling WHERE member_id='member-one'").first(),incomplete)
   t.mock.restoreAll()
   await selectBusyCalendars(own,'member-one',{account_id:null,calendar_ids:[]})
   const day=new Date(Date.now()+3*86400000).toISOString().slice(0,10),start=`${day}T14:00:00.000Z`,end=`${day}T15:00:00.000Z`

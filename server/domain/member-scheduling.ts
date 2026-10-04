@@ -135,8 +135,10 @@ export async function refreshMemberBusy(db: DbClient, env: CloudflareEnv, member
    const timeMax=new Date(Math.min(from+30*86400000,Date.parse(until))).toISOString()
    const response=await fetch('https://www.googleapis.com/calendar/v3/freeBusy',{method:'POST',headers:{Authorization:`Bearer ${token.accessToken}`,'content-type':'application/json'},signal:AbortSignal.timeout(10000),body:JSON.stringify({timeMin:new Date(from).toISOString(),timeMax,items:ids.map(id=>({id}))})})
    if(!response.ok) {
-    const failure=await response.json() as {error?:{message?:string}}
-    throw new Error(`Google busy-calendar check failed (${response.status})${failure.error?.message?`: ${failure.error.message}`:''}`)
+    const failure=await response.json().catch((cause:unknown)=>{
+     throw new Error(`Google busy-calendar check failed (${response.status}): Invalid error response${cause instanceof Error?` (${cause.message})`:''}`)
+    }) as {error?:{message?:string}} | null
+    throw new Error(`Google busy-calendar check failed (${response.status})${typeof failure?.error?.message==='string'?`: ${failure.error.message}`:''}`)
    }
    const data=await response.json() as {calendars?:Record<string,{errors?:unknown[];busy?:SchedulingInterval[]}>}
    for(const id of ids) {const calendar=data.calendars?.[id];if(!calendar||calendar.errors?.length||!Array.isArray(calendar.busy))throw new Error('A selected Google calendar could not be checked'); for(const interval of calendar.busy) {if(!Number.isFinite(Date.parse(interval.start))||!Number.isFinite(Date.parse(interval.end))||Date.parse(interval.end)<=Date.parse(interval.start))throw new Error('Google returned an invalid busy interval');busy.push({start:new Date(interval.start).toISOString(),end:new Date(interval.end).toISOString()})}}
