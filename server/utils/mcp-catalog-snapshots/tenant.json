@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:12b1bd04271092314b00896f82574acecf6d635fd10169b804568a4d2679b3ab",
+  "fingerprint": "sha256:299aa9d1ed3f5496ba47468c9469fbbb0bd5dd21a49a2ab0ea1bdc336f39f485",
   "tools": [
     {
       "name": "append_content_block",
@@ -12305,7 +12305,7 @@
             "type": "integer"
           },
           "metrics": {
-            "description": "breakdown only: 1-8 metrics. events (events); page_views (page views); interactions (interactions); outcomes (outcome events); sessions (distinct sessions); visitors (distinct visitors); entities (distinct business subjects); quoted_value_minor (minor units of the group currency); purchase_value_minor (minor units of the group currency); collected_minor (minor units of the group currency); refunded_minor (minor units of the group currency); net_collected_minor (minor units of the group currency); converting_sessions (distinct eligible sessions that completed the selected outcome in the range); eligible_sessions (distinct sessions with a pageview); session_conversion_rate (percent: converting sessions / eligible sessions, over the same sessions); checkouts_started (checkouts); payments_paid (payments); refunds_sent (refunds); checkout_conversion_rate (percent: payments captured / checkouts started); refund_rate (percent: refunds sent / payments captured); payments_volume_minor (minor units of the group currency); avg_decision_seconds (seconds)",
+            "description": "breakdown only: 1-8 metrics. events (events); page_views (page views); interactions (interactions); outcomes (outcome events); sessions (distinct sessions); visitors (distinct visitors); entities (distinct business subjects); quoted_value_minor (minor units of the group currency); purchase_value_minor (minor units of the group currency); collected_minor (minor units of the group currency); refunded_minor (minor units of the group currency); net_collected_minor (minor units of the group currency); converting_sessions (distinct eligible sessions that completed the selected outcome in the range); eligible_sessions (distinct sessions with a pageview); session_conversion_rate (percent: converting sessions / eligible sessions, over the same sessions); checkouts_started (checkouts); payments_paid (payments); refunds_sent (refunds); checkout_conversion_rate (percent: checkouts started that were paid / checkouts started); refund_rate (percent: refunds sent / payments captured); payments_volume_minor (minor units of the group currency); avg_decision_seconds (seconds)",
             "items": {
               "enum": [
                 "events",
@@ -12431,7 +12431,7 @@
     },
     {
       "name": "reassign_product_booking",
-      "description": "Explicitly reassign the entire provider-led Session to the offering’s currently assigned member. All attendees keep Booking IDs and Session time; active checkout holds refuse the change. Checks member hours/time off/busy data/overlap atomically and audits actor/old/new assignment. Guest notifications use the existing inbox delivery workflow. Retry the same key after a notification failure.",
+      "description": "Move a provider-led booking to another team member who is free at that time, without changing the service’s provider. The whole Session moves: attendees keep Booking IDs and Session time; active checkout holds refuse the change. Checks the member’s hours, time off, busy calendar and overlapping bookings atomically and audits actor/old/new assignment. The guest is told in their inbox thread; owners and both team members are notified. Retry the same key after a notification failure.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {

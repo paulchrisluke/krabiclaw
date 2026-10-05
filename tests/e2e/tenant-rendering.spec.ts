@@ -231,7 +231,7 @@ test.describe('NCLS representative journeys', () => {
   // One reader walking the site. Each route is a different page recipe, so the
   // traversal is the coverage; six separate fixtures were not.
   test('renders every route reachable from the header', async ({ page }) => {
-    for (const journey of [
+    const journeys = [
       { path: '/pricing', text: /pricing|income|calculator/i },
       { path: '/article/writing-your-own-will-how-it-works', text: /will|North Carolina/i },
       { path: '/contact', text: /contact|message/i },
@@ -244,7 +244,10 @@ test.describe('NCLS representative journeys', () => {
       { path: '/policies/privacy', text: /personal information/i },
       { path: '/policies/terms', text: /terms of service/i },
       { path: '/third-party-notices', text: /legal aid|inner banks/i },
-    ]) {
+    ]
+    // Nine uncached server renders at 3–4 s each do not fit one page's 30 s budget; each route gets that budget.
+    test.setTimeout(journeys.length * 30_000)
+    for (const journey of journeys) {
       const response = await openTenantPage(page, `${blawbyBaseURL}${journey.path}`, blawbyExtraHeaders)
       expect(response?.status(), journey.path).toBe(200)
       await expect(page.locator('main'), journey.path).toContainText(journey.text)

@@ -29,6 +29,7 @@ import {
   bookingCancelledMessage,
   bookingChangeMessage,
   bookingCreatedMessage,
+  bookingReassignedMessage,
   contactReceivedMessage,
   guestReplyMessage,
   reservationCancelledMessage,
@@ -271,10 +272,11 @@ async function resolveOwnerRecipients(
     category: NotificationCategory
     /** The team member a booking is assigned to hears about it alongside the owners. */
     assignedMemberId?: string | null
+    memberIds?: string[]
   },
 ): Promise<OwnerRecipient[]> {
   const [members, messagingEnabled] = await Promise.all([
-    listOrganizationNotificationMembers(env, opts.organizationId, { includeMemberIds: opts.assignedMemberId ? [opts.assignedMemberId] : [] }),
+    listOrganizationNotificationMembers(env, opts.organizationId, { includeMemberIds: [...(opts.assignedMemberId ? [opts.assignedMemberId] : []), ...(opts.memberIds ?? [])] }),
     hasOrganizationEntitlement(env, opts.organizationId, 'messaging'),
   ])
   const recipients = await Promise.all(members.map(async (member) => {
@@ -548,6 +550,8 @@ async function notifyOwner(
     idempotencyKey?: string
     /** Native financial event identity, independent of later buyer linking. */
     deliveryEventKey?: string
+    /** Team members told alongside the owners and the booking's assignee, such as the one a booking moved away from. */
+    memberIds?: string[]
   }
 ) {
   const threadContext = opts.notificationSource
@@ -578,6 +582,7 @@ async function notifyOwner(
     organizationId: opts.organizationId,
     category: opts.message.category,
     assignedMemberId: assigned?.assigned_member_id ?? null,
+    memberIds: opts.memberIds ?? [],
   })
 
   // The owner reads mail sent for their business, framed by its own mark.
@@ -1282,6 +1287,50 @@ export async function notifyBookingChangeOwner(
     notificationSource: { threadId: opts.threadId, entryId: opts.sourceEntryId },
     message: ownerMessage,
     whatsappTemplate: 'booking_change_update',
+  })
+}
+
+/** Owners and both team members hear that a booking moved; the guest is told in their thread. */
+export async function notifyBookingReassigned(
+  env: NotificationEnv,
+  db: DbClient,
+  opts: { organizationId: string; bookingId: string; previousMemberId: string | null; memberId: string; sourceEntryId: string },
+) {
+  const row = await queryFirst<{ request_id: string; location_id: string | null; title: string; starts_at: string; timezone: string; party_size: number; guest_name: string | null; organization_name: string }>(db, `
+    SELECT b.request_id, r.location_id, p.name title, s.starts_at, s.timezone, b.party_size, json_extract(r.payload_json,'$.guest.name') guest_name, o.name organization_name
+    FROM bookings b JOIN product_sessions s ON s.id=b.product_session_id AND s.organization_id=b.organization_id
+      JOIN products p ON p.id=b.product_id AND p.organization_id=b.organization_id
+      JOIN organization o ON o.id=b.organization_id
+      LEFT JOIN requests r ON r.id=b.request_id AND r.organization_id=b.organization_id
+    WHERE b.id=? AND b.organization_id=?`, [opts.bookingId, opts.organizationId])
+  if (!row) throw new Error(`Booking ${opts.bookingId} disappeared before its reassignment was announced`)
+  const memberName = async (memberId: string) => (await queryFirst<{ name: string }>(db, `SELECT COALESCE(NULLIF(ms.public_name,''), u.name, u.email) name FROM member m JOIN user u ON u.id=m.userId
+    LEFT JOIN member_scheduling ms ON ms.member_id=m.id WHERE m.id=? AND m.organizationId=?`, [memberId, opts.organizationId]))?.name ?? null
+  const toName = await memberName(opts.memberId)
+  if (!toName) throw new Error(`Team member ${opts.memberId} is not in this organization`)
+  const fromName = opts.previousMemberId ? await memberName(opts.previousMemberId) : null
+  const replyUrl = await buildOwnerThreadInboxUrl(env, db, { organizationId: opts.organizationId, locationId: row.location_id, threadId: row.request_id })
+  const message = bookingReassignedMessage({
+    guestName: row.guest_name ?? 'Guest',
+    productTitle: row.title,
+    date: new Intl.DateTimeFormat('en-US', { timeZone: row.timezone, dateStyle: 'medium' }).format(new Date(row.starts_at)),
+    time: new Intl.DateTimeFormat('en-US', { timeZone: row.timezone, timeStyle: 'short' }).format(new Date(row.starts_at)),
+    partySize: String(row.party_size),
+    fromName, toName, replyUrl,
+    organizationName: row.organization_name,
+  })
+  await notifyOwner(env, db, {
+    organizationId: opts.organizationId,
+    organizationName: row.organization_name,
+    locationId: row.location_id,
+    template: 'booking_reassigned',
+    title: message.title,
+    payload: { booking_id: opts.bookingId, request_id: row.request_id, deep_link: replyUrl ?? '' },
+    submissionType: 'booking',
+    submissionId: opts.bookingId,
+    notificationSource: { threadId: row.request_id, entryId: opts.sourceEntryId },
+    message,
+    memberIds: [opts.memberId, ...(opts.previousMemberId ? [opts.previousMemberId] : [])],
   })
 }
 

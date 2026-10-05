@@ -23,9 +23,12 @@ test('reservation projection preserves canonical UTC instants and timezone witho
   for (const origin of ['http://localhost:3113', 'https://staging.krabiclaw.com']) {
     assert.equal(composeOwnerThreadInboxUrl({ NUXT_PUBLIC_PLATFORM_DOMAIN: origin }, { orgSlug: 'org', locationSlug: null }, 'thread'), `${origin}/dashboard/org/messages/thread`)
   }
-  const event = calendarEvent({ booking_kind: 'reservation', operational_id: 'reservation', request_id: 'thread', status: 'confirmed', starts_at: '2099-01-01T12:00:00.000Z', ends_at: '2099-01-01T13:00:00.000Z', timezone: 'Asia/Bangkok', guest_name: 'Guest', revision: 'committed' }, 'https://app.example/dashboard/org/messages/thread')
+  const event = calendarEvent({ booking_kind: 'reservation', operational_id: 'reservation', request_id: 'thread', status: 'confirmed', starts_at: '2099-01-01T12:00:00.000Z', ends_at: '2099-01-01T13:00:00.000Z', timezone: 'Asia/Bangkok', guest_name: 'Guest', member_name: null, revision: 'committed' }, 'https://app.example/dashboard/org/messages/thread')
   assert.equal(event.summary, 'Reservation — Guest')
   assert.deepEqual(event.start, { dateTime: '2099-01-01T12:00:00.000Z', timeZone: 'Asia/Bangkok' })
   assert.equal('attendees' in event, false)
-  assert.throws(() => calendarEvent({ booking_kind: 'booking', operational_id: 'booking', request_id: null, status: 'pending', starts_at: 'invalid', ends_at: 'invalid', timezone: 'Asia/Bangkok', guest_name: null, revision: 'committed' }, 'https://app.example'))
+  assert.equal(event.description, 'Status: confirmed\nhttps://app.example/dashboard/org/messages/thread')
+  const booking = calendarEvent({ booking_kind: 'booking', operational_id: 'booking', request_id: 'thread', status: 'confirmed', starts_at: '2099-01-01T12:00:00.000Z', ends_at: '2099-01-01T13:00:00.000Z', timezone: 'Asia/Bangkok', guest_name: 'Guest', member_name: 'Sam Rivera', revision: 'committed' }, null)
+  assert.equal(booking.description, 'Status: confirmed\nTeam member: Sam Rivera')
+  assert.throws(() => calendarEvent({ booking_kind: 'booking', operational_id: 'booking', request_id: null, status: 'pending', starts_at: 'invalid', ends_at: 'invalid', timezone: 'Asia/Bangkok', guest_name: null, member_name: null, revision: 'committed' }, 'https://app.example'))
 })
