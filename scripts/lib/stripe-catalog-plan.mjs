@@ -113,9 +113,10 @@ export function keyMode(key) {
   return 'unknown'
 }
 
-export function assertTestModeKey(key) {
-  if (keyMode(key) !== 'test') {
-    throw new Error('Stripe catalog operations require a test-mode key (sk_test_ or rk_test_).')
+export function assertCatalogModeKey(key, requiredMode = 'test') {
+  if (!['test', 'live'].includes(requiredMode)) throw new Error('Stripe catalog mode must be test or live.')
+  if (keyMode(key) !== requiredMode) {
+    throw new Error(`Stripe catalog operations require a ${requiredMode}-mode key (sk_${requiredMode}_ or rk_${requiredMode}_).`)
   }
 }
 
@@ -1194,14 +1195,15 @@ export async function applyCatalogPlan({
   mutationAdapter,
   filesAdapter,
   journalPath,
+  requiredMode = 'test',
 }) {
   if (typeof journalPath !== 'string' || journalPath.trim().length === 0) {
     throw new Error('Stripe catalog apply requires an explicit journal path.')
   }
   assertCatalogPlanSchema(plan)
-  assertTestModeKey(key)
+  assertCatalogModeKey(key, requiredMode)
   const hash = assertPlanIntegrity(plan, confirmedSha256)
-  if (plan.accountMode !== 'test') throw new Error('Stripe catalog apply only accepts a test-mode plan.')
+  if (plan.accountMode !== requiredMode) throw new Error(`Stripe catalog apply requires a ${requiredMode}-mode plan.`)
   if (!Array.isArray(plan.operations)) throw new Error('Stripe catalog plan operations must be an array.')
   for (const operation of plan.operations) {
     if (!SUPPORTED_OPERATION_TYPES.has(operation?.type)) {
