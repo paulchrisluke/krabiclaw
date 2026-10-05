@@ -7,6 +7,7 @@ import { getOrgAdapter, hasPermission } from 'better-auth/plugins'
 import { getPlanEntitlements, type EntitlementsMap } from '~/server/utils/billing-entitlements'
 import { getOrganizationEntitlements, planFromSubscriptions, readOrganizationSubscriptions } from '~/server/utils/billing-access'
 import { createStripeClient } from '~/server/utils/stripe-client'
+import { createStripePlanLoader } from '~/server/utils/better-auth-stripe'
 import { organizationAccessControl, organizationRoles } from '~/utils/organization-access'
 import { assertNewSalePlan } from '~/shared/billing-model'
 import {
@@ -27,6 +28,8 @@ export interface OrganizationBillingStatus {
   subscriptionStatus?: string
   currentPeriodEnd?: string
   cancelAtPeriodEnd?: boolean
+  /** Better Auth's subscription schedule for a plan change at the end of the period. */
+  stripeScheduleId?: string
   entitlements: EntitlementsMap
 }
 
@@ -76,6 +79,7 @@ export async function getOrganizationBillingStatus(
     subscriptionStatus: subscription?.status ?? undefined,
     currentPeriodEnd: subscription?.periodEnd ? betterAuthTimestampToIso(subscription.periodEnd, 'subscription.periodEnd') : undefined,
     cancelAtPeriodEnd: subscription ? Boolean(subscription.cancelAtPeriodEnd) : undefined,
+    stripeScheduleId: subscription?.stripeScheduleId ?? undefined,
     entitlements: getPlanEntitlements(plan),
   }
 }
@@ -91,6 +95,20 @@ export async function hasOrganizationEntitlement(
 }
 
 // ── Stripe helpers ────────────────────────────────────────────────────────────
+
+/** The plan a Better Auth subscription schedule moves to at the end of the period, read from Stripe. */
+export async function scheduledPlanChange(env: CloudflareEnv, scheduleId: string): Promise<{ plan: string; at: string } | null> {
+  const stripe = getStripe(env)
+  const schedule = await stripe.subscriptionSchedules.retrieve(scheduleId)
+  if (schedule.status !== 'active' && schedule.status !== 'not_started') return null
+  const next = schedule.phases.find(phase => phase.start_date * 1000 > Date.now())
+  if (!next) return null
+  const item = next.items[0]
+  const priceId = typeof item?.price === 'string' ? item.price : item?.price?.id
+  const plan = (await createStripePlanLoader(stripe, env)()).find(row => row.priceId === priceId || row.annualDiscountPriceId === priceId)
+  if (!plan) throw new Error(`Subscription schedule ${scheduleId} moves to a price outside the plan catalog`)
+  return { plan: plan.name.toLowerCase(), at: new Date(next.start_date * 1000).toISOString() }
+}
 
 export async function getPriceIdForPlan(env: BillingEnv, plan: string, interval: 'month' | 'year' = 'month'): Promise<string> {
   const validatedPlan = assertNewSalePlan(plan)

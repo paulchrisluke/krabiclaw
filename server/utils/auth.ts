@@ -27,6 +27,7 @@ import { platformAdminAccessControl, platformAdminRoles } from '~/utils/platform
 import { createStripePlanLoader } from '~/server/utils/better-auth-stripe'
 import { handleStripeGa4Event } from '~/server/utils/stripe-ga4'
 import { notifyPaymentsInvoiceEvent } from '~/server/domain/payments/billing-notifications'
+import { setUpPaymentsBillingForSubscriptionEvent } from '~/server/domain/payments/usage'
 import { createStripeClient } from '~/server/utils/stripe-client'
 import { unwrapInstrumentedD1 } from '~/server/utils/request-metrics'
 import { timingSafeEqualText } from '~/server/utils/dev-route-auth'
@@ -636,11 +637,12 @@ export function createAuth(env: CloudflareEnv) {
         },
         // The plugin's own /api/auth/stripe/webhook handlers own the
         // `subscription` table, and Stripe's delivery retries are the retry
-        // mechanism. This hook adds analytics and Payments status alerts; a throw here returns a
+        // mechanism. This hook adds analytics, Payments status alerts and Payments fees billing set-up; a throw here returns a
         // non-2xx so Stripe redelivers the event.
         onEvent: async (event) => {
           await handleStripeGa4Event(env, db, stripeClient, event)
           await notifyPaymentsInvoiceEvent(db, stripeClient, env, event)
+          await setUpPaymentsBillingForSubscriptionEvent(db, stripeClient, env, event)
         },
       }),
       organizationDeletionCleanupPlugin(env),

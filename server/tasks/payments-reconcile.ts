@@ -6,11 +6,11 @@ import {defineScheduledTask} from '~/server/utils/scheduled-task'
 import type {CloudflareEnv} from '~/server/utils/auth'
 import {executeRefund,reconcileRefundState,requirePayment,type Payment} from '~/server/domain/payments'
 import {reconcilePaymentIntent,reconcileDisputeState} from '~/server/domain/payments/events'
-import {deliverPaymentsUsage} from '~/server/domain/payments/usage'
+import {deliverPaymentsUsage,setUpPaymentsBilling} from '~/server/domain/payments/usage'
 import {reconcileStripeCosts} from '~/server/domain/payments/costs'
 import {reconcilePayoutEvent} from '~/server/domain/payments/notifications'
 import {reconcilePaymentsInvoiceNotifications} from '~/server/domain/payments/billing-notifications'
-export default defineScheduledTask<{skipped?:string;attempts?:number;refunds?:number;billingAccounts?:number;stripeCosts?:'test_mode_unavailable'|'live_mode'}>({meta:{name:'payments:reconcile',description:'Reconcile Stripe payment attempts, durable refunds, attributable costs and Metronome usage'},async run({context}){
+export default defineScheduledTask<{skipped?:string;attempts?:number;refunds?:number;billingAccounts?:number;billingSetUps?:number;stripeCosts?:'test_mode_unavailable'|'live_mode'}>({meta:{name:'payments:reconcile',description:'Reconcile Stripe payment attempts, durable refunds, attributable costs and Metronome usage'},async run({context}){
  const env=(context as {cloudflare?:{env?:CloudflareEnv}})?.cloudflare?.env
  if(!env?.DB)throw new Error('Payments reconciliation requires DB')
  const db=env.DB as DbClient
@@ -87,11 +87,14 @@ export default defineScheduledTask<{skipped?:string;attempts?:number;refunds?:nu
    if(page===99)throw new Error('Native payout event history requires bounded operator review')
   }
  }catch(error){errors.push(error instanceof Error?error:new Error(String(error)))}}
+ // A business whose plan includes Payments and whose subscription event did not finish its fees billing set-up.
+ const unbilled=await queryAll<{organization_id:string}>(db,`SELECT DISTINCT s."referenceId" AS organization_id FROM subscription s JOIN organization o ON o.id=s."referenceId" WHERE lower(trim(s.plan))='commerce' AND s.status IN ('active','trialing') AND NOT EXISTS(SELECT 1 FROM payment_billing_accounts b WHERE b.organization_id=s."referenceId" AND b.status='active' AND b.metronome_contract_id IS NOT NULL)`)
+ for(const account of unbilled){try{if(await hasOrganizationEntitlement(env,account.organization_id,'payments'))await setUpPaymentsBilling(db,stripe,env,account.organization_id)}catch(error){errors.push(error instanceof Error?error:new Error(String(error)))}}
  const accounts=await queryAll<{organization_id:string}>(db,'SELECT organization_id FROM payment_billing_accounts')
  for(const account of accounts){
   try{if(!await hasOrganizationEntitlement(env,account.organization_id,'payments'))await execute(db,"UPDATE payment_billing_accounts SET status='servicing',updated_at=? WHERE organization_id=? AND status='active'",[now,account.organization_id]);await deliverPaymentsUsage(db,env,account.organization_id)}catch(error){errors.push(error instanceof Error?error:new Error(String(error)))}
   try{await reconcilePaymentsInvoiceNotifications(db,stripe,env,account.organization_id)}catch(error){errors.push(error instanceof Error?error:new Error(String(error)))}
  }
  if(errors.length)throw new AggregateError(errors,'Payments reconciliation has unresolved provider failures')
- return {result:{attempts:attempts.length,refunds:refunds.length,billingAccounts:accounts.length,stripeCosts}}
+ return {result:{attempts:attempts.length,refunds:refunds.length,billingAccounts:accounts.length,billingSetUps:unbilled.length,stripeCosts}}
 }})
