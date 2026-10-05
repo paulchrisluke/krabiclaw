@@ -5,6 +5,7 @@ import type { GuestPaymentNotificationEvent, PaymentNotificationEvent } from './
 import {
   bookingCancelledMessage,
   bookingChangeMessage,
+  bookingReassignedMessage,
   bookingCreatedMessage,
   contactReceivedMessage,
   domainUpdateMessage,
@@ -202,6 +203,15 @@ export const NOTIFICATION_CATALOG: CatalogEntry[] = [
       date: 'Jul 21, 2026', time: '2:00 PM', whenLabel: 'Tue, Jul 21, 2026 at 2:00 PM',
       partySize: '2 guests', summary: 'The guest accepted. The updated details are now confirmed.',
       replyUrl: inbox, organizationName: studio,
+    })),
+  },
+  {
+    id: 'booking-reassigned',
+    audience: 'owner',
+    title: 'Owner — booking moved to another team member',
+    message: ownerAlert(bookingReassignedMessage({
+      guestName: 'Mina Park', productTitle: 'Pottery Wheel Class', date: 'Jul 21, 2026', time: '2:00 PM',
+      partySize: '2', fromName: 'Priya Shah', toName: 'Sam Rivera', replyUrl: inbox, organizationName: studio,
     })),
   },
   {

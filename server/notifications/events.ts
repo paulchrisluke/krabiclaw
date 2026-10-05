@@ -218,6 +218,38 @@ export function reviewReceivedMessage(input: ReviewEventInput): NotificationMess
   }
 }
 
+export interface BookingReassignedEventInput {
+  guestName: string
+  productTitle: string
+  date: string
+  time: string
+  partySize: string
+  fromName: string | null
+  toName: string
+  replyUrl: string | null
+  organizationName: string
+}
+
+export function bookingReassignedMessage(input: BookingReassignedEventInput): NotificationMessage {
+  return {
+    title: `${input.guestName}’s booking is now with ${input.toName}`,
+    preheader: `${input.productTitle} · ${input.date} at ${input.time}`,
+    hero: null,
+    facts: facts(
+      fact('context', 'Booking', input.productTitle, true),
+      fact('guestName', 'Guest', input.guestName, true),
+      fact('date', 'Date', input.date, true),
+      fact('time', 'Time', input.time, true),
+      fact('partySize', 'Party size', input.partySize, true),
+      fact('toName', 'Team member', input.toName, true),
+      fact('fromName', 'Previously', input.fromName),
+    ),
+    primaryAction: input.replyUrl ? { url: input.replyUrl, label: 'Open in dashboard' } : undefined,
+    category: 'reservations_bookings',
+    organizationName: input.organizationName,
+  }
+}
+
 export interface BookingChangeEventInput {
   recordKind: string
   guestName: string
