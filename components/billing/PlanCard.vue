@@ -170,7 +170,7 @@ const savingsNote = computed(() => {
 </script>
 
 <style scoped>
-.kc-photo-plan { aspect-ratio: 2 / 3; min-height: 0; border-radius: 14px; padding: clamp(1.5rem, 3vw, 2.5rem); transform: none; background: #fff; color: #222840; box-shadow: none; border: 0; perspective: 1600px; transform-style: preserve-3d; overflow: visible; backdrop-filter: none; }
+.kc-photo-plan { border-radius: 14px; padding: clamp(1.5rem, 3vw, 2.5rem); transform: none; background: #fff; color: #222840; box-shadow: none; border: 0; perspective: 1600px; transform-style: preserve-3d; overflow: visible; backdrop-filter: none; }
 .kc-photo-plan :deep(h3), .kc-photo-plan :deep(.text-default), .kc-photo-plan :deep(.text-white) { color: #222840; }
 .kc-photo-plan :deep(.text-white\/60), .kc-photo-plan :deep(.text-white\/50), .kc-photo-plan :deep(.text-white\/80), .kc-photo-plan :deep(.text-muted) { color: #5a6072; }
 .kc-photo-plan__front { display: none; position: absolute; inset: 0; z-index: 20; border-radius: inherit; overflow: hidden; pointer-events: none; backface-visibility: hidden; }
@@ -180,7 +180,7 @@ const savingsNote = computed(() => {
 .kc-photo-plan .kc-plan-header > span { position: absolute; top: 0; right: 0; }
 .kc-photo-plan h3 { font-size: 1.9rem; padding-right: 6rem; }
 .kc-photo-plan .kc-plan-price { font-size: 3rem; line-height: 1.1; font-weight: 600; }
-.kc-photo-plan ul { min-height: 0; overflow-y: auto; margin: 1rem 0; padding-right: .4rem; }
+.kc-photo-plan ul { margin: 1rem 0; }
 .kc-photo-plan ul > li + li { margin-top: .7rem; }
 
 .kc-photo-plan--flipping { animation: kc-plan-right 1050ms ease-in-out both; animation-delay: var(--flip-delay); }
