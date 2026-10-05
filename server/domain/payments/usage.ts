@@ -129,13 +129,14 @@ export async function setUpPaymentsBilling(db:DbClient,stripe:Stripe,env:Cloudfl
  if(matchingConfigurations.length!==1||typeof matchingConfigurations[0]!.id!=='string')throw new Error('A unique operating Stripe customer collection mapping in this platform account is required')
  const billingConfigurationId=matchingConfigurations[0]!.id
  let contract:string|null=null,cursor:string|null=null,attachConfiguration=false
+ const others:Record<string,unknown>[]=[]
  for(let page=0;page<100;page++){
   const listed=await metronomeRequest(env,'/v2/contracts/list',{customer_id:metronomeCustomer,include_archived:true,limit:20,...(cursor?{cursor}:{})})
   if(!Array.isArray(listed.data))throw new Error('Native Metronome contract list is invalid')
   for(const value of listed.data){
    if(!value||typeof value!=='object')throw new Error('Native Metronome contract shape invalid')
    const row=value as Record<string,unknown>
-   if(row.uniqueness_key!==`payments:${organizationId}`)continue
+   if(row.uniqueness_key!==`payments:${organizationId}`){if(!row.archived_at)others.push(row);continue}
    if(contract||row.archived_at||row.rate_card_id!==env.METRONOME_RATE_CARD_ID||typeof row.starting_at!=='string'||Date.parse(row.starting_at)!==Date.parse(reserved.contract_start_at))throw new Error('Existing native Payments contract conflicts with immutable setup')
    if(reserved.metronome_contract_id&&reserved.metronome_contract_id!==row.id)throw new Error('Persisted Payments contract conflicts with native setup')
    const configuration=row.customer_billing_provider_configuration as Record<string,unknown>|undefined
@@ -158,6 +159,9 @@ export async function setUpPaymentsBilling(db:DbClient,stripe:Stripe,env:Cloudfl
  if(verifiedContract?.id!==contract||verifiedConfiguration?.id!==billingConfigurationId)throw new Error('Native Payments contract collection mapping was not applied')
  if(typeof verifiedContract.ending_before==='string'){
   // A business back on a plan with Payments: its one contract is reopened, as updateEndDate without an end does natively.
+  // Reopened, it runs open-ended, so no other live contract of this customer may end after it starts.
+  const start=Date.parse(String(verifiedContract.starting_at))
+  if(others.some(other=>other.ending_before===undefined||other.ending_before===null||Date.parse(String(other.ending_before))>start))throw new Error('Reopening the Payments contract would overlap another Metronome contract of this customer')
   await metronomeRequest(env,'/v1/contracts/updateEndDate',{customer_id:metronomeCustomer,contract_id:contract},`payments-reopen:${contract}:${Date.parse(verifiedContract.ending_before)}`)
   if((await getPaymentsBillingContract(env,{...reserved,metronome_customer_id:metronomeCustomer,metronome_contract_id:contract})).ending_before)throw new Error('Native Payments contract did not reopen')
  }
