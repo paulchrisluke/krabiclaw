@@ -12,6 +12,17 @@ import type { GuestThreadEntryAttachmentViewModel } from './types'
 */
 
 export const MAX_MESSAGE_PHOTOS = 10
+
+/** The rules every message photo meets, however it arrived: count, size and real image type. */
+export function assertMessagePhotos(photos: MessagePhoto[]): Array<MessagePhoto & { contentType: string }> {
+  if (photos.length > MAX_MESSAGE_PHOTOS) throw new MessagePhotoRejection(`A message can carry at most ${MAX_MESSAGE_PHOTOS} photos.`)
+  return photos.map((photo) => {
+    if (photo.bytes.byteLength > MAX_IMAGE_BYTES) throw new MessagePhotoRejection(`${photo.filename} is larger than 20 MB.`)
+    const contentType = sniffMediaMimeType(photo.bytes)
+    if (!MESSAGE_PHOTO_TYPES.has(contentType)) throw new MessagePhotoRejection(`${photo.filename} is not a JPEG, PNG, WebP, GIF or AVIF photo.`)
+    return { ...photo, contentType }
+  })
+}
 // Photos, not drawings: an SVG is a document, and nobody sends one as a photo.
 const MESSAGE_PHOTO_TYPES = new Set([...RESOLVED_MEDIA_IMAGE_TYPES].filter(type => type !== 'image/svg+xml'))
 
@@ -88,13 +99,7 @@ export async function uploadMessagePhotos(
   photos: MessagePhoto[],
   uploader: Uploader,
 ): Promise<string[]> {
-  if (photos.length > MAX_MESSAGE_PHOTOS) throw new MessagePhotoRejection(`A message can carry at most ${MAX_MESSAGE_PHOTOS} photos.`)
-  const checked = photos.map((photo) => {
-    if (photo.bytes.byteLength > MAX_IMAGE_BYTES) throw new MessagePhotoRejection(`${photo.filename} is larger than 20 MB.`)
-    const contentType = sniffMediaMimeType(photo.bytes)
-    if (!MESSAGE_PHOTO_TYPES.has(contentType)) throw new MessagePhotoRejection(`${photo.filename} is not a JPEG, PNG, WebP, GIF or AVIF photo.`)
-    return { ...photo, contentType }
-  })
+  const checked = assertMessagePhotos(photos)
 
   const assetIds: string[] = []
   try {

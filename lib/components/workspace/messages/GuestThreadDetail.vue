@@ -63,14 +63,14 @@
                 <UChatMessage
                   v-else
                   :id="item.key"
-                  :role="item.own ? 'user' : 'assistant'"
-                  :side="item.own ? 'right' : 'left'"
+                  :role="item.outgoing ? 'user' : 'assistant'"
+                  :side="item.outgoing ? 'right' : 'left'"
                   :parts="[]"
                   :avatar="item.avatar"
                   :class="item.startsRun ? 'pt-4' : 'pt-1'"
                   :ui="{
                     root: 'scroll-mt-0',
-                    header: item.own ? 'mb-1 text-xs text-muted' : 'mb-1 ps-12 text-xs text-muted',
+                    header: item.outgoing ? 'mb-1 text-xs text-muted' : 'mb-1 ps-12 text-xs text-muted',
                     container: 'items-end gap-2 pb-0',
                     leading: 'mt-0 min-h-0',
                     leadingAvatar: item.endsRun ? undefined : 'invisible',
@@ -585,6 +585,8 @@ type MessageItem = {
   run: string
   who: string
   own: boolean
+  /** Which side it reads from: the account's own replies, or the business's whole side of the conversation. */
+  outgoing: boolean
   avatar: AvatarProps
   startsRun: boolean
   endsRun: boolean
@@ -623,7 +625,8 @@ const stream = computed<StreamItem[]>(() => {
     const avatar: AvatarProps = speaker === 'platform'
       ? { src: '/platform/krabiclaw-symbol.svg', alt: who }
       : { alt: who }
-    push(occurredAt, { type: 'message', key, body, photos: [], unshown: [], occurredAt, run: `${speaker}:${who}`, who, own: false, avatar, startsRun: true, endsRun: true, ...extra })
+    const outgoing = props.personalScope ? Boolean(extra.own) : speaker === 'member'
+    push(occurredAt, { type: 'message', key, body, photos: [], unshown: [], occurredAt, run: `${speaker}:${who}`, who, own: false, outgoing, avatar, startsRun: true, endsRun: true, ...extra })
   }
 
   for (const entry of current.entries) {

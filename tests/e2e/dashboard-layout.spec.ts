@@ -209,8 +209,18 @@ test.describe('dashboard pane hierarchy', () => {
       && new URL(response.url()).searchParams.get('scope') === 'personal')
     await page.getByRole('button', { name: 'All, filter by message type' }).click()
     await page.getByRole('menuitemcheckbox', { name: 'Updates', exact: true }).click()
-    expect((await personalUpdates).status()).toBe(200)
+    const updatesResponse = await personalUpdates
+    expect(updatesResponse.status(), await updatesResponse.text()).toBe(200)
+    const updates = await updatesResponse.json() as { notifications: Array<{ id: string; scope: string; title: string | null; target_user_id: string | null }> }
+    const viewer = await (await page.request.get('/api/auth/get-session')).json() as { user: { id: string } }
+    // Personal Updates are platform notifications addressed to this account, or to everyone; never a business's.
+    expect(updates.notifications.every(item => item.scope === 'global' && (item.target_user_id === viewer.user.id || item.target_user_id === null)), 'personal Updates carry only this account\'s notifications').toBe(true)
     await expect(page).toHaveURL('/dashboard/account/messages?view=updates')
+    if (updates.notifications.length) {
+      for (const item of updates.notifications) await expect(page.getByText(item.title ?? '', { exact: true }).first()).toBeVisible()
+    } else {
+      await expect(page.getByText('No updates yet.', { exact: true })).toBeVisible()
+    }
     await expect(mobileNav.getByRole('link')).toHaveText(['Today', 'Calendar', 'Messages', 'Menu'])
     await page.setViewportSize(WIDE)
     await expect(page.getByTestId('dashboard-top-nav').getByRole('navigation', { name: 'Dashboard' }).getByRole('link')).toHaveText(['Today', 'Calendar', 'Messages'])

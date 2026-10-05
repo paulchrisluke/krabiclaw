@@ -1,7 +1,10 @@
 <template>
   <UModal v-model:open="isOpen" :ui="{ content: 'max-w-lg' }">
     <template #content>
-      <div v-if="content" class="p-6">
+      <div v-if="unavailable" class="p-6">
+        <UAlert color="error" variant="soft" icon="i-lucide-circle-alert" :description="unavailable" />
+      </div>
+      <div v-else-if="content" class="p-6">
         <!-- Team strip -->
         <div class="flex items-center gap-3 mb-5">
           <div class="flex -space-x-2">
@@ -117,11 +120,16 @@ interface UpsellContent {
   cta: string
 }
 
-const content = computed<UpsellContent | null>(() => {
+// A plan or monthly price that can't be read is the modal's own error, not a render crash.
+const unavailable = computed(() => {
   if (!type.value) return null
   const plan = plans.value.find(plan => plan.id === type.value)
-  const price = plan ? displayPrice(plan, false) : null
-  if (!plan || !price) throw new Error(`${type.value} monthly offer is unavailable`)
+  return plan && displayPrice(plan, false) ? null : `The ${type.value} plan's monthly price could not be loaded.`
+})
+const content = computed<UpsellContent | null>(() => {
+  if (!type.value || unavailable.value) return null
+  const plan = plans.value.find(plan => plan.id === type.value)!
+  const price = displayPrice(plan, false)!
   return {
     headline: `Get ${plan.name}`,
     subheading: plan.tagline,
@@ -133,6 +141,7 @@ const content = computed<UpsellContent | null>(() => {
 })
 
 async function handleCta() {
+  if (unavailable.value || !content.value) return
   error.value = null
   loading.value = true
   try {

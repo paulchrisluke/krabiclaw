@@ -4,7 +4,7 @@ import { compile } from 'html-to-text'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 import { getGuestRequest, getThreadOperationalRecord, requestSummary } from '~/server/domain/requests'
 import { appendEntry, GuestThreadEntryDedupeConflictError, GuestThreadEntryOwnershipError } from '~/server/domain/guest-threads/entries'
-import { attachGuestPhotos, messagePreview, sortGuestFiles, type MessagePhoto } from '~/server/domain/guest-threads/attachments'
+import { attachGuestPhotos, messagePreview, sortGuestFiles, type MessagePhoto, assertMessagePhotos } from '~/server/domain/guest-threads/attachments'
 import { updateThreadProjectionIfLatestEntry } from '~/server/domain/guest-threads/repository'
 import type { GuestThreadEntryRow } from '~/server/domain/guest-threads/types'
 import type { CloudflareEnv } from '~/server/utils/auth'
@@ -107,6 +107,8 @@ async function receiveGuestReply(env:CloudflareEnv,input:{threadId:string;organi
   const db=env.DB,thread=await getGuestRequest(db,input.threadId,input.organizationId,input.submissionType,input.userId??undefined)
   if(!thread)throw new Error('Conversation no longer exists')
   const {photos,unshown}=input
+  // Photos are checked before the message is saved, so a rejected photo never leaves a message without it.
+  assertMessagePhotos(photos)
   let entry: GuestThreadEntryRow
   try {
     entry = await appendEntry(db, {
