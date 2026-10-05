@@ -20,7 +20,8 @@ else {
     })
     await navigateTo(detail.booking_request_id ? `${base}/booking/${encodeURIComponent(detail.booking_request_id)}` : `${base}/${detail.order ? 'order' : 'payment'}/${encodeURIComponent(paymentId)}`, { replace: true })
   } catch (cause) {
-    showError(createError({ statusCode: 404, statusMessage: getErrorMessage(cause, 'Transaction not found') }))
+    const status = isRecord(cause) && typeof cause.statusCode === 'number' ? cause.statusCode : 500
+    showError(createError({ statusCode: status, statusMessage: getErrorMessage(cause, 'Transaction could not be loaded') }))
   }
 }
 </script>

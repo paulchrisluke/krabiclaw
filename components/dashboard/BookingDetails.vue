@@ -60,17 +60,17 @@
             </component>
             <UAlert v-if="booking.providerConflict" class="mt-4" color="warning" description="This booking overlaps a busy time. Contact your guest to change it." />
             <UAlert v-if="booking.providerCalendarStatus" class="mt-4" color="warning" :description="booking.providerCalendarStatus" />
-            <!-- Airbnb's "Change requested": the proposal is out and the record stays as it is until the guest answers. -->
-            <UAlert
-              v-if="booking.pendingChange"
-              class="mt-4"
-              color="info"
-              variant="soft"
-              icon="i-lucide-clock"
-              :title="`Change requested · ${booking.pendingChange.afterLabel} · ${booking.pendingChange.partySize} ${booking.pendingChange.partySize === 1 ? 'guest' : 'guests'}`"
-              :description="personalScope ? `${booking.organizationName} asked to change this ${noun}. Accept or decline from the email we sent you; nothing moves until you do.` : `Waiting for ${firstName(booking.guestName ?? '')} to accept. The ${noun} stays as it is until then.`"
-            />
           </template>
+          <!-- Airbnb's "Change requested", for both sides and both kinds: the proposal is out and the record stays as it is until the guest answers. -->
+          <UAlert
+            v-if="booking.pendingChange"
+            class="mt-4"
+            color="info"
+            variant="soft"
+            icon="i-lucide-clock"
+            :title="`Change requested · ${booking.pendingChange.afterLabel} · ${booking.pendingChange.partySize} ${booking.pendingChange.partySize === 1 ? 'guest' : 'guests'}`"
+            :description="personalScope ? `${booking.organizationName} asked to change this ${noun}. Accept or decline from the email we sent you; nothing moves until you do.` : `Waiting for ${firstName(booking.guestName ?? '')} to accept. The ${noun} stays as it is until then.`"
+          />
           <div class="mt-6 space-y-2">
             <UButton
               v-if="canChangeBooking && !personalScope"

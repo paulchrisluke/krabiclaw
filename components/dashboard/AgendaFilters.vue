@@ -20,6 +20,7 @@
           <p class="font-semibold text-highlighted">Filters</p>
           <UButton v-if="active" label="Clear" color="neutral" variant="ghost" size="xs" @click="clear" />
         </div>
+        <UAlert v-if="failure" color="error" variant="soft" :description="getErrorMessage(failure, 'The filter could not be applied')" />
         <UFormField v-if="locations" label="Location">
           <USelect v-model="filters.locationId" :items="locationOptions" class="w-full" />
         </UFormField>
@@ -45,7 +46,7 @@ const props = defineProps<{
   organizationId?: string | null
 }>()
 
-const { filters, active, clear } = useAgendaFilters()
+const { filters, active, clear, failure } = useAgendaFilters()
 const open = ref(false)
 
 const members = props.organizationId
