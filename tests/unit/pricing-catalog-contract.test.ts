@@ -42,7 +42,7 @@ test('comparison rejects unknown capabilities and preserves current review-reque
   assert.throws(() => comparisonValue({ entitlement: 'messaging' }, 'invented_plan'), /Unsupported runtime billing plan/)
   const review = PRICING_COMPARISON.flatMap(group => [...group.rows]).find(row => row.id === 'reviews.requests')!
   assert.equal(comparisonValue(review, 'free'), 'Not included')
-  assert.equal(comparisonValue(review, 'growth'), 'Included with setup')
+  assert.equal(comparisonValue(review, 'growth'), 'Included')
   const onboarding = PRICING_COMPARISON.flatMap(group => [...group.rows]).find(row => row.id === 'places.onboarding')!
   assert.equal(comparisonValue(onboarding, 'free'), 'Included')
 })

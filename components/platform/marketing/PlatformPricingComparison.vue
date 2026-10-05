@@ -18,9 +18,8 @@
               </th>
               <td v-for="plan in plans" :key="plan.id">
                 <span v-if="row.limits?.[plan.id] !== undefined"><span aria-hidden="true">{{ row.limits[plan.id] }}</span><span class="sr-only">{{ comparisonValue(row, plan.id) }}</span></span>
-                <span v-else-if="comparisonValue(row, plan.id).startsWith('Included')" class="kc-pricing-comparison__included">
+                <span v-else-if="comparisonValue(row, plan.id) === 'Included'" class="kc-pricing-comparison__included">
                   <PlatformIcon name="check-solid" class="size-6" aria-hidden="true" />
-                  <span v-if="row.entitlement" aria-hidden="true" class="kc-pricing-comparison__qualifier">Setup</span>
                   <span class="sr-only">{{ comparisonValue(row, plan.id) }}</span>
                 </span>
                 <span v-else><span aria-hidden="true">—</span><span class="sr-only">{{ comparisonValue(row, plan.id) }}</span></span>
@@ -56,6 +55,5 @@ td { width: 25%; font-size: .9rem; }
 .kc-pricing-comparison__detail summary::-webkit-details-marker { display: none; }
 .kc-pricing-comparison__detail summary svg { flex: none; color: #646878; }
 .kc-pricing-comparison__included { display: inline-flex; gap: .35rem; align-items: center; }
-.kc-pricing-comparison__qualifier { font-size: .75rem; color: #646878; }
 .kc-pricing-comparison__group th { padding-top: 2.5rem; background: #eeeee8; font-size: 1rem; letter-spacing: .03em; }
 </style>

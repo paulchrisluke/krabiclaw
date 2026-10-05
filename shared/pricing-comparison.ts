@@ -59,7 +59,7 @@ export function comparisonValue(row: { included?: string; entitlement?: string; 
   if (row.entitlement) {
     const value = getPlanEntitlements(planId)[row.entitlement]
     if (typeof value !== 'boolean') throw new Error(`Unknown capability ${row.entitlement}`)
-    return value ? 'Included with setup' : 'Not included'
+    return value ? 'Included' : 'Not included'
   }
   if (planId === 'free' && row.free) return row.free
   if (planId === 'growth' && row.growth) return row.growth
