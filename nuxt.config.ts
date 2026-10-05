@@ -76,7 +76,6 @@ function publicSurfaceCssAssetFileName(assetInfo: { name?: string; fileName?: st
 }
 
 export default defineNuxtConfig({
-  ignore: ['**/.worktrees/**', '**/.claude/**'],
   modules: [
     '@nuxt/scripts',
     '@nuxtjs/robots',
@@ -206,7 +205,7 @@ export default defineNuxtConfig({
     },
     server: {
       watch: {
-        ignored: ['**/.worktrees/**', '**/.claude/**', '**/.wrangler/**', '**/.data/**', '**/node_modules/**', '**/.git/**', '**/.nuxt/**', '**/.output/**', '**/dist/**']
+        ignored: ['**/.wrangler/**', '**/.data/**', '**/node_modules/**', '**/.git/**', '**/.nuxt/**', '**/.output/**', '**/dist/**']
       },
       allowedHosts: ['.krabiclaw.com']
     },
@@ -396,7 +395,7 @@ export default defineNuxtConfig({
   // Global watcher exclusions
   watchers: {
     chokidar: {
-      ignored: ['**/.worktrees/**', '**/.claude/**', '**/.wrangler/**', '**/.data/**', '**/node_modules/**', '**/.git/**', '**/.nuxt/**', '**/.output/**', '**/dist/**']
+      ignored: ['**/.wrangler/**', '**/.data/**', '**/node_modules/**', '**/.git/**', '**/.nuxt/**', '**/.output/**', '**/dist/**']
     }
   },
 
