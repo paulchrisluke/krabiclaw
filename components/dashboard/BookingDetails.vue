@@ -229,8 +229,8 @@
 import type { ComputedRef, InjectionKey, Ref } from 'vue'
 import type { DashboardBookingDetails, DashboardRecordType } from '~/server/utils/dashboard-booking-details'
 
-export interface BookingChangeDraft { bookingDate: string; bookingTime: string; partySize: number; locationId: string; sourceUpdatedAt: string }
-export type BookingChangeField = 'date' | 'time' | 'guests' | 'location'
+export interface BookingChangeDraft { bookingDate: string; bookingTime: string; partySize: number; locationId: string; sessionId: string; sessionLabel: string; sourceUpdatedAt: string }
+export type BookingChangeField = 'date' | 'time' | 'guests' | 'location' | 'session'
 
 /** The record and the drafts its levels edit: one change request, one note. */
 export interface BookingEditor {
@@ -352,7 +352,7 @@ const refundable = computed(() => (booking.value?.payments ?? []).reduce((sum, e
 const changeSaving = ref(false)
 const changeDraft = useState(
   `booking-change-draft:${orgSlug.value}:${props.bookingType}:${props.bookingId}`,
-  () => ({ bookingDate: '', bookingTime: '', partySize: 1, locationId: '', sourceUpdatedAt: '' }),
+  () => ({ bookingDate: '', bookingTime: '', partySize: 1, locationId: '', sessionId: '', sessionLabel: '', sourceUpdatedAt: '' }),
 )
 const changeAttemptKey = ref<string | null>(null)
 const changeAttemptDraft = ref('')
@@ -362,18 +362,17 @@ const changeDirty = computed(() => {
   if (!booking.value) return false
   if (changeDraft.value.partySize !== (booking.value.partySize ?? 1)) return true
   // Only the fields this kind can actually change count as a change.
-  return props.bookingType === 'reservation' && (
-    changeDraft.value.bookingDate !== booking.value.bookingDate
+  if (props.bookingType !== 'reservation') return changeDraft.value.sessionId !== (booking.value.sessionId ?? '')
+  return changeDraft.value.bookingDate !== booking.value.bookingDate
     || changeDraft.value.bookingTime !== (booking.value.bookingTime ?? '').slice(0, 5)
-    || changeDraft.value.locationId !== booking.value.locationId)
+    || changeDraft.value.locationId !== booking.value.locationId
 })
 /**
  * What this record can be changed to.
  *
  * A reservation moves to a location, date and time. A booking moves to another
- * SESSION of its product — an occurrence that exists as a row — so a date and
- * time picker cannot express one, and the screen offers party size only until
- * it can name a session.
+ * SESSION of its product — an occurrence that exists as a row — so its "Date
+ * and time" is chosen from the product's open sessions.
  */
 const changeFields = computed(() => props.bookingType === 'reservation'
   ? [
@@ -382,11 +381,12 @@ const changeFields = computed(() => props.bookingType === 'reservation'
       { key: 'guests', label: 'Guests', summary: `${changeDraft.value.partySize} ${changeDraft.value.partySize === 1 ? 'guest' : 'guests'}` },
     ]
   : [
+      { key: 'session', label: 'Date and time', summary: changeDraft.value.sessionLabel || (booking.value?.bookingDate ? `${formatCalendarDate(booking.value.bookingDate, 'en')}${booking.value.bookingTime ? ` · ${formatTime(booking.value.bookingTime, 'en')}` : ''}` : 'Choose a time') },
       { key: 'guests', label: 'Guests', summary: `${changeDraft.value.partySize} ${changeDraft.value.partySize === 1 ? 'guest' : 'guests'}` },
     ])
 const changeValid = computed(() => props.bookingType === 'reservation'
   ? Boolean(changeDraft.value.bookingDate && changeDraft.value.bookingTime && changeDraft.value.locationId && Number.isInteger(changeDraft.value.partySize) && changeDraft.value.partySize > 0)
-  : Boolean(booking.value?.sessionId && Number.isInteger(changeDraft.value.partySize) && changeDraft.value.partySize > 0))
+  : Boolean((changeDraft.value.sessionId || booking.value?.sessionId) && Number.isInteger(changeDraft.value.partySize) && changeDraft.value.partySize > 0))
 const pendingAction = ref<string | null>(null)
 const actionAttempt = ref<{ draft: string; key: string } | null>(null)
 const noteDraft = ref('')
@@ -426,7 +426,7 @@ function cancelChangeField(field: BookingChangeField) {
 }
 
 function draftKey(field: BookingChangeField) {
-  return field === 'date' ? 'bookingDate' : field === 'time' ? 'bookingTime' : field === 'guests' ? 'partySize' : 'locationId'
+  return field === 'date' ? 'bookingDate' : field === 'time' ? 'bookingTime' : field === 'guests' ? 'partySize' : field === 'session' ? 'sessionId' : 'locationId'
 }
 
 function resetChangeDraft() {
@@ -435,6 +435,8 @@ function resetChangeDraft() {
   changeDraft.value.bookingTime = (booking.value.bookingTime ?? '').slice(0, 5)
   changeDraft.value.partySize = booking.value.partySize ?? 1
   changeDraft.value.locationId = booking.value.locationId ?? ''
+  changeDraft.value.sessionId = booking.value.sessionId ?? ''
+  changeDraft.value.sessionLabel = ''
   changeDraft.value.sourceUpdatedAt = booking.value.updatedAt
   changeAttemptKey.value = null
   changeAttemptDraft.value = ''
@@ -542,7 +544,7 @@ async function sendChangeRequest() {
           partySize: changeDraft.value.partySize,
           locationId: changeDraft.value.locationId,
         }
-      : { kind: 'booking' as const, sessionId: booking.value?.sessionId ?? '', partySize: changeDraft.value.partySize }
+      : { kind: 'booking' as const, sessionId: changeDraft.value.sessionId || (booking.value?.sessionId ?? ''), partySize: changeDraft.value.partySize }
     const response = await dashboardApi<{ booking: DashboardBookingDetails }>(
       `/api/dashboard/bookings/${props.bookingType}/${encodeURIComponent(props.bookingId)}/changes`,
       {
