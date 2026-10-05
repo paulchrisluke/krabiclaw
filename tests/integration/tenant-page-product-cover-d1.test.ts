@@ -19,7 +19,7 @@ const REEL_POSTER = 'https://imagedelivery.net/acct/reel/public'
 
 async function boot() {
   const runtime = new Miniflare({ workers: [{ config: {
-    name: 'tenant-page-product-cover-proof', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'tenant-page-product-cover-proof', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } },
     env: { DB: { type: 'd1' } },
   } }] })

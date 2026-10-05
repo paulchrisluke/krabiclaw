@@ -67,7 +67,7 @@ async function rowsOwnedBy(db: D1Database, org: string): Promise<Record<string, 
  */
 test('guest records refuse an ordinary parent delete and cascade away with their organization', { timeout: 60_000 }, async () => {
   const runtime = new Miniflare({ workers: [{ config: {
-    name: 'organization-cascade-proof', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'organization-cascade-proof', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } },
     env: { DB: { type: 'd1' } },
   } }] })

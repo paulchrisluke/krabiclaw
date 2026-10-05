@@ -30,7 +30,6 @@ async function migratedCacheD1(context: TestContext) {
     workers: [{
       config: {
         name: 'public-resource-cache-test',
-        type: 'worker',
         compatibilityDate: '2024-11-01',
         manifest: {
           mainModule: 'index.mjs',

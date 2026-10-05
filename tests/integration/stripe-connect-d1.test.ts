@@ -14,7 +14,7 @@ import { processStripeWebhookEvent } from '../../server/utils/stripe-webhook-eve
 
 async function withD1(run: (db: D1Database) => Promise<void>) {
   const runtime = new Miniflare({ workers: [{ config: {
-    name: 'stripe-connect-proof', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'stripe-connect-proof', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': {
       type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }',
     } } }, env: { DB: { type: 'd1' } },

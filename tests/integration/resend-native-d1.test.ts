@@ -132,7 +132,7 @@ function fakeResend(t: TestContext) {
 
 async function runtimeWithSchema() {
   const runtime = new Miniflare({ workers: [{ config: {
-    name: 'resend-native-proof', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'resend-native-proof', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: `
       export class Hub {
         constructor(ctx) { this.ctx = ctx }

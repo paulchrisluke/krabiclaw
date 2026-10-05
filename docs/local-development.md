@@ -223,12 +223,12 @@ corepack yarn mcp:catalog:write
 corepack yarn chatgpt:submission:write
 ```
 
-`yarn install` normally runs `patch-package` through `postinstall`. If Yarn did
-not rerun it after a dependency change, use:
-
-```sh
-corepack yarn patch-package --error-on-fail
-```
+Dependency patches (`patches/*.patch`) are applied by Yarn's `patch:` protocol
+from `package.json`, so every `yarn install` applies them and fails if one no
+longer applies. To change one, run `corepack yarn patch <package>`, edit the
+printed folder, then `corepack yarn patch-commit -s <folder>` and move the
+generated file from the ignored `.yarn/patches/` into `patches/`, updating its
+`package.json` reference.
 
 ## Isolated MCP verification
 

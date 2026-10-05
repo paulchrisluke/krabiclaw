@@ -8,7 +8,7 @@ import { deleteConfig, setConfig } from '../../server/utils/organization-config.
 
 test('a new organization initializes analytics time without inventing a location timezone', { timeout: 60_000 }, async () => {
   const runtime = new Miniflare({ workers: [{ config: {
-    name: 'site-default-proof', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'site-default-proof', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } },
     env: { DB: { type: 'd1' } },
   } }] })

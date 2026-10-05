@@ -20,7 +20,7 @@ const browser = { headers: new Headers({ cookie: `kc_session_id=${SESSION}; kc_v
 
 async function openDb() {
   const runtime = new Miniflare({ workers: [{ config: {
-    name: 'conversion-proof', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'conversion-proof', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } },
     env: { DB: { type: 'd1' } },
   } }] })

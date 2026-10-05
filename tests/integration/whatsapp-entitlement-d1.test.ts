@@ -19,7 +19,7 @@ import whatsappWebhook from '../../server/api/whatsapp/webhook.post.ts'
 // the external Meta HTTP boundary is intercepted; no live messages are sent.
 test('organization messaging entitlement fences Meta calls while preserving notification fallbacks', async () => {
   const runtime = new Miniflare({ workers: [{ config: {
-    name: 'guest-delivery-proof', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'guest-delivery-proof', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export class Hub { fetch() { return new Response(null, { status: 204 }) } } export default { fetch() { return new Response("ok") } }' } } },
     exports: { Hub: { type: 'durable-object', storage: 'sqlite' } },
     env: { DB: { type: 'd1' }, GUEST_INBOX_HUBS: { type: 'durable-object', worker: 'guest-delivery-proof', exportName: 'Hub' } },
@@ -134,7 +134,7 @@ test('organization messaging entitlement fences Meta calls while preserving noti
 // cannot check it accepts nothing.
 test('the WhatsApp webhook accepts only what Meta signed with the configured app secret', async () => {
   const runtime = new Miniflare({ workers: [{ config: {
-    name: 'whatsapp-webhook-proof', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'whatsapp-webhook-proof', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } },
     env: { DB: { type: 'd1' } },
   } }] })
