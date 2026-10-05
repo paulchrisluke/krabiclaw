@@ -12,7 +12,6 @@ export interface PaymentDisplay {
 }
 export interface PaymentRefundDisplay {id:string;amount:number;status:string}
 export interface PaymentOrderDisplay {
- fulfillment_status:string
  lines:Array<{id:string;title:string;quantity:number;unit_amount:number;currency:CurrencyCode}>
 }
 export function paymentDisplay(value:unknown):PaymentDisplay {
@@ -30,10 +29,9 @@ export function paymentRefundsDisplay(value:unknown):PaymentRefundDisplay[] {
 }
 export function paymentOrderDisplay(value:unknown):PaymentOrderDisplay|null {
  if(value===null)return null
- if(!value||typeof value!=='object'||!('fulfillment_status' in value)||typeof value.fulfillment_status!=='string'||!('lines' in value)||!Array.isArray(value.lines))throw new Error('Invalid payment order')
+ if(!value||typeof value!=='object'||!('lines' in value)||!Array.isArray(value.lines))throw new Error('Invalid payment order')
  if(!value.lines.length)throw new Error('Payment order has no items')
- if(!['unfulfilled','fulfilled','cancelled'].includes(value.fulfillment_status))throw new Error('Invalid order fulfillment state')
- return {fulfillment_status:value.fulfillment_status,lines:value.lines.map((line:unknown)=>{
+ return {lines:value.lines.map((line:unknown)=>{
   if(!line||typeof line!=='object'||!('id' in line)||typeof line.id!=='string'||!('title' in line)||typeof line.title!=='string'||!('quantity' in line)||typeof line.quantity!=='number'||!Number.isSafeInteger(line.quantity)||line.quantity<1||!('unit_amount' in line)||typeof line.unit_amount!=='number'||!Number.isSafeInteger(line.unit_amount)||line.unit_amount<0||!('currency' in line)||!isCurrencyCode(line.currency))throw new Error('Invalid payment order line')
   if(!Number.isSafeInteger(line.quantity*line.unit_amount))throw new Error('Invalid order line total')
   return {id:line.id,title:line.title,quantity:line.quantity,unit_amount:line.unit_amount,currency:line.currency}
@@ -44,4 +42,13 @@ export function paymentMoney(amount:unknown,currency:unknown):string {
  if(typeof amount!=='number'||!Number.isSafeInteger(amount)||!isCurrencyCode(currency))throw new Error('Invalid currency-safe payment amount')
  const value=amount
  return `${value<0?'-':''}${formatMinorAmount(Math.abs(value),currency)}`
+}
+/** What a reader is told about a payment, in the words the booking screen uses; one place for both the business and the buyer. */
+export function paymentStateLabel(payment:Pick<PaymentDisplay,'captured_amount'|'refunded_amount'|'state'>):string {
+ if(payment.captured_amount>0){
+  if(payment.refunded_amount===payment.captured_amount)return 'Refunded'
+  if(payment.refunded_amount>0)return 'Partially refunded'
+  return 'Paid'
+ }
+ return payment.state==='failed'?'Failed':payment.state==='recovery'?'Needs attention':'Pending'
 }

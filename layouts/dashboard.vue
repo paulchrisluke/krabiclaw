@@ -309,7 +309,7 @@ const scopeHeaderModel = computed<DashboardScopeHeaderModel>(() => {
         ? { to: `/dashboard/${encodeURIComponent(org.slug)}` }
         : { onSelect: () => void selectOrganization(org) }),
     }))],
-    createAction: { label: 'New Organization', to: '/dashboard/onboarding' }
+    createAction: { label: 'Start a business', to: '/dashboard/onboarding' }
   }
 })
 
@@ -409,7 +409,6 @@ const navTargets = computed<DashboardMobileNavItem[]>(() => {
   if (isAccountRoute.value) return [
     { key: 'today', label: 'Today', icon: 'i-lucide-bookmark', to: '/dashboard/account' },
     { key: 'calendar', label: 'Calendar', icon: 'i-lucide-calendar-days', to: '/dashboard/account/calendar' },
-    { key: 'activity', label: 'Activity', icon: 'i-lucide-ticket', to: '/dashboard/account/activity' },
     { key: 'messages', label: 'Messages', icon: 'i-lucide-message-square', to: '/dashboard/account/messages' },
   ]
   const routeOrgSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null

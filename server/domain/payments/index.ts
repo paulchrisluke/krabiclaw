@@ -25,6 +25,7 @@ export interface Payment {
   refunded_amount: number
   state: string
   stripe_payment_intent_id: string | null
+  stripe_charge_id: string | null
   receipt_url: string | null
   created_at: string
   updated_at: string

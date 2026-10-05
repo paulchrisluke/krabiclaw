@@ -1,7 +1,8 @@
 import { expect, test, type Page } from '@playwright/test'
 import { dismissPreviewToolbar, waitForNuxtHydration } from './helpers'
 import { loginAs } from './helpers/auth'
-import { isAccountActivityResponse, isAccountActivityDetailResponse } from '../../shared/account-activity'
+import { isAccountActivityResponse } from '../../shared/account-activity'
+import { isBookingDetailsResponse } from '../../composables/useBookingDetails'
 
 // The dashboard's pane topology is the nested route tree (DESIGN.md, Route
 // hierarchy). On a wide screen a level renders beside the parent its Back goes
@@ -90,10 +91,6 @@ test.describe('dashboard pane hierarchy', () => {
     await page.setViewportSize(WIDE)
     await open(page, `${ORG}/settings/integrations`)
     // Integrations is an index of deterministic rows: it opens the first one.
-    await expect(page).toHaveURL(`${ORG}/settings/integrations/stripe`)
-    await expectPanes(page, ['organization-integrations', 'organization-payouts'])
-
-    await page.locator('#dashboard-panel-organization-integrations a[href$="/google-maps"]').click()
     await expect(page).toHaveURL(`${ORG}/settings/integrations/google-maps`)
     await expectPanes(page, ['organization-integrations', 'integration-google-maps'])
 
@@ -105,12 +102,18 @@ test.describe('dashboard pane hierarchy', () => {
     await expectPanes(page, ['integration-google-maps', `integration-google-maps-${locationSlug}`])
 
     // In-app Back leads to the bare Integrations index, which must not stay
-    // alone at full width: it opens the first Stripe row again.
+    // alone at full width: it opens the first row again.
     const back = page.locator('#dashboard-panel-integration-google-maps [data-testid="dashboard-navbar-back"]')
     await expect(back).toHaveAttribute('href', `${ORG}/settings/integrations`)
     await back.click()
-    await expect(page).toHaveURL(`${ORG}/settings/integrations/stripe`)
-    await expectPanes(page, ['organization-integrations', 'organization-payouts'])
+    await expect(page).toHaveURL(`${ORG}/settings/integrations/google-maps`)
+    await expectPanes(page, ['organization-integrations', 'integration-google-maps'])
+
+    // Payments is one page with Airbnb's tabs, reached from the Earnings cog; Payouts is the first tab.
+    await open(page, `${ORG}/settings/payments`)
+    await expect(page.getByRole('heading', { name: 'How you get paid', exact: true })).toBeVisible()
+    await page.getByRole('tab', { name: 'Plan', exact: true }).click()
+    await expect(page).toHaveURL(`${ORG}/settings/payments?tab=plan`)
   })
 
   test('five destinations keep tenant management in Menu and personal activity in its own context', async ({ page }) => {
@@ -118,24 +121,26 @@ test.describe('dashboard pane hierarchy', () => {
     await open(page, `${ORG}/settings`)
     await expect(page.getByTestId('dashboard-top-nav').getByRole('navigation', { name: 'Dashboard' }).getByRole('link')).toHaveText(['Today', 'Calendar', 'Locations', 'Messages'])
     await page.getByTestId('dashboard-top-nav-menu-button').click()
-    await page.getByRole('dialog', { name: 'Menu', exact: true }).getByRole('link', { name: 'Payments', exact: true }).click()
-    await expect(page).toHaveURL(`${ORG}/payments/overview`)
-    await expect(page.locator('#dashboard-panel-payments [data-testid="dashboard-navbar-back"]')).toHaveAttribute('href', `${ORG}/settings`)
-    await expect(page.getByText('No captured payment activity in this UTC period.', { exact: true })).toBeVisible()
-    for (const view of ['transactions', 'refunds', 'disputes']) {
-      await open(page, `${ORG}/payments/${view}`)
-      await expect(page.getByText(view === 'transactions' ? 'No transactions in this UTC period.' : `No ${view} yet.`, { exact: true })).toBeVisible()
-    }
+    // Earnings is a card on Menu, as Airbnb's is; it shows the month and leads to payouts, transactions and refunds.
+    await page.getByRole('dialog', { name: 'Menu', exact: true }).getByTestId('dashboard-menu-earnings').click()
+    await expect(page).toHaveURL(`${ORG}/earnings`)
+    await expect(page.locator('#dashboard-panel-earnings [data-testid="dashboard-navbar-back"]')).toHaveAttribute('href', `${ORG}/settings`)
+    await expect(page.getByRole('heading', { name: 'Earnings', exact: true })).toBeVisible()
+    await open(page, `${ORG}/earnings/transactions`)
+    await expect(page.getByText('No transactions in this period.', { exact: true })).toBeVisible()
+    await open(page, `${ORG}/earnings/refunds`)
+    await expect(page.getByText('No refunds yet.', { exact: true })).toBeVisible()
+    await expect(page.getByText('No disputes.', { exact: true })).toBeVisible()
 
     await page.setViewportSize({ width: 390, height: 844 })
-    await open(page, `${ORG}/payments`)
+    await open(page, `${ORG}/earnings`)
     const mobileNav = page.getByTestId('dashboard-mobile-nav')
     await expect(mobileNav.getByRole('link')).toHaveText(['Today', 'Calendar', 'Locations', 'Messages', 'Menu'])
     await expect(page.getByTestId('dashboard-mobile-nav-menu-link')).toHaveAttribute('aria-current', 'page')
-    await page.locator('#dashboard-panel-payments [data-testid="dashboard-navbar-back"]').click()
+    await page.locator('#dashboard-panel-earnings [data-testid="dashboard-navbar-back"]').click()
     await expect(page).toHaveURL(`${ORG}/settings`)
-    await page.locator('#dashboard-panel-organization-settings').getByRole('link', { name: 'Payments', exact: true }).click()
-    await expect(page).toHaveURL(`${ORG}/payments`)
+    await page.locator('#dashboard-panel-organization-settings').getByTestId('dashboard-menu-earnings').click()
+    await expect(page).toHaveURL(`${ORG}/earnings`)
 
     const services = '/dashboard/north-carolina-legal-services'
     await open(page, `${services}/settings`)
@@ -147,40 +152,47 @@ test.describe('dashboard pane hierarchy', () => {
     await page.locator('#dashboard-panel-organization-products [data-testid="dashboard-navbar-back"]').click()
     await expect(page).toHaveURL(`${services}/settings`)
 
-    await open(page, `${ORG}/settings/payments-billing`)
+    await open(page, `${ORG}/settings/payments?tab=fees`)
     await expect(page.getByText('No usage waiting to be reported.', { exact: true })).toBeVisible()
-    const account = page.waitForResponse(response => new URL(response.url()).pathname === '/api/account' && response.request().method() === 'GET')
     await open(page, '/account')
+    await expect(page).toHaveURL('/dashboard/account')
+    await expect(mobileNav.getByRole('link')).toHaveText(['Today', 'Calendar', 'Messages', 'Menu'])
+    // Past activity is a card in the account's Menu, as Past trips is on Airbnb's profile; Today owns what is ahead.
+    const account = page.waitForResponse(response => new URL(response.url()).pathname === '/api/account' && response.request().method() === 'GET')
+    await mobileNav.getByRole('link', { name: 'Menu', exact: true }).click()
+    await page.getByTestId('dashboard-menu-past-activity').click()
     await expect(page).toHaveURL('/dashboard/account/activity')
     const response = await account
     expect(response.status(), await response.text()).toBe(200)
     const activity = await response.json()
     expect(isAccountActivityResponse(activity), 'the account API returns actual owned activity').toBe(true)
     if (!isAccountActivityResponse(activity)) throw new Error('Invalid account activity response')
-    await expect(mobileNav.getByRole('link')).toHaveText(['Today', 'Calendar', 'Activity', 'Messages', 'Menu'])
-    await expect(mobileNav.getByRole('link', { name: 'Activity', exact: true })).toHaveAttribute('aria-current', 'page')
-    await expect(page.getByRole('heading', { name: 'Activity', exact: true })).toBeVisible()
-    await expect(page.locator('[data-testid^="account-activity-"]')).toHaveCount(activity.activities.length)
-    for (const item of activity.activities) {
+    await expect(page.getByRole('heading', { name: 'Past activity', exact: true })).toBeVisible()
+    const past = activity.activities.filter(item => item.kind === 'order' || item.kind === 'payment' || (item.status !== 'cancelled' && item.endsAt !== null && Date.parse(item.endsAt) < Date.now()))
+    const cancelled = activity.activities.filter(item => (item.kind === 'booking' || item.kind === 'reservation') && item.status === 'cancelled')
+    await expect(page.getByTestId('account-activity-cancelled')).toHaveCount(cancelled.length ? 1 : 0)
+    await expect(page.locator('[data-testid^="account-activity-"]')).toHaveCount(past.length)
+    for (const item of past) {
       await expect(page.getByTestId(`account-activity-${item.kind}-${item.id}`)).toContainText(item.title)
     }
     // The copied actor's own history may be empty; never create a purchase to
     // make the dashboard assert its fabricated premise.
-    if (activity.activities.length) {
-      const item = activity.activities[0]!
-      const read = await page.request.get('/api/account', { params: { kind: item.kind, id: item.id } })
+    if (past.length) {
+      const item = past[0]!
+      // A visit and a purchase open the same record screen, on the account's own read.
+      const read = await page.request.get(`/api/account/bookings/${item.kind}/${item.id}`)
       expect(read.status(), await read.text()).toBe(200)
       const detail = await read.json()
-      expect(isAccountActivityDetailResponse(detail)).toBe(true)
-      if (!isAccountActivityDetailResponse(detail)) throw new Error('Invalid activity detail response')
+      const paymentCount = isBookingDetailsResponse(detail) ? (detail.booking.payments ?? []).length : -1
+      expect(paymentCount, 'the account detail API returns the canonical record').toBeGreaterThanOrEqual(0)
       await page.getByTestId(`account-activity-${item.kind}-${item.id}`).click()
       await expect(page).toHaveURL(`/dashboard/account/activity/${item.kind}/${item.id}`)
       await expect(page.getByRole('heading', { name: item.title, exact: true })).toBeVisible()
-      if (detail.activity.payments.length) await expect(page.getByRole('heading', { name: 'Payment info', exact: true })).toHaveCount(detail.activity.payments.length)
-      await page.getByTestId('dashboard-navbar-close').click()
+      if (paymentCount) await expect(page.getByRole('heading', { name: 'Payment info', exact: true })).toHaveCount(paymentCount)
+      await page.getByTestId('dashboard-navbar-back').click()
       await expect(page).toHaveURL('/dashboard/account/activity')
     } else {
-      await expect(page.getByText('No activity yet', { exact: true })).toBeVisible()
+      await expect(page.getByText('No past activity yet', { exact: true })).toBeVisible()
     }
     await mobileNav.getByRole('link', { name: 'Today', exact: true }).click()
     await expect(page).toHaveURL('/dashboard/account')
@@ -195,9 +207,9 @@ test.describe('dashboard pane hierarchy', () => {
     await page.getByRole('tab', { name: 'Updates', exact: true }).click()
     expect((await personalUpdates).status()).toBe(200)
     await expect(page).toHaveURL('/dashboard/account/messages?view=updates')
-    await expect(mobileNav.getByRole('link')).toHaveText(['Today', 'Calendar', 'Activity', 'Messages', 'Menu'])
+    await expect(mobileNav.getByRole('link')).toHaveText(['Today', 'Calendar', 'Messages', 'Menu'])
     await page.setViewportSize(WIDE)
-    await expect(page.getByTestId('dashboard-top-nav').getByRole('navigation', { name: 'Dashboard' }).getByRole('link')).toHaveText(['Today', 'Calendar', 'Activity', 'Messages'])
+    await expect(page.getByTestId('dashboard-top-nav').getByRole('navigation', { name: 'Dashboard' }).getByRole('link')).toHaveText(['Today', 'Calendar', 'Messages'])
   })
 
   test('booking Change opens its first field on desktop and not below lg', async ({ page }) => {

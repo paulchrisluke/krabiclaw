@@ -124,7 +124,7 @@ test('signed-in paid CTAs retain their selected plan through the canonical billi
     await expect(page.getByRole('link', { name: label, exact: true })).toHaveAttribute('href', `/api/post-login?plan=${plan}`)
     const destination = await page.request.get(`/api/post-login?plan=${plan}`, { maxRedirects: 0 })
     expect(destination.status()).toBe(302)
-    expect(destination.headers().location).toBe(`/dashboard/ember-slice-demo/settings/billing?plan=${plan}`)
+    expect(destination.headers().location).toBe(`/dashboard/ember-slice-demo/settings/payments?tab=plan&plan=${plan}`)
   }
   const invalid = await page.request.get('/api/post-login?plan=unknown', { maxRedirects: 0 })
   expect(invalid.status()).toBe(400)

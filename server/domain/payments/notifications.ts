@@ -41,7 +41,7 @@ export async function notifyPaymentFinancialEvent(db: DbClient, stripe: Stripe, 
   const threadId = hold?.request_id ?? null
   const booking=payment.subject_type==='booking'&&payment.subject_id&&organization?await queryFirst<{request_id:string|null}>(db,'SELECT request_id FROM bookings WHERE organization_id=? AND id=?',[payment.organization_id,payment.subject_id]):null
   if(booking&&booking.request_id!==threadId)throw new Error('Booking payment notification request does not match its operational booking')
-  const deepLink = organization ? `${dashboardOrigin(env, { orgSlug: organization.slug, locationSlug: null })}${booking?.request_id?`/bookings/booking/${encodeURIComponent(booking.request_id)}`:`/payments/transactions/${encodeURIComponent(payment.id)}`}` : null
+  const deepLink = organization ? `${dashboardOrigin(env, { orgSlug: organization.slug, locationSlug: null })}${booking?.request_id?`/bookings/booking/${encodeURIComponent(booking.request_id)}`:`/earnings/transactions/${encodeURIComponent(payment.id)}`}` : null
   const details = { organizationName: organization?.name ?? null, amount: input.amount, currency: payment.currency, productTitle: snapshot.title, action: deepLink ? { url: deepLink, label: 'View details' } : null }
   const event: PaymentNotificationEvent = input.kind === 'dispute_needs_response' ? { ...details, kind: input.kind, responseDueBy: input.responseDueBy } : { ...details, kind: input.kind }
   const ownerMessage = organization ? ownerPaymentMessage(event) : undefined
@@ -88,7 +88,7 @@ export async function notifyPayoutState(db: DbClient, env: CloudflareEnv, scope:
   }
   const currency = payout.currency.toUpperCase()
   if (!isCurrencyCode(currency)) throw new Error('Payout currency is unsupported')
-  const deepLink = `${dashboardOrigin(env, { orgSlug: organization.slug, locationSlug: null })}/payments/payouts`
+  const deepLink = `${dashboardOrigin(env, { orgSlug: organization.slug, locationSlug: null })}/earnings/payouts`
   const details = { organizationName: organization.name, amount: payout.amount, currency, action: { url: deepLink, label: 'View payout' } }
   const event: PaymentNotificationEvent = payout.status === 'paid'
     ? { ...details, kind: 'payout_paid', arrivalDate: new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', dateStyle: 'medium' }).format(new Date(payout.arrival_date * 1000)) }

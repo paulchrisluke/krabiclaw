@@ -13,7 +13,7 @@ useSeoMeta({ title: 'Activity | Krabiclaw', robots: 'noindex, nofollow' })
 const route = useRoute()
 const checkoutReturn = typeof route.query.payment_id === 'string' && typeof route.query.purchase_claim === 'string'
 const error = ref('')
-const destination = '/dashboard/account/activity'
+const destination = '/dashboard/account'
 if (!checkoutReturn) await navigateTo({ path: destination, query: route.query }, { redirectCode: 302, replace: true })
 onMounted(async () => {
   if (!checkoutReturn) return

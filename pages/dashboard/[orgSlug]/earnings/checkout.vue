@@ -1,5 +1,5 @@
 <template>
- <DashboardLeafPanel id="payments-checkout" title="One-time order checkout" lead="Create a Stripe payment link for an offering your business will fulfill." :footer="false">
+ <DashboardLeafPanel id="earnings-checkout" title="Payment link" lead="A Stripe link to pay for one item, to send to a buyer." :footer="false">
   <UAlert v-if="error" color="error" :description="error.message" /><USkeleton v-else-if="pending" class="h-32" />
   <template v-else-if="data">
    <UEmpty v-if="!data.offerings.length" icon="i-lucide-package" title="No priced offerings" description="Add a one-time USD price to an offering without a booking calendar." />

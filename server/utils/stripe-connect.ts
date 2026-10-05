@@ -127,7 +127,7 @@ export function buildStripeConnectOnboardingUrls(
   if (!organizationSlug.trim() || /[\/\\]/u.test(organizationSlug) || Array.from(organizationSlug).some(character => character.codePointAt(0)! < 32)) {
     throw new Error('Stripe Connect organization slug is invalid')
   }
-  const returnUrl = new URL(`/dashboard/${encodeURIComponent(organizationSlug)}/settings/integrations/stripe`, origin)
+  const returnUrl = new URL(`/dashboard/${encodeURIComponent(organizationSlug)}/settings/payments`, origin)
   returnUrl.searchParams.set('stripe_connect', 'returned')
   const refreshUrl = new URL('/api/dashboard/connect/refresh', origin)
   refreshUrl.searchParams.set('org', organizationSlug)

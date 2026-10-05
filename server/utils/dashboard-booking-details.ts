@@ -1,5 +1,6 @@
 import { readMemberScheduling } from '~/server/domain/member-scheduling'
-import { getGuestRequest } from '~/server/domain/requests'
+import { getGuestRequest, REQUEST_CURRENT_BUYER_SQL } from '~/server/domain/requests'
+import { resolveLocationContact } from '~/server/utils/contact-resolution'
 import type { H3Event } from 'nitro'
 import { HTTPError } from 'nitro'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
@@ -16,6 +17,8 @@ import { readPaymentDetails } from '~/server/domain/payments'
 import {paymentDisplay,paymentRefundsDisplay,paymentOrderDisplay,type PaymentDisplay,type PaymentRefundDisplay,type PaymentOrderDisplay} from '~/shared/payment-display'
 
 export type DashboardBookingType = 'reservation' | 'booking'
+/** What the record screen can show: a visit, or a purchase that stands on its own (an order, or a payment whose visit is gone). */
+export type DashboardRecordType = DashboardBookingType | 'order' | 'payment'
 
 interface BookingRow {
   id: string
@@ -43,6 +46,7 @@ interface BookingRow {
   experience_title: string | null
   session_id: string | null
   request_id: string | null
+  cancellation_used_at: string | null
   created_at: string
   updated_at: string
 }
@@ -62,7 +66,7 @@ export interface DashboardBookingDetails {
   providerCalendarStatus: string | null
   operationalUpdatedAt: string
   operationalBookingId: string
-  type: DashboardBookingType
+  type: DashboardRecordType
   organizationId: string
   organizationName: string
   vertical: string
@@ -71,13 +75,17 @@ export interface DashboardBookingDetails {
   locationTitle: string
   resourceTitle: string
   resourceImageUrl: string | null
-  guestName: string
-  guestEmail: string
+  /** Null for a purchase made without an account. */
+  guestName: string | null
+  guestEmail: string | null
   guestPhone: string | null
   guestImageUrl: string | null
-  partySize: number
+  /** Null for a purchase, which has no party. */
+  partySize: number | null
+  /** The visit's local day, or the day a purchase was made. */
   bookingDate: string
-  bookingTime: string
+  /** Null for a purchase. */
+  bookingTime: string | null
   timeZone: string
   status: string
   /** Derived, never stored: confirmed and its end has passed. */
@@ -97,6 +105,10 @@ export interface DashboardBookingDetails {
   notes: DashboardBookingNote[]
   locations: Array<{ id: string; title: string; imageUrl: string | null }>
   payments: Array<{payment:PaymentDisplay;refunds:PaymentRefundDisplay[];order:PaymentOrderDisplay|null}> | null
+  /** The guest's own self-service cancellation is still open. */
+  guestCanCancel: boolean
+  /** The business's phone for this booking, as the guest reaches it. */
+  contactPhone: string | null
 }
 
 interface BookingAccessContext {
@@ -121,9 +133,12 @@ async function bookingContext(event: H3Event, organizationSlug?: string | null):
   }
 }
 
+/** Whose booking: the business that hosts it, or the account that currently owns it. */
+type BookingScope = { organizationId: string; buyerUserId?: undefined } | { buyerUserId: string; organizationId?: undefined }
+
 async function loadBookingRow(
   db: DbClient,
-  organizationId: string,
+  scope: BookingScope,
   type: DashboardBookingType,
   bookingId: string,
 ): Promise<BookingRow | null> {
@@ -133,9 +148,9 @@ async function loadBookingRow(
   return queryFirst<BookingRow>(db, `SELECT r.id, record.id AS operational_id, r.organization_id, s.name AS organization_name, s.vertical,
     record.assigned_member_id, record.operational_updated_at, record.location_id, l.slug AS location_slug, l.title AS location_title,
     json_extract(r.payload_json, '$.guest.name') AS guest_name, json_extract(r.payload_json, '$.guest.email') AS guest_email, json_extract(r.payload_json, '$.guest.phone') AS guest_phone,
-    NULL AS guest_image_url, record.party_size, record.starts_at, record.ends_at, record.timezone, record.status, json_extract(r.payload_json, '$.notes') AS requests,
+    (SELECT u.image FROM user u WHERE u.id = r.user_id) AS guest_image_url, record.party_size, record.starts_at, record.ends_at, record.timezone, record.status, json_extract(r.payload_json, '$.notes') AS requests,
     record.product_id AS experience_id, record.product_name AS experience_title, record.product_session_id AS session_id,
-    r.id AS request_id, r.created_at, r.updated_at
+    r.id AS request_id, json_extract(r.payload_json, '$.cancellation.used_at') AS cancellation_used_at, r.created_at, r.updated_at
     FROM requests r
     JOIN organization s ON s.id = r.organization_id
     JOIN (
@@ -145,7 +160,7 @@ async function loadBookingRow(
       SELECT res.id, res.request_id, res.status, res.party_size, res.starts_at, res.ends_at, res.timezone, res.location_id, NULL, NULL, NULL, NULL, res.updated_at FROM reservations res
     ) record ON record.request_id = r.id
     LEFT JOIN business_locations l ON l.id = record.location_id
-    WHERE r.id = ? AND r.organization_id = ? AND r.kind = ?`, [bookingId, organizationId, type])
+    WHERE r.id = ? AND r.kind = ? AND ${scope.buyerUserId ? `r.user_id = ? AND ${REQUEST_CURRENT_BUYER_SQL}` : 'r.organization_id = ?'}`, [bookingId, type, scope.buyerUserId ?? scope.organizationId])
 }
 
 async function assertBookingAccess(context: BookingAccessContext, row: BookingRow) {
@@ -189,43 +204,80 @@ async function listInternalNotes(db: DbClient, threadId: string | null): Promise
 
 export async function loadDashboardBookingDetails(
   event: H3Event,
-  input: { type: DashboardBookingType; bookingId: string; organizationSlug?: string | null },
+  input: { type: DashboardRecordType; bookingId: string; organizationSlug?: string | null },
 ): Promise<DashboardBookingDetails> {
   const context = await bookingContext(event, input.organizationSlug)
-  const row = await loadBookingRow(context.db, context.organization.id, input.type, input.bookingId)
+  if (input.type === 'order' || input.type === 'payment') {
+    if (!await roleAllows({ organizationId: context.organization.id, role: context.organization.role, permissions: { payments: ['read'] } })) throw new HTTPError({ statusCode: 403, message: 'Payments access is required' })
+    return composePurchaseDetails(context.db, { organizationId: context.organization.id }, input.bookingId)
+  }
+  const row = await loadBookingRow(context.db, { organizationId: context.organization.id }, input.type, input.bookingId)
   if (!row) throw new HTTPError({ statusCode: 404, message: 'Booking not found' })
   await assertBookingAccess(context, row)
+  const canReadPayments=await roleAllows({organizationId:context.organization.id,role:context.organization.role,permissions:{payments:['read']}})
+  return composeBookingDetails(context.db, row, input.type, { canReadPayments })
+}
+
+/**
+ * The same record as the account that booked it reads it: ownership is the
+ * request's current buyer, the team's private notes and scheduling stay with
+ * the team, and the payments are the ones this account made.
+ */
+export async function loadBuyerBookingDetails(
+  db: DbClient,
+  userId: string,
+  type: DashboardRecordType,
+  bookingId: string,
+): Promise<DashboardBookingDetails> {
+  if (type === 'order' || type === 'payment') return composePurchaseDetails(db, { buyerUserId: userId }, bookingId)
+  const row = await loadBookingRow(db, { buyerUserId: userId }, type, bookingId)
+  if (!row) throw new HTTPError({ statusCode: 404, message: 'Booking not found' })
+  return composeBookingDetails(db, row, type, { buyerUserId: userId })
+}
+
+async function composeBookingDetails(
+  db: DbClient,
+  row: BookingRow,
+  type: DashboardBookingType,
+  reader: { canReadPayments: boolean; buyerUserId?: undefined } | { buyerUserId: string; canReadPayments?: undefined },
+): Promise<DashboardBookingDetails> {
   if (row.location_id !== null && !row.location_title) throw new HTTPError({ statusCode: 500, message: 'The booking location is missing its title' })
 
-  const locations = await queryAll<{ id: string; title: string }>(context.db, 'SELECT id, title FROM business_locations WHERE organization_id = ? ORDER BY title', [row.organization_id])
-  const visibleLocations = locations.filter(location => input.type === 'reservation' || location.id === row.location_id)
-  const locationPictures = await loadOwnerPictures(context.db, row.organization_id, 'business_location', visibleLocations.map(location => location.id))
+  const locations = await queryAll<{ id: string; title: string }>(db, 'SELECT id, title FROM business_locations WHERE organization_id = ? ORDER BY title', [row.organization_id])
+  const visibleLocations = locations.filter(location => type === 'reservation' || location.id === row.location_id)
+  const locationPictures = await loadOwnerPictures(db, row.organization_id, 'business_location', visibleLocations.map(location => location.id))
 
-  const [resourceImageUrl, resolvedPolicy, notes, timeZone] = await Promise.all([
-    loadResourceImage(context.db, row, input.type),
+  const [resourceImageUrl, resolvedPolicy, notes, timeZone, contact] = await Promise.all([
+    loadResourceImage(db, row, type),
     // A reservation's terms are its location's typed policy. A booking's are
     // the product's own attributes, which travel with the product — there is
     // no site-level policy to merge underneath either.
-    input.type === 'reservation' && row.location_id
-      ? getLocationReservationConfig(context.db, { organizationId: row.organization_id, locationId: row.location_id })
+    type === 'reservation' && row.location_id
+      ? getLocationReservationConfig(db, { organizationId: row.organization_id, locationId: row.location_id })
       : Promise.resolve(null),
-    listInternalNotes(context.db, row.request_id),
+    reader.buyerUserId ? Promise.resolve([]) : listInternalNotes(db, row.request_id),
     Promise.resolve(row.timezone),
+    row.location_id
+      ? resolveLocationContact(db, row.organization_id, row.location_id)
+      : queryFirst<{ contactPhone: string | null }>(db, 'SELECT contact_phone AS contactPhone FROM organization WHERE id = ?', [row.organization_id]),
   ])
 
-  const provider=row.assigned_member_id?await queryFirst<{name:string|null;busy_error:string|null;busy_checked_at:string|null;conflict:number}>(context.db,`SELECT u.name,ms.busy_error,ms.busy_checked_at,EXISTS(SELECT 1 FROM json_each(ms.busy_json) busy WHERE json_extract(busy.value,'$.start')<? AND json_extract(busy.value,'$.end')>?) conflict FROM member m LEFT JOIN user u ON u.id=m.userId LEFT JOIN member_scheduling ms ON ms.member_id=m.id AND ms.organization_id=m.organizationId WHERE m.id=? AND m.organizationId=?`,[row.ends_at,row.starts_at,row.assigned_member_id,row.organization_id]):null
-  const scheduling=row.assigned_member_id ? await readMemberScheduling(context.db,row.organization_id,row.assigned_member_id) : null
-  const canReadPayments=await roleAllows({organizationId:context.organization.id,role:context.organization.role,permissions:{payments:['read']}})
-  const paymentIds=canReadPayments?await queryAll<{id:string}>(context.db,'SELECT id FROM payments WHERE organization_id=? AND subject_type=? AND subject_id=? ORDER BY created_at,id',[row.organization_id,input.type,row.operational_id]):[]
+  const provider=!reader.buyerUserId&&row.assigned_member_id?await queryFirst<{name:string|null;busy_error:string|null;busy_checked_at:string|null;conflict:number}>(db,`SELECT u.name,ms.busy_error,ms.busy_checked_at,EXISTS(SELECT 1 FROM json_each(ms.busy_json) busy WHERE json_extract(busy.value,'$.start')<? AND json_extract(busy.value,'$.end')>?) conflict FROM member m LEFT JOIN user u ON u.id=m.userId LEFT JOIN member_scheduling ms ON ms.member_id=m.id AND ms.organization_id=m.organizationId WHERE m.id=? AND m.organizationId=?`,[row.ends_at,row.starts_at,row.assigned_member_id,row.organization_id]):null
+  const scheduling=!reader.buyerUserId&&row.assigned_member_id ? await readMemberScheduling(db,row.organization_id,row.assigned_member_id) : null
+  const paymentIds=reader.buyerUserId
+    ?await queryAll<{id:string}>(db,'SELECT id FROM payments WHERE organization_id=? AND subject_type=? AND subject_id=? AND buyer_user_id=? ORDER BY created_at,id',[row.organization_id,type,row.operational_id,reader.buyerUserId])
+    :reader.canReadPayments?await queryAll<{id:string}>(db,'SELECT id FROM payments WHERE organization_id=? AND subject_type=? AND subject_id=? ORDER BY created_at,id',[row.organization_id,type,row.operational_id]):[]
   const payments=await Promise.all(paymentIds.map(async ({id})=>{
-    const detail=await readPaymentDetails(context.db,row.organization_id,id)
+    const detail=await readPaymentDetails(db,row.organization_id,id)
     return {payment:paymentDisplay(detail.payment),refunds:paymentRefundsDisplay(detail.refunds),order:paymentOrderDisplay(detail.order)}
   }))
+  const now = new Date().toISOString()
+  const complete = isBookingComplete({ status: row.status as BookingStatus, ends_at: row.ends_at }, now)
   return {
     assignedMemberId: row.assigned_member_id, assignedMemberName:provider?.name??null,providerConflict:Boolean(provider?.conflict),providerCalendarStatus: scheduling?.calendar_ids.length && scheduling.calendar_status !== 'ready' ? scheduling.busy_error || `Busy-calendar status: ${scheduling.calendar_status}` : null,operationalUpdatedAt:row.operational_updated_at,
     id: row.id,
     operationalBookingId: row.operational_id,
-    type: input.type,
+    type,
     organizationId: row.organization_id,
     organizationName: row.organization_name,
     vertical: row.vertical,
@@ -237,7 +289,7 @@ export async function loadDashboardBookingDetails(
     guestName: row.guest_name,
     guestEmail: row.guest_email,
     guestPhone: row.guest_phone,
-    // Customer records do not expose an avatar. Never bypass Better Auth to read one.
+    // The picture is the buyer's own account picture when they booked signed in; an emailed guest has none.
     guestImageUrl: row.guest_image_url,
     partySize: row.party_size,
     // The screen shows a local date and time; the record holds one instant and
@@ -247,7 +299,7 @@ export async function loadDashboardBookingDetails(
     bookingTime: localTimeOf(row),
     timeZone,
     status: row.status,
-    complete: isBookingComplete({ status: row.status as BookingStatus, ends_at: row.ends_at }, new Date().toISOString()),
+    complete,
     requests: row.requests,
     experienceId: row.experience_id,
     sessionId: row.session_id,
@@ -259,7 +311,11 @@ export async function loadDashboardBookingDetails(
     policy: resolvedPolicy ? renderBookingPolicySummary(reservationPolicySummarySource(resolvedPolicy)) : null,
     notes,
     locations: visibleLocations.map(location => ({ ...location, imageUrl: locationPictures.get(location.id)?.imageUrl ?? null })),
-    payments:canReadPayments?payments:null,
+    payments:reader.buyerUserId||reader.canReadPayments?payments:null,
+    // The same rule the public cancel route applies, read here so the screen
+    // does not offer a cancellation the write would refuse.
+    guestCanCancel: ['pending', 'confirmed'].includes(row.status) && row.ends_at > now && !complete && !row.cancellation_used_at,
+    contactPhone: contact?.contactPhone ?? null,
   }
 }
 
@@ -268,7 +324,7 @@ export async function requestDashboardBookingChange(
   input: { type: DashboardBookingType; bookingId: string; body: unknown },
 ): Promise<DashboardBookingDetails> {
   const context = await bookingContext(event)
-  const row = await loadBookingRow(context.db, context.organization.id, input.type, input.bookingId)
+  const row = await loadBookingRow(context.db, { organizationId: context.organization.id }, input.type, input.bookingId)
   if (!row) throw new HTTPError({ statusCode: 404, message: 'Booking not found' })
   await assertBookingAccess(context, row)
   if (!input.body || typeof input.body !== 'object' || !('idempotencyKey' in input.body) || typeof input.body.idempotencyKey !== 'string' || !input.body.idempotencyKey || input.body.idempotencyKey.length > 100) throw new HTTPError({ statusCode: 400, message: 'Request key is required' })
@@ -285,7 +341,7 @@ export async function addDashboardBookingNote(
   input: { type: DashboardBookingType; bookingId: string; body: unknown },
 ): Promise<DashboardBookingDetails> {
   const context = await bookingContext(event)
-  const row = await loadBookingRow(context.db, context.organization.id, input.type, input.bookingId)
+  const row = await loadBookingRow(context.db, { organizationId: context.organization.id }, input.type, input.bookingId)
   if (!row) throw new HTTPError({ statusCode: 404, message: 'Booking not found' })
   await assertBookingAccess(context, row)
   if (!input.body || typeof input.body !== 'object' || Array.isArray(input.body)) {
@@ -325,4 +381,72 @@ export async function addDashboardBookingNote(
 
 export function isDashboardBookingType(value: string | undefined): value is DashboardBookingType {
   return value === 'reservation' || value === 'booking'
+}
+
+export function isDashboardRecordType(value: string | undefined): value is DashboardRecordType {
+  return isDashboardBookingType(value) || value === 'order' || value === 'payment'
+}
+
+/**
+ * A purchase on the same screen as a visit: an order, or a payment whose visit
+ * no longer exists, read by the business that took it or the account that paid.
+ * It has no party, time, policy or conversation, and nothing left to decide —
+ * what remains is what was bought, when, from whom, and the money.
+ */
+async function composePurchaseDetails(db: DbClient, scope: BookingScope, paymentId: string): Promise<DashboardBookingDetails> {
+  const payment = await queryFirst<{ organization_id: string; buyer_user_id: string | null; location_id: string | null; created_at: string; updated_at: string; organization_name: string; vertical: string; contact_phone: string | null; buyer_name: string | null; buyer_email: string | null; buyer_image: string | null; location_slug: string | null; location_title: string | null }>(db, `
+    SELECT p.organization_id, p.buyer_user_id, p.location_id, p.created_at, p.updated_at, s.name AS organization_name, s.vertical, s.contact_phone,
+           u.name AS buyer_name, u.email AS buyer_email, u.image AS buyer_image, l.slug AS location_slug, l.title AS location_title
+    FROM payments p
+    JOIN organization s ON s.id = p.organization_id
+    LEFT JOIN user u ON u.id = p.buyer_user_id
+    LEFT JOIN business_locations l ON l.id = p.location_id AND l.organization_id = p.organization_id
+    WHERE p.id = ? AND ${scope.buyerUserId ? 'p.buyer_user_id = ?' : 'p.organization_id = ?'}`, [paymentId, scope.buyerUserId ?? scope.organizationId])
+  if (!payment) throw new HTTPError({ statusCode: 404, message: 'Purchase not found' })
+  const detail = await readPaymentDetails(db, payment.organization_id, paymentId)
+  const snapshot: unknown = JSON.parse(detail.payment.price_snapshot_json)
+  if (!snapshot || typeof snapshot !== 'object' || !('title' in snapshot) || typeof snapshot.title !== 'string' || !snapshot.title.trim()) throw new Error('Purchase has no immutable title')
+  const line = detail.order ? await queryFirst<{ product_id: string | null }>(db, 'SELECT product_id FROM payment_order_lines WHERE order_id = ? ORDER BY rowid LIMIT 1', [detail.order.id]) : null
+  // The picture is the item's; failing that, the place it was sold; failing that, the business's own mark — as the booking screen leads with its place.
+  const resourceImageUrl = (line?.product_id ? (await loadOwnerPictures(db, payment.organization_id, 'product', [line.product_id])).get(line.product_id)?.imageUrl : null)
+    ?? (payment.location_id ? (await loadOwnerPictures(db, payment.organization_id, 'business_location', [payment.location_id])).get(payment.location_id)?.imageUrl : null)
+    ?? (await loadOwnerPictures(db, payment.organization_id, 'organization', [payment.organization_id])).get(payment.organization_id)?.imageUrl
+    ?? null
+  const contact = payment.location_id ? await resolveLocationContact(db, payment.organization_id, payment.location_id) : { contactPhone: payment.contact_phone }
+  return {
+    assignedMemberId: null, assignedMemberName: null, providerConflict: false, providerCalendarStatus: null, operationalUpdatedAt: payment.updated_at,
+    id: paymentId,
+    operationalBookingId: detail.order?.id ?? paymentId,
+    type: detail.order ? 'order' : 'payment',
+    organizationId: payment.organization_id,
+    organizationName: payment.organization_name,
+    vertical: payment.vertical,
+    locationId: payment.location_id,
+    locationSlug: payment.location_slug,
+    locationTitle: payment.location_id === null ? 'Online' : payment.location_title ?? 'Online',
+    resourceTitle: snapshot.title,
+    resourceImageUrl,
+    guestName: payment.buyer_name,
+    guestEmail: payment.buyer_email,
+    guestPhone: null,
+    guestImageUrl: payment.buyer_image,
+    partySize: null,
+    bookingDate: localDateOf({ starts_at: payment.created_at, timezone: 'UTC' }),
+    bookingTime: null,
+    timeZone: 'UTC',
+    status: detail.payment.state,
+    complete: true,
+    requests: null,
+    experienceId: null,
+    sessionId: null,
+    threadId: null,
+    createdAt: payment.created_at,
+    updatedAt: payment.updated_at,
+    policy: null,
+    notes: [],
+    locations: [],
+    payments: [{ payment: paymentDisplay(detail.payment), refunds: paymentRefundsDisplay(detail.refunds), order: paymentOrderDisplay(detail.order) }],
+    guestCanCancel: false,
+    contactPhone: contact?.contactPhone ?? null,
+  }
 }

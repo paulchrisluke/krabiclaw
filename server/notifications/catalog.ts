@@ -112,7 +112,7 @@ const payment = {
   amount: 10000,
   currency: 'USD' as const,
   productTitle: 'Pottery Wheel Class',
-  action: { url: 'https://demo.krabiclaw.com/dashboard/pottery-house/payments', label: 'View payment' },
+  action: { url: 'https://demo.krabiclaw.com/dashboard/pottery-house/earnings', label: 'View payment' },
 }
 
 // Preview data only: these show native statuses, not qualified financial sends.

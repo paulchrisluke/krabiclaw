@@ -64,7 +64,7 @@ export default defineHandler(async (event) => {
       if (route.kind === 'choose') {
         return redirect(`${route.destination}?plan=${encodeURIComponent(plan)}`, 302)
       }
-      return redirect(`${route.destination}/settings/billing?plan=${encodeURIComponent(plan)}`, 302)
+      return redirect(`${route.destination}/settings/payments?tab=plan&plan=${encodeURIComponent(plan)}`, 302)
     }
     return redirect(route.destination, 302)
   } catch (error) {

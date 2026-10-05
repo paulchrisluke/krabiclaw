@@ -1,7 +1,4 @@
-import { paymentDisplay, paymentRefundsDisplay, paymentOrderDisplay } from './payment-display'
 import { isValidTimezone, isValidInstant } from '../utils/timezone'
-import type { PaymentDisplay, PaymentRefundDisplay, PaymentOrderDisplay } from './payment-display'
-import type { FormattedBookingPolicySummary } from '../server/utils/booking-policy-summary'
 
 export type AccountActivityKind = 'booking' | 'reservation' | 'order' | 'payment'
 export interface AccountActivityItem {
@@ -24,16 +21,7 @@ export interface AccountActivityItem {
   locationTitle: string | null
   partySize: number | null
 }
-export interface AccountActivityDetail extends AccountActivityItem {
-  payments: Array<{ payment: PaymentDisplay; refunds: PaymentRefundDisplay[]; order: PaymentOrderDisplay | null }>
-  policy: FormattedBookingPolicySummary | null
-  canCancel: boolean
-  contactEmail: string | null
-  contactPhone: string | null
-  threadId: string | null
-}
 export interface AccountActivityResponse { activities: AccountActivityItem[] }
-export interface AccountActivityDetailResponse { activity: AccountActivityDetail }
 
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value)
 const nullableString = (value: unknown) => value === null || typeof value === 'string'
@@ -52,20 +40,30 @@ export function isAccountActivityItem(value: unknown): value is AccountActivityI
 export function isAccountActivityResponse(value: unknown): value is AccountActivityResponse {
   return record(value) && Array.isArray(value.activities) && value.activities.every(isAccountActivityItem)
 }
-export function isAccountActivityDetailResponse(value: unknown): value is AccountActivityDetailResponse {
-  if (!record(value) || !isAccountActivityItem(value.activity) || !record(value.activity)) return false
-  const activity = value.activity
-  if (!Array.isArray(activity.payments)) return false
-  try {
-    for (const group of activity.payments) {
-      if (!record(group)) return false
-      paymentDisplay(group.payment)
-      paymentRefundsDisplay(group.refunds)
-      paymentOrderDisplay(group.order)
-    }
-  } catch { return false }
-  return (activity.policy === null || (record(activity.policy) && typeof activity.policy.heading === 'string' && Array.isArray(activity.policy.items) && activity.policy.items.every(item => record(item) && typeof item.id === 'string' && typeof item.text === 'string') && nullableString(activity.policy.additional_notes_html)))
-    && typeof activity.canCancel === 'boolean' && nullableString(activity.contactEmail) && nullableString(activity.contactPhone) && nullableString(activity.threadId)
+/** One line of Airbnb's "Your payments": money the account paid, or money that came back. */
+export interface BuyerPaymentEntry {
+  id: string
+  kind: 'paid' | 'refunded'
+  occurredAt: string
+  title: string
+  organizationName: string | null
+  /** Positive for a payment, negative for a refund, in minor units. */
+  amount: number
+  currency: string
+  /** The record this line belongs to, as an Activity path. */
+  to: string
+  imageUrl: string | null
+  /** The visit this paid for, when it still exists. */
+  visitStartsAt: string | null
+  visitEndsAt: string | null
+  timeZone: string | null
+}
+export function isBuyerPaymentEntry(value: unknown): value is BuyerPaymentEntry {
+  return record(value) && typeof value.id === 'string' && (value.kind === 'paid' || value.kind === 'refunded') && isValidInstant(value.occurredAt)
+    && nullableString(value.imageUrl) && nullableString(value.visitStartsAt) && nullableString(value.visitEndsAt) && nullableString(value.timeZone)
+    && typeof value.title === 'string' && !!value.title.trim() && nullableString(value.organizationName)
+    && typeof value.amount === 'number' && Number.isSafeInteger(value.amount) && (value.kind === 'paid' ? value.amount > 0 : value.amount < 0)
+    && typeof value.currency === 'string' && isAccountActivityPath(value.to)
 }
 
 export function isAccountActivityPath(value: unknown): value is string {

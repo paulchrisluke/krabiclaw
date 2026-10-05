@@ -1,6 +1,6 @@
 <template>
   <!-- A row on Menu, with its own controls: nothing here saves from a footer. -->
-  <DashboardLeafPanel id="organization-billing" title="Billing" :footer="false">
+  <div>
     <div class="space-y-6">
       <UAlert
         v-if="errorMessage"
@@ -31,17 +31,15 @@
         the only surface the Better Auth Stripe plugin exposes for it.
       -->
       <EditorNavigationList v-else :groups="groups" @act="onRowAction" />
-      <UButton :to="`/dashboard/${route.params.orgSlug}/settings/payments-billing`" variant="outline">Payments usage charges and invoices</UButton>
+      
     </div>
-  </DashboardLeafPanel>
+  </div>
 </template>
 
 <script setup lang="ts">
 import EditorNavigationList from '~/components/dashboard/EditorNavigationList.vue'
 import type { EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import { STARTER_PLAN_ID, isKnownBillingPlan, isNewSalePlan } from '~/shared/billing-model'
-
-definePageMeta({ layout: 'dashboard' })
 
 const route = useRoute()
 const router = useRouter()
@@ -172,6 +170,4 @@ onMounted(async () => {
     }
   }
 })
-
-useSeoMeta({ title: 'Billing | Krabiclaw Dashboard', robots: 'noindex, nofollow' })
 </script>

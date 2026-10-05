@@ -35,7 +35,6 @@ export function useOrganizationSettingsNavigation() {
             ...(dashboard.organization.value?.vertical === 'service'
               ? [{ id: 'products', label: requireProductPresentation('service', dashboard.organization.value.theme_id).collectionLabel, to: `${business.organization}/products` }]
               : []),
-            { id: 'payments', label: 'Payments', to: `${business.organization}/payments` },
             { id: 'pages', label: 'Pages', to: business.pages },
             { id: 'blog', label: 'Blog', to: business.blog },
             { id: 'qa', label: 'Reviews and Q&A', to: business.qa },
@@ -49,11 +48,12 @@ export function useOrganizationSettingsNavigation() {
       ...(isPlatformOrganization.value
         ? [{ id: 'people', label: 'Platform accounts', to: `${settingsPath.value}/people` }]
         : []),
-      { id: 'billing', label: 'Billing', to: `${settingsPath.value}/billing` },
       // The way to the account on a phone, where there is no header to carry an
       // avatar. Airbnb's mobile Menu lists "Account settings" in the same place,
       // second from last, above Log out (measured 2026-09-22).
       { id: 'account', label: 'Account settings', to: orgPaths.value.accountProfile },
+      // Airbnb's "Switch to travelling": the last row before Log out.
+      { id: 'switch-personal', label: 'Switch to Personal', action: {} },
       { id: 'log-out', label: 'Log out', action: {} },
     ]
   })

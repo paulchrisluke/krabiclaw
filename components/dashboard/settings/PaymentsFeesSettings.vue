@@ -1,5 +1,5 @@
 <template>
- <DashboardLeafPanel id="payments-billing" title="Payments billing" lead="Billed after use." :footer="false">
+ <div>
   <UAlert v-if="error" color="error" :description="error.message" /><USkeleton v-else-if="pending" class="h-24" />
   <template v-else-if="data">
    <p v-if="data.pricing" class="mb-3 text-sm text-muted">{{ data.pricing.livemode?'Billing rate':'Sandbox billing rate' }}: {{ data.pricing.captured_volume_rate_percent }}% of payment volume, plus Stripe fees.</p>
@@ -18,7 +18,7 @@
    <p v-if="!invoices.length" class="mt-2">No invoices yet.</p>
    <template v-if="credits.length"><h2 class="mt-6 font-semibold">Pending credits</h2><p class="mt-2 text-sm text-muted">Issue the credit in Stripe, then verify its credit note here.</p><UButton class="mt-3" to="https://dashboard.stripe.com/invoices" target="_blank" variant="outline">Open Stripe billing credits</UButton><section v-for="row in credits" :key="String(row.id)" class="border-b border-default py-6"><p>{{ paymentMoney(-Number(row.amount),row.currency) }} · {{ row.source_id }}</p><UButton class="mt-3" variant="outline" :disabled="working" @click="openCredit(String(row.id))">Verify credit note</UButton></section></template>
   </template><UAlert v-if="failure" class="mt-4" color="error" :description="failure" />
- </DashboardLeafPanel>
+ </div>
  <DashboardListItemDialog v-model:open="creditOpen" title="Verify credit note" :saving="working" :save-disabled="!creditNote.trim()" :error="failure" save-label="Verify credit" @save="settle">
   <UFormField label="Issued Stripe credit note ID"><UInput v-model="creditNote" placeholder="cn_…" :disabled="working" /></UFormField>
  </DashboardListItemDialog>
@@ -27,7 +27,6 @@
 import {paymentMoney} from '~/shared/payment-display'
 import {isCurrencyCode} from '~/shared/currencies'
 import DashboardListItemDialog from '~/components/dashboard/DashboardListItemDialog.vue'
-definePageMeta({layout:'dashboard'})
 const route=useRoute(),api=useDashboardApi(),working=ref(false),failure=ref(''),creditId=ref<string|null>(null),creditNote=ref('')
 const creditOpen=computed({get:()=>creditId.value!==null,set:(open:boolean)=>{if(!open){creditId.value=null;creditNote.value=''}}})
 const ratedMoney=new Intl.NumberFormat(undefined,{style:'currency',currency:'USD',maximumFractionDigits:20})

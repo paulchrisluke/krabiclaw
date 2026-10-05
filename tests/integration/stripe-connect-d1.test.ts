@@ -79,7 +79,7 @@ test('Connect callback URLs are built only from the configured platform origin a
   assert.deepEqual(
     buildStripeConnectOnboardingUrls('https://krabiclaw.com', 'sun-and-sea'),
     {
-      returnUrl: 'https://krabiclaw.com/dashboard/sun-and-sea/settings/integrations/stripe?stripe_connect=returned',
+      returnUrl: 'https://krabiclaw.com/dashboard/sun-and-sea/settings/payments?stripe_connect=returned',
       refreshUrl: 'https://krabiclaw.com/api/dashboard/connect/refresh?org=sun-and-sea',
     },
   )

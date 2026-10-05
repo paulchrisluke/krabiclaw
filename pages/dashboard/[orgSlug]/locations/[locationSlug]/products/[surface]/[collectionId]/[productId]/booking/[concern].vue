@@ -19,7 +19,7 @@
       <SettingRow v-model="p.form.online_payment_required" :disabled="!paymentEntitled && !p.form.online_payment_required" label="Require online payment for paid sessions" />
       <template v-if="!paymentEntitled">
         <p class="mt-4 text-sm text-muted">Online payments require Commerce. Paid sessions can be booked without online payment when this setting is off.</p>
-        <UButton class="mt-3" :to="`/dashboard/${route.params.orgSlug}/settings/billing`" variant="outline">View plans</UButton>
+        <UButton class="mt-3" :to="`/dashboard/${route.params.orgSlug}/settings/payments?tab=plan`" variant="outline">View plans</UButton>
       </template>
     </div>
     <LocationTimezoneField v-else-if="concern === 'location'" v-model="onlineTimezone" />

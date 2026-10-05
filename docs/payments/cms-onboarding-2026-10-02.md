@@ -7,7 +7,7 @@ active card payments and payouts, livemode=false and zero requirements. Earlier
 checkpoints below record the intermediate blockers; the final section records
 the completed result.
 
-CMS route: `/dashboard/{orgSlug}/settings/integrations/stripe`, under
+CMS route: `/dashboard/{orgSlug}/settings/payments`, under
 Settings → Integrations → Stripe. The tested local organization is
 `payments-proof-org` (`payments-local-proof`). Its single new sandbox seller is
 `acct_1ULvggRBlJ8qySB7`; no existing merchant was replaced or deleted.

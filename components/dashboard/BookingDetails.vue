@@ -49,10 +49,11 @@
             class="mb-6 aspect-[4/3] w-full rounded-xl object-cover"
           >
 
-          <h1 class="text-[32px] font-semibold leading-tight text-highlighted">{{ partyTitle }}</h1>
-          <p class="mt-1 text-base text-muted">{{ formattedDate }} <span aria-hidden="true">·</span> {{ booking.resourceTitle }}</p>
+          <!-- The business reads who is coming; the account reads what it booked and where. A purchase is what was bought, for both. -->
+          <h1 class="text-[32px] font-semibold leading-tight text-highlighted">{{ personalScope || purchase ? booking.resourceTitle : partyTitle }}</h1>
+          <p class="mt-1 text-base text-muted">{{ subline }}</p>
 
-          <template v-if="booking.type === 'booking'">
+          <template v-if="booking.type === 'booking' && !personalScope">
             <component :is="canChangeBooking ? NuxtLink : 'div'" :to="canChangeBooking ? `${editorPath}/team-member` : undefined" class="mt-6 flex items-center gap-4 border-y border-default py-6">
               <span class="min-w-0 flex-1"><span class="block text-base font-medium text-highlighted">Team member</span><span class="block text-sm text-muted">{{ booking.assignedMemberName || (booking.assignedMemberId ? 'Previously assigned member' : booking.organizationName) }}</span></span>
               <UIcon v-if="canChangeBooking" name="i-lucide-chevron-right" class="size-5 shrink-0 text-muted" />
@@ -62,7 +63,7 @@
           </template>
           <div class="mt-6 space-y-2">
             <UButton
-              v-if="canChangeBooking"
+              v-if="canChangeBooking && !personalScope"
               :label="`Change ${noun}`"
               color="neutral"
               variant="soft"
@@ -73,16 +74,25 @@
             />
             <UButton
               v-if="messageTo"
-              label="Message guest"
+              :label="personalScope ? 'Message' : 'Message guest'"
               color="neutral"
               variant="soft"
               block
               class="h-12 justify-center rounded-xl text-base font-medium"
               :to="messageTo"
             />
+            <UButton
+              v-if="personalScope && booking.contactPhone"
+              label="Call"
+              color="neutral"
+              variant="soft"
+              block
+              class="h-12 justify-center rounded-xl text-base font-medium"
+              :to="`tel:${booking.contactPhone.replace(/\s/g, '')}`"
+            />
           </div>
 
-          <div class="mt-8 grid grid-cols-2 gap-4 border-t border-default pt-6">
+          <div v-if="!purchase" class="mt-8 grid grid-cols-2 gap-4 border-t border-default pt-6">
             <div>
               <p class="text-base font-semibold text-highlighted">Date</p>
               <p class="mt-1 text-base text-muted">{{ formattedDate }}</p>
@@ -94,27 +104,36 @@
           </div>
 
           <PaymentDetails v-for="detail in booking.payments" :key="detail.payment.id" :payment="detail.payment" :refunds="detail.refunds" :order="detail.order">
-            <template #actions>
-              <UButton v-if="detail.payment.captured_amount > detail.payment.refunded_amount" class="mt-4" color="neutral" variant="soft" label="Refund payment" :to="`/dashboard/${orgSlug}/payments/transactions/${detail.payment.id}`" />
+            <template v-if="!personalScope && detail.payment.captured_amount > detail.payment.refunded_amount" #actions>
+              <!-- Airbnb's host sends money from the reservation; the amount is asked for on its own leaf. -->
+              <NuxtLink :to="{ path: `${editorPath}/refund`, query: { payment: detail.payment.id } }" class="flex items-center gap-4 border-t border-default py-4">
+                <span class="min-w-0 flex-1 text-base font-medium text-highlighted">Send a refund</span>
+                <UIcon name="i-lucide-chevron-right" class="size-5 shrink-0 text-muted" />
+              </NuxtLink>
             </template>
           </PaymentDetails>
 
           <div class="mt-6 border-t border-default pt-2">
-            <NuxtLink :to="`${editorPath}/guest`" class="flex items-center gap-4 py-4">
+            <!-- The business opens the guest; the account reads its own party, as Airbnb's "Who's coming". A purchase names its buyer and nothing opens. -->
+            <div v-if="personalScope && !purchase" class="py-4">
+              <p class="text-base font-medium text-highlighted">Who’s coming</p>
+              <p class="mt-1 text-sm text-muted">{{ guestCountLabel }}</p>
+            </div>
+            <component :is="purchase ? 'div' : NuxtLink" v-else-if="!personalScope && booking.guestName" :to="purchase ? undefined : `${editorPath}/guest`" class="flex items-center gap-4 py-4">
               <UAvatar :src="booking.guestImageUrl || undefined" :alt="booking.guestName" icon="i-lucide-user" size="md" class="shrink-0" />
               <span class="min-w-0 flex-1">
                 <span class="block text-base font-medium text-highlighted">{{ booking.guestName }}</span>
-                <span class="block text-sm text-muted">{{ guestCountLabel }}</span>
+                <span v-if="!purchase" class="block text-sm text-muted">{{ guestCountLabel }}</span>
               </span>
-              <UIcon name="i-lucide-chevron-right" class="size-5 shrink-0 text-muted" />
-            </NuxtLink>
+              <UIcon v-if="!purchase" name="i-lucide-chevron-right" class="size-5 shrink-0 text-muted" />
+            </component>
 
             <div v-if="booking.requests" class="border-t border-default py-4">
-              <p class="text-base font-medium text-highlighted">Guest requests</p>
+              <p class="text-base font-medium text-highlighted">{{ personalScope ? 'Your requests' : 'Guest requests' }}</p>
               <p class="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-muted">{{ booking.requests }}</p>
             </div>
 
-            <button type="button" class="flex w-full items-center gap-4 border-t border-default py-4 text-left" @click="policyOpen = true">
+            <button v-if="!purchase" type="button" class="flex w-full items-center gap-4 border-t border-default py-4 text-left" @click="policyOpen = true">
               <span class="min-w-0 flex-1">
                 <span class="block text-base font-medium text-highlighted">Cancellation policy</span>
                 <span class="block text-sm text-muted">{{ cancellationSummary }}</span>
@@ -122,7 +141,7 @@
               <UIcon name="i-lucide-chevron-right" class="size-5 shrink-0 text-muted" />
             </button>
 
-            <NuxtLink :to="`${editorPath}/notes`" class="flex items-center gap-4 border-t border-default py-4">
+            <NuxtLink v-if="!personalScope && !purchase" :to="`${editorPath}/notes`" class="flex items-center gap-4 border-t border-default py-4">
               <span class="min-w-0 flex-1">
                 <span class="block text-base font-medium text-highlighted">Your notes</span>
                 <span class="block text-sm text-muted">{{ notesSummary }}</span>
@@ -187,11 +206,14 @@
   >
     <div v-if="booking" class="space-y-5">
       <p class="text-sm leading-relaxed text-muted">{{ cancellationSummary }}</p>
-      <UFormField :label="`Add a note for ${firstName(booking.guestName)}`" hint="Optional">
+      <UFormField v-if="!personalScope" :label="`Add a note for ${firstName(booking.guestName ?? '')}`" hint="Optional">
         <UTextarea v-model="cancelNote" :rows="4" maxlength="500" class="w-full" placeholder="Let them know why, and what happens next." />
       </UFormField>
-      <p class="text-sm text-muted">
-        {{ firstName(booking.guestName) }} is told the {{ noun }} was cancelled{{ cancelNote.trim() ? ', with your note' : '' }}. This cannot be undone.
+      <p v-if="personalScope" class="text-sm text-muted">
+        {{ booking.organizationName }} is told the {{ noun }} was cancelled. Cancelling doesn’t refund a payment by itself. This cannot be undone.
+      </p>
+      <p v-else class="text-sm text-muted">
+        {{ firstName(booking.guestName ?? '') }} is told the {{ noun }} was cancelled{{ cancelNote.trim() ? ', with your note' : '' }}. This cannot be undone.
       </p>
       <div class="flex items-center justify-between gap-4 pt-1">
         <UButton :label="`Keep ${noun}`" color="neutral" variant="ghost" @click="cancelOpen = false" />
@@ -203,14 +225,14 @@
 
 <script lang="ts">
 import type { ComputedRef, InjectionKey, Ref } from 'vue'
-import type { DashboardBookingDetails, DashboardBookingType } from '~/server/utils/dashboard-booking-details'
+import type { DashboardBookingDetails, DashboardRecordType } from '~/server/utils/dashboard-booking-details'
 
 export interface BookingChangeDraft { bookingDate: string; bookingTime: string; partySize: number; locationId: string; sourceUpdatedAt: string }
 export type BookingChangeField = 'date' | 'time' | 'guests' | 'location'
 
 /** The record and the drafts its levels edit: one change request, one note. */
 export interface BookingEditor {
-  bookingType: DashboardBookingType
+  bookingType: DashboardRecordType
   refresh: () => Promise<void>
   booking: Ref<DashboardBookingDetails | null>
   noun: ComputedRef<string>
@@ -246,6 +268,7 @@ export const bookingEditorKey = Symbol('booking-editor') as InjectionKey<Booking
 
 <script setup lang="ts">
 import PaymentDetails from '~/components/dashboard/PaymentDetails.vue'
+import { authClient } from '~/lib/auth-client'
 import { NuxtLink } from '#components'
 import { formatCalendarDate, formatTime, formatTimestamp } from '~/utils/timezone'
 import DashboardListItemDialog from '~/components/dashboard/DashboardListItemDialog.vue'
@@ -253,34 +276,43 @@ import DashboardIndexPanel from '~/lib/components/workspace/dashboard/DashboardI
 import { getErrorMessage } from '~/utils/errors'
 
 const props = defineProps<{
-  bookingType: DashboardBookingType
+  bookingType: DashboardRecordType
   bookingId: string
   /** The record's canonical URL, which the rows that change it link into. */
   editorPath: string
   /** Mounted inside the guest thread's drawer, which already owns the column. */
   embedded?: boolean
+  /** The account that booked, reading its own record: no team controls, its own cancel. */
+  personalScope?: boolean
 }>()
 
 type ActionColor = 'success' | 'error' | 'neutral'
 
-const dashboardApi = useDashboardApi()
+const dashboardApi = props.personalScope ? applicationFetch : useDashboardApi()
 const realtime = useDashboardInvalidations()
 const actionError = ref<string | null>(null)
 const editorPath = computed(() => props.editorPath)
 // Owning the column means owning its header; inside the drawer it is a plain body.
 const chrome = computed(() => (props.embedded
   ? { class: 'flex min-h-0 flex-1 flex-col' }
-  : { id: 'booking-details', title: pageTitle.value, ui: { body: 'p-0 sm:p-0' } }))
+  : { id: props.personalScope ? 'account-booking-details' : 'booking-details', title: pageTitle.value, ui: { body: 'p-0 sm:p-0' } }))
 /** Which note a leaf is editing, or none for a new one. */
 const openNoteId = ref<string | null>(null)
 const selectedNote = computed(() => booking.value?.notes.find(note => note.id === openNoteId.value))
 
-const { resource, booking, pending, error, presentation, noun, pageTitle, orgSlug, refresh: refreshDetails } = await useBookingDetails(props.bookingType, props.bookingId)
+const { resource, booking, pending, error, presentation, noun, pageTitle, orgSlug, purchase, refresh: refreshDetails } = await useBookingDetails(props.bookingType, props.bookingId, props.personalScope)
 
 const formattedDate = computed(() => booking.value ? formatCalendarDate(booking.value.bookingDate, 'en') : '')
 const formattedTime = computed(() => {
-  if (!booking.value) return ''
+  if (!booking.value?.bookingTime) return ''
   return formatTime(booking.value.bookingTime, 'en')
+})
+// Under the title: when, then where it was booked or who bought it.
+const subline = computed(() => {
+  if (!booking.value) return ''
+  const when = purchase ? `${booking.value.type === 'order' ? 'Ordered' : 'Paid'} ${formattedDate.value}` : formattedDate.value
+  const who = props.personalScope ? booking.value.organizationName : purchase ? booking.value.guestName : booking.value.resourceTitle
+  return [when, who].filter(Boolean).join(' · ')
 })
 // The picture the panel leads with: the hero of the location this was booked at.
 const bookingImageUrl = computed(() => booking.value
@@ -290,8 +322,8 @@ const bookingImageUrl = computed(() => booking.value
 // group of 2". A single guest is just their name.
 const partyTitle = computed(() => {
   if (!booking.value) return ''
-  const size = booking.value.partySize
-  return size > 1 ? `${booking.value.guestName}'s group of ${size}` : booking.value.guestName
+  const size = booking.value.partySize ?? 0
+  return size > 1 ? `${booking.value.guestName}'s group of ${size}` : booking.value.guestName ?? ''
 })
 const notesSummary = computed(() => {
   const count = booking.value?.notes.length ?? 0
@@ -323,11 +355,11 @@ const changeFieldOriginal = ref<string | number | null>(null)
 const changeLocation = computed(() => booking.value?.locations.find(location => location.id === changeDraft.value.locationId))
 const changeDirty = computed(() => {
   if (!booking.value) return false
-  if (changeDraft.value.partySize !== booking.value.partySize) return true
+  if (changeDraft.value.partySize !== (booking.value.partySize ?? 1)) return true
   // Only the fields this kind can actually change count as a change.
   return props.bookingType === 'reservation' && (
     changeDraft.value.bookingDate !== booking.value.bookingDate
-    || changeDraft.value.bookingTime !== booking.value.bookingTime.slice(0, 5)
+    || changeDraft.value.bookingTime !== (booking.value.bookingTime ?? '').slice(0, 5)
     || changeDraft.value.locationId !== booking.value.locationId)
 })
 /**
@@ -395,8 +427,8 @@ function draftKey(field: BookingChangeField) {
 function resetChangeDraft() {
   if (!booking.value) return
   changeDraft.value.bookingDate = booking.value.bookingDate
-  changeDraft.value.bookingTime = booking.value.bookingTime.slice(0, 5)
-  changeDraft.value.partySize = booking.value.partySize
+  changeDraft.value.bookingTime = (booking.value.bookingTime ?? '').slice(0, 5)
+  changeDraft.value.partySize = booking.value.partySize ?? 1
   changeDraft.value.locationId = booking.value.locationId ?? ''
   changeDraft.value.sourceUpdatedAt = booking.value.updatedAt
   changeAttemptKey.value = null
@@ -412,6 +444,10 @@ function beginChange() {
 // and changing it is the link above.
 const availableActions = computed<Array<{ value: string; label: string; icon: string; color: ActionColor }>>(() => {
   if (!booking.value || !presentation.value || !booking.value.threadId) return []
+  // The account's one decision is its own cancellation, on the public cancel rule the server already answered.
+  if (props.personalScope) return booking.value.guestCanCancel
+    ? [{ value: 'cancel', label: `Cancel ${presentation.value.noun}`, icon: 'i-lucide-calendar-x', color: 'error' as const }]
+    : []
   if (booking.value.complete) return []
   if (booking.value.type === 'booking' && booking.value.status === 'pending') return [
     { value: 'confirm', label: `Confirm ${presentation.value.noun}`, icon: 'i-lucide-calendar-check', color: 'success' as const },
@@ -528,11 +564,20 @@ async function runAction(action: string) {
   pendingAction.value = action
   actionError.value = null
   try {
-    await dashboardApi(`/api/dashboard/organizations/${booking.value.organizationId}/guest-threads/${booking.value.threadId}/operations/${action}`, {
-      method: 'POST',
-      body: { idempotencyKey: actionAttempt.value.key, ...(note ? { body: note } : {}) },
-      validate: (value: unknown): value is { thread: Record<string, unknown> } => isRecord(value) && isRecord(value.thread),
-    })
+    if (props.personalScope) {
+      await applicationFetch('/api/account/cancel', {
+        method: 'POST',
+        body: { request_id: booking.value.threadId },
+        validate: (value: unknown): value is { success: true } => isRecord(value) && value.success === true,
+      })
+      await refreshNuxtData(`account-activity:${authClient.useSession().value.data?.user.id}`)
+    } else {
+      await dashboardApi(`/api/dashboard/organizations/${booking.value.organizationId}/guest-threads/${booking.value.threadId}/operations/${action}`, {
+        method: 'POST',
+        body: { idempotencyKey: actionAttempt.value.key, ...(note ? { body: note } : {}) },
+        validate: (value: unknown): value is { thread: Record<string, unknown> } => isRecord(value) && isRecord(value.thread),
+      })
+    }
     await refreshDetails()
     actionAttempt.value = null
     cancelOpen.value = false

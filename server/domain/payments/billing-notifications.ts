@@ -33,7 +33,7 @@ async function notifyInvoice(
       throw new Error('Payments invoice paid notification requires full native collection')
     }
     if (kind !== 'usage_invoice_paid' && (!['open', 'uncollectible'].includes(native.status ?? '') || native.amount_remaining <= 0)) continue
-    const deepLink = `/dashboard/${encodeURIComponent(organization.slug)}/settings/billing`
+    const deepLink = `/dashboard/${encodeURIComponent(organization.slug)}/settings/payments?tab=plan`
     await notifyFinancialNotification(env, db, {
       organizationId,
       eventKey: `payments.invoice:${Number(native.livemode)}:${native.id}:${kind}`,

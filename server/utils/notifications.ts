@@ -474,9 +474,9 @@ async function recordGuestCancellation(
     body: string
     wasConfirmed: boolean
   },
-): Promise<{ guestThreadId: string; sourceEntryId: string } | null> {
+): Promise<{ guestThreadId: string; sourceEntryId: string }> {
   const thread = await getGuestRequest(db, input.submissionId, undefined, input.submissionType)
-  if (!thread) return null
+  if (!thread) throw new Error('Guest cancellation has no canonical request')
   const entry = await appendEntry(db, {
     threadId: thread.id,
     kind: 'operation',
@@ -863,6 +863,10 @@ export async function notifyReservationCancelled(
       ...opts,
       submissionType: 'reservation',
       submissionId: opts.reservationId,
+      // The opening entry already carries the new_reservation alert and a source
+      // entry holds one notification, so this one hangs off the cancellation
+      // entry recorded above.
+      notificationSource: { threadId: threadContext.guestThreadId, entryId: threadContext.sourceEntryId },
       template: 'reservation_cancelled',
       title: ownerMessage.title,
       payload,
@@ -1179,6 +1183,10 @@ export async function notifyBookingCancelled(
       ...opts,
       submissionType: 'booking',
       submissionId: opts.bookingId,
+      // The opening entry already carries the new_booking alert and a source
+      // entry holds one notification, so this one hangs off the cancellation
+      // entry recorded above.
+      notificationSource: { threadId: threadContext.guestThreadId, entryId: threadContext.sourceEntryId },
       template: 'booking_cancelled',
       title: ownerMessage.title,
       payload,

@@ -39,14 +39,14 @@ export async function handlePaymentsTools(ctx:McpExecutorContext):Promise<unknow
   case 'request_payment_refund':{
    const dashboardUrl=dashboard()
    const prepared=await requestRefundAuthorization(db,principal,String(args.payment_id),Number(args.amount))
-   return {...prepared,approval_url:`${dashboardUrl}/payments/refunds/approve?id=${encodeURIComponent(prepared.authorization_id)}`}
+   return {...prepared,approval_url:`${dashboardUrl}/earnings/refunds/approve?id=${encodeURIComponent(prepared.authorization_id)}`}
   }
   case 'issue_payment_refund':return await refundPayment(db,stripe(),principal,String(args.authorization_id),env)
   case 'create_payment_checkout':
    await authorizePayments(principal,'create')
    if(!env.NUXT_PUBLIC_PLATFORM_DOMAIN) throw new Error('Payments HTTPS platform origin missing')
    return await createPaymentCheckout(db,stripe(),env,{organizationId,buyerUserId:null,productId:String(args.product_id),variantId:String(args.variant_id),quantity:Number(args.quantity),idempotencyKey:String(args.idempotency_key),returnOrigin:env.NUXT_PUBLIC_PLATFORM_DOMAIN})
-  case 'open_payments_onboarding':await authorizePayments(principal,'integration');return {organization_id:organizationId,onboarding_url:`${dashboard()}/settings/integrations/stripe`,source:'Authenticated merchant Stripe-native onboarding handoff'}
+  case 'open_payments_onboarding':await authorizePayments(principal,'integration');return {organization_id:organizationId,onboarding_url:`${dashboard()}/settings/payments`,source:'Authenticated merchant Stripe-native onboarding handoff'}
   default:return NOT_HANDLED
  }
 }

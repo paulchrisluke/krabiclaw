@@ -4,6 +4,7 @@ import {getDashboardContext} from '~/server/utils/dashboard-context'
 import {jsonResponse} from '~/server/utils/api-response'
 import {listPayments,paymentSummary,paymentPayouts,readPaymentDetails,authorizePayments} from '~/server/domain/payments'
 import {paymentsBillingPricing} from '~/server/domain/payments/usage'
+import {connectedStripe,paymentPayoutDetail,paymentPerformance,paymentTransactions,payoutItems} from '~/server/domain/payments/earnings'
 import {queryAll,queryFirst} from '~/server/db'
 export default defineHandler(async event=>{
  const {db,env,organization,userId}=await getDashboardContext(event,{})
@@ -15,7 +16,26 @@ export default defineHandler(async event=>{
  if(typeof query.payment_id==='string'){
   return jsonResponse(await readPaymentDetails(db,organization.id,query.payment_id))
  }
- if(query.view==='payouts')return jsonResponse(await paymentPayouts(db,env,principal,after))
+ if(query.view==='payouts'){
+  const result=await paymentPayouts(db,env,principal,after)
+  // The Earnings page draws the last paid payouts with what they carried; the full list does not need it.
+  if(query.with_items==='1'&&result.configured){
+   const {stripe,options}=await connectedStripe(db,env,organization.id)
+   const paid=result.payouts.filter(row=>row.status==='paid').slice(0,3)
+   const items=await Promise.all(paid.map(row=>payoutItems(db,stripe,options,organization.id,row.id)))
+   return jsonResponse({...result,items:Object.fromEntries(paid.map((row,index)=>[row.id,items[index]]))})
+  }
+  return jsonResponse(result)
+ }
+ if(query.view==='payout'){
+  if(typeof query.payout_id!=='string'||!query.payout_id)throw new HTTPError({statusCode:400,statusMessage:'Payout is required'})
+  return jsonResponse(await paymentPayoutDetail(db,env,principal,query.payout_id))
+ }
+ if(query.view==='performance'){
+  const year=Number(query.year??now.getUTCFullYear()),month=typeof query.month==='string'?query.month:`${now.getUTCFullYear()}-${String(now.getUTCMonth()+1).padStart(2,'0')}`
+  return jsonResponse(await paymentPerformance(db,principal,year,month))
+ }
+ if(query.view==='transactions')return jsonResponse(await paymentTransactions(db,principal,organization.slug,await listPayments(db,principal,{from,to,after})))
  if(query.view==='refunds' || query.view==='disputes'){
   if(query.view==='disputes') await authorizePayments(principal,'disputes')
   const table=query.view==='refunds'?'payment_refunds':'payment_disputes'

@@ -6,7 +6,7 @@ import { finalizeRequestMetrics } from '~/server/utils/request-metrics'
 
 export default defineHandler(async (event) => {
   const { env, db, organization } = await getDashboardContext(event, {})
-  const today = await listTodayAgenda(db, organization.id, {
+  const today = await listTodayAgenda(db, { organizationId: organization.id }, {
     organizationSlug: organization.slug,
     principal: { env, membership: organization },
   })

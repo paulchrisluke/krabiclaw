@@ -442,6 +442,52 @@ one place that tells them apart.
 with no collections, renders its own empty state. Containers that cannot be
 empty are a modelling error.
 
+## Parity is page-level, and a screen is built once
+
+What went wrong on 2026-10-05, written down so it is not repeated: a run of
+work shipped the right *concepts* — buyer Today, buyer Calendar, a purchase
+screen, an Earnings page — each as its own freshly drawn screen. They did not
+look like Airbnb, did not look like each other, and could not be maintained,
+because every one re-stated layout, copy and state that already existed.
+
+**Read the Airbnb page before drawing anything.** Open the actual screen in the
+owner's logged-in Chrome (`chrome.sh`), read its sections, headings, rows,
+button labels and card shapes, and mirror that structure. "Inspired by" is not
+parity. Earnings is Performance card → Upcoming → Paid → Reports; the account's
+Payments is sections with *Manage payments* → *Your payments*; Payouts is *How
+you get paid* rows + *Add payout method* + *Need help?*. When Airbnb has no
+equivalent, say so in a comment and keep the screen to the smallest honest
+thing — never invent a section to fill the space.
+
+**One screen per concept, scoped, never copied.** A second audience gets a
+`personal-scope` (or similar) prop on the existing component and a scope on the
+existing data source — `TodayPage`, `CalendarPage`, `BookingDetails`,
+`MessagesPage`, `AgendaFilters`, `PaymentDetails` all work this way. The buyer
+booking and the tenant booking are the same `BookingDetails`; a purchase is the
+same screen with no visit. If a new file under `pages/` contains markup for a
+list or a record, that is the smell: the markup belongs in the component the
+tenant already uses, and the page is a one-line mount.
+
+**One control per job.** Filters are one `AgendaFilters` popover, wherever
+filtering happens. Money words come from `paymentStateLabel`. The record screen
+is one `BookingDetails`. Two implementations of a thing means one is wrong.
+
+**Customer words, not system words.** "Paid", "Refunded", "On its way",
+"Amount paid", "Get receipt", "Send a refund", "Who's coming". Never
+"captured", "fulfillment", "recovery", "Review refund", "Refresh status", a
+Stripe id, or a UTC qualifier in something a customer or tenant reads. Status
+that must be re-read from a provider is re-read on load, not behind a button.
+
+**The picture leads, from real data.** Cards and rows carry the thing's photo —
+the place, the offering, the person's account picture — with an icon in the
+same footprint when there is none. Avatars come from Better Auth's
+`user.image` through the record that owns it; never a placeholder face.
+
+**Beautiful is the shared shell plus Airbnb's structure.** Rounded cards with a
+hairline ring, 24px rows separated by hairlines, one big figure per card, soft
+secondary buttons and one filled primary — and nothing else. A screen that
+needs a new visual device needs a reason written beside it.
+
 ## Where we deliberately differ from Airbnb
 
 Airbnb has no equivalent, so these are additions rather than parity, and each
