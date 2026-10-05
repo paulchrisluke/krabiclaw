@@ -133,9 +133,11 @@ export async function createPaymentCheckout(db: DbClient, stripe: Stripe, env: C
       throw new HTTPError({statusCode:409,statusMessage:'Session capacity is unavailable'})
     }
   }
+  // Airbnb keeps the card: a signed-in buyer is a Customer on this business's Stripe account, and Checkout offers their saved cards and keeps a new one.
+  const customer=input.buyerUserId?await queryFirst<{stripe_customer_id:string}>(db,'SELECT stripe_customer_id FROM payment_customers WHERE user_id=? AND stripe_account_id=? AND livemode=?',[input.buyerUserId,connected.stripeAccountId,Number(connected.livemode)]):null
   try {
-  const checkout = await stripe.checkout.sessions.create({mode:'payment',integration_identifier:'krabiclaw_payments_aqpfkmvz',automatic_tax:{enabled:automaticTax},line_items:[{price_data:{currency:price.currency.toLowerCase(),unit_amount:price.unit_amount,tax_behavior:price.tax_behavior,product_data:{name:projectionTitle,...(projectionTaxCode?{tax_code:projectionTaxCode}:{}),metadata:{krabiclaw_variant_id:input.variantId}}},quantity:input.quantity}],payment_method_configuration:methodConfigurationId,
-    payment_intent_data:{application_fee_amount:0,metadata:{krabiclaw_payment_id:id}},metadata:{krabiclaw_payment_id:id},client_reference_id:id,
+  const checkout = await stripe.checkout.sessions.create({mode:'payment',integration_identifier:'krabiclaw_payments_aqpfkmvz',...(input.buyerUserId?{...(customer?{customer:customer.stripe_customer_id}:{customer_creation:'always' as const}),saved_payment_method_options:{payment_method_save:'enabled' as const}}:{}),automatic_tax:{enabled:automaticTax},line_items:[{price_data:{currency:price.currency.toLowerCase(),unit_amount:price.unit_amount,tax_behavior:price.tax_behavior,product_data:{name:projectionTitle,...(projectionTaxCode?{tax_code:projectionTaxCode}:{}),metadata:{krabiclaw_variant_id:input.variantId}}},quantity:input.quantity}],payment_method_configuration:methodConfigurationId,
+    payment_intent_data:{application_fee_amount:0,metadata:{krabiclaw_payment_id:id},...(input.buyerUserId?{setup_future_usage:'off_session' as const}:{})},metadata:{krabiclaw_payment_id:id},client_reference_id:id,
     expires_at:Math.floor(Date.parse(expiresAt)/1000),success_url:new URL(`/account?payment_id=${encodeURIComponent(id)}&purchase_claim=${encodeURIComponent(returnToken)}`,origin).toString(),cancel_url:new URL('/account?payment=cancelled',origin).toString(),
   },{stripeAccount:connected.stripeAccountId,idempotencyKey:key})
   if (!checkout.url || checkout.livemode !== connected.livemode) throw new Error('Stripe Checkout returned invalid scoped handoff')

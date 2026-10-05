@@ -69,6 +69,16 @@ CREATE TABLE `payment_checkout_holds` (
 CREATE UNIQUE INDEX `payment_checkout_holds_payment_id_unique` ON `payment_checkout_holds` (`payment_id`);--> statement-breakpoint
 CREATE INDEX `payment_holds_capacity_idx` ON `payment_checkout_holds` (`session_id`,`status`,`expires_at`);--> statement-breakpoint
 CREATE INDEX `payment_holds_calendar_idx` ON `payment_checkout_holds` (`organization_id`,`calendar_group`,`status`,`expires_at`);--> statement-breakpoint
+CREATE TABLE `payment_customers` (
+	`user_id` text NOT NULL,
+	`stripe_account_id` text NOT NULL,
+	`livemode` integer NOT NULL,
+	`stripe_customer_id` text NOT NULL,
+	`created_at` text NOT NULL,
+	PRIMARY KEY(`user_id`, `stripe_account_id`, `livemode`),
+	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
 CREATE TABLE `payment_claims` (
 	`token_hash` text PRIMARY KEY NOT NULL,
 	`payment_id` text NOT NULL,

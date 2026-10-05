@@ -109,8 +109,8 @@ test.describe('dashboard pane hierarchy', () => {
     await expect(page).toHaveURL(`${ORG}/settings/integrations/google-maps`)
     await expectPanes(page, ['organization-integrations', 'integration-google-maps'])
 
-    // Payments is one page with Airbnb's tabs, reached from the Earnings cog; Payouts is the first tab.
-    await open(page, `${ORG}/settings/payments`)
+    // Payments is one page with Airbnb's tabs, reached from the Earnings cog; Payments is the first tab.
+    await open(page, `${ORG}/settings/payments?tab=payouts`)
     await expect(page.getByRole('heading', { name: 'How you get paid', exact: true })).toBeVisible()
     await page.getByRole('tab', { name: 'Plan', exact: true }).click()
     await expect(page).toHaveURL(`${ORG}/settings/payments?tab=plan`)
@@ -152,8 +152,10 @@ test.describe('dashboard pane hierarchy', () => {
     await page.locator('#dashboard-panel-organization-products [data-testid="dashboard-navbar-back"]').click()
     await expect(page).toHaveURL(`${services}/settings`)
 
-    await open(page, `${ORG}/settings/payments?tab=fees`)
-    await expect(page.getByText('No usage waiting to be reported.', { exact: true })).toBeVisible()
+    await open(page, `${ORG}/settings/payments`)
+    await expect(page.getByRole('heading', { name: 'Payment methods', exact: true })).toBeVisible()
+    await open(page, `${ORG}/settings/payments?tab=plan`)
+    await expect(page.getByText(/^(Manage|Choose a plan)$/)).toBeVisible()
     await open(page, '/account')
     await expect(page).toHaveURL('/dashboard/account')
     await expect(mobileNav.getByRole('link')).toHaveText(['Today', 'Calendar', 'Messages', 'Menu'])

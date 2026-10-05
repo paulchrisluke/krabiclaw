@@ -46,7 +46,7 @@ export async function handlePaymentsTools(ctx:McpExecutorContext):Promise<unknow
    await authorizePayments(principal,'create')
    if(!env.NUXT_PUBLIC_PLATFORM_DOMAIN) throw new Error('Payments HTTPS platform origin missing')
    return await createPaymentCheckout(db,stripe(),env,{organizationId,buyerUserId:null,productId:String(args.product_id),variantId:String(args.variant_id),quantity:Number(args.quantity),idempotencyKey:String(args.idempotency_key),returnOrigin:env.NUXT_PUBLIC_PLATFORM_DOMAIN})
-  case 'open_payments_onboarding':await authorizePayments(principal,'integration');return {organization_id:organizationId,onboarding_url:`${dashboard()}/settings/payments`,source:'Authenticated merchant Stripe-native onboarding handoff'}
+  case 'open_payments_onboarding':await authorizePayments(principal,'integration');return {organization_id:organizationId,onboarding_url:`${dashboard()}/settings/payments?tab=payouts`,source:'Authenticated merchant Stripe-native onboarding handoff'}
   default:return NOT_HANDLED
  }
 }

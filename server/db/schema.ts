@@ -2407,6 +2407,14 @@ export const payment_authorizations = sqliteTable("payment_authorizations", {
  consumed_at: text(),
 });
 
+/** The buyer's Stripe Customer on a business's connected account: Stripe keeps the cards, this keeps which customer is theirs. */
+export const payment_customers = sqliteTable("payment_customers", {
+ user_id: text().notNull().references(() => user.id, { onDelete: "cascade" }),
+ stripe_account_id: text().notNull(),
+ livemode: integer().notNull(),
+ stripe_customer_id: text().notNull(),
+ created_at: text().notNull(),
+}, t => [primaryKey({ columns: [t.user_id, t.stripe_account_id, t.livemode] })]);
 export const payment_claims = sqliteTable("payment_claims", {
  token_hash: text().primaryKey(),
  payment_id: text().notNull().references(() => payments.id, { onDelete: "restrict" }),

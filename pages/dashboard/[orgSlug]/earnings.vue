@@ -130,9 +130,9 @@ const reports = computed(() => [1, 2, 3].map((offset) => {
 
 // Airbnb's cog: "Settings and documents" — the Payments page's tabs, and the payment link.
 const settingsItems = computed(() => [[
-  { label: 'Payout settings', icon: 'i-lucide-landmark', to: `/dashboard/${route.params.orgSlug}/settings/payments` },
+  { label: 'Payments', icon: 'i-lucide-credit-card', to: `/dashboard/${route.params.orgSlug}/settings/payments` },
+  { label: 'Payout settings', icon: 'i-lucide-landmark', to: `/dashboard/${route.params.orgSlug}/settings/payments?tab=payouts` },
   { label: 'Plan', icon: 'i-lucide-badge-check', to: `/dashboard/${route.params.orgSlug}/settings/payments?tab=plan` },
-  { label: 'Fees and invoices', icon: 'i-lucide-file-text', to: `/dashboard/${route.params.orgSlug}/settings/payments?tab=fees` },
 ], [
   { label: 'Create a payment link', icon: 'i-lucide-link', to: `${level.path.value}/checkout` },
 ]])

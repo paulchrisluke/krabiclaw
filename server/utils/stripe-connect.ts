@@ -128,6 +128,7 @@ export function buildStripeConnectOnboardingUrls(
     throw new Error('Stripe Connect organization slug is invalid')
   }
   const returnUrl = new URL(`/dashboard/${encodeURIComponent(organizationSlug)}/settings/payments`, origin)
+  returnUrl.searchParams.set('tab', 'payouts')
   returnUrl.searchParams.set('stripe_connect', 'returned')
   const refreshUrl = new URL('/api/dashboard/connect/refresh', origin)
   refreshUrl.searchParams.set('org', organizationSlug)
