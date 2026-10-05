@@ -266,6 +266,8 @@ test.describe('dashboard pane hierarchy', () => {
     expect(members.length).toBeGreaterThan(0)
     const member = members[0]!
     await open(page, `${ORG}/calendar`)
+    // The selects sit behind the one Filters control, as Airbnb keeps them.
+    await page.getByRole('button', { name: 'Filter bookings', exact: true }).click()
     const filter = page.getByRole('combobox', { name: 'Assigned person' })
     await expect(filter).toContainText('All assigned people')
     await filter.click()
