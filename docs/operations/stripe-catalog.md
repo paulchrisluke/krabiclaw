@@ -154,7 +154,7 @@ Apply defaults to test mode (`sk_test_` or `rk_test_`). Live apply requires
 `--require-live-mode` on the reviewed plan and apply commands. Apply is refused
 unless the key and plan have the selected mode, the
 plan hash is intact, the confirmation matches exactly, the plan is
-and bound to the current exact Stripe account, local image files still match
+bound to the current exact Stripe account, local image files still match
 their planned hashes, and the provider snapshot is unchanged when a new
 journal starts. During resume, each pending operation revalidates its signed
 target and canonical safety boundary against a fresh snapshot. A failed
@@ -186,8 +186,8 @@ handoff. Ownership mode accepts the
 inventory's exact account and mode, including live, and changes only Customer
 metadata, non-canceled Subscription metadata, and the existing webhook URL. Run
 this during the canonical release cutover, before removing the old webhook route
-from production. The current request authorizes staging only; production execution
-belongs to the owner.
+from production. Execute only for the exact environment and account authorized
+by the operator.
 
 Create a private JSON inventory from the verified epoch export's Better Auth
 Organization customer IDs and the read-only Stripe endpoint census:
