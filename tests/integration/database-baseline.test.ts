@@ -88,6 +88,42 @@ test('a v7 export transfers into the current baseline, its connections into orga
   }
 })
 
+test('a v11 export transfers into the v12 baseline, which has no capability overrides', async () => {
+  const { transferDatabaseExport } = await import('../../scripts/transfer-database-export.mjs')
+  const directory = mkdtempSync(join(tmpdir(), 'krabiclaw-v11-transfer-'))
+  const v11 = JSON.parse(readFileSync('migrations-history/v11/meta/_journal.json', 'utf8')).entries.map((entry: { tag: string }) => `${entry.tag}.sql`) as string[]
+  const export11 = (name: string, overrides: string | null) => {
+    const path = join(directory, name)
+    const source = new Database(path)
+    for (const file of v11) source.exec(readFileSync(`migrations-history/v11/${file}`, 'utf8'))
+    source.exec(`CREATE TABLE "d1_migrations"(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL);
+      ${v11.map(file => `INSERT INTO d1_migrations (name) VALUES ('${file}');`).join('\n')}`)
+    source.prepare("INSERT INTO organization (id, name, slug, subdomain, feature_overrides) VALUES ('org', 'Org', 'org', 'org', ?)").run(overrides)
+    source.prepare("INSERT INTO organization_locales (id, organization_id, locale, is_source, status) VALUES ('org-en', 'org', 'en', 1, 'published')").run()
+    source.close()
+    return path
+  }
+  try {
+    const targetPath = join(directory, 'v12.sqlite')
+    const manifest = transferDatabaseExport(export11('v11.sqlite', null), targetPath)
+    assert.deepEqual(manifest.source_migrations, v11)
+    const target = new Database(targetPath, { readonly: true })
+    try {
+      assert.deepEqual(target.pragma('foreign_key_check'), [])
+      assert.equal((target.prepare("SELECT slug FROM organization WHERE id = 'org'").get() as { slug: string }).slug, 'org')
+      for (const table of ['organization', 'business_locations']) {
+        assert.equal((target.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).some(column => column.name === 'feature_overrides'), false)
+      }
+    } finally {
+      target.close()
+    }
+    // An override nothing maps stops the transfer rather than disappearing.
+    assert.throws(() => transferDatabaseExport(export11('override.sqlite', '{"reservations":false}'), join(directory, 'target-override.sqlite')), /organization.feature_overrides holds values nothing maps/)
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
+
 test('consultation settings move preserves every value with one canonical source and referenced organization', () => {
   const db = new Database(':memory:')
   db.pragma('foreign_keys = ON')
