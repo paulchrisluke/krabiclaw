@@ -78,6 +78,12 @@ test('committed consultation projection is tenant scoped, private, idempotent an
     await syncCalendarOrganization(env, 'org', 25, provider)
     assert.equal(events.size, 1)
     assert.equal(events.get(String(link?.event_id))?.summary, 'Booking — Jane Doe')
+    // A booking moved to a team member updates the same event to name them.
+    await db.prepare("INSERT INTO member(id,organizationId,userId,role,createdAt) VALUES('member-owner','org','owner','owner',?)").bind(Date.now()).run()
+    await db.prepare("UPDATE bookings SET assigned_member_id='member-owner',updated_at=? WHERE id=?").bind(new Date().toISOString(), bookingId).run()
+    await syncCalendarOrganization(env, 'org', 25, provider)
+    assert.equal(events.size, 1)
+    assert.equal(events.get(String(link?.event_id))?.description, 'Status: confirmed\nTeam member: Owner\nhttps://krabiclaw.test/dashboard/org/messages/thread')
     await updateSession(db, { organizationId: 'org', sessionId: 's', actorId: 'actor', startsAt: '2099-11-01T15:00:00.000Z', endsAt: '2099-11-01T15:30:00.000Z' })
     cancelDuringPut = true
     await syncCalendarOrganization(env, 'org', 25, provider)
