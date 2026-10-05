@@ -163,7 +163,7 @@
               <span class="block text-[11px] text-muted">{{ formatCalendarDate(dayKey, 'en', { weekday: 'short' }) }}</span>
             </NuxtLink>
             <div class="min-w-0">
-              <AgendaRow v-for="item in itemsOn(dayKey)" :key="item.id" :item="item" :to="personalScope ? undefined : `${dayTo(dayKey)}/${item.kind}/${encodeURIComponent(item.id.slice(item.kind.length + 1))}`" />
+              <AgendaRow v-for="item in itemsOn(dayKey)" :key="item.id" :item="item" :to="personalScope ? undefined : `${level.path.value}/${dayKey}/${item.kind}/${encodeURIComponent(item.id.slice(item.kind.length + 1))}`" />
             </div>
           </div>
         </div>
