@@ -11,7 +11,12 @@ export interface StripeWebhookEventInput {
 
 const WEBHOOK_LEASE_MS = 5 * 60 * 1000
 
-/** Deduplicate concurrent handlers; Stripe owns failed-delivery retries. */
+/**
+ * Deduplicate concurrent handlers; Stripe owns failed-delivery retries.
+ * Automatic retries stop after three days in live mode, or three retries over a few hours in Sandbox.
+ * attempt_count records deliveries; manual redelivery remains available after a repair.
+ * https://docs.stripe.com/webhooks#automatic-retries
+ */
 export async function processStripeWebhookEvent(
   db: DbClient,
   event: StripeWebhookEventInput,

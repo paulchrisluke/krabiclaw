@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import Stripe from 'stripe'
+import { HTTPError } from 'nitro'
 import { Miniflare } from 'miniflare'
 import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api'
 import * as schema from '../../server/db/schema.ts'
@@ -9,6 +10,9 @@ import { ingestStripeFeeReport, stripeFeeMinor } from '../../server/domain/payme
 import { buyerPayments, claimCheckoutReturn, tokenHash } from '../../server/domain/payments/buyer.ts'
 import { retainPaymentsForTenantDeletion } from '../../server/domain/payments/retention.ts'
 import paymentsReconcile from '../../server/tasks/payments-reconcile.ts'
+import { deliverPaymentsUsage, paymentsUsageStatus, reconcileNativeBillingCredit } from '../../server/domain/payments/usage.ts'
+import { getStripe } from '../../server/utils/billing.ts'
+import type { CloudflareEnv } from '../../server/utils/auth.ts'
 const ORG = 'payments-org', NOW = '2026-10-01T00:00:00.000Z'
 async function boot(){
  const runtime=new Miniflare({workers:[{config:{name:'payments-proof',type:'worker',compatibilityDate:'2024-11-01',manifest:{mainModule:'index.mjs',modules:{'index.mjs':{type:'esm',contents:'export default {fetch(){return new Response("ok")}}'}}},env:{DB:{type:'d1'}}}}]})
@@ -180,5 +184,82 @@ test('failed historical reconciliation rotates later payments while reporting ev
    }
    snapshots.push(after)
   }
+ }finally{await runtime.dispose()}
+})
+
+test('owner-serviced credits leave the usage batch without hiding credits or starving later delivery', {timeout:120000},async(t)=>{
+ const {db,runtime}=await boot();try{
+  const customer='11111111-1111-4111-8111-111111111111',contractId='22222222-2222-4222-8222-222222222222',rateCard='33333333-3333-4333-8333-333333333333'
+  const start='2026-09-01T00:00:00.000Z',occurred='2026-09-30T23:00:00.000Z'
+  await db.prepare("INSERT INTO payment_billing_accounts(organization_id,stripe_billing_customer_id,metronome_customer_id,metronome_contract_id,contract_start_at,currency,status,updated_at)VALUES(?,'cus_operating',?,?,?,'USD','servicing',?)").bind(ORG,customer,contractId,start,NOW).run()
+  const credits=Array.from({length:100},(_,index)=>({id:`credit-${String(index).padStart(3,'0')}`,source:`fee-credit:${index}`,createdAt:new Date(Date.parse(NOW)+index*1000).toISOString()}))
+  await db.batch(credits.map(credit=>db.prepare("INSERT INTO payment_usage_events(id,organization_id,kind,currency,amount,source_id,provider_occurred_at,created_at)VALUES(?,?,'stripe_cost_adjustment','USD',-100,?,?,?)").bind(credit.id,ORG,credit.source,occurred,credit.createdAt)))
+  await db.prepare("INSERT INTO payment_usage_events(id,organization_id,kind,currency,amount,source_id,provider_occurred_at,created_at)VALUES('billable',?,'captured_volume','USD',10000,'capture:billable',?,?)").bind(ORG,NOW,new Date(Date.parse(NOW)+100000).toISOString()).run()
+  const before=(await db.prepare('SELECT * FROM payment_usage_events ORDER BY created_at').all()).results
+  assert.equal(before.length,101)
+  assert.deepEqual(before.map(event=>event.id),[...credits.map(credit=>credit.id),'billable'])
+  const native={id:contractId,customer_id:customer,uniqueness_key:`payments:${ORG}`,rate_card_id:rateCard,starting_at:start,customer_billing_provider_configuration:{customer_id:customer,billing_provider:'stripe',delivery_method:'direct_to_billing_provider',configuration:{stripe_customer_id:'cus_operating',stripe_collection_method:'charge_automatically'},delivery_method_configuration:{stripe_account_id:'acct_platform'}}}
+  const invoice={id:'44444444-4444-4444-8444-444444444444',customer_id:customer,contract_id:contractId,type:'USAGE',status:'FINALIZED',start_timestamp:start,end_timestamp:NOW,credit_type:{id:'55555555-5555-4555-8555-555555555555',name:'USD (cents)'},total:10000,external_invoice:null}
+  let ended=true
+  const ingests:unknown[][]=[],creditReads:string[]=[],originalFetch=globalThis.fetch
+  // External reads are inputs; failed writes never fabricate native acceptance or settlement.
+  t.mock.method(globalThis,'fetch',async(input,init)=>{
+   const url=new URL(input instanceof Request?input.url:String(input))
+   if(url.origin==='https://api.metronome.com'){
+    const body=init?.body?JSON.parse(String(init.body)):undefined
+    const readContract={...native,...(ended?{ending_before:'2026-10-02T00:00:00.000Z'}:{})}
+    if(url.pathname==='/v2/contracts/get'){assert.equal(init?.method,'POST');assert.deepEqual(body,{customer_id:customer,contract_id:contractId});return Response.json({data:readContract})}
+    if(url.pathname==='/v2/contracts/list'){assert.equal(init?.method,'POST');assert.deepEqual(body,{customer_id:customer,limit:20});return Response.json({data:[readContract]})}
+    if(url.pathname===`/v1/customers/${customer}/invoices`){assert.equal(init?.method,'GET');assert.equal(url.searchParams.get('contract_id'),contractId);return Response.json({data:[invoice]})}
+    assert.equal(url.pathname,'/v1/ingest')
+    assert.equal(init?.method,'POST')
+    assert.ok(Array.isArray(body))
+    ingests.push(body)
+    return Response.json({message:'Ingest unavailable at the external test boundary'},{status:503})
+   }
+   if(url.origin==='https://api.stripe.com'){
+    assert.equal(init?.method,'GET')
+    if(url.pathname==='/v1/account')return Response.json({id:'acct_platform',object:'account',livemode:false})
+    assert.equal(url.pathname,'/v1/credit_notes/cn_owner_credit')
+    creditReads.push(url.pathname)
+    return Response.json({error:{type:'invalid_request_error',code:'resource_missing',message:'No such credit_note'}},{status:404,headers:{'stripe-should-retry':'false'}})
+   }
+   return originalFetch(input,init)
+  })
+  const env={DB:db,STRIPE_SECRET_KEY:'sk_test_credit_boundary',METRONOME_API_KEY:'metronome_external_boundary',METRONOME_RATE_CARD_ID:rateCard} as CloudflareEnv
+  const began=Date.now()
+  assert.deepEqual(await deliverPaymentsUsage(db,env,ORG),{delivered:0})
+  const finished=Date.now(),after=(await db.prepare('SELECT * FROM payment_usage_events ORDER BY created_at').all()).results
+  assert.equal(after.length,101)
+  assert.deepEqual(after.map(({error,dead_letter_at,...event})=>event),before.map(({error,dead_letter_at,...event})=>event))
+  const error='Closed-period actual-cost credit requires native Stripe credit memo settlement; retained for owner servicing'
+  for(const event of after.slice(0,100)){assert.equal(event.error,error);assert.equal(typeof event.dead_letter_at,'string');assert.ok(Date.parse(String(event.dead_letter_at))>=began&&Date.parse(String(event.dead_letter_at))<=finished)}
+  assert.deepEqual(after[100],before[100])
+  assert.equal(ingests.length,0)
+  const status=await paymentsUsageStatus(db,env,ORG)
+  assert.equal(status.account?.status,'closed')
+  assert.deepEqual(status.pending,[{currency:'USD',kind:'captured_volume',event_count:1,amount:10000,error:null},{currency:'USD',kind:'stripe_cost_adjustment',event_count:100,amount:-10000,error}])
+  assert.deepEqual(status.credits.map(event=>({id:event.id,source_id:event.source_id,amount:event.amount,error:event.error})),credits.map(credit=>({id:credit.id,source_id:credit.source,amount:-100,error})))
+  // A subsequent native read reports the same contract open; held credits stay owner-serviced.
+  ended=false
+  for(let attempt=0;attempt<2;attempt++)await assert.rejects(()=>deliverPaymentsUsage(db,env,ORG),failure=>{assert.ok(failure instanceof HTTPError);assert.equal(failure.status,502);assert.equal(failure.data?.provider_status,503);return true})
+  assert.equal(ingests.length,2)
+  assert.deepEqual(ingests[1],ingests[0])
+  assert.equal(ingests[0]?.length,1)
+  const ingest=ingests[0]?.[0] as {customer_id:string;timestamp:string;event_type:string;properties:Record<string,string>}
+  assert.equal(ingest.customer_id,customer)
+  assert.equal(ingest.timestamp,NOW)
+  assert.equal(ingest.event_type,'payments_captured_volume')
+  assert.equal(ingest.properties.payment_source,'capture:billable')
+  assert.equal(ingest.properties.amount_minor,'10000')
+  await assert.rejects(()=>reconcileNativeBillingCredit(db,getStripe(env),env,{organizationId:ORG,userId:'verified',role:'owner'},credits[0]!.id,'cn_owner_credit'),failure=>{assert.ok(failure instanceof Stripe.errors.StripeInvalidRequestError);assert.equal(failure.code,'resource_missing');return true})
+  assert.deepEqual(creditReads,['/v1/credit_notes/cn_owner_credit'])
+  const retained=(await db.prepare('SELECT * FROM payment_usage_events ORDER BY created_at').all()).results
+  assert.equal(retained.length,101)
+  assert.deepEqual(retained.slice(0,100),after.slice(0,100))
+  assert.equal(retained[100]?.delivery_at,null)
+  assert.equal(retained[100]?.dead_letter_at,null)
+  assert.equal(retained[100]?.billing_timestamp,NOW)
+  assert.match(String(retained[100]?.error),/Metronome request failed \(503\)/u)
  }finally{await runtime.dispose()}
 })

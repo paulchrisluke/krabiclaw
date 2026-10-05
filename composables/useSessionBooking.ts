@@ -281,8 +281,9 @@ export function useSessionBooking(input: MaybeRefOrGetter<SessionBookingContext>
     } catch (error) {
       // Unknown provider outcomes retain their key so retries cannot create a second payment.
       const response = isRecord(error) && isRecord(error.data) ? error.data : null
-      if ((isRecord(error) && error.code === 'checkout_expired') || response?.code === 'checkout_expired'
-        || (isRecord(response?.data) && response.data.code === 'checkout_expired')) {
+      if ((isRecord(error) && (error.code === 'checkout_expired' || error.code === 'checkout_failed'))
+        || response?.code === 'checkout_expired' || response?.code === 'checkout_failed'
+        || (isRecord(response?.data) && (response.data.code === 'checkout_expired' || response.data.code === 'checkout_failed'))) {
         checkoutRequestKey.value = null
         checkoutFingerprint = null
       }

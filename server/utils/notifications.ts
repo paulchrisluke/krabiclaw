@@ -1429,7 +1429,7 @@ export async function notifyGuestCancellation(env: NotificationEnv, db: DbClient
   const request = cancelled.request
   const record = cancelled.record
   const organizationId = request.organization_id
-  const summary = await requestSummary(db, request)
+  if (record.kind === 'booking' && !record.product_name?.trim()) throw new Error('Booking cancellation delivery requires its canonical offering')
   await publishGuestInboxThreadEvent(env, db, { threadId: request.id, type: 'thread.changed' })
 
   const organization = await queryFirst<{ name?: string | null }>(db, 'SELECT name FROM organization WHERE id = ? LIMIT 1', [organizationId])
@@ -1439,11 +1439,12 @@ export async function notifyGuestCancellation(env: NotificationEnv, db: DbClient
       organizationId: request.organization_id, organizationName: organization?.name,
       locationId: record.location_id, bookingId: request.id, guestName: request.payload.guest.name,
       email: request.payload.guest.email, guestPhone: request.payload.guest.phone,
-      productTitle: record.product_name ?? summary.productTitle ?? '',
+      productTitle: record.product_name!,
       startsAt: record.starts_at, timezone: record.timezone, partySize: record.party_size,
       notes: request.payload.notes, wasConfirmed: cancelled.wasConfirmed,
     })
   } else {
+    const summary = await requestSummary(db, request)
     // The reservation email states a calendar date and a clock time, so the
     // instant is read back in the reservation's own zone rather than the
     // worker's.

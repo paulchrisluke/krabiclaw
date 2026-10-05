@@ -207,7 +207,7 @@ export async function deliverPaymentsUsage(db:DbClient,env:CloudflareEnv,organiz
   if(event.billing_timestamp && usageBillingDecision({...event,provider_occurred_at:event.billing_timestamp},invoices,undefined,account.contract_start_at).adjustment){
    await execute(db,'UPDATE payment_usage_events SET error=?,dead_letter_at=? WHERE id=?',['Previously attempted usage period has closed; reconcile native acceptance before retiming this event',new Date().toISOString(),event.id]);continue
   }
-  if(decision.requiresCredit){await execute(db,'UPDATE payment_usage_events SET error=? WHERE id=?',['Closed-period actual-cost credit requires native Stripe credit memo settlement; retained for owner servicing',event.id]);continue}
+  if(decision.requiresCredit){await execute(db,'UPDATE payment_usage_events SET error=?,dead_letter_at=? WHERE id=?',['Closed-period actual-cost credit requires native Stripe credit memo settlement; retained for owner servicing',new Date().toISOString(),event.id]);continue}
   const timestamp=event.billing_timestamp ?? decision.timestamp
   await execute(db,'UPDATE payment_usage_events SET billing_timestamp=COALESCE(billing_timestamp,?) WHERE id=?',[timestamp,event.id])
   if(Date.now()-Date.parse(timestamp)>34*86400000){
