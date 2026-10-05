@@ -104,7 +104,7 @@ test('Connect webhook work is claimed once across concurrent D1 deliveries', asy
       await finish.promise
     }
     const processing = processStripeWebhookEvent(db, event, work)
-    await Promise.race([started.promise, processing])
+    assert.equal(await Promise.race([started.promise.then(() => 'started'), processing.then(() => 'settled')]), 'started')
     try {
       assert.equal(await processStripeWebhookEvent(db, event, work), false)
     } finally {
