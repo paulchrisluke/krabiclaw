@@ -27,17 +27,18 @@ export function resolveGuestThreadMailbox(
   thread: Pick<GuestRequest, 'archived_at'>,
   record: Pick<ThreadOperationalRecord, 'ends_at'> | null,
   now: string,
+  audience: 'member'|'buyer' = 'member',
 ): GuestThreadMailboxState {
-  const manuallyArchived = thread.archived_at !== null
+  const manuallyArchived = audience==='member' && thread.archived_at !== null
   const occurrenceEnded = record !== null && record.ends_at < now
   const mailbox: GuestThreadMailbox = manuallyArchived || occurrenceEnded ? 'past' : 'current'
   return {
     mailbox,
     manuallyArchived,
     occurrenceEnded,
-    canArchive: mailbox === 'current',
+    canArchive: audience==='member' && mailbox === 'current',
     // An ended occurrence is Past by the clock; taking the archive flag off
     // would not bring it back, so it is not offered.
-    canUnarchive: manuallyArchived && !occurrenceEnded,
+    canUnarchive: audience==='member' && manuallyArchived && !occurrenceEnded,
   }
 }

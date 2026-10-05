@@ -58,18 +58,19 @@
                   <span>{{ item.label }}</span>
                 </p>
 
-                <!-- What someone said, Airbnb's way: everyone on the left, who and
-                     when above a run, the avatar beside the run's last bubble. -->
+                <!-- The current buyer's own web replies sit opposite the business;
+                     historical authors retain the identity actually recorded. -->
                 <UChatMessage
                   v-else
                   :id="item.key"
-                  role="assistant"
+                  :role="item.own ? 'user' : 'assistant'"
+                  :side="item.own ? 'right' : 'left'"
                   :parts="[]"
                   :avatar="item.avatar"
                   :class="item.startsRun ? 'pt-4' : 'pt-1'"
                   :ui="{
                     root: 'scroll-mt-0',
-                    header: 'mb-1 ps-12 text-xs text-muted',
+                    header: item.own ? 'mb-1 text-xs text-muted' : 'mb-1 ps-12 text-xs text-muted',
                     container: 'items-end gap-2 pb-0',
                     leading: 'mt-0 min-h-0',
                     leadingAvatar: item.endsRun ? undefined : 'invisible',
@@ -157,12 +158,12 @@
           aria-live="polite"
         >
           <UAlert
-            v-if="actionError"
+            v-if="actionError || readError"
             key="action-error"
             color="error"
             variant="soft"
             icon="i-lucide-circle-alert"
-            :description="actionError"
+            :description="actionError ?? readError ?? undefined"
             class="mb-1"
           />
           <UAlert
@@ -200,7 +201,7 @@
           v-model="draft"
           placeholder="Write a message…"
           color="neutral"
-          :disabled="!thread.guestEmail"
+          :disabled="(!props.personalScope && !thread.guestEmail)"
           :rows="2"
           :maxrows="8"
           class="gap-2 rounded-2xl px-5 pb-2.5 pt-4"
@@ -241,7 +242,7 @@
               :ui="{ leadingIcon: 'size-6' }"
               aria-label="Add photos"
               title="Add photos"
-              :disabled="!thread.guestEmail || chosen.length >= MAX_PHOTOS"
+              :disabled="(!props.personalScope && !thread.guestEmail) || chosen.length >= MAX_PHOTOS"
               @click="picker?.click()"
             />
             <input ref="picker" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" multiple class="hidden" @change="addPickedPhotos">
@@ -254,7 +255,7 @@
               :ui="{ leadingIcon: 'size-4' }"
               aria-label="Send reply"
               title="Send reply"
-              :disabled="!thread.guestEmail || sending || (!draft.trim() && !chosen.length)"
+              :disabled="(!props.personalScope && !thread.guestEmail) || sending || (!draft.trim() && !chosen.length)"
             />
           </template>
         </UChatPrompt>
@@ -307,13 +308,14 @@
           </template>
         </UModal>
 
-        <p v-if="!thread.guestEmail" class="mt-2 text-xs text-warning">This guest has no email on file, so a reply cannot be sent.</p>
+        <p v-if="!props.personalScope && !thread.guestEmail" class="mt-2 text-xs text-warning">This guest has no email on file, so a reply cannot be sent.</p>
       </div>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
+import { useIntervalFn, useDocumentVisibility } from '@vueuse/core'
 import type { AvatarProps } from '@nuxt/ui'
 import { getErrorMessage, isNotFoundError } from '~/utils/errors'
 import { isThreadDetailResponse, threadRecordTitle, type ThreadDetail } from '~/lib/components/workspace/messages/guest-thread-client'
@@ -326,22 +328,23 @@ import { authClient } from '~/lib/auth-client'
   level of the route tree, and the panel, navbar and the way into the record
   belong to the route that mounts this.
 */
-const props = defineProps<{ threadId: string }>()
+const props = withDefaults(defineProps<{ threadId: string; personalScope?:boolean }>(),{personalScope:false})
 
 const dashboard = useDashboardOrganization()
 const dashboardApi = useDashboardApi(useDashboardRouteScope())
 const realtime = useDashboardInvalidations()
-const realtimeFailed = computed(() => realtime.status.value === 'failed')
+const realtimeFailed = computed(() => !props.personalScope && realtime.status.value === 'failed')
 const { locale } = useI18n()
 const session = authClient.useSession()
 
 // The one copy of this thread. The record beside the conversation reads the
 // same entry, so writing a reply's answer into it updates both.
-const { data, thread, pending, error, refresh } = await useGuestThread(computed(() => props.threadId))
-const threadPath = computed(() => `/api/dashboard/organizations/${dashboard.organizationId.value}/guest-threads/${encodeURIComponent(props.threadId)}`)
+const { data, thread, pending, error, refresh } = await useGuestThread(computed(() => props.threadId),computed(()=>props.personalScope))
+const threadPath = computed(() => props.personalScope ? `/api/account/messages/${encodeURIComponent(props.threadId)}` : `/api/dashboard/organizations/${dashboard.organizationId.value}/guest-threads/${encodeURIComponent(props.threadId)}`)
 
 const draft = ref('')
 const actionError = ref<string | null>(null)
+const readError = ref<string | null>(null)
 const retryingDeliveryId = ref<string | null>(null)
 
 /*
@@ -369,12 +372,12 @@ async function sendReply() {
   chosen.value = []
   void scrollToLatest()
   try {
-    const res = await dashboardApi<{ thread: ThreadDetail }>(`${threadPath.value}/operations/reply`, {
+    const res = await (props.personalScope?applicationFetch:dashboardApi)<{ thread: ThreadDetail }>(`${threadPath.value}/${props.personalScope?'reply':'operations/reply'}`, {
       method: 'POST',
       body: photos.length ? replyForm(body, photos, current.key) : { body, idempotencyKey: current.key },
       validate: isThreadDetailResponse,
     })
-    const reply = res.thread.entries.findLast(entry => entry.kind === 'message' && entry.actorKind === 'member' && !current.sentAfter.has(entry.id))
+    const reply = res.thread.entries.findLast(entry => entry.kind === 'message' && entry.actorKind === (props.personalScope?'guest':'member') && !current.sentAfter.has(entry.id))
     if (reply) settledKeys.value = { ...settledKeys.value, [reply.id]: `pending:${current.key}` }
     data.value = res
     attempt.value = null
@@ -466,12 +469,12 @@ async function retryDelivery(deliveryId: string) {
 }
 
 function refreshThreadState() {
-  realtime.connect()
+  if (!props.personalScope) realtime.connect()
   void refresh()
 }
 
 watch(realtime.event, (event) => {
-  if (!event || !('threadId' in event)) return
+  if (props.personalScope || !event || !('threadId' in event)) return
   if (event.organizationId !== dashboard.organizationId.value) return
   if (event.threadId === props.threadId) void refresh()
 })
@@ -479,6 +482,45 @@ watch(realtime.event, (event) => {
 watch(realtime.connectionEpoch, (epoch) => {
   if (epoch > 0) refreshThreadState()
 })
+
+const documentVisibility = useDocumentVisibility()
+useIntervalFn(() => { if (props.personalScope && documentVisibility.value === 'visible') void refresh() }, 15_000)
+
+// Reading is an explicit user receipt on the rendered public entries, never a GET mutation.
+// This set avoids repeated network requests; the server's ledger owns read state.
+const acknowledgedEntryIds = new Set<string>()
+let acknowledgedScope: string | null = null
+let markingRead = false
+const readScope = computed(() => `${session.value.data?.user.id ?? ''}:${props.threadId}:${props.personalScope}`)
+const visibleEntryIds = computed(() => thread.value?.entries.map(entry => entry.id).join('|') ?? '')
+
+async function acknowledgeVisibleEntries() {
+  if (!import.meta.client || markingRead || !props.personalScope || documentVisibility.value !== 'visible' || pending.value) return
+  markingRead = true
+  await nextTick()
+  try {
+    // Re-read the displayed entries after each successful batch, including any
+    // that arrived while the previous request was in flight.
+    while (props.personalScope && documentVisibility.value === 'visible' && !pending.value) {
+      const scope = readScope.value
+      if (acknowledgedScope !== scope) {
+        acknowledgedEntryIds.clear()
+        acknowledgedScope = scope
+      }
+      const batch = (thread.value?.entries ?? []).map(entry => entry.id).filter(id => !acknowledgedEntryIds.has(id)).slice(0, 200)
+      if (!batch.length) { readError.value = null; return }
+      await applicationFetch<{acknowledged:number}>(`${threadPath.value}/read`, {
+        method:'POST',body:{entry_ids:batch},
+        validate:(value):value is {acknowledged:number}=>!!value&&typeof value==='object'&&'acknowledged' in value&&typeof value.acknowledged==='number'&&Number.isSafeInteger(value.acknowledged)&&value.acknowledged>=0,
+      })
+      if (readScope.value === scope) for (const id of batch) acknowledgedEntryIds.add(id)
+    }
+  } catch(error) { readError.value=getErrorMessage(error,'Message read state could not be saved') }
+  finally { markingRead = false }
+}
+
+// A normal refresh retries failed IDs; successful IDs generate no new POST.
+watch([visibleEntryIds, documentVisibility, pending, readScope], acknowledgeVisibleEntries, { immediate:true })
 
 /*
   Following the conversation. UChatMessages opens it at the newest message and
@@ -499,7 +541,7 @@ watch(() => thread.value?.entries.length, () => {
 
 // The tenant's own word for the record.
 const recordNoun = computed(() => thread.value
-  ? threadRecordTitle(thread.value.submissionType, dashboard.organization.value?.vertical ?? null).toLowerCase()
+  ? threadRecordTitle(thread.value.submissionType, (props.personalScope ? thread.value.organizationVertical : dashboard.organization.value?.vertical) ?? null).toLowerCase()
   : 'details')
 
 /*
@@ -542,6 +584,7 @@ type MessageItem = {
   occurredAt: string
   run: string
   who: string
+  own: boolean
   avatar: AvatarProps
   startsRun: boolean
   endsRun: boolean
@@ -576,11 +619,11 @@ const stream = computed<StreamItem[]>(() => {
   }
 
   const message = (key: string, occurredAt: string, body: string | null, speaker: Speaker, label: string | null, extra: Partial<MessageItem> = {}) => {
-    const who = speaker === 'platform' ? 'Krabiclaw' : speaker === 'guest' ? current.guestName : label || 'Team member'
+    const who = extra.own ? 'You' : speaker === 'platform' ? 'Krabiclaw' : speaker === 'guest' ? current.guestName : label || 'Team member'
     const avatar: AvatarProps = speaker === 'platform'
       ? { src: '/platform/krabiclaw-symbol.svg', alt: who }
       : { alt: who }
-    push(occurredAt, { type: 'message', key, body, photos: [], unshown: [], occurredAt, run: `${speaker}:${who}`, who, avatar, startsRun: true, endsRun: true, ...extra })
+    push(occurredAt, { type: 'message', key, body, photos: [], unshown: [], occurredAt, run: `${speaker}:${who}`, who, own: false, avatar, startsRun: true, endsRun: true, ...extra })
   }
 
   for (const entry of current.entries) {
@@ -599,6 +642,7 @@ const stream = computed<StreamItem[]>(() => {
       const member = entry.actorKind !== 'guest'
       const unshown = entry.payload?.unshownFiles
       message(key, entry.occurredAt, entry.body, member ? 'member' : 'guest', entry.actorLabel, {
+        own: props.personalScope && entry.actorKind === 'guest' && entry.channel === 'web' && entry.actorUserId !== null && entry.actorUserId === session.value.data?.user.id,
         photos: entry.attachments,
         unshown: Array.isArray(unshown) ? unshown.filter((name): name is string => typeof name === 'string') : [],
         ...(member ? { receipt: receiptFor(entry) } : {}),
@@ -609,9 +653,10 @@ const stream = computed<StreamItem[]>(() => {
   }
 
   if (attempt.value && sending.value) {
-    message(`pending:${attempt.value.key}`, new Date().toISOString(), attempt.value.body || null, 'member', session.value.data?.user.name ?? null, {
+    message(`pending:${attempt.value.key}`, new Date().toISOString(), attempt.value.body || null, props.personalScope?'guest':'member', session.value.data?.user.name ?? null, {
       photos: attempt.value.photos.map(photo => ({ url: photo.url, alt: photo.file.name, width: null, height: null })),
       sending: true,
+      own: props.personalScope && Boolean(session.value.data?.user.id),
       receipt: { label: 'Sending…', failed: false },
     })
   }
@@ -678,6 +723,10 @@ function systemEventIcon(entry: GuestThreadEntryViewModel) {
 function systemEventLabel(entry: GuestThreadEntryViewModel) {
   const actor = entry.actorLabel ? `${entry.actorLabel} ` : ''
   if (entry.kind === 'operation') {
+    if (/^(?:payment|refund|dispute)\./.test(entry.eventName ?? '')) {
+      if (!entry.body?.trim()) throw createError({ statusCode: 500, statusMessage: 'Financial conversation activity requires its display message.', fatal: true })
+      return entry.body
+    }
     if (entry.eventName === 'migration_snapshot') return 'Imported from previous system'
     if (entry.payload?.action === 'cancel') return `${actor}cancelled the ${recordNoun.value}`.trim()
     if (entry.eventName === 'thread.archived') return `${actor}archived this conversation`.trim()

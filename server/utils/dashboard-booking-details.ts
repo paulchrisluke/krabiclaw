@@ -4,7 +4,7 @@ import type { H3Event } from 'nitro'
 import { HTTPError } from 'nitro'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
-import { assertResourceAccess, memberAccessPrincipal } from '~/server/utils/member-access'
+import { assertResourceAccess, memberAccessPrincipal, roleAllows } from '~/server/utils/member-access'
 import { getLocationReservationConfig, reservationPolicySummarySource, renderBookingPolicySummary, type RenderedBookingPolicySummary } from '~/server/utils/reservations'
 import { loadOwnerPictures } from '~/server/notifications/hero'
 import { localPartsAt } from '~/utils/timezone'
@@ -12,6 +12,8 @@ import { appendEntry, getEntryById, GuestThreadEntryDedupeConflictError } from '
 import { requestBookingChange } from '~/server/domain/guest-threads/booking-changes'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 import { isBookingComplete, type BookingStatus } from '~/shared/bookings'
+import { readPaymentDetails } from '~/server/domain/payments'
+import {paymentDisplay,paymentRefundsDisplay,paymentOrderDisplay,type PaymentDisplay,type PaymentRefundDisplay,type PaymentOrderDisplay} from '~/shared/payment-display'
 
 export type DashboardBookingType = 'reservation' | 'booking'
 
@@ -94,6 +96,7 @@ export interface DashboardBookingDetails {
   policy: RenderedBookingPolicySummary | null
   notes: DashboardBookingNote[]
   locations: Array<{ id: string; title: string; imageUrl: string | null }>
+  payments: Array<{payment:PaymentDisplay;refunds:PaymentRefundDisplay[];order:PaymentOrderDisplay|null}> | null
 }
 
 interface BookingAccessContext {
@@ -212,6 +215,12 @@ export async function loadDashboardBookingDetails(
 
   const provider=row.assigned_member_id?await queryFirst<{name:string|null;busy_error:string|null;busy_checked_at:string|null;conflict:number}>(context.db,`SELECT u.name,ms.busy_error,ms.busy_checked_at,EXISTS(SELECT 1 FROM json_each(ms.busy_json) busy WHERE json_extract(busy.value,'$.start')<? AND json_extract(busy.value,'$.end')>?) conflict FROM member m LEFT JOIN user u ON u.id=m.userId LEFT JOIN member_scheduling ms ON ms.member_id=m.id AND ms.organization_id=m.organizationId WHERE m.id=? AND m.organizationId=?`,[row.ends_at,row.starts_at,row.assigned_member_id,row.organization_id]):null
   const scheduling=row.assigned_member_id ? await readMemberScheduling(context.db,row.organization_id,row.assigned_member_id) : null
+  const canReadPayments=await roleAllows({organizationId:context.organization.id,role:context.organization.role,permissions:{payments:['read']}})
+  const paymentIds=canReadPayments?await queryAll<{id:string}>(context.db,'SELECT id FROM payments WHERE organization_id=? AND subject_type=? AND subject_id=? ORDER BY created_at,id',[row.organization_id,input.type,row.operational_id]):[]
+  const payments=await Promise.all(paymentIds.map(async ({id})=>{
+    const detail=await readPaymentDetails(context.db,row.organization_id,id)
+    return {payment:paymentDisplay(detail.payment),refunds:paymentRefundsDisplay(detail.refunds),order:paymentOrderDisplay(detail.order)}
+  }))
   return {
     assignedMemberId: row.assigned_member_id, assignedMemberName:provider?.name??null,providerConflict:Boolean(provider?.conflict),providerCalendarStatus: scheduling?.calendar_ids.length && scheduling.calendar_status !== 'ready' ? scheduling.busy_error || `Busy-calendar status: ${scheduling.calendar_status}` : null,operationalUpdatedAt:row.operational_updated_at,
     id: row.id,
@@ -250,6 +259,7 @@ export async function loadDashboardBookingDetails(
     policy: resolvedPolicy ? renderBookingPolicySummary(reservationPolicySummarySource(resolvedPolicy)) : null,
     notes,
     locations: visibleLocations.map(location => ({ ...location, imageUrl: locationPictures.get(location.id)?.imageUrl ?? null })),
+    payments:canReadPayments?payments:null,
   }
 }
 
@@ -267,7 +277,6 @@ export async function requestDashboardBookingChange(
   if (!thread) throw new HTTPError({ statusCode: 404, message: 'Booking not found' })
   await requestBookingChange(context.db, context.env, thread, context.userId, input.body, input.body.idempotencyKey)
   await publishGuestInboxThreadEvent(context.env, context.db, { threadId: threadId, type: 'thread.changed' })
-    .catch(error => console.warn('[booking-details] inbox publication skipped', error))
   return await loadDashboardBookingDetails(event, { type: input.type, bookingId: row.id })
 }
 
@@ -311,7 +320,6 @@ export async function addDashboardBookingNote(
     throw error
   })
   await publishGuestInboxThreadEvent(context.env, context.db, { threadId: threadId, type: 'thread.changed' })
-    .catch(error => console.warn('[booking-details] inbox publication skipped', error))
   return await loadDashboardBookingDetails(event, { type: input.type, bookingId: row.id })
 }
 

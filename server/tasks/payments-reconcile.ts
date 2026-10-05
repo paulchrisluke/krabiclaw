@@ -8,6 +8,8 @@ import {executeRefund,reconcileRefundState,requirePayment,type Payment} from '~/
 import {reconcilePaymentIntent,reconcileDisputeState} from '~/server/domain/payments/events'
 import {deliverPaymentsUsage} from '~/server/domain/payments/usage'
 import {reconcileStripeCosts} from '~/server/domain/payments/costs'
+import {reconcilePayoutEvent} from '~/server/domain/payments/notifications'
+import {reconcilePaymentsInvoiceNotifications} from '~/server/domain/payments/billing-notifications'
 export default defineScheduledTask<{skipped?:string;attempts?:number;refunds?:number;billingAccounts?:number;stripeCosts?:'test_mode_unavailable'|'live_mode'}>({meta:{name:'payments:reconcile',description:'Reconcile Stripe payment attempts, durable refunds, attributable costs and Metronome usage'},async run({context}){
  const env=(context as {cloudflare?:{env?:CloudflareEnv}})?.cloudflare?.env
  if(!env?.DB)throw new Error('Payments reconciliation requires DB')
@@ -32,13 +34,13 @@ export default defineScheduledTask<{skipped?:string;attempts?:number;refunds?:nu
  for(const payment of attempts){try{
   const checkout=await stripe.checkout.sessions.retrieve(payment.stripe_checkout_id,{}, {stripeAccount:payment.stripe_account_id})
   if(checkout.livemode!==Boolean(payment.livemode) || checkout.client_reference_id!==payment.id)throw new Error('Reconciliation checkout financial scope mismatch')
-  if(checkout.payment_status==='paid'&&checkout.payment_intent){const id=typeof checkout.payment_intent==='string'?checkout.payment_intent:checkout.payment_intent.id;await reconcilePaymentIntent(db,stripe,payment,await stripe.paymentIntents.retrieve(id,{}, {stripeAccount:payment.stripe_account_id}),env);await execute(db,"UPDATE payment_attempts SET status='completed',updated_at=? WHERE payment_id=?",[now,payment.id])}
-  else if(checkout.status==='expired')await execute(db,"UPDATE payment_attempts SET status='expired',updated_at=? WHERE payment_id=?",[now,payment.id])
+  if(checkout.payment_intent){const id=typeof checkout.payment_intent==='string'?checkout.payment_intent:checkout.payment_intent.id;await reconcilePaymentIntent(db,stripe,payment,await stripe.paymentIntents.retrieve(id,{}, {stripeAccount:payment.stripe_account_id}),env);if(checkout.payment_status==='paid')await execute(db,"UPDATE payment_attempts SET status='completed',updated_at=? WHERE payment_id=?",[now,payment.id])}
+  if(checkout.status==='expired')await execute(db,"UPDATE payment_attempts SET status='expired',updated_at=? WHERE payment_id=?",[now,payment.id])
  }catch(error){errors.push(error instanceof Error?error:new Error(String(error)));await execute(db,'UPDATE payment_attempts SET error=?,updated_at=? WHERE payment_id=?',[String(error),now,payment.id])}}
  const refunds=await queryAll<{payment_id:string;organization_id:string;amount:number;idempotency_key:string;created_by:string|null}>(db,"SELECT r.*,p.organization_id FROM payment_refunds r JOIN payments p ON p.id=r.payment_id WHERE r.status IN ('queued','creating') ORDER BY r.updated_at LIMIT 50")
- for(const refund of refunds){try{await executeRefund(db,stripe,await requirePayment(db,refund.organization_id,refund.payment_id),refund.amount,refund.idempotency_key,'requested_by_customer',refund.created_by)}catch(error){errors.push(error instanceof Error?error:new Error(String(error)))}}
+ for(const refund of refunds){try{await executeRefund(db,stripe,await requirePayment(db,refund.organization_id,refund.payment_id),refund.amount,refund.idempotency_key,'requested_by_customer',refund.created_by,env)}catch(error){errors.push(error instanceof Error?error:new Error(String(error)))}}
  const unresolved=await queryAll<Payment & {stripe_refund_id:string}>(db,"SELECT p.*,r.stripe_refund_id FROM payment_refunds r JOIN payments p ON p.id=r.payment_id WHERE r.stripe_refund_id IS NOT NULL AND r.status IN ('pending','requires_action') ORDER BY r.updated_at LIMIT 50")
- for(const payment of unresolved){try{await reconcileRefundState(db,stripe,payment,payment.stripe_refund_id)}catch(error){errors.push(error instanceof Error?error:new Error(String(error)))}}
+ for(const payment of unresolved){try{await reconcileRefundState(db,stripe,payment,payment.stripe_refund_id,env)}catch(error){errors.push(error instanceof Error?error:new Error(String(error)))}}
  // Recover an authenticated provider Checkout if creation succeeded before D1
  // received its ID. Listing is read-only; it does not repeat expired writes.
  const interrupted=await queryAll<Payment & {attempt_id:string;expires_at:string}>(db,"SELECT p.*,a.id AS attempt_id,a.expires_at FROM payment_attempts a JOIN payments p ON p.id=a.payment_id WHERE a.stripe_checkout_id IS NULL AND a.status='creating' ORDER BY a.updated_at LIMIT 20")
@@ -62,8 +64,8 @@ export default defineScheduledTask<{skipped?:string;attempts?:number;refunds?:nu
   await reconcilePaymentIntent(db,stripe,payment,await stripe.paymentIntents.retrieve(id,{},options),env)
   const [nativeRefunds,nativeDisputes]=await Promise.all([stripe.refunds.list({payment_intent:id,limit:100},options),stripe.disputes.list({payment_intent:id,limit:100},options)])
   if(nativeRefunds.has_more||nativeDisputes.has_more)throw new Error('Historical payment provider history requires bounded operator review')
-  for(const refund of nativeRefunds.data)await reconcileRefundState(db,stripe,payment,refund.id)
-  for(const dispute of nativeDisputes.data)await reconcileDisputeState(db,payment,dispute)
+  for(const refund of nativeRefunds.data)await reconcileRefundState(db,stripe,payment,refund,env)
+  for(const dispute of nativeDisputes.data)await reconcileDisputeState(db,stripe,payment,dispute,env)
  }catch(error){
   errors.push(error instanceof Error?error:new Error(String(error)))
   try{await execute(db,'UPDATE payments SET updated_at=? WHERE id=?',[now,payment.id])}catch(error){errors.push(error instanceof Error?error:new Error(String(error)))}
@@ -71,8 +73,25 @@ export default defineScheduledTask<{skipped?:string;attempts?:number;refunds?:nu
  const active=await queryFirst(db,`SELECT 1 WHERE EXISTS(SELECT 1 FROM payments) OR EXISTS(SELECT 1 FROM stripe_connected_accounts WHERE stripe_account_id IS NOT NULL) OR EXISTS(SELECT 1 FROM payment_servicing_tenants) OR EXISTS(SELECT 1 FROM payment_fee_reports)`)
  let stripeCosts:'test_mode_unavailable'|'live_mode'|undefined
  if(active){try{stripeCosts=(await reconcileStripeCosts(db,stripe,stripeLivemodeFromKey(env.STRIPE_SECRET_KEY),env.STRIPE_SECRET_KEY)).status}catch(error){errors.push(error instanceof Error?error:new Error(String(error)))}}
+ const payoutAccounts=await queryAll<{organization_id:string;stripe_account_id:string;livemode:number;attribution_count:number}>(db,`WITH mappings AS (SELECT organization_id,stripe_account_id,livemode FROM stripe_connected_accounts WHERE stripe_account_id IS NOT NULL UNION SELECT organization_id,stripe_account_id,livemode FROM payment_servicing_tenants) SELECT *,COUNT(*) OVER (PARTITION BY stripe_account_id,livemode) AS attribution_count FROM mappings`)
+ for(const account of payoutAccounts){try{
+  if(account.attribution_count!==1)throw new Error('Stripe connected payout account has ambiguous tenant attribution')
+  if(Boolean(account.livemode)!==stripeLivemodeFromKey(env.STRIPE_SECRET_KEY))throw new Error('Stripe connected payout account mode does not match configuration')
+  let after:string|undefined
+  for(let page=0;page<100;page++){
+   const events=await stripe.events.list({types:['payout.paid','payout.failed'],created:{gte:Math.floor(Date.parse(now)/1000)-30*24*60*60,lte:Math.floor(Date.parse(now)/1000)},limit:100,...(after?{starting_after:after}:{})},{stripeAccount:account.stripe_account_id})
+   for(const event of events.data)await reconcilePayoutEvent(db,stripe,env,{organizationId:account.organization_id,stripeAccountId:account.stripe_account_id,livemode:Boolean(account.livemode)},event)
+   if(!events.has_more)break
+   after=events.data.at(-1)?.id
+   if(!after)throw new Error('Native payout event history is missing its next cursor')
+   if(page===99)throw new Error('Native payout event history requires bounded operator review')
+  }
+ }catch(error){errors.push(error instanceof Error?error:new Error(String(error)))}}
  const accounts=await queryAll<{organization_id:string}>(db,'SELECT organization_id FROM payment_billing_accounts')
- for(const account of accounts){try{if(!await hasOrganizationEntitlement(env,account.organization_id,'payments'))await execute(db,"UPDATE payment_billing_accounts SET status='servicing',updated_at=? WHERE organization_id=? AND status='active'",[now,account.organization_id]);await deliverPaymentsUsage(db,env,account.organization_id)}catch(error){errors.push(error instanceof Error?error:new Error(String(error)))}}
+ for(const account of accounts){
+  try{if(!await hasOrganizationEntitlement(env,account.organization_id,'payments'))await execute(db,"UPDATE payment_billing_accounts SET status='servicing',updated_at=? WHERE organization_id=? AND status='active'",[now,account.organization_id]);await deliverPaymentsUsage(db,env,account.organization_id)}catch(error){errors.push(error instanceof Error?error:new Error(String(error)))}
+  try{await reconcilePaymentsInvoiceNotifications(db,stripe,env,account.organization_id)}catch(error){errors.push(error instanceof Error?error:new Error(String(error)))}
+ }
  if(errors.length)throw new AggregateError(errors,'Payments reconciliation has unresolved provider failures')
  return {result:{attempts:attempts.length,refunds:refunds.length,billingAccounts:accounts.length,stripeCosts}}
 }})

@@ -1,5 +1,7 @@
 import type { WhatsAppTemplate } from '~/server/utils/whatsapp'
 import type { NotificationMessage } from './messages'
+import { guestPaymentMessage, ownerPaymentMessage } from './payment-events'
+import type { GuestPaymentNotificationEvent, PaymentNotificationEvent } from './payment-events'
 import {
   bookingCancelledMessage,
   bookingChangeMessage,
@@ -104,6 +106,42 @@ const guestVisit = {
   heroImageUrl: sampleCover,
 }
 
+const payment = {
+  organizationName: studio,
+  organizationLogoUrl: sampleLogo,
+  amount: 10000,
+  currency: 'USD' as const,
+  productTitle: 'Pottery Wheel Class',
+  action: { url: 'https://demo.krabiclaw.com/dashboard/pottery-house/payments', label: 'View payment' },
+}
+
+// Preview data only: these show native statuses, not qualified financial sends.
+const ownerPayments: PaymentNotificationEvent[] = [
+  { ...payment, kind: 'payment_captured' },
+  { ...payment, kind: 'payment_failed' },
+  { ...payment, kind: 'refund_pending', amount: 5000 },
+  { ...payment, kind: 'refund_succeeded', amount: 5000 },
+  { ...payment, kind: 'refund_failed', amount: 5000 },
+  { ...payment, kind: 'refund_canceled', amount: 5000 },
+  { ...payment, kind: 'dispute_needs_response', responseDueBy: 'Oct 12, 2026 at 5:00 PM UTC' },
+  { ...payment, kind: 'dispute_won' },
+  { ...payment, kind: 'dispute_lost' },
+  { ...payment, kind: 'dispute_closed' },
+  { ...payment, kind: 'payout_paid', amount: 25000, productTitle: null, arrivalDate: 'Oct 7, 2026', action: { ...payment.action, label: 'View payout' } },
+  { ...payment, kind: 'payout_failed', amount: 25000, productTitle: null, action: { ...payment.action, label: 'View payout' } },
+  { ...payment, kind: 'usage_invoice_paid', amount: 140, productTitle: null, action: { ...payment.action, label: 'View invoice' } },
+  { ...payment, kind: 'usage_invoice_payment_failed', amount: 140, productTitle: null, action: { ...payment.action, label: 'View invoice' } },
+  { ...payment, kind: 'usage_invoice_action_required', amount: 140, productTitle: null, action: { ...payment.action, label: 'Pay invoice' } },
+]
+
+const guestPayments: GuestPaymentNotificationEvent[] = [
+  { ...payment, kind: 'payment_captured', action: { url: 'https://pay.stripe.com/receipts/preview', label: 'View receipt' } },
+  ...(['payment_failed', 'refund_pending', 'refund_succeeded', 'refund_failed', 'refund_canceled'] as const).map(kind => ({
+    ...payment, kind, amount: kind === 'payment_failed' ? payment.amount : 5000,
+    action: { url: 'https://demo.krabiclaw.com/account', label: 'View purchase' },
+  })),
+]
+
 export const NOTIFICATION_CATALOG: CatalogEntry[] = [
   // Owner alerts — both channels.
   { id: 'reservation-created', audience: 'owner', title: 'Owner — new reservation', whatsappTemplate: 'new_reservation', message: ownerAlert(reservationCreatedMessage(reservation)) },
@@ -129,6 +167,17 @@ export const NOTIFICATION_CATALOG: CatalogEntry[] = [
     message: ownerAlert(guestReplyMessage({
       guestName: 'Jordan Lee', guestEmail: 'jordan@example.com', inboundChannel: 'email',
       messagePreview: 'Thanks! One more thing — is the terrace covered if it rains?',
+      organizationName: restaurant, replyUrl: inbox,
+    })),
+  },
+  {
+    id: 'guest-reply-web',
+    audience: 'owner',
+    title: 'Owner — guest replied in Messages',
+    whatsappTemplate: 'guest_thread_reply_whatsapp',
+    message: ownerAlert(guestReplyMessage({
+      guestName: 'Jordan Lee', guestEmail: 'jordan@example.com', inboundChannel: 'web',
+      messagePreview: 'Thanks! See you tomorrow.',
       organizationName: restaurant, replyUrl: inbox,
     })),
   },
@@ -181,4 +230,6 @@ export const NOTIFICATION_CATALOG: CatalogEntry[] = [
   { id: 'guest-booking-change-proposal', audience: 'guest', title: 'Guest — booking change proposed', message: bookingChangeProposalMessage({ guestName: 'Mina Park', organizationName: studio, organizationLogoUrl: sampleLogo, heading: 'Please review changes to your booking', intro: 'Your host has requested changes. Your booking stays exactly as it is until you accept, and the link below expires in 7 days.', rows: [['Location', 'Main Studio'], ['When', 'Tue, Jul 21, 2026 at 2:00 PM'], ['Guests', '2']], actionUrl: 'https://demo.krabiclaw.com/booking-changes/preview', actionLabel: 'Review the changes' }) },
   { id: 'guest-review-request', audience: 'guest', title: 'Guest — review request', message: reviewRequestMessage({ guestName: 'Alex Carter', organizationName: restaurant, locationName: 'Main Dining Room', visitAt: 'Tue, Jul 14, 2026 at 7:00 PM', partySize: '2 guests', reviewUrl: 'https://demo.krabiclaw.com/locations/main/review-submit?request=preview', organizationLogoUrl: sampleLogo }) },
   { id: 'article-announcement', audience: 'owner', title: 'Krabiclaw news — new article', message: articleAnnouncementMessage({ title: 'Turning walk-ins into repeat guests', summary: 'Three things the best-performing Krabiclaw sites do after a guest leaves.', bodyMarkdown: '## Say thank you the same day\n\nA short note while the meal is still fresh brings guests back more often than any discount.\n\n## Ask for the review\n\n- Send the link once\n- Make it one tap\n\n## Invite them back\n\nTell them what is new next month, and [show them the menu](https://krabiclaw.com).', coverImageUrl: null, articleUrl: 'https://krabiclaw.com/blog/operations/preview' }) },
+  ...ownerPayments.map(event => ({ id: `owner-${event.kind}`, audience: 'owner' as const, title: `Owner — ${ownerPaymentMessage(event).title}`, message: ownerPaymentMessage(event) })),
+  ...guestPayments.map(event => ({ id: `guest-${event.kind}`, audience: 'guest' as const, title: `Guest — ${guestPaymentMessage(event).title}`, message: guestPaymentMessage(event) })),
 ]

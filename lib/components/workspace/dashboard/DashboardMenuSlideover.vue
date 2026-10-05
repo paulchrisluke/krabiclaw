@@ -15,6 +15,7 @@
     <template #actions>
       <div class="ms-auto flex items-center gap-1.5">
         <UButton
+          v-if="!personal"
           icon="i-lucide-search"
           aria-label="Search"
           color="neutral"
@@ -41,7 +42,7 @@ const open = defineModel<boolean>('open', { default: false })
 
 const route = useRoute()
 const nuxtApp = useNuxtApp()
-const { notificationsTo } = useDashboardMenu()
+const { notificationsTo, personal } = useDashboardMenu()
 
 function openSearch() {
   open.value = false

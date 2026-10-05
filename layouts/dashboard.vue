@@ -290,17 +290,17 @@ const scope = computed<'organization' | 'location'>(() => routeLocationSlug.valu
 const scopeHeaderModel = computed<DashboardScopeHeaderModel>(() => {
   return {
     current: {
-      label: organizationLabel.value,
-      avatar: organizationAvatar.value,
+      label: isAccountRoute.value ? 'Personal' : organizationLabel.value,
+      avatar: isAccountRoute.value ? sessionData.value?.user?.image ?? undefined : organizationAvatar.value,
     },
     parent: null,
     // Peers carry no mark. `organization.logo` is Better Auth's column and
     // nothing here writes it, and the dashboard context loads media for the
     // active organization only — drawing anything for a peer would claim
     // "no logo" where the truth is "not loaded".
-    peers: organizations.value.map((org) => ({
+    peers: [{ label: 'Personal', active: isAccountRoute.value, onSelect: () => void selectOrganization(null) }, ...organizations.value.map((org) => ({
       label: org.name,
-      active: org.id === organization.value?.id,
+      active: !isAccountRoute.value && org.id === organization.value?.id,
       // Which one is a plain link is the *session's* question, not the route's.
       // A route can be open in an organization the session is not active in —
       // that is the case #905 exists for — and comparing against the route left
@@ -308,7 +308,7 @@ const scopeHeaderModel = computed<DashboardScopeHeaderModel>(() => {
       ...(org.id === activeOrganizationId.value
         ? { to: `/dashboard/${encodeURIComponent(org.slug)}` }
         : { onSelect: () => void selectOrganization(org) }),
-    })),
+    }))],
     createAction: { label: 'New Organization', to: '/dashboard/onboarding' }
   }
 })
@@ -316,16 +316,15 @@ const scopeHeaderModel = computed<DashboardScopeHeaderModel>(() => {
 
 
 /**
- * Switching businesses activates the organization in Better Auth first, then
- * navigates. Navigating first left the session pointing at the old one, which
- * is what the account pages read to find their way back (#905).
+ * Explicit selection updates Better Auth's active organization first, then
+ * navigates. Personal clears it through the same native operation.
  */
 const organizationSwitchError = ref<string | null>(null)
 // One activation at a time. Two quick presses raced: both called `setActive`,
 // and whichever resolved last decided the session while the other was already
 // navigating — the dashboard could open an organization the session left.
 const switchingOrganization = ref(false)
-async function selectOrganization(org: { id: string, slug: string }) {
+async function selectOrganization(org: { id: string, slug: string } | null) {
   if (switchingOrganization.value) return
   switchingOrganization.value = true
   organizationSwitchError.value = null
@@ -336,17 +335,17 @@ async function selectOrganization(org: { id: string, slug: string }) {
   }
 }
 
-async function activateOrganization(org: { id: string, slug: string }) {
-  const { error } = await authClient.organization.setActive({ organizationId: org.id })
+async function activateOrganization(org: { id: string, slug: string } | null) {
+  const { error } = await authClient.organization.setActive({ organizationId: org?.id ?? null })
   if (error) {
     // Staying put is the honest outcome: the session is still in the old
     // organization, so entering the new one would show a dashboard the session
     // is not actually in.
-    organizationSwitchError.value = error.message || 'Could not switch organization'
+    organizationSwitchError.value = error.message || 'Could not switch view'
     return
   }
   await session.value.refetch()
-  await navigateTo(`/dashboard/${encodeURIComponent(org.slug)}`)
+  await navigateTo(org ? `/dashboard/${encodeURIComponent(org.slug)}` : '/dashboard/account')
 }
 
 provide(dashboardScopeHeaderModelKey, scopeHeaderModel)
@@ -407,6 +406,12 @@ function withActiveItem<T extends { to?: string }>(items: T[], root: string | nu
 
 /** The tabs themselves; which one is lit is answered after they are known. */
 const navTargets = computed<DashboardMobileNavItem[]>(() => {
+  if (isAccountRoute.value) return [
+    { key: 'today', label: 'Today', icon: 'i-lucide-bookmark', to: '/dashboard/account' },
+    { key: 'calendar', label: 'Calendar', icon: 'i-lucide-calendar-days', to: '/dashboard/account/calendar' },
+    { key: 'activity', label: 'Activity', icon: 'i-lucide-ticket', to: '/dashboard/account/activity' },
+    { key: 'messages', label: 'Messages', icon: 'i-lucide-message-square', to: '/dashboard/account/messages' },
+  ]
   const routeOrgSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null
   if (!routeOrgSlug) return []
   const routeOrgBase = `/dashboard/${encodeURIComponent(routeOrgSlug)}`
@@ -438,12 +443,13 @@ const primaryNavItems = computed(() => withActiveItem(navTargets.value, activeTa
 // bar wait for an organization, because Today, Calendar, Locations and Messages do not
 // exist until there is one. Gating both together is what left an owner who
 // abandoned onboarding with no way to reach account settings or log out.
-const showNavChrome = computed(() => primaryNavItems.value.length > 0 && !isAccountRoute.value)
+const showNavChrome = computed(() => primaryNavItems.value.length > 0)
 // A leaf with Cancel/Save is a sheet on a phone: the tab bar is not there
 // under it, the way Airbnb's editor leaves cover theirs.
 const leafFooters = useDashboardLeafFooters()
 const showBottomNav = computed(() => showNavChrome.value && leafFooters.value === 0)
 const topNavHomeTo = computed(() => {
+  if (isAccountRoute.value) return '/dashboard/account'
   const routeOrgSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null
   return routeOrgSlug ? `/dashboard/${encodeURIComponent(routeOrgSlug)}` : '/dashboard'
 })

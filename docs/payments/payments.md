@@ -20,6 +20,105 @@ Growth's features and Payments. Free and Growth do not include Payments;
 historical Basic/Starter catalog names do not grant it. Existing transaction,
 refund, dispute, receipt and usage servicing is independent of new-sale entitlement.
 
+## Activity and payment details
+
+Buyer navigation is Today, Calendar, Activity, Messages and Menu. Tenant
+navigation remains Today, Calendar, Locations, Messages and Menu. The explicit
+route selects the screen; a tenant owner can also be a buyer. Profile holds account
+settings, with no separate Purchases and bookings page.
+
+Better Auth owns the session, active organization, membership and permissions.
+The explicit Personal/business chooser uses its native `organization.setActive`
+with null or the chosen organization ID, then refetches the session. There is no
+buyer role, account-type flag or second authentication context. A direct route
+still targets its stated tenant and must pass the shared membership/permission
+boundary; visiting a route does not silently activate a different organization.
+
+Activity opens the actual booking, reservation or product detail. Payment info,
+receipts and refunds belong inside that detail. Both audiences use the same
+payment presentation; tenant management actions use the existing financial
+authorization. Messages links back to the same record. One-time orders have
+their immutable items and fulfillment status, without a calendar occurrence or
+manufactured booking conversation.
+
+Buyer reads authorize the current Better Auth user against the targeted record.
+The buyer conversation excludes internal notes, staff controls and delivery
+diagnostics. Tenant membership never grants access to another buyer's account.
+An authenticated personal web reply is labelled You using its exact native user
+identity. Other actor IDs stay private; historical and deleted authors are not
+inferred from current record ownership.
+
+## Payment updates
+
+Authenticated native payment, refund and dispute status changes use the existing
+activity and notification center. Bookings retain their conversation; a financial
+operation appears there with its actual amount and item. One-time orders do not
+create a conversation. Merchant alerts appear under Messages → Updates, and
+buyers see their own updates under Messages → Updates. Both reuse the same notification list;
+the tenant navigation remains Today, Calendar, Locations, Messages and Menu.
+Tenant feeds exclude platform alerts and other businesses' or buyers' updates.
+
+Merchant email respects each Better Auth owner's or administrator's
+Organization and billing preference. Buyer payment/refund notices use the
+existing transactional category and the authenticated Checkout contact; that
+email address never creates or identifies an account. Updates open the actual
+service or product detail; receipts and invoice links remain native Stripe links.
+No new WhatsApp template is introduced.
+
+Native object, account, mode and status identify an alert. Replays retain one
+notification and durable per-recipient email receipts. Email receipts remain on
+the merchant's financial activity when a personal account is deleted. Existing
+Better Auth anonymous linking transfers purchases, notification targets and read
+acknowledgements; current purchase ownership authorizes a return-proof replay.
+Booking conversion completes before notification delivery. Delivery and realtime
+publication failures remain visible and retryable through the canonical path.
+
+Better Auth Stripe still owns subscriptions. Its documented `onEvent` hook adds
+Metronome Payments invoice status alerts after the canonical customer, contract,
+platform and external-invoice validation. Native paid state is authoritative;
+an open invoice alone does not imply failure. The existing hourly reconciliation
+recovers capture/refund/dispute updates, recent native payout events and paid
+usage-invoice alerts even when no usage remains to deliver. It does not issue or
+collect an invoice.
+
+The preserved local environment intentionally has no automatic cron schedule and
+uses log-only customer mail. Its existing Stripe CLI listeners forward the native
+Sandbox events. The hourly thread follow-up independently checks actual native
+collection, restores the same monthly contract only after paid collection, and
+verifies the resulting alert and normal authenticated readback. Collection stays
+pending until the genuine invoice issue time; an hourly check does not guarantee
+collection at that exact minute.
+
+October 5 verification includes the production Worker with development routes
+disabled and normal Better Auth authentication. The actual $100 order appears
+in Activity and its product detail, with immutable items, Payment info and the
+native receipt. A genuinely disposable existing contact received one web reply:
+the original and exact replay returned 200, conflicting replay returned 409,
+and read acknowledgement counts were 1 then 0. Independent D1 and merchant
+reads show one message, one owner notification and one buyer read receipt;
+acknowledgements never render as conversation events. All seven original
+Commerce financial datasets compared exactly unchanged. Personal selection
+changed exactly one existing native Better Auth session from Commerce to null;
+business selection restored the same session to the exact Commerce organization.
+
+Supporting checks passed: quality, the final full typecheck and Node 24.18.1
+production build, 239 unit tests, 107 D1 tests, four migration tests, migration
+and schema guards, 44 email previews, ten dual-channel notification cases and
+the normal HTTPS OAuth/MCP smoke with its 116-tool catalog. The D1 suite has one
+explicit native Resend opt-in skip. Local CodeRabbit reviewed all 67 changed
+files; its three valid findings were corrected, with scoped lint and the final
+typecheck/build passing. Earlier full-PR review and its dispositions remain in
+the dated qualification notes.
+
+Isolated persisted delivery, realtime retry and audience isolation are separate
+from the native Resend transport test addressed only to `delivered@resend.dev`.
+That transport proof does not claim an actual merchant inbox or the pending
+Metronome/Stripe collection event. The genuine 140-cent invoice remains DRAFT
+with no external Stripe invoice and a native issue time of October 5 11:00 UTC
+after the native grace period.
+The PR remains a draft until native collection, monthly restoration, acceptance
+and the resulting alerts are verified.
+
 ## Native financial contract
 
 A connected Accounts v2 merchant owns direct charges and captured principal. The

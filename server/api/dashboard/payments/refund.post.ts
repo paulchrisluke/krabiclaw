@@ -23,9 +23,9 @@ export default defineHandler(async event=>{
   const outcome=await executeGuestThreadOperation(db,{threadId:booking.request_id,organizationId:organization.id,action:'reject',actorUserId:userId,idempotencyKey:`paid-reject:${body.authorization_id}`,financialAuthorizationId:body.authorization_id,env})
   const refund=await queryFirst(db,'SELECT id FROM payment_refunds WHERE payment_id=? AND idempotency_key=?',[payment.id,`rejected:${payment.subject_id}`])
   if(!refund) throw new HTTPError({statusCode:409,statusMessage:outcome.ok?'Refund intent missing':'Booking rejection could not be committed'})
-  const submitted=await executeRefund(db,createStripeClient(env.STRIPE_SECRET_KEY, 'payments'),payment,authorization.amount,`rejected:${payment.subject_id}`,'requested_by_customer',userId)
+  const submitted=await executeRefund(db,createStripeClient(env.STRIPE_SECRET_KEY, 'payments'),payment,authorization.amount,`rejected:${payment.subject_id}`,'requested_by_customer',userId,env)
   if(!outcome.ok)throw new HTTPError({statusCode:outcome.status,statusMessage:'Refund submitted, but the booking rejection notification did not complete. Retry this approval to finish it.',data:{refund:submitted,rejection:outcome}})
   return jsonResponse(submitted)
  }
- return jsonResponse(await refundPayment(db,createStripeClient(env.STRIPE_SECRET_KEY, 'payments'),principal,body.authorization_id))
+ return jsonResponse(await refundPayment(db,createStripeClient(env.STRIPE_SECRET_KEY, 'payments'),principal,body.authorization_id,env))
 })

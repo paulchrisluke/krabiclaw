@@ -41,7 +41,7 @@ export async function handlePaymentsTools(ctx:McpExecutorContext):Promise<unknow
    const prepared=await requestRefundAuthorization(db,principal,String(args.payment_id),Number(args.amount))
    return {...prepared,approval_url:`${dashboardUrl}/payments/refunds/approve?id=${encodeURIComponent(prepared.authorization_id)}`}
   }
-  case 'issue_payment_refund':return await refundPayment(db,stripe(),principal,String(args.authorization_id))
+  case 'issue_payment_refund':return await refundPayment(db,stripe(),principal,String(args.authorization_id),env)
   case 'create_payment_checkout':
    await authorizePayments(principal,'create')
    if(!env.NUXT_PUBLIC_PLATFORM_DOMAIN) throw new Error('Payments HTTPS platform origin missing')

@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { dismissPreviewToolbar, waitForNuxtHydration } from './helpers'
 import { loginAs } from './helpers/auth'
+import { isAccountActivityResponse, isAccountActivityDetailResponse } from '../../shared/account-activity'
 
 // The dashboard's pane topology is the nested route tree (DESIGN.md, Route
 // hierarchy). On a wide screen a level renders beside the parent its Back goes
@@ -112,7 +113,7 @@ test.describe('dashboard pane hierarchy', () => {
     await expectPanes(page, ['organization-integrations', 'organization-payouts'])
   })
 
-  test('five tenant destinations keep Payments and Services in Menu and the buyer account separate', async ({ page }) => {
+  test('five destinations keep tenant management in Menu and personal activity in its own context', async ({ page }) => {
     await page.setViewportSize(WIDE)
     await open(page, `${ORG}/settings`)
     await expect(page.getByTestId('dashboard-top-nav').getByRole('navigation', { name: 'Dashboard' }).getByRole('link')).toHaveText(['Today', 'Calendar', 'Locations', 'Messages'])
@@ -150,14 +151,53 @@ test.describe('dashboard pane hierarchy', () => {
     await expect(page.getByText('No usage waiting to be reported.', { exact: true })).toBeVisible()
     const account = page.waitForResponse(response => new URL(response.url()).pathname === '/api/account' && response.request().method() === 'GET')
     await open(page, '/account')
-    await expect(page).toHaveURL('/dashboard/account/profile/purchases')
+    await expect(page).toHaveURL('/dashboard/account/activity')
     const response = await account
     expect(response.status(), await response.text()).toBe(200)
-    const purchases = await response.json()
-    expect(purchases).toMatchObject({ payments: [], refunds: [] })
-    await expect(page.getByTestId('dashboard-mobile-nav')).toHaveCount(0)
-    await expect(page.getByTestId('dashboard-top-nav').getByRole('navigation', { name: 'Dashboard' })).toHaveCount(0)
-    await expect(page.getByRole('heading', { name: 'Purchases & bookings', exact: true })).toBeVisible()
+    const activity = await response.json()
+    expect(isAccountActivityResponse(activity), 'the account API returns actual owned activity').toBe(true)
+    if (!isAccountActivityResponse(activity)) throw new Error('Invalid account activity response')
+    await expect(mobileNav.getByRole('link')).toHaveText(['Today', 'Calendar', 'Activity', 'Messages', 'Menu'])
+    await expect(mobileNav.getByRole('link', { name: 'Activity', exact: true })).toHaveAttribute('aria-current', 'page')
+    await expect(page.getByRole('heading', { name: 'Activity', exact: true })).toBeVisible()
+    await expect(page.locator('[data-testid^="account-activity-"]')).toHaveCount(activity.activities.length)
+    for (const item of activity.activities) {
+      await expect(page.getByTestId(`account-activity-${item.kind}-${item.id}`)).toContainText(item.title)
+    }
+    // The copied actor's own history may be empty; never create a purchase to
+    // make the dashboard assert its fabricated premise.
+    if (activity.activities.length) {
+      const item = activity.activities[0]!
+      const read = await page.request.get('/api/account', { params: { kind: item.kind, id: item.id } })
+      expect(read.status(), await read.text()).toBe(200)
+      const detail = await read.json()
+      expect(isAccountActivityDetailResponse(detail)).toBe(true)
+      if (!isAccountActivityDetailResponse(detail)) throw new Error('Invalid activity detail response')
+      await page.getByTestId(`account-activity-${item.kind}-${item.id}`).click()
+      await expect(page).toHaveURL(`/dashboard/account/activity/${item.kind}/${item.id}`)
+      await expect(page.getByRole('heading', { name: item.title, exact: true })).toBeVisible()
+      if (detail.activity.payments.length) await expect(page.getByRole('heading', { name: 'Payment info', exact: true })).toHaveCount(detail.activity.payments.length)
+      await page.getByTestId('dashboard-navbar-close').click()
+      await expect(page).toHaveURL('/dashboard/account/activity')
+    } else {
+      await expect(page.getByText('No activity yet', { exact: true })).toBeVisible()
+    }
+    await mobileNav.getByRole('link', { name: 'Today', exact: true }).click()
+    await expect(page).toHaveURL('/dashboard/account')
+    await expect(page.getByRole('heading', { name: 'Today', exact: true })).toBeVisible()
+    await mobileNav.getByRole('link', { name: 'Calendar', exact: true }).click()
+    await expect(page).toHaveURL('/dashboard/account/calendar')
+    await expect(page.getByRole('heading', { name: 'Calendar', exact: true })).toBeVisible()
+    await mobileNav.getByRole('link', { name: 'Messages', exact: true }).click()
+    await expect(page).toHaveURL('/dashboard/account/messages')
+    const personalUpdates = page.waitForResponse(response => new URL(response.url()).pathname === '/api/dashboard/notifications'
+      && new URL(response.url()).searchParams.get('scope') === 'personal')
+    await page.getByRole('tab', { name: 'Updates', exact: true }).click()
+    expect((await personalUpdates).status()).toBe(200)
+    await expect(page).toHaveURL('/dashboard/account/messages?view=updates')
+    await expect(mobileNav.getByRole('link')).toHaveText(['Today', 'Calendar', 'Activity', 'Messages', 'Menu'])
+    await page.setViewportSize(WIDE)
+    await expect(page.getByTestId('dashboard-top-nav').getByRole('navigation', { name: 'Dashboard' }).getByRole('link')).toHaveText(['Today', 'Calendar', 'Activity', 'Messages'])
   })
 
   test('booking Change opens its first field on desktop and not below lg', async ({ page }) => {

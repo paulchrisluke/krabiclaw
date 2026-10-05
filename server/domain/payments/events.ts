@@ -5,7 +5,9 @@ import { notifyProductBookingCreated } from '~/server/domain/product-bookings'
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { sessionClaimQuery, sessionAssignmentQuery } from '~/server/utils/availability'
 import { processStripeWebhookEvent } from '~/server/utils/stripe-webhook-events'
-import { executeRefund, reconcileRefundState, requirePayment, type Payment } from './index'
+import { executeRefund, reconcileRefundState, requirePayment, assertMinorAmount, type Payment } from './index'
+import { notifyPaymentFinancialEvent, reconcilePayoutEvent } from './notifications'
+import { raiseSettledFailures } from '~/server/utils/notifications'
 
 interface Hold {
   id:string; organization_id:string; product_id:string; variant_id:string; session_id:string
@@ -16,11 +18,6 @@ export async function reconcilePaymentIntent(db:DbClient,stripe:Stripe,payment:P
   if (intent.livemode !== Boolean(payment.livemode) || intent.currency.toUpperCase() !== payment.currency || intent.metadata.krabiclaw_payment_id !== payment.id || (payment.stripe_payment_intent_id && payment.stripe_payment_intent_id !== intent.id)) throw new Error('Stripe PaymentIntent financial identity mismatch')
   // Settled refunds never re-enter booking conversion. Recovery remains retryable
   // through its durable refund intent after an interrupted native response.
-  if (payment.state === 'refunded') return
-  if (payment.state === 'recovery') {
-    await executeRefund(db,stripe,payment,payment.captured_amount,`unfulfillable:${intent.id}`,'requested_by_customer',null)
-    return
-  }
   const attempt=await queryFirst<{stripe_checkout_id:string}>(db,'SELECT stripe_checkout_id FROM payment_attempts WHERE payment_id=? AND stripe_checkout_id IS NOT NULL ORDER BY created_at DESC LIMIT 1',[payment.id])
   if(!attempt) throw new Error('PaymentIntent has no authorized checkout attempt')
   const checkout=await stripe.checkout.sessions.retrieve(attempt.stripe_checkout_id,{expand:['line_items.data.price']},{stripeAccount:payment.stripe_account_id})
@@ -32,6 +29,7 @@ export async function reconcilePaymentIntent(db:DbClient,stripe:Stripe,payment:P
   const now = new Date().toISOString()
   if (intent.status !== 'succeeded') {
     if (intent.status === 'canceled') await executeBatch(db,[{query:"UPDATE payments SET state='failed',updated_at=? WHERE id=? AND captured_amount=0",params:[now,payment.id]},{query:"UPDATE payment_checkout_holds SET status='released' WHERE payment_id=? AND status='active'",params:[payment.id]}])
+    if (intent.status === 'requires_payment_method' && intent.last_payment_error) await notifyPaymentFinancialEvent(db,stripe,env,payment,{kind:'payment_failed',nativeId:intent.id,status:intent.status,amount:intent.amount,checkout})
     return
   }
   if (checkout.payment_status !== 'paid') throw new Error('Stripe Checkout has not confirmed paid fulfillment')
@@ -45,8 +43,13 @@ export async function reconcilePaymentIntent(db:DbClient,stripe:Stripe,payment:P
     {query:"INSERT OR IGNORE INTO payment_usage_events(id,organization_id,payment_id,kind,currency,amount,source_id,provider_occurred_at,created_at) VALUES(?,?,?,'captured_volume',?,?,?,?,?)",params:[crypto.randomUUID(),payment.organization_id,payment.id,payment.currency,intent.amount_received,`capture:${payment.stripe_account_id}:${payment.livemode}:${intent.id}`,new Date(charge.created*1000).toISOString(),now]},
   ],{operation:'Record authenticated capture and usage'})
   const recorded = await requirePayment(db,payment.organization_id,payment.id)
-  if (recorded.state === 'refunded' || recorded.refunded_amount > 0) return
-  if (payment.subject_type !== 'booking') return
+  const capture={kind:'payment_captured' as const,nativeId:intent.id,status:intent.status,amount:intent.amount_received,checkout}
+  if(recorded.state==='recovery'){
+    const outcomes=await Promise.allSettled([executeRefund(db,stripe,recorded,recorded.captured_amount,`unfulfillable:${intent.id}`,'requested_by_customer',null,env),notifyPaymentFinancialEvent(db,stripe,env,recorded,capture)])
+    raiseSettledFailures('Unfulfillable payment recovery',payment.id,outcomes,['refund','capture notification'])
+    return
+  }
+  if (recorded.state === 'refunded' || recorded.refunded_amount > 0 || payment.subject_type !== 'booking') {await notifyPaymentFinancialEvent(db,stripe,env,recorded,capture);return}
   const hold = await queryFirst<Hold>(db,'SELECT * FROM payment_checkout_holds WHERE payment_id=? AND organization_id=?',[payment.id,payment.organization_id])
   if (!hold) throw new Error('Captured booking payment has no durable hold')
   if (hold.status !== 'converted') {
@@ -64,20 +67,22 @@ export async function reconcilePaymentIntent(db:DbClient,stripe:Stripe,payment:P
     const converted = await queryFirst<Hold>(db,'SELECT * FROM payment_checkout_holds WHERE id=?',[hold.id])
     if (converted?.status !== 'converted') {
       await executeBatch(db,[{query:"UPDATE payment_checkout_holds SET status='released' WHERE id=? AND status='active'",params:[hold.id]},{query:"UPDATE payments SET state='recovery',updated_at=? WHERE id=?",params:[now,payment.id]}])
-      await executeRefund(db,stripe,await requirePayment(db,payment.organization_id,payment.id),intent.amount_received,`unfulfillable:${intent.id}`,'requested_by_customer',null)
+      const outcomes=await Promise.allSettled([executeRefund(db,stripe,await requirePayment(db,payment.organization_id,payment.id),intent.amount_received,`unfulfillable:${intent.id}`,'requested_by_customer',null,env),notifyPaymentFinancialEvent(db,stripe,env,recorded,capture)])
+      raiseSettledFailures('Unfulfillable payment recovery',payment.id,outcomes,['refund','capture notification'])
       return
     }
   }
   }
-  if(!await queryFirst(db,'SELECT id FROM organization WHERE id=?',[payment.organization_id])&&await queryFirst(db,'SELECT organization_id FROM payment_servicing_tenants WHERE organization_id=? AND stripe_account_id=? AND livemode=?',[payment.organization_id,payment.stripe_account_id,payment.livemode]))return
+  if(!await queryFirst(db,'SELECT id FROM organization WHERE id=?',[payment.organization_id])&&await queryFirst(db,'SELECT organization_id FROM payment_servicing_tenants WHERE organization_id=? AND stripe_account_id=? AND livemode=?',[payment.organization_id,payment.stripe_account_id,payment.livemode])){await notifyPaymentFinancialEvent(db,stripe,env,recorded,capture);return}
   if(!hold.request_id)throw new Error('Captured booking has no canonical guest request for delivery')
-  await notifyProductBookingCreated(env,db,hold.organization_id,hold.request_id)
+  const outcomes=await Promise.allSettled([notifyPaymentFinancialEvent(db,stripe,env,await requirePayment(db,payment.organization_id,payment.id),capture),notifyProductBookingCreated(env,db,hold.organization_id,hold.request_id)])
+  raiseSettledFailures('Captured booking delivery',payment.id,outcomes,['capture notification','booking creation notification'])
   await execute(db,"UPDATE requests SET payload_json=json_set(payload_json,'$.provenance.followups_completed',json('true')) WHERE id=? AND organization_id=? AND json_type(payload_json,'$.provenance')='object'",[hold.request_id,hold.organization_id])
 }
 
 export function paymentEventKey(event:Pick<Stripe.Event,'id'|'account'|'livemode'>):string{return `payments:${event.account??'unscoped'}:${Number(event.livemode)}:${event.id}`}
 export async function processPaymentEvent(db:DbClient,stripe:Stripe,event:Stripe.Event,env:CloudflareEnv) {
-  if(!['checkout.session.','payment_intent.','refund.','charge.dispute.'].some(prefix=>event.type.startsWith(prefix)))return true
+  if(!['checkout.session.','payment_intent.','refund.','charge.dispute.','payout.'].some(prefix=>event.type.startsWith(prefix)))return true
   const object=event.data.object as {id?:string;metadata?:Record<string,string>|null}
   const payload=JSON.stringify({id:event.id,type:event.type,account:event.account,livemode:event.livemode,data:{object:{id:object.id,metadata:{krabiclaw_payment_id:object.metadata?.krabiclaw_payment_id}}}})
   return await processStripeWebhookEvent(db,{id:paymentEventKey(event),type:event.type,payload,processor:'tenant_payments'},async()=>{
@@ -87,6 +92,11 @@ export async function processPaymentEvent(db:DbClient,stripe:Stripe,event:Stripe
     const connected=mappings[0]
     if (!connected) return
     if (Boolean(connected.livemode) !== event.livemode) throw new Error('Stripe connected event mode mismatch')
+    if(event.type.startsWith('payout.')) {
+      if(event.type!=='payout.paid'&&event.type!=='payout.failed')return
+      await reconcilePayoutEvent(db,stripe,env,{organizationId:connected.organization_id,stripeAccountId:event.account,livemode:event.livemode},event)
+      return
+    }
     if (event.type.startsWith('checkout.session.')) {
       const object = event.data.object as Stripe.Checkout.Session
       const attempt = await queryFirst<{payment_id:string}>(db,`SELECT a.payment_id FROM payment_attempts a JOIN payments p ON p.id=a.payment_id WHERE a.stripe_checkout_id=? AND p.stripe_account_id=? AND p.livemode=?`,[object.id,event.account,Number(event.livemode)])
@@ -115,7 +125,7 @@ export async function processPaymentEvent(db:DbClient,stripe:Stripe,event:Stripe
       const intentId = typeof refund.payment_intent==='string'?refund.payment_intent:refund.payment_intent?.id
       const payment = await queryFirst<Payment>(db,'SELECT * FROM payments WHERE stripe_account_id=? AND livemode=? AND stripe_payment_intent_id=?',[event.account,Number(event.livemode),intentId])
       if (!payment) return
-      await reconcileRefundState(db,stripe,payment,refund.id)
+      await reconcileRefundState(db,stripe,payment,refund,env)
       return
     }
     if (event.type.startsWith('charge.dispute.')) {
@@ -124,13 +134,16 @@ export async function processPaymentEvent(db:DbClient,stripe:Stripe,event:Stripe
       const intentId=typeof dispute.payment_intent==='string'?dispute.payment_intent:dispute.payment_intent?.id
       const payment=await queryFirst<Payment>(db,'SELECT * FROM payments WHERE stripe_account_id=? AND livemode=? AND stripe_payment_intent_id=?',[event.account,Number(event.livemode),intentId])
       if (!payment) return
-      await reconcileDisputeState(db,payment,dispute)
+      await reconcileDisputeState(db,stripe,payment,dispute,env)
     }
   })
 }
 
-export async function reconcileDisputeState(db:DbClient,payment:Payment,dispute:Stripe.Dispute) {
+export async function reconcileDisputeState(db:DbClient,stripe:Stripe,payment:Payment,dispute:Stripe.Dispute,env:CloudflareEnv) {
  const intentId=typeof dispute.payment_intent==='string'?dispute.payment_intent:dispute.payment_intent?.id
- if(dispute.currency.toUpperCase()!==payment.currency||intentId!==payment.stripe_payment_intent_id)throw new Error('Dispute native financial identity mismatch')
+ if(dispute.livemode!==Boolean(payment.livemode)||dispute.currency.toUpperCase()!==payment.currency||intentId!==payment.stripe_payment_intent_id)throw new Error('Dispute native financial identity mismatch')
+ assertMinorAmount(dispute.amount,false)
  await execute(db,`INSERT INTO payment_disputes(id,payment_id,stripe_dispute_id,amount,currency,reason,status,evidence_due_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(payment_id,stripe_dispute_id) DO UPDATE SET status=excluded.status,evidence_due_at=excluded.evidence_due_at,updated_at=excluded.updated_at`,[crypto.randomUUID(),payment.id,dispute.id,dispute.amount,payment.currency,dispute.reason,dispute.status,dispute.evidence_details.due_by?new Date(dispute.evidence_details.due_by*1000).toISOString():null,new Date().toISOString()])
+ const kind=dispute.status==='needs_response'||dispute.status==='warning_needs_response'?'dispute_needs_response':dispute.status==='won'?'dispute_won':dispute.status==='lost'?'dispute_lost':dispute.status==='warning_closed'||dispute.status==='prevented'?'dispute_closed':null
+ if(kind)await notifyPaymentFinancialEvent(db,stripe,env,payment,{kind,nativeId:dispute.id,status:dispute.status,amount:dispute.amount,responseDueBy:dispute.evidence_details.due_by?`${new Intl.DateTimeFormat('en-US',{timeZone:'UTC',dateStyle:'medium',timeStyle:'short'}).format(new Date(dispute.evidence_details.due_by*1000))} UTC`:null})
 }

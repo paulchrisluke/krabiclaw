@@ -63,14 +63,15 @@ export async function attachGuestPhotos(
   organizationId: string,
   entryId: string,
   photos: MessagePhoto[],
+  uploader: Uploader = { source: 'external', userId: null },
 ): Promise<void> {
   if (!photos.length) return
   if ((await listMessagePhotos(db, [entryId])).has(entryId)) return
-  const assetIds = await uploadMessagePhotos(db, env, organizationId, photos, { source: 'external', userId: null })
+  const assetIds = await uploadMessagePhotos(db, env, organizationId, photos, uploader)
   try {
     await executeBatch(db, messagePhotoPlacements(organizationId, entryId, assetIds, new Date().toISOString()), { operation: 'guest message photos' })
   } catch (error) {
-    await discardMessagePhotos(db, env, organizationId, assetIds, null, error)
+    await discardMessagePhotos(db, env, organizationId, assetIds, uploader.userId, error)
     throw error
   }
 }

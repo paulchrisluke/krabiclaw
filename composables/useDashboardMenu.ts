@@ -30,6 +30,7 @@ export function useDashboardMenu() {
   const route = useRoute()
   const scopeHeaderModel = inject(dashboardScopeHeaderModelKey, null)
   const organizationSettings = useOrganizationSettingsNavigation()
+  const personal = computed(() => typeof route.name === 'string' && route.name.startsWith('dashboard-account'))
 
   const orgBase = computed(() => {
     const slug = route.params.orgSlug
@@ -37,7 +38,7 @@ export function useDashboardMenu() {
   })
 
   /** The Menu tab is the organization's settings level; its rows are the leaves beneath it. */
-  const menuPageTo = computed(() => orgBase.value ? `${orgBase.value}/settings` : '/dashboard')
+  const menuPageTo = computed(() => personal.value ? '/dashboard/account/menu' : orgBase.value ? `${orgBase.value}/settings` : '/dashboard')
 
   const notificationsTo = computed(() => orgBase.value ? `${orgBase.value}/settings/notifications` : null)
 
@@ -48,11 +49,16 @@ export function useDashboardMenu() {
     await navigateTo({ path: '/login', query: { redirect } })
   }
 
-  const groups = computed<EditorNavigationGroup[]>(() => organizationSettings.groups.value)
+  const groups = computed<EditorNavigationGroup[]>(() => personal.value ? [{
+    id: 'account', items: [
+      { id: 'account', label: 'Account settings', to: '/dashboard/account/profile' },
+      { id: 'log-out', label: 'Log out', action: {} },
+    ],
+  }] : organizationSettings.groups.value)
   const activeItem = computed(() => organizationSettings.activeItem.value)
 
   /** Organization switcher. */
   const scopeModel = computed(() => scopeHeaderModel?.value ?? null)
 
-  return { menuPageTo, notificationsTo, groups, activeItem, scopeModel, logOut }
+  return { menuPageTo, notificationsTo, groups, activeItem, scopeModel, logOut, personal }
 }

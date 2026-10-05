@@ -93,6 +93,12 @@
             </div>
           </div>
 
+          <PaymentDetails v-for="detail in booking.payments" :key="detail.payment.id" :payment="detail.payment" :refunds="detail.refunds" :order="detail.order">
+            <template #actions>
+              <UButton v-if="detail.payment.captured_amount > detail.payment.refunded_amount" class="mt-4" color="neutral" variant="soft" label="Refund payment" :to="`/dashboard/${orgSlug}/payments/transactions/${detail.payment.id}`" />
+            </template>
+          </PaymentDetails>
+
           <div class="mt-6 border-t border-default pt-2">
             <NuxtLink :to="`${editorPath}/guest`" class="flex items-center gap-4 py-4">
               <UAvatar :src="booking.guestImageUrl || undefined" :alt="booking.guestName" icon="i-lucide-user" size="md" class="shrink-0" />
@@ -239,6 +245,7 @@ export const bookingEditorKey = Symbol('booking-editor') as InjectionKey<Booking
 </script>
 
 <script setup lang="ts">
+import PaymentDetails from '~/components/dashboard/PaymentDetails.vue'
 import { NuxtLink } from '#components'
 import { formatCalendarDate, formatTime, formatTimestamp } from '~/utils/timezone'
 import DashboardListItemDialog from '~/components/dashboard/DashboardListItemDialog.vue'

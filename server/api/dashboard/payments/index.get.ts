@@ -2,8 +2,7 @@ import {defineHandler,HTTPError} from 'nitro'
 import {getQuery} from 'nitro/h3'
 import {getDashboardContext} from '~/server/utils/dashboard-context'
 import {jsonResponse} from '~/server/utils/api-response'
-import {readPaymentOrder} from '~/server/domain/payments/orders'
-import {listPayments,paymentSummary,paymentPayouts,requirePayment,authorizePayments} from '~/server/domain/payments'
+import {listPayments,paymentSummary,paymentPayouts,readPaymentDetails,authorizePayments} from '~/server/domain/payments'
 import {paymentsBillingPricing} from '~/server/domain/payments/usage'
 import {queryAll,queryFirst} from '~/server/db'
 export default defineHandler(async event=>{
@@ -14,10 +13,7 @@ export default defineHandler(async event=>{
  if(query.after!==undefined&&(typeof query.after!=='string'||!query.after))throw new HTTPError({statusCode:400,statusMessage:'Valid page cursor is required'})
  const after=typeof query.after==='string'?query.after:undefined
  if(typeof query.payment_id==='string'){
-  const payment=await requirePayment(db,organization.id,query.payment_id)
-  const [refunds,disputes]=await Promise.all([queryAll(db,'SELECT * FROM payment_refunds WHERE payment_id=?',[payment.id]),queryAll(db,'SELECT * FROM payment_disputes WHERE payment_id=?',[payment.id])])
-  const booking=payment.subject_type==='booking'?await queryFirst<{request_id:string|null}>(db,'SELECT request_id FROM bookings WHERE id=? AND organization_id=?',[payment.subject_id,organization.id]):null
-  return jsonResponse({payment,refunds,disputes,booking_request_id:booking?.request_id??null,order:await readPaymentOrder(db,organization.id,payment.id)})
+  return jsonResponse(await readPaymentDetails(db,organization.id,query.payment_id))
  }
  if(query.view==='payouts')return jsonResponse(await paymentPayouts(db,env,principal,after))
  if(query.view==='refunds' || query.view==='disputes'){

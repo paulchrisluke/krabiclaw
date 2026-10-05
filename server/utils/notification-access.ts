@@ -1,4 +1,5 @@
-import type { H3Event } from 'nitro'
+import { HTTPError, type H3Event } from 'nitro'
+import { getQuery } from 'nitro/h3'
 import { isOrganizationWideRole } from '~/server/utils/member-access'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
@@ -22,7 +23,9 @@ export function buildNotificationVisibilityFilter(principal: NotificationVisibil
 
   // scope_kind is the column the CHECK constrains, so it is the only place a
   // notification's scope is read from.
-  if (principal.platformAdmin) visibilityClauses.push(`n.scope_kind = 'global'`)
+  if (principal.platformAdmin && !principal.organization) visibilityClauses.push(`n.scope_kind = 'global' AND n.target_user_id IS NULL`)
+  if (!principal.organization) visibilityClauses.push(`(n.scope_kind = 'global' AND n.target_user_id = ?)`)
+  if (!principal.organization) params.push(principal.userId)
 
   if (principal.organization) {
     if (isOrganizationWideRole(principal.organization.role)) {
@@ -41,15 +44,20 @@ export function buildNotificationVisibilityFilter(principal: NotificationVisibil
 
 export async function getNotificationAccess(event: H3Event) {
   const context = await getDashboardContext(event, { requireOrganization: false })
-  const platformAdmin = await hasPlatformEventPermission(event, context.env, { platform: ['access'] })
+  const scope = getQuery(event).scope
+  if (scope !== undefined && scope !== 'personal') throw new HTTPError({ statusCode: 400, statusMessage: 'Invalid notification scope' })
+  const personal = scope === 'personal'
+  const organization = personal ? null : context.organization
+  const platformAdmin = !personal && await hasPlatformEventPermission(event, context.env, { platform: ['access'] })
   const filter = buildNotificationVisibilityFilter({
     userId: context.userId,
     platformAdmin,
-    organization: context.organization,
+    organization,
   })
 
   return {
     ...context,
+    organization,
     ...filter,
   }
 }

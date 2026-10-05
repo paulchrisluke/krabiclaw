@@ -81,8 +81,13 @@ export function parseGuestRequest(row: Record<string, unknown>): GuestRequest {
   return guestRequestSchema.parse({ ...row, payload: JSON.parse(row.payload_json) })
 }
 
-export async function getGuestRequest(db: DbClient, id: string, organizationId?: string, kind?: GuestRequestKind): Promise<GuestRequest | null> {
-  const row = await queryFirst<Record<string, unknown>>(db, `SELECT * FROM requests WHERE id = ? AND kind IN ('contact', 'reservation', 'booking')${organizationId ? ' AND organization_id = ?' : ''}${kind ? ' AND kind = ?' : ''}`, [id, ...(organizationId ? [organizationId] : []), ...(kind ? [kind] : [])])
+/** Resource ownership belongs to the current request and every actual linked operational record. */
+export const REQUEST_CURRENT_BUYER_SQL = `r.user_id IS NOT NULL
+ AND NOT EXISTS(SELECT 1 FROM bookings b WHERE b.request_id=r.id AND (b.user_id IS NULL OR b.user_id<>r.user_id OR b.organization_id<>r.organization_id OR r.kind<>'booking'))
+ AND NOT EXISTS(SELECT 1 FROM reservations v WHERE v.request_id=r.id AND (v.user_id IS NULL OR v.user_id<>r.user_id OR v.organization_id<>r.organization_id OR r.kind<>'reservation'))`
+
+export async function getGuestRequest(db: DbClient, id: string, organizationId?: string, kind?: GuestRequestKind, buyerUserId?:string): Promise<GuestRequest | null> {
+  const row = await queryFirst<Record<string, unknown>>(db, `SELECT r.* FROM requests r WHERE r.id = ? AND r.kind IN ('contact', 'reservation', 'booking')${organizationId ? ' AND r.organization_id = ?' : ''}${kind ? ' AND r.kind = ?' : ''}${buyerUserId?` AND r.user_id=? AND ${REQUEST_CURRENT_BUYER_SQL}`:''}`, [id, ...(organizationId ? [organizationId] : []), ...(kind ? [kind] : []),...(buyerUserId?[buyerUserId]:[])])
   return row ? parseGuestRequest(row) : null
 }
 

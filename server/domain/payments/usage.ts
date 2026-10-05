@@ -180,7 +180,7 @@ export async function paymentsUsageStatus(db:DbClient,env:CloudflareEnv,organiza
    if(collection.id!==external.invoice_id||customerId!==account.stripe_billing_customer_id||collection.metadata?.metronome_id!==invoice.id||collection.livemode!==stripeLivemodeFromKey(env.STRIPE_SECRET_KEY!))throw new Error('Stripe invoice collection does not match the Payments customer and Metronome invoice')
    collection_invoice={id:collection.id,status:collection.status,currency:collection.currency.toUpperCase(),total:collection.total,amount_due:collection.amount_due,amount_paid:collection.amount_paid,amount_remaining:collection.amount_remaining,hosted_invoice_url:collection.hosted_invoice_url,invoice_pdf:collection.invoice_pdf}
   }
-  collected.push({...invoice,collection_invoice})
+  collected.push({...invoice,id:invoice.id,collection_invoice})
  }
  const status=typeof native.ending_before==='string'?(Date.parse(native.ending_before)<=Date.now()?'closed':'closing'):['closed','closing'].includes(account.status)?'servicing':account.status
  return {configured:true,pending,pricing,account:{...account,status},invoices:collected,credits,source:'Metronome',refreshed_at:new Date().toISOString()}
@@ -233,7 +233,7 @@ export async function metronomeInvoices(env:CloudflareEnv,customerId:string,cont
   const result=await metronomeRequest(env,`/v1/customers/${encodeURIComponent(customerId)}/invoices?limit=100&contract_id=${encodeURIComponent(contractId)}${cursor?`&next_page=${encodeURIComponent(cursor)}`:''}`)
   if(!Array.isArray(result.data))throw new Error('Metronome invoice list is invalid')
   for(const invoice of result.data){
-   if(!invoice||typeof invoice!=='object'||Array.isArray(invoice)||invoice.contract_id!==contractId||invoice.customer_id!==customerId)throw new Error('Metronome invoice does not match the configured Payments contract')
+   if(!invoice||typeof invoice!=='object'||Array.isArray(invoice)||typeof invoice.id!=='string'||!invoice.id||invoice.contract_id!==contractId||invoice.customer_id!==customerId)throw new Error('Metronome invoice does not match the configured Payments contract')
    const credit=invoice.credit_type as Record<string,unknown>|undefined
    if(credit?.name!=='USD (cents)'||typeof credit.id!=='string'||typeof invoice.total!=='number'||!Number.isFinite(invoice.total))throw new Error('Metronome Payments invoice must contain its native USD-cent amount')
    rows.push(invoice as Record<string,unknown>)
