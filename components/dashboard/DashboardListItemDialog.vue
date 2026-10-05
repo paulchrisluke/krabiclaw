@@ -1,7 +1,7 @@
 <template>
   <UModal
     v-model:open="open"
-    :close="false"
+    :title="title"
     :dismissible="false"
     :ui="{
       // Centred dialog at `sm` and up; a bottom sheet below it. One element, one
@@ -14,28 +14,17 @@
       // `transform`. The explicit width is needed too, because the default
       // `w-[calc(100vw-2rem)]` outranks `inset-x-0`.
       content: 'max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-auto max-sm:w-full max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-b-none',
+      wrapper: 'w-full min-w-0 px-10',
+      title: 'truncate text-center text-base',
       footer: 'justify-between',
     }"
   >
-    <template #header>
-      <!--
-        Close left, title centred, nothing on the right. This is the item-detail
-        chrome: you opened one row to change it and you are leaving either way.
-      -->
-      <div class="grid w-full grid-cols-[auto_1fr_auto] items-center gap-2">
-        <UButton
-          icon="i-lucide-x"
-          :aria-label="`Close ${title}`"
-          color="neutral"
-          variant="ghost"
-          size="sm"
-          square
-          data-testid="list-item-dismiss"
-          @click="open = false"
-        />
-        <h2 class="truncate text-center text-base font-semibold text-highlighted">{{ title }}</h2>
-        <span class="size-8" />
-      </div>
+    <template #close="{ ui }">
+      <UButton
+        icon="i-lucide-x" :aria-label="`Close ${title}`"
+        color="neutral" variant="ghost" size="sm" square
+        data-testid="list-item-dismiss" :class="ui.close({ class: 'start-4 end-auto sm:start-6' })"
+      />
     </template>
 
     <template #body>

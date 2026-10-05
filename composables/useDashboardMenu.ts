@@ -36,9 +36,6 @@ export function useDashboardMenu() {
     return typeof slug === 'string' && slug ? `/dashboard/${slug}` : null
   })
 
-  /** Links shown in the top nav and the bottom bar; the organization surfaces build their own. */
-  const primaryNavItems = computed<Array<{ key: string; label: string; icon: string; to: string; active: boolean }> | null>(() => null)
-
   /** The Menu tab is the organization's settings level; its rows are the leaves beneath it. */
   const menuPageTo = computed(() => orgBase.value ? `${orgBase.value}/settings` : '/dashboard')
 
@@ -57,5 +54,5 @@ export function useDashboardMenu() {
   /** Organization switcher. */
   const scopeModel = computed(() => scopeHeaderModel?.value ?? null)
 
-  return { primaryNavItems, menuPageTo, notificationsTo, groups, activeItem, scopeModel, logOut }
+  return { menuPageTo, notificationsTo, groups, activeItem, scopeModel, logOut }
 }

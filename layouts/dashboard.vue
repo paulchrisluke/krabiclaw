@@ -137,7 +137,6 @@ import { useAnalytics } from '~/composables/useAnalytics'
 import '~/assets/css/dashboard.css'
 import { mediaStillUrl } from '~/shared/media-placement-contract'
 import { useMediaQuery } from '@vueuse/core'
-import { requireProductPresentation } from '~/utils/product-presentation'
 
 // ─────────────────────────────────────────────────────────────────────────
 // Dashboard shell architecture.
@@ -414,17 +413,14 @@ const navTargets = computed<DashboardMobileNavItem[]>(() => {
   const items: DashboardMobileNavItem[] = [
     { key: 'today', label: 'Today', icon: 'i-lucide-bookmark', to: routeOrgBase },
     { key: 'calendar', label: 'Calendar', icon: 'i-lucide-calendar-days', to: `${routeOrgBase}/calendar` },
-    ...(dashboard.organization.value?.vertical === 'service' ? [{ key: 'products', label: requireProductPresentation('service', dashboard.organization.value.theme_id).collectionLabel, icon: 'i-lucide-package', to: `${routeOrgBase}/products` }] : []),
     { key: 'locations', label: 'Locations', icon: 'i-lucide-map-pin', to: `${routeOrgBase}/locations` },
-    { key: 'payments', label: 'Payments', icon: 'i-lucide-credit-card', to: `${routeOrgBase}/payments` },
     { key: 'messages', label: 'Messages', icon: 'i-lucide-message-square', to: `${routeOrgBase}/messages` },
   ]
   return items
 })
 
 // The top nav (tablet and desktop, md and up) and the bottom bar (mobile, below
-// md) render the same list — one nav source, two presentations. useDashboardMenu
-// owns which list that is.
+// md) render this layout's navTargets — one nav source, two presentations.
 // "Menu" opens the slideover at md and up and navigates to the menu page below
 // it, because a slideover is the wrong control on a phone.
 const menuOpen = ref(false)

@@ -32,7 +32,6 @@
         <p class="text-[15px] font-semibold text-highlighted">Insights</p>
         <UIcon name="i-lucide-chart-no-axes-column" class="size-5 text-muted" />
       </div>
-      <p class="mt-1 text-sm text-muted">Traffic, sources and conversions for your organization.</p>
     </NuxtLink>
 
     <EditorNavigationList :groups="groups" :active-item="activeItem" @act="onAct" />

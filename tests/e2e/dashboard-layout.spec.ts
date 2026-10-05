@@ -112,14 +112,40 @@ test.describe('dashboard pane hierarchy', () => {
     await expectPanes(page, ['organization-integrations', 'organization-payouts'])
   })
 
-  test('Payments navigation and empty-state rendering include the buyer account', async ({ page }) => {
+  test('five tenant destinations keep Payments and Services in Menu and the buyer account separate', async ({ page }) => {
     await page.setViewportSize(WIDE)
-    await open(page, `${ORG}/payments/overview`)
+    await open(page, `${ORG}/settings`)
+    await expect(page.getByTestId('dashboard-top-nav').getByRole('navigation', { name: 'Dashboard' }).getByRole('link')).toHaveText(['Today', 'Calendar', 'Locations', 'Messages'])
+    await page.getByTestId('dashboard-top-nav-menu-button').click()
+    await page.getByRole('dialog', { name: 'Menu', exact: true }).getByRole('link', { name: 'Payments', exact: true }).click()
+    await expect(page).toHaveURL(`${ORG}/payments/overview`)
+    await expect(page.locator('#dashboard-panel-payments [data-testid="dashboard-navbar-back"]')).toHaveAttribute('href', `${ORG}/settings`)
     await expect(page.getByText('No captured payment activity in this UTC period.', { exact: true })).toBeVisible()
     for (const view of ['transactions', 'refunds', 'disputes']) {
       await open(page, `${ORG}/payments/${view}`)
       await expect(page.getByText(view === 'transactions' ? 'No transactions in this UTC period.' : `No ${view} yet.`, { exact: true })).toBeVisible()
     }
+
+    await page.setViewportSize({ width: 390, height: 844 })
+    await open(page, `${ORG}/payments`)
+    const mobileNav = page.getByTestId('dashboard-mobile-nav')
+    await expect(mobileNav.getByRole('link')).toHaveText(['Today', 'Calendar', 'Locations', 'Messages', 'Menu'])
+    await expect(page.getByTestId('dashboard-mobile-nav-menu-link')).toHaveAttribute('aria-current', 'page')
+    await page.locator('#dashboard-panel-payments [data-testid="dashboard-navbar-back"]').click()
+    await expect(page).toHaveURL(`${ORG}/settings`)
+    await page.locator('#dashboard-panel-organization-settings').getByRole('link', { name: 'Payments', exact: true }).click()
+    await expect(page).toHaveURL(`${ORG}/payments`)
+
+    const services = '/dashboard/north-carolina-legal-services'
+    await open(page, `${services}/settings`)
+    await expect(mobileNav.getByRole('link')).toHaveText(['Today', 'Calendar', 'Locations', 'Messages', 'Menu'])
+    await page.locator('#dashboard-panel-organization-settings').getByRole('link', { name: 'Services', exact: true }).click()
+    await expect(page).toHaveURL(`${services}/products`)
+    await expect(page.getByTestId('dashboard-mobile-nav-menu-link')).toHaveAttribute('aria-current', 'page')
+    await expect(page.locator('#dashboard-panel-organization-products [data-testid="dashboard-navbar-back"]')).toHaveAttribute('href', `${services}/settings`)
+    await page.locator('#dashboard-panel-organization-products [data-testid="dashboard-navbar-back"]').click()
+    await expect(page).toHaveURL(`${services}/settings`)
+
     await open(page, `${ORG}/settings/payments-billing`)
     await expect(page.getByText('No usage waiting to be reported.', { exact: true })).toBeVisible()
     const account = page.waitForResponse(response => new URL(response.url()).pathname === '/api/account' && response.request().method() === 'GET')
@@ -129,6 +155,8 @@ test.describe('dashboard pane hierarchy', () => {
     expect(response.status(), await response.text()).toBe(200)
     const purchases = await response.json()
     expect(purchases).toMatchObject({ payments: [], refunds: [] })
+    await expect(page.getByTestId('dashboard-mobile-nav')).toHaveCount(0)
+    await expect(page.getByTestId('dashboard-top-nav').getByRole('navigation', { name: 'Dashboard' })).toHaveCount(0)
     await expect(page.getByRole('heading', { name: 'Purchases & bookings', exact: true })).toBeVisible()
   })
 
