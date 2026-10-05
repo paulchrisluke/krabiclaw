@@ -38,8 +38,8 @@ Activity opens the actual booking, reservation or product detail. Payment info,
 receipts and refunds belong inside that detail. Both audiences use the same
 payment presentation; tenant management actions use the existing financial
 authorization. Messages links back to the same record. One-time orders have
-their immutable items and fulfillment status, without a calendar occurrence or
-manufactured booking conversation.
+their immutable items, without a calendar occurrence or manufactured booking
+conversation; the merchant arranges fulfillment outside KrabiClaw.
 
 Buyer reads authorize the current Better Auth user against the targeted record.
 The buyer conversation excludes internal notes, staff controls and delivery
