@@ -68,9 +68,6 @@ export interface UpdateOrganizationSettingsRequest {
   canonical_url?: string | null
   robots?: string | null
   media?: Array<{ asset_id: string | null; slot: 'logo' | 'favicon' | 'social_share' | 'announcement' }>
-  // Additive/subtractive delta on top of the vertical's own module defaults (config/cms-registry.ts
-  // ProductFeature ids) — null clears the override back to defaults.
-  feature_overrides?: { enabled?: string[]; disabled?: string[] } | null
 }
 
 export interface LaunchReadiness {

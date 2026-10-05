@@ -9,10 +9,18 @@ definePageMeta({ layout: 'dashboard' })
 const route = useRoute()
 const api = useDashboardApi()
 const paymentId = String(route.params.paymentId || '')
-const detail = await api<{ booking_request_id: string | null; order: unknown }>('/api/dashboard/payments', {
-  query: { payment_id: paymentId },
-  validate: (value: unknown): value is { booking_request_id: string | null; order: unknown } => isRecord(value) && 'order' in value && (value.booking_request_id === null || typeof value.booking_request_id === 'string'),
-})
 const base = `/dashboard/${route.params.orgSlug}/bookings`
-await navigateTo(detail.booking_request_id ? `${base}/booking/${encodeURIComponent(detail.booking_request_id)}` : `${base}/${detail.order ? 'order' : 'payment'}/${encodeURIComponent(paymentId)}`, { replace: true })
+// Raised, not thrown: a nested page's setup throw leaves a blank screen (DESIGN.md).
+if (!paymentId) showError(createError({ statusCode: 404, statusMessage: 'Transaction not found' }))
+else {
+  try {
+    const detail = await api<{ booking_request_id: string | null; order: unknown }>('/api/dashboard/payments', {
+      query: { payment_id: paymentId },
+      validate: (value: unknown): value is { booking_request_id: string | null; order: unknown } => isRecord(value) && 'order' in value && (value.booking_request_id === null || typeof value.booking_request_id === 'string'),
+    })
+    await navigateTo(detail.booking_request_id ? `${base}/booking/${encodeURIComponent(detail.booking_request_id)}` : `${base}/${detail.order ? 'order' : 'payment'}/${encodeURIComponent(paymentId)}`, { replace: true })
+  } catch (cause) {
+    showError(createError({ statusCode: 404, statusMessage: getErrorMessage(cause, 'Transaction not found') }))
+  }
+}
 </script>

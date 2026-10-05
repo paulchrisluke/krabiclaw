@@ -32,9 +32,6 @@ import { parseOpeningHours, parseSpecialHours, type OpeningHours, type SpecialHo
 import type { Ref } from 'vue'
 import type { LocationReservationConfig, LocationReservationConfigPatch } from '~/server/utils/reservations'
 import { getErrorMessage } from '~/utils/errors'
-import { defaultModuleFeaturesForVertical, resolveCmsCapabilities, toggleableModulesForScope, type ProductFeature } from '~/config/cms-registry'
-import { resolvePublicTemplate } from '~/utils/template-registry'
-import type { OrganizationVertical } from '~/utils/vertical-copy'
 import { postalAddressFromAnswers, type PostalAddress } from '~/utils/postal-address'
 
 
@@ -66,7 +63,7 @@ export interface BusinessLocation {
  * rest are the gear's.
  */
 export const HUB_KEYS = ['name', 'description', 'hours', 'address', 'contact', 'reservations'] as const
-export const SETTINGS_KEYS = ['status', 'slug', 'features'] as const
+export const SETTINGS_KEYS = ['status', 'slug'] as const
 export type LocationEditorKey = typeof HUB_KEYS[number] | typeof SETTINGS_KEYS[number]
 
 /**
@@ -97,51 +94,7 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
   const loading = ref(true)
   const error = ref<string | null>(null)
   const location = ref<BusinessLocation | null>(null)
-  const savingLocationFeatures = ref(false)
   const originalSignature = ref('')
-  const locationEnabledFeatureSet = reactive<Partial<Record<ProductFeature, boolean>>>({})
-  // The baseline for diffing a checkbox change is always the parent SITE's effective feature set
-  // (never this location's own current state) — re-enabling a module back to what the site already
-  // supports must collapse the stored override to null, not an equivalent-but-redundant explicit
-  // delta. Both come straight from the location GET/PATCH response (server/utils/location-management.ts's
-  // resolveLocationCapabilitySummary) rather than being recomputed client-side.
-  const organizationEffectiveFeatures = ref<ProductFeature[]>([])
-  const locationEffectiveFeatures = ref<ProductFeature[]>([])
-
-  const locationToggleableFeatures = computed<ProductFeature[]>(() => {
-    const organization = dashboard.organization.value
-    if (!organization?.vertical) return []
-    const template = resolvePublicTemplate({ themeId: organization.theme_id, vertical: organization.vertical as OrganizationVertical }).slug
-    const configurableHere = new Set(toggleableModulesForScope(template, 'location'))
-    return organizationEffectiveFeatures.value.filter(feature => configurableHere.has(feature))
-  })
-
-  const locationFeatureLabels = computed<Map<ProductFeature, string>>(() => {
-    const organization = dashboard.organization.value
-    if (!organization?.vertical) return new Map()
-    const vertical = organization.vertical as OrganizationVertical
-    const template = resolvePublicTemplate({ themeId: organization.theme_id, vertical }).slug
-    const defaults = defaultModuleFeaturesForVertical(vertical)
-    const effective = organizationEffectiveFeatures.value
-    const capabilities = resolveCmsCapabilities(vertical, template, {
-      organization: {
-        enabled: effective.filter(feature => !defaults.includes(feature)),
-        disabled: defaults.filter(feature => !effective.includes(feature)),
-      },
-    })
-    return new Map(capabilities.managers.map(manager => [manager.id, manager.label]))
-  })
-
-  function locationFeatureLabel(feature: ProductFeature): string {
-    const label = locationFeatureLabels.value.get(feature)
-    if (!label) throw new Error(`No registry label for location module: ${feature}`)
-    return label
-  }
-
-  interface LocationCapabilitySummary {
-    organization_effective_features?: ProductFeature[]
-    location_effective_features?: ProductFeature[]
-  }
 
   const isNullableString = (value: unknown): value is string | null => value === null || typeof value === 'string'
   const isBusinessLocation = (value: unknown): value is BusinessLocation => {
@@ -154,53 +107,8 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
       && isNullableString(value.phone)
       && isNullableString(value.google_place_id)
   }
-  const isCapabilitySummary = (value: unknown): value is LocationCapabilitySummary =>
-    isRecord(value)
-    && (value.organization_effective_features === undefined
-      || (Array.isArray(value.organization_effective_features) && value.organization_effective_features.every(item => typeof item === 'string')))
-    && (value.location_effective_features === undefined
-      || (Array.isArray(value.location_effective_features) && value.location_effective_features.every(item => typeof item === 'string')))
-  const isLocationResponse = (value: unknown): value is { success: true; location: BusinessLocation } & LocationCapabilitySummary =>
-    isRecord(value) && value.success === true && isBusinessLocation(value.location) && isCapabilitySummary(value)
-  function fillLocationFeatures(summary: LocationCapabilitySummary) {
-    organizationEffectiveFeatures.value = summary.organization_effective_features ?? []
-    locationEffectiveFeatures.value = summary.location_effective_features ?? []
-    const enabled = new Set(locationEffectiveFeatures.value)
-    // Only ever read through locationToggleableFeatures (see the template's v-for and
-    // saveLocationFeatures' filter), so a stale key from a previous load is harmless.
-    for (const feature of locationToggleableFeatures.value) locationEnabledFeatureSet[feature] = enabled.has(feature)
-  }
-
-  async function saveLocationFeatures() {
-    const requestedLocationId = locationId.value
-    savingLocationFeatures.value = true
-    editorError.value = null
-    try {
-      // Delta against the SITE's effective set, not this location's prior state (see
-      // organizationEffectiveFeatures' doc comment) — collapses to `null` when the checked set exactly
-      // matches what the site already supports. `enabled` is structurally always [] today:
-      // locationToggleableFeatures is itself filtered from organizationEffectiveFeatures (see its own
-      // computed above), so every feature checked here already satisfies `organizationSet.has(feature)`.
-      // Kept as a real filter (not hardcoded to []) so this stays correct if that upstream
-      // computed ever changes — don't "simplify" this away without re-checking that invariant.
-      const organizationSet = new Set(organizationEffectiveFeatures.value)
-      const enabled = locationToggleableFeatures.value.filter(feature => locationEnabledFeatureSet[feature] && !organizationSet.has(feature))
-      const disabled = locationToggleableFeatures.value.filter(feature => organizationSet.has(feature) && !locationEnabledFeatureSet[feature])
-      const featureOverrides = enabled.length === 0 && disabled.length === 0 ? null : { enabled, disabled }
-      await dashboardApi<{ success: boolean; location: BusinessLocation } & LocationCapabilitySummary>(`/api/dashboard/locations/${requestedLocationId}`, {
-        method: 'PATCH',
-        body: { feature_overrides: featureOverrides },
-        validate: isLocationResponse,
-      })
-      if (locationId.value !== requestedLocationId) return
-      await refreshLocationWorkspace()
-      await dashboard.refresh()
-    } catch (error) {
-      editorError.value = getErrorMessage(error, 'Failed to save availability')
-    } finally {
-      savingLocationFeatures.value = false
-    }
-  }
+  const isLocationResponse = (value: unknown): value is { success: true; location: BusinessLocation } =>
+    isRecord(value) && value.success === true && isBusinessLocation(value.location)
   const detailsSaving = ref(false)
 
   // The reservation policy is its own row (location_reservation_configs), not a
@@ -295,24 +203,19 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
 
   const slugSummary = computed(() => location.value?.slug?.trim() || 'Not set')
   const statusSummary = computed(() => location.value?.status === 'active' ? 'Active' : 'Hidden from the public site')
-  const featureSummary = computed(() => {
-    const count = locationToggleableFeatures.value.filter(feature => locationEnabledFeatureSet[feature]).length
-    return count ? `${count} ${count === 1 ? 'module' : 'modules'} available` : 'No location modules'
-  })
   const navigationGroups = computed(() => [{
     id: 'settings',
     items: [
       { id: 'status', label: 'Status', summary: statusSummary.value, to: `${settingsBase.value}/status` },
       { id: 'slug', label: 'Link', summary: slugSummary.value, to: `${settingsBase.value}/slug` },
       { id: 'languages', label: 'Languages', summary: 'Translate the name, description and address', action: { label: 'Localize' } },
-      { id: 'features', label: 'Features', summary: featureSummary.value, to: `${settingsBase.value}/features` },
     ],
   }])
 
   // Every write this screen can be in the middle of, including the one that
   // stops reservations: Save stayed live during that delete, and a save landing
   // on top of it recreated the policy it had just removed.
-  const saving = computed(() => detailsSaving.value || savingLocationFeatures.value || reservationSaving.value || closingReservations.value)
+  const saving = computed(() => detailsSaving.value || reservationSaving.value || closingReservations.value)
 
   function editorSignature(key: string | null): string {
     switch (key) {
@@ -324,7 +227,6 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
       case 'hours': return JSON.stringify(hoursForm.value)
       case 'description': return JSON.stringify([detailsForm.short_description, detailsForm.description, detailsForm.price_level])
       case 'reservations': return JSON.stringify(reservationForm.value)
-      case 'features': return JSON.stringify(locationToggleableFeatures.value.map(feature => [feature, Boolean(locationEnabledFeatureSet[feature])]))
       default: return ''
     }
   }
@@ -354,10 +256,6 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
     if (!location.value) return
     fillDetailsForm(location.value)
     reservationForm.value = reservationPatchFrom(reservationConfig.value)
-    fillLocationFeatures({
-      organization_effective_features: organizationEffectiveFeatures.value,
-      location_effective_features: locationEffectiveFeatures.value,
-    })
     originalSignature.value = editorSignature(key)
   }
 
@@ -366,7 +264,7 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
     detailsSaving.value = true
     editorError.value = null
     try {
-      const response = await dashboardApi<{ success: true; location: BusinessLocation } & LocationCapabilitySummary>(
+      const response = await dashboardApi<{ success: true; location: BusinessLocation }>(
         `/api/dashboard/locations/${requestedLocationId}`,
         { method: 'PATCH', body, validate: isLocationResponse },
       )
@@ -433,10 +331,6 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
       await saveReservationPolicy()
       return
     }
-    if (key === 'features') {
-      await saveLocationFeatures()
-      return
-    }
     if (key === 'name') {
       await patchLocation({ title: detailsForm.title.trim() })
       return
@@ -476,7 +370,7 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
   }
 
   interface LocationSettingsResource {
-    location: { success: true; location: BusinessLocation } & LocationCapabilitySummary
+    location: { success: true; location: BusinessLocation }
     reservationConfig: { success: true; config: LocationReservationConfig | null }
   }
 
@@ -490,7 +384,7 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
     const requestedLocationId = locationId.value
     if (!requestedLocationId) throw createError({ statusCode: 400, statusMessage: 'Location is required' })
     const [locationResponse, reservationResponse] = await Promise.all([
-      dashboardApi<{ success: true; location: BusinessLocation } & LocationCapabilitySummary>(
+      dashboardApi<{ success: true; location: BusinessLocation }>(
         `/api/dashboard/locations/${requestedLocationId}`,
         { validate: isLocationResponse },
       ),
@@ -515,7 +409,6 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
       location.value = resource.location.location
       reservationConfig.value = resource.reservationConfig.config
       reservationForm.value = reservationPatchFrom(resource.reservationConfig.config)
-      fillLocationFeatures(resource.location)
       fillDetailsForm(resource.location.location)
       originalSignature.value = editorSignature(key)
     },
@@ -532,7 +425,6 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
   return {
     loading, error, location, saving, saveDisabled, validationMessage, editorError, dirty,
     detailsForm, hoursForm, reservationForm, reservationConfigExists, closingReservations,
-    locationToggleableFeatures, locationEnabledFeatureSet, locationFeatureLabel,
     navigationGroups, locationLocalizationFields, localizedLocationPath, organizationLocalizationSettingsPath,
     revert: resetDraft, save: saveCurrentEditor, closeReservations, loadLocationWorkspace,
   }

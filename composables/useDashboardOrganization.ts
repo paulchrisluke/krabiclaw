@@ -23,7 +23,6 @@ export interface DashboardOrganization {
   onboarding_status: string
   effective_plan: string
   default_currency: string | null
-  feature_overrides: string | null
   media: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string | null }>
 }
 
@@ -37,7 +36,6 @@ export interface DashboardLocation {
   media: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string | null }>
   picture_url: string | null
   social_image: { url: string; width?: number; height?: number; type?: string } | null
-  feature_overrides: string | null
 }
 
 

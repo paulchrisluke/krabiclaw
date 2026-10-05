@@ -327,7 +327,7 @@ import { productLocationCollectionPath } from '~/utils/product-presentation'
 import { extractDietarySchemaUrls, type ProductCollectionSibling } from '~/utils/product-seo'
 import type { ProductDetailValue } from '~/shared/product-details'
 import { EXPERIENCE_ATTRIBUTE_HANDLES, productDetailFields, productDetailKey, PRICING_NOTE_HANDLE } from '~/shared/product-details'
-import type { PublicProductBooking, PublicProductLocationPayload, PublicProductReview, PublicProductSession } from '~/server/utils/public-products'
+import type { PublicProductBooking, PublicProductLocation, PublicProductReview, PublicProductSession } from '~/server/utils/public-products'
 import { formatPostalAddress, schemaPostalAddress } from '~/utils/postal-address'
 import SayaReviewCard from '~/components/saya/SayaReviewCard.vue'
 import BookingModal from '~/components/booking/BookingModal.vue'
@@ -342,7 +342,7 @@ const props = defineProps<{
   organizationId: string
   vertical: string
   product: Product
-  location: PublicProductLocationPayload | null
+  location: PublicProductLocation | null
   organizationName?: string
   reviews: PublicProductReview[]
   /** Non-null exactly when this Product takes bookings. */

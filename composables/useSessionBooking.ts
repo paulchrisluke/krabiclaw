@@ -1,6 +1,6 @@
 import type { MaybeRefOrGetter } from 'vue'
 import type { Product } from '~/server/types/products'
-import type { PublicProductLocationPayload, PublicProductSession } from '~/server/utils/public-products'
+import type { PublicProductLocation, PublicProductSession } from '~/server/utils/public-products'
 import type { CurrencyCode } from '~/shared/currencies'
 import { selectPrice } from '~/shared/prices'
 import { formatProductMoney } from '~/utils/product-money'
@@ -18,7 +18,7 @@ export interface SessionBookingContext {
   organizationName: string
   product: Product
   currency: CurrencyCode
-  location: PublicProductLocationPayload | null
+  location: PublicProductLocation | null
   sessions: PublicProductSession[]
   showPartySize?: boolean
 }

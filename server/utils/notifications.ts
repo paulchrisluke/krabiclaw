@@ -269,10 +269,12 @@ async function resolveOwnerRecipients(
   opts: {
     organizationId: string
     category: NotificationCategory
+    /** The team member a booking is assigned to hears about it alongside the owners. */
+    assignedMemberId?: string | null
   },
 ): Promise<OwnerRecipient[]> {
   const [members, messagingEnabled] = await Promise.all([
-    listOrganizationNotificationMembers(env, opts.organizationId),
+    listOrganizationNotificationMembers(env, opts.organizationId, { includeMemberIds: opts.assignedMemberId ? [opts.assignedMemberId] : [] }),
     hasOrganizationEntitlement(env, opts.organizationId, 'messaging'),
   ])
   const recipients = await Promise.all(members.map(async (member) => {
@@ -568,9 +570,14 @@ async function notifyOwner(
   })
   const deliveryContext = threadContext ?? { guestThreadId: null, sourceEntryId: notificationId }
 
+  // Owners and admins hear about every booking; the member it is assigned to hears about theirs.
+  const assigned = opts.submissionType === 'booking' && opts.submissionId
+    ? await queryFirst<{ assigned_member_id: string | null }>(db, 'SELECT assigned_member_id FROM bookings WHERE organization_id = ? AND (request_id = ? OR id = ?) LIMIT 1', [opts.organizationId, opts.submissionId, opts.submissionId])
+    : null
   const recipients = await resolveOwnerRecipients(env, db, {
     organizationId: opts.organizationId,
     category: opts.message.category,
+    assignedMemberId: assigned?.assigned_member_id ?? null,
   })
 
   // The owner reads mail sent for their business, framed by its own mark.

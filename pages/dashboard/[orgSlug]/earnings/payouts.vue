@@ -50,6 +50,8 @@
 <script setup lang="ts">
 import { paymentMoney } from '~/shared/payment-display'
 import { downloadCsv, isPayoutsView, payoutDate, payoutStatusLabel, type PayoutRow, type PayoutsView } from '~/shared/earnings-display'
+import { minorAmountToMajor } from '~/shared/prices'
+import type { CurrencyCode } from '~/shared/currencies'
 
 definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'Paid | Krabiclaw', robots: 'noindex, nofollow' })
@@ -78,6 +80,6 @@ const total = computed(() => {
 })
 function exportCsv() {
   downloadCsv(`payouts-${String(route.params.orgSlug)}.csv`, ['Date', 'Sent', 'Amount', 'Currency', 'Status', 'Payout ID'],
-    paid.value.map(row => [payoutDate(row.arrival_date), payoutDate(row.arrival_date, { month: 'long', day: 'numeric', year: 'numeric' }), (row.amount / 100).toFixed(2), row.currency.toUpperCase(), payoutStatusLabel(row.status), row.id]))
+    paid.value.map(row => [payoutDate(row.arrival_date), payoutDate(row.arrival_date, { month: 'long', day: 'numeric', year: 'numeric' }), minorAmountToMajor(row.amount, row.currency.toUpperCase() as CurrencyCode), row.currency.toUpperCase(), payoutStatusLabel(row.status), row.id]))
 }
 </script>

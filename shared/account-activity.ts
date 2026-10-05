@@ -1,4 +1,5 @@
 import { isValidTimezone, isValidInstant } from '../utils/timezone'
+import { isCurrencyCode } from './currencies'
 
 export type AccountActivityKind = 'booking' | 'reservation' | 'order' | 'payment'
 export interface AccountActivityItem {
@@ -67,5 +68,5 @@ export function isBuyerPaymentEntry(value: unknown): value is BuyerPaymentEntry 
     && nullableString(value.imageUrl) && nullableString(value.visitStartsAt) && nullableString(value.visitEndsAt) && nullableString(value.timeZone)
     && typeof value.title === 'string' && !!value.title.trim() && nullableString(value.organizationName)
     && typeof value.amount === 'number' && Number.isSafeInteger(value.amount) && (value.kind === 'paid' ? value.amount > 0 : value.amount < 0)
-    && typeof value.currency === 'string' && isAccountActivityPath(value.to)
+    && isCurrencyCode(value.currency) && isAccountActivityPath(value.to)
 }

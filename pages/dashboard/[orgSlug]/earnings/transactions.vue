@@ -57,6 +57,8 @@
 <script setup lang="ts">
 import { paymentMoney, paymentStateLabel } from '~/shared/payment-display'
 import { downloadCsv, isTransactionsView, type TransactionRow } from '~/shared/earnings-display'
+import { minorAmountToMajor } from '~/shared/prices'
+import type { CurrencyCode } from '~/shared/currencies'
 import { formatCalendarDate, formatTimestamp } from '~/utils/timezone'
 
 definePageMeta({ layout: 'dashboard' })
@@ -158,6 +160,6 @@ function whenLabel(row: TransactionRow): string {
 }
 function exportCsv() {
   downloadCsv(`transactions-${String(route.params.orgSlug)}-${from.value || 'all'}.csv`, ['Date', 'Status', 'Buyer', 'Item', 'Paid', 'Refunded', 'Currency', 'Payment ID'],
-    rows.value.map(row => [row.created_at.slice(0, 10), paymentStateLabel(row), row.buyer_name ?? '', row.title, (row.captured_amount / 100).toFixed(2), (row.refunded_amount / 100).toFixed(2), row.currency, row.id]))
+    rows.value.map(row => [row.created_at.slice(0, 10), paymentStateLabel(row), row.buyer_name ?? '', row.title, minorAmountToMajor(row.captured_amount, row.currency as CurrencyCode), minorAmountToMajor(row.refunded_amount, row.currency as CurrencyCode), row.currency, row.id]))
 }
 </script>

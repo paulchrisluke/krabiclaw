@@ -115,7 +115,9 @@ const clearing = computed(() => [
   ...(payouts.value?.balance?.available ?? []).map(row => ({ amount: row.amount, currency: row.currency.toUpperCase(), label: 'Ready to send' })),
   ...(payouts.value?.balance?.pending ?? []).map(row => ({ amount: row.amount, currency: row.currency.toUpperCase(), label: 'Clearing' })),
 ].filter(row => row.amount !== 0))
-const upcomingAmount = computed(() => clearing.value.reduce((sum, row) => sum + row.amount, 0) + upcomingPayouts.value.reduce((sum, row) => sum + row.amount, 0))
+// One currency on the card: the performance currency, USD until it is known.
+const shownCurrency = computed(() => (performance.value?.currency ?? 'USD').toUpperCase())
+const upcomingAmount = computed(() => clearing.value.filter(row => row.currency === shownCurrency.value).reduce((sum, row) => sum + row.amount, 0) + upcomingPayouts.value.filter(row => row.currency.toUpperCase() === shownCurrency.value).reduce((sum, row) => sum + row.amount, 0))
 const upcoming = computed(() => money(upcomingAmount.value))
 // Two bars share one scale; an empty month still draws a short stub, as Airbnb's does.
 const barHeight = (amount: number) => Math.max(12, Math.round((amount / Math.max(1, paidAmount.value, upcomingAmount.value)) * 100))

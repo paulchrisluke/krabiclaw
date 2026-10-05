@@ -105,7 +105,6 @@ interface CapabilityOrganizationRow {
   subdomain: string | null
   vertical: string
   theme_id: string
-  feature_overrides: string | null
 }
 
 interface LocationRow {
@@ -164,7 +163,7 @@ export async function listAgenda(
   if (query.from > query.to) throw new Error('from must not be after to')
 
   const capabilityOrganizations = await queryAll<CapabilityOrganizationRow>(db, `
-    SELECT s.id, s.name, s.subdomain, s.vertical, s.theme_id, s.feature_overrides
+    SELECT s.id, s.name, s.subdomain, s.vertical, s.theme_id
     FROM organization s
     WHERE ${scope.buyerUserId ? `s.id IN (SELECT r.organization_id FROM requests r WHERE r.user_id = ? AND ${REQUEST_CURRENT_BUYER_SQL})` : 's.id = ?'}
     ORDER BY s.id
@@ -172,9 +171,7 @@ export async function listAgenda(
   // A buyer has visits, not a publishing calendar.
   const available = new Set<AgendaKind>(scope.buyerUserId ? [] : ['post'])
   for (const organization of capabilityOrganizations) {
-    const { capabilities } = resolveOrganizationCmsCapabilities(organization.vertical, organization.theme_id, {
-      organizationEnabledFeatures: organization.feature_overrides,
-    })
+    const { capabilities } = resolveOrganizationCmsCapabilities(organization.vertical, organization.theme_id)
     const features = new Set([...capabilities.pages.map(page => page.feature), ...capabilities.managers.map(manager => manager.id)])
     if (features.has('reservations')) available.add('reservation')
     // A class's schedule is the product's own; the calendar carries who is

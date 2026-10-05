@@ -44,7 +44,7 @@
 </template>
 
 <script setup lang="ts">
-import { loadStripe, type Stripe, type StripeElements } from '@stripe/stripe-js'
+import { loadStripe, type Stripe, type StripeElements, type StripePaymentElement } from '@stripe/stripe-js'
 import DashboardListItemDialog from '~/components/dashboard/DashboardListItemDialog.vue'
 import type { PaymentMethodRow } from '~/server/utils/billing-customer'
 
@@ -98,6 +98,7 @@ const formError = ref('')
 const mount = ref<HTMLElement | null>(null)
 let stripe: Stripe | null = null
 let elements: StripeElements | null = null
+let paymentElement: StripePaymentElement | null = null
 async function openCardForm() {
   if (opening.value) return
   opening.value = true
@@ -117,9 +118,9 @@ async function openCardForm() {
     await nextTick()
     if (!mount.value) throw new Error('The card form has nowhere to mount')
     elements = stripe.elements({ clientSecret: setup.client_secret, appearance: { theme: document.documentElement.classList.contains('dark') ? 'night' : 'stripe' } })
-    const payment = elements.create('payment', { layout: 'tabs' })
-    payment.on('ready', () => { ready.value = true })
-    payment.mount(mount.value)
+    paymentElement = elements.create('payment', { layout: 'tabs' })
+    paymentElement.on('ready', () => { ready.value = true })
+    paymentElement.mount(mount.value)
   } catch (cause) {
     adding.value = false
     failure.value = getErrorMessage(cause, 'The card form could not be opened')
@@ -142,5 +143,5 @@ async function confirmCard() {
     saving.value = false
   }
 }
-watch(adding, (open) => { if (!open) { elements = null; ready.value = false } })
+watch(adding, (open) => { if (!open) { paymentElement?.destroy(); paymentElement = null; elements = null; ready.value = false } })
 </script>

@@ -36,6 +36,8 @@ const preparing = ref(false)
 const failure = ref('')
 const payment = computed(() => b.booking.value?.payments?.find(entry => entry.payment.id === route.query.payment)?.payment ?? null)
 const remaining = computed(() => payment.value ? payment.value.captured_amount - payment.value.refunded_amount : 0)
+// Raised, not thrown: a nested page's setup throw leaves a blank screen (DESIGN.md).
+watch(() => b.booking.value, (loaded) => { if (loaded && !payment.value) showError(createError({ statusCode: 404, statusMessage: 'Payment not found on this booking' })) }, { immediate: true })
 
 async function prepare() {
   if (!payment.value || preparing.value) return

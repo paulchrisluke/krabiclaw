@@ -60,6 +60,16 @@
             </component>
             <UAlert v-if="booking.providerConflict" class="mt-4" color="warning" description="This booking overlaps a busy time. Contact your guest to change it." />
             <UAlert v-if="booking.providerCalendarStatus" class="mt-4" color="warning" :description="booking.providerCalendarStatus" />
+            <!-- Airbnb's "Change requested": the proposal is out and the record stays as it is until the guest answers. -->
+            <UAlert
+              v-if="booking.pendingChange"
+              class="mt-4"
+              color="info"
+              variant="soft"
+              icon="i-lucide-clock"
+              :title="`Change requested · ${booking.pendingChange.afterLabel} · ${booking.pendingChange.partySize} ${booking.pendingChange.partySize === 1 ? 'guest' : 'guests'}`"
+              :description="personalScope ? `${booking.organizationName} asked to change this ${noun}. Accept or decline from the email we sent you; nothing moves until you do.` : `Waiting for ${firstName(booking.guestName ?? '')} to accept. The ${noun} stays as it is until then.`"
+            />
           </template>
           <div class="mt-6 space-y-2">
             <UButton
@@ -345,6 +355,7 @@ const canChangeBooking = computed(() => Boolean(booking.value && !booking.value.
 const callTo = computed(() => booking.value?.guestPhone ? `tel:${booking.value.guestPhone}` : null)
 
 const policyOpen = ref(false)
+const session = authClient.useSession()
 const cancelOpen = ref(false)
 const cancelNote = ref('')
 // What a cancellation gives back: everything still captured, as Airbnb's host cancellation does.
@@ -577,7 +588,7 @@ async function runAction(action: string) {
         body: { request_id: booking.value.threadId },
         validate: (value: unknown): value is { success: true } => isRecord(value) && value.success === true,
       })
-      await refreshNuxtData(`account-activity:${authClient.useSession().value.data?.user.id}`)
+      await refreshNuxtData(`account-activity:${session.value.data?.user.id}`)
     } else {
       await dashboardApi(`/api/dashboard/organizations/${booking.value.organizationId}/guest-threads/${booking.value.threadId}/operations/${action}`, {
         method: 'POST',

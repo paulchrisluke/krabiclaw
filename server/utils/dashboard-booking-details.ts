@@ -103,6 +103,8 @@ export interface DashboardBookingDetails {
   updatedAt: string
   policy: RenderedBookingPolicySummary | null
   notes: DashboardBookingNote[]
+  /** A change the business proposed that the guest has not answered; Airbnb's "Change requested". */
+  pendingChange: { requestedAt: string; afterLabel: string; partySize: number } | null
   locations: Array<{ id: string; title: string; imageUrl: string | null }>
   payments: Array<{payment:PaymentDisplay;refunds:PaymentRefundDisplay[];order:PaymentOrderDisplay|null}> | null
   /** The guest's own self-service cancellation is still open. */
@@ -187,6 +189,22 @@ async function loadResourceImage(db: DbClient, row: BookingRow, type: DashboardB
     : ['business_location' as const, row.location_id]
   if (!ownerId) return null
   return (await loadOwnerPictures(db, row.organization_id, ownerType, [ownerId])).get(ownerId)?.imageUrl ?? null
+}
+
+/** The latest proposal on the thread with no acceptance or decline answering it. */
+async function pendingBookingChange(db: DbClient, threadId: string | null): Promise<DashboardBookingDetails['pendingChange']> {
+  if (!threadId) return null
+  const row = await queryFirst<{ created_at: string; payload_json: string | null }>(db, `
+    SELECT e.created_at, e.payload_json FROM activity_entries e
+     WHERE e.request_id = ? AND e.event_name = 'booking_change.requested'
+       AND NOT EXISTS (SELECT 1 FROM activity_entries r WHERE r.request_id = e.request_id
+                         AND r.event_name IN ('booking_change.accepted', 'booking_change.declined')
+                         AND json_extract(r.payload_json, '$.requestId') = e.id)
+     ORDER BY e.created_at DESC LIMIT 1`, [threadId])
+  if (!row) return null
+  const proposal: unknown = JSON.parse(row.payload_json || '{}')
+  if (!isRecord(proposal) || typeof proposal.afterLabel !== 'string' || !isRecord(proposal.after) || typeof proposal.after.partySize !== 'number') throw new Error('Booking change proposal has invalid required state')
+  return { requestedAt: row.created_at, afterLabel: proposal.afterLabel, partySize: proposal.after.partySize }
 }
 
 async function listInternalNotes(db: DbClient, threadId: string | null): Promise<DashboardBookingNote[]> {
@@ -310,6 +328,7 @@ async function composeBookingDetails(
     // screen shows as such rather than inventing default terms.
     policy: resolvedPolicy ? renderBookingPolicySummary(reservationPolicySummarySource(resolvedPolicy)) : null,
     notes,
+    pendingChange: await pendingBookingChange(db, row.request_id),
     locations: visibleLocations.map(location => ({ ...location, imageUrl: locationPictures.get(location.id)?.imageUrl ?? null })),
     payments:reader.buyerUserId||reader.canReadPayments?payments:null,
     // The same rule the public cancel route applies, read here so the screen
@@ -444,6 +463,7 @@ async function composePurchaseDetails(db: DbClient, scope: BookingScope, payment
     updatedAt: payment.updated_at,
     policy: null,
     notes: [],
+    pendingChange: null,
     locations: [],
     payments: [{ payment: paymentDisplay(detail.payment), refunds: paymentRefundsDisplay(detail.refunds), order: paymentOrderDisplay(detail.order) }],
     guestCanCancel: false,

@@ -239,7 +239,7 @@ import {
   type SubmissionType,
   type ThreadListItem,
 } from '~/lib/components/workspace/messages/guest-thread-client'
-import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities, type ProductFeature } from '~/config/cms-registry'
+import { resolveCmsCapabilities, type ProductFeature } from '~/config/cms-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { normalizeVertical, type OrganizationVertical } from '~/utils/vertical-copy'
 import { useDashboardInvalidations } from '~/composables/useDashboardInvalidations'
@@ -300,7 +300,8 @@ const typeMenuItems = computed(() => [[
     onSelect: () => setQuery({ filter: option.value ?? undefined, view: undefined }),
     ui: { itemLabel: 'text-base' },
   })),
-  { label: 'Updates', icon: 'i-lucide-bell', type: 'checkbox' as const, checked: updatesView.value, onSelect: () => setQuery({ view: 'updates', filter: undefined, unread: undefined }), ui: { itemLabel: 'text-base' } },
+  // Updates replaces the conversation pane, so an open conversation closes with it.
+  { label: 'Updates', icon: 'i-lucide-bell', type: 'checkbox' as const, checked: updatesView.value, onSelect: () => void router.replace({ path: listRoute.value, query: { ...route.query, view: 'updates', filter: undefined, unread: undefined } }), ui: { itemLabel: 'text-base' } },
 ]])
 
 const filtersApplied = computed(() => Boolean(route.query.query || route.query.filter || route.query.unread))
@@ -318,9 +319,7 @@ const capabilities = computed(() => {
   const vertical = dashboard.organization.value?.vertical
   if (!vertical) return null
   const template = resolvePublicTemplate({ themeId: dashboard.organization.value?.theme_id, vertical }).slug
-  return resolveCmsCapabilities(normalizeVertical(vertical) as OrganizationVertical, template, {
-    organization: parseCmsFeatureOverrideDelta(dashboard.organization.value?.feature_overrides),
-  })
+  return resolveCmsCapabilities(normalizeVertical(vertical) as OrganizationVertical, template)
 })
 
 const dashboardScope = useDashboardRouteScope()
@@ -400,7 +399,8 @@ useIntervalFn(()=>{if(props.personalScope&&documentVisibility.value==='visible')
 
 // The newest thread, for the index above to open into its second column on
 // arrival. The list only says which; whether there is a column is the shell's.
-watch([threads, openThreadId], ([rows, open]) => {
+watch([threads, openThreadId, updatesView], ([rows, open, updates]) => {
+  if (updates) { emit('first', null); return }
   if (open) return
   const first = rows[0]
   emit('first', first ? { path: threadRoute(first), query: route.query } : null)

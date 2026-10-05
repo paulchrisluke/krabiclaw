@@ -14,12 +14,16 @@ export function useAgendaFilters() {
   const route = useRoute()
   const router = useRouter()
   const read = (key: string) => typeof route.query[key] === 'string' && route.query[key] ? String(route.query[key]) : AGENDA_FILTER_ALL
+  // Writes queue behind one another, so two controls changed in quick succession both land in the URL.
+  let writing: Promise<unknown> = Promise.resolve()
   const write = (patch: Partial<Record<keyof typeof QUERY_KEYS, string>>) => {
-    const query: Record<string, string | undefined> = { ...(route.query as Record<string, string>) }
-    for (const [field, value] of Object.entries(patch) as [keyof typeof QUERY_KEYS, string][]) {
-      query[QUERY_KEYS[field]] = value !== AGENDA_FILTER_ALL ? value : undefined
-    }
-    void router.replace({ query })
+    writing = writing.then(() => {
+      const query: Record<string, string | undefined> = { ...(router.currentRoute.value.query as Record<string, string>) }
+      for (const [field, value] of Object.entries(patch) as [keyof typeof QUERY_KEYS, string][]) {
+        query[QUERY_KEYS[field]] = value !== AGENDA_FILTER_ALL ? value : undefined
+      }
+      return router.replace({ query })
+    })
   }
   const filters = reactive({
     locationId: computed({ get: () => read(QUERY_KEYS.locationId), set: (value: string) => write({ locationId: value }) }),

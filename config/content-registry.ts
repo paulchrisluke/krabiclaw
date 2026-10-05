@@ -1,4 +1,4 @@
-import type { CmsCapabilityDefinition, CmsCapabilityOverrides, CmsPageCapability } from '~/config/cms-registry'
+import type { CmsCapabilityDefinition, CmsPageCapability } from '~/config/cms-registry'
 import { resolveCmsCapabilities } from '~/config/cms-registry'
 import type { PublicTemplateSlug } from '~/utils/template-registry'
 import type { OrganizationVertical } from '~/utils/vertical-copy'
@@ -41,9 +41,8 @@ export const contentRegistry: Record<string, { path: string }> = {
 export function getEditablePages(
   vertical: OrganizationVertical,
   template: PublicTemplateSlug,
-  overrides?: CmsCapabilityOverrides,
 ): EditablePage[] {
-  const capability = resolveCmsCapabilities(vertical, template, overrides)
+  const capability = resolveCmsCapabilities(vertical, template)
   return capability.pages.map(page => ({
     id: page.id,
     label: page.label,
