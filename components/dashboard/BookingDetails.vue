@@ -68,8 +68,8 @@
             color="info"
             variant="soft"
             icon="i-lucide-clock"
-            :title="`Change requested · ${booking.pendingChange.afterLabel} · ${booking.pendingChange.partySize} ${booking.pendingChange.partySize === 1 ? 'guest' : 'guests'}`"
-            :description="personalScope ? `${booking.organizationName} asked to change this ${noun}. Nothing moves until you accept.` : `Waiting for ${firstName(booking.guestName ?? '')} to accept. The ${noun} stays as it is until then.`"
+            :title="personalScope ? `${booking.organizationName} requested a change` : 'Change requested'"
+            :description="`${booking.pendingChange.afterLabel} · ${booking.pendingChange.partySize} ${booking.pendingChange.partySize === 1 ? 'guest' : 'guests'}${personalScope ? '' : ` · Waiting for ${firstName(booking.guestName ?? '')} to respond`}`"
             :actions="personalScope ? [
               { label: 'Accept', color: 'primary' as const, loading: answering === 'accept', onClick: () => answerChange('accept') },
               { label: 'Decline', color: 'neutral' as const, variant: 'soft' as const, loading: answering === 'decline', onClick: () => answerChange('decline') },
