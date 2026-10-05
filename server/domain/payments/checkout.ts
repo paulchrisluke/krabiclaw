@@ -10,8 +10,8 @@ import { getStripeConnectedAccount, stripeLivemodeFromKey } from '~/server/utils
 import { hasOrganizationEntitlement } from '~/server/utils/billing'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { tokenHash } from './buyer'
+import { connectedCustomerWithSavedCards } from '~/server/utils/billing-customer'
 import { assertMinorAmount, requirePayment } from './index'
-import { getPaymentsBillingContract, type BillingAccount } from './usage'
 
 export interface CheckoutInput {
   organizationId: string
@@ -33,10 +33,6 @@ export async function createPaymentCheckout(db: DbClient, stripe: Stripe, env: C
   if (!await hasOrganizationEntitlement(env,input.organizationId,'payments')) throw new HTTPError({statusCode:403,statusMessage:'Payments entitlement is required for new acceptance'})
   if (!env.STRIPE_SECRET_KEY || !env.STRIPE_PAYMENTS_METHOD_CONFIGURATION) throw new HTTPError({statusCode:503,statusMessage:'Stripe Payments synchronous-method configuration is required'})
   if(await queryFirst(db,'SELECT stripe_account_id FROM payment_servicing_tenants WHERE organization_id=? LIMIT 1',[input.organizationId]))throw new HTTPError({statusCode:409,statusMessage:'Tenant deletion servicing prevents new payment acceptance'})
-  const billing=await queryFirst<BillingAccount>(db,'SELECT * FROM payment_billing_accounts WHERE organization_id=? AND metronome_contract_id IS NOT NULL',[input.organizationId])
-  if(!billing||billing.status!=='active')throw new HTTPError({statusCode:409,statusMessage:'Active operating Payments usage billing is required before accepting customer funds'})
-  const contract=await getPaymentsBillingContract(env,billing)
-  if(Date.parse(String(contract.starting_at))>Date.now() || (typeof contract.ending_before==='string'&&Date.parse(contract.ending_before)<=Date.now()))throw new HTTPError({statusCode:409,statusMessage:'Active native Payments usage billing is required before accepting customer funds'})
   const origin = new URL(input.returnOrigin)
   if (origin.protocol !== 'https:' || origin.username || origin.password || origin.pathname !== '/' || origin.search || origin.hash) throw new Error('Payments return origin must be an HTTPS origin')
   const connected = await getStripeConnectedAccount(db,input.organizationId)
@@ -133,11 +129,11 @@ export async function createPaymentCheckout(db: DbClient, stripe: Stripe, env: C
       throw new HTTPError({statusCode:409,statusMessage:'Session capacity is unavailable'})
     }
   }
-  // Airbnb keeps the card: a signed-in buyer is a Customer on this business's Stripe account, and Checkout offers their saved cards and keeps a new one.
-  const customer=input.buyerUserId?await queryFirst<{stripe_customer_id:string}>(db,'SELECT stripe_customer_id FROM payment_customers WHERE user_id=? AND stripe_account_id=? AND livemode=?',[input.buyerUserId,connected.stripeAccountId,Number(connected.livemode)]):null
+  // Airbnb offers the cards you keep: a signed-in buyer's saved cards are cloned onto this business's Stripe account so Checkout shows them.
+  const customer=input.buyerUserId?await connectedCustomerWithSavedCards(db,stripe,env,input.buyerUserId,connected.stripeAccountId,connected.livemode):null
   try {
-  const checkout = await stripe.checkout.sessions.create({mode:'payment',integration_identifier:'krabiclaw_payments_aqpfkmvz',...(input.buyerUserId?{...(customer?{customer:customer.stripe_customer_id}:{customer_creation:'always' as const}),saved_payment_method_options:{payment_method_save:'enabled' as const}}:{}),automatic_tax:{enabled:automaticTax},line_items:[{price_data:{currency:price.currency.toLowerCase(),unit_amount:price.unit_amount,tax_behavior:price.tax_behavior,product_data:{name:projectionTitle,...(projectionTaxCode?{tax_code:projectionTaxCode}:{}),metadata:{krabiclaw_variant_id:input.variantId}}},quantity:input.quantity}],payment_method_configuration:methodConfigurationId,
-    payment_intent_data:{application_fee_amount:0,metadata:{krabiclaw_payment_id:id},...(input.buyerUserId?{setup_future_usage:'off_session' as const}:{})},metadata:{krabiclaw_payment_id:id},client_reference_id:id,
+  const checkout = await stripe.checkout.sessions.create({mode:'payment',integration_identifier:'krabiclaw_payments_aqpfkmvz',...(customer?{customer}:{}),automatic_tax:{enabled:automaticTax},line_items:[{price_data:{currency:price.currency.toLowerCase(),unit_amount:price.unit_amount,tax_behavior:price.tax_behavior,product_data:{name:projectionTitle,...(projectionTaxCode?{tax_code:projectionTaxCode}:{}),metadata:{krabiclaw_variant_id:input.variantId}}},quantity:input.quantity}],payment_method_configuration:methodConfigurationId,
+    payment_intent_data:{application_fee_amount:0,metadata:{krabiclaw_payment_id:id}},metadata:{krabiclaw_payment_id:id},client_reference_id:id,
     expires_at:Math.floor(Date.parse(expiresAt)/1000),success_url:new URL(`/account?payment_id=${encodeURIComponent(id)}&purchase_claim=${encodeURIComponent(returnToken)}`,origin).toString(),cancel_url:new URL('/account?payment=cancelled',origin).toString(),
   },{stripeAccount:connected.stripeAccountId,idempotencyKey:key})
   if (!checkout.url || checkout.livemode !== connected.livemode) throw new Error('Stripe Checkout returned invalid scoped handoff')

@@ -2,7 +2,7 @@ import {HTTPError} from 'nitro'
 import {executeBatch,queryAll,queryFirst,type DbClient} from '~/server/db'
 import {REQUEST_CURRENT_BUYER_SQL} from '~/server/domain/requests'
 import {loadOwnerPictures} from '~/server/notifications/hero'
-import {isAccountActivityItem,type AccountActivityItem,type AccountActivityResponse} from '~/shared/account-activity'
+import {isAccountActivityItem,isBuyerPaymentEntry,type AccountActivityItem,type AccountActivityResponse,type BuyerPaymentEntry} from '~/shared/account-activity'
 
 export async function ownedBuyerRequest(db:DbClient,userId:string,requestId:string) {
  const owned=await queryFirst<{organization_id:string;kind:'booking'|'reservation'}>(db,`SELECT r.organization_id,r.kind FROM requests r WHERE r.id=? AND r.user_id=? AND ${REQUEST_CURRENT_BUYER_SQL} AND (
@@ -65,6 +65,27 @@ export async function buyerActivities(db:DbClient,userId:string):Promise<Account
  return {activities}
 }
 /** Airbnb's "Your payments": every payment the account made and every refund that came back, newest first. */
+/** Airbnb's "Your payments": every payment the account made and every refund that came back, newest first. */
+export async function buyerPayments(db:DbClient,userId:string):Promise<{entries:BuyerPaymentEntry[]}> {
+ const rows=await buyerActivityRows(db,userId)
+ const refunds=rows.payments.length?await queryAll<{id:string;payment_id:string;amount:number;created_at:string}>(db,`SELECT id,payment_id,amount,created_at FROM payment_refunds WHERE status='succeeded' AND payment_id IN (SELECT value FROM json_each(?))`,[JSON.stringify(rows.payments.map(row=>row.id))]):[]
+ const entries:BuyerPaymentEntry[]=[]
+ for(const payment of rows.payments){
+  if(payment.captured_amount<=0)continue
+  const item=resolvePaymentActivity(rows,payment),snapshot:unknown=JSON.parse(payment.price_snapshot_json)
+  if(!snapshot||typeof snapshot!=='object'||!('title' in snapshot)||typeof snapshot.title!=='string'||!snapshot.title.trim())throw new Error('Owned payment has no immutable title')
+  const to=`/dashboard/account/activity/${item.kind}/${encodeURIComponent(item.id)}`
+  const visit=rows.visits.find(row=>row.kind===item.kind&&row.id===item.id)
+  const ownerType=visit?.product_id?'product':'business_location',ownerId=visit?(visit.product_id??visit.location_id):(await queryFirst<{product_id:string|null}>(db,'SELECT l.product_id FROM payment_order_lines l JOIN payment_orders o ON o.id=l.order_id WHERE o.payment_id=? ORDER BY l.rowid LIMIT 1',[payment.id]))?.product_id??null
+  const imageUrl=ownerId?(await loadOwnerPictures(db,payment.organization_id,visit?ownerType:'product',[ownerId])).get(ownerId)?.imageUrl??null:null
+  const line={title:visit?visit.title:snapshot.title,organizationName:payment.organization_name,currency:payment.currency,to,imageUrl,visitStartsAt:visit?.starts_at??null,visitEndsAt:visit?.ends_at??null,timeZone:visit?.timezone??null}
+  entries.push({id:`paid:${payment.id}`,kind:'paid',occurredAt:payment.created_at,amount:payment.captured_amount,...line})
+  for(const refund of refunds.filter(row=>row.payment_id===payment.id))entries.push({id:`refund:${refund.id}`,kind:'refunded',occurredAt:refund.created_at,amount:-refund.amount,...line})
+ }
+ for(const entry of entries)if(!isBuyerPaymentEntry(entry))throw new Error('Owned payment line has invalid required state')
+ entries.sort((a,b)=>b.occurredAt.localeCompare(a.occurredAt)||a.id.localeCompare(b.id))
+ return {entries}
+}
 export async function buyerPaymentActivityPath(db:DbClient,userId:string,paymentId:string):Promise<string> {
  const rows=await buyerActivityRows(db,userId),payment=rows.payments.find(row=>row.id===paymentId)
  if(!payment)throw new HTTPError({statusCode:404,statusMessage:'Owned activity not found'})

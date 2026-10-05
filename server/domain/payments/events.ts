@@ -37,8 +37,6 @@ export async function reconcilePaymentIntent(db:DbClient,stripe:Stripe,payment:P
   const chargeId=typeof intent.latest_charge==='string'?intent.latest_charge:intent.latest_charge?.id
   const charge=chargeId?await stripe.charges.retrieve(chargeId,{}, {stripeAccount:payment.stripe_account_id}):null
   if(!charge || charge.livemode!==Boolean(payment.livemode) || charge.payment_intent!==intent.id || charge.amount!==intent.amount_received) throw new Error('Captured charge financial scope mismatch')
-  const customerId=typeof checkout.customer==='string'?checkout.customer:checkout.customer?.id
-  if(payment.buyer_user_id&&customerId) await execute(db,'INSERT INTO payment_customers(user_id,stripe_account_id,livemode,stripe_customer_id,created_at) VALUES(?,?,?,?,?) ON CONFLICT(user_id,stripe_account_id,livemode) DO UPDATE SET stripe_customer_id=excluded.stripe_customer_id',[payment.buyer_user_id,payment.stripe_account_id,Number(payment.livemode),customerId,now])
   await executeBatch(db,[
     {query:'UPDATE payments SET stripe_charge_id=?,receipt_url=? WHERE id=?',params:[charge.id,charge.receipt_url,payment.id]},
     {query:"UPDATE payments SET stripe_payment_intent_id=?,captured_amount=?,tax_amount=?,state=CASE WHEN state IN ('refunded','recovery') THEN state ELSE 'captured' END,updated_at=? WHERE id=? AND organization_id=?",params:[intent.id,intent.amount_received,checkout.total_details?.amount_tax??0,now,payment.id,payment.organization_id]},

@@ -109,8 +109,14 @@ export async function connectedStripe(db: DbClient, env: CloudflareEnv, organiza
   return { stripe: createStripeClient(env.STRIPE_SECRET_KEY, 'payments'), options: { stripeAccount: account.stripeAccountId } }
 }
 
-/** The payments a payout carried, matched through Stripe's balance transactions to the charges this business recorded. */
+/**
+ * The payments a payout carried, matched through Stripe's balance transactions
+ * to the charges this business recorded. Stripe attributes transactions only to
+ * the payouts it schedules itself; a payout someone created by hand carries none.
+ */
 export async function payoutItems(db: DbClient, stripe: Stripe, options: { stripeAccount: string }, organizationId: string, payoutId: string): Promise<PayoutItem[]> {
+  const payout = await stripe.payouts.retrieve(payoutId, {}, options)
+  if (!payout.automatic) return []
   const transactions = await stripe.balanceTransactions.list({ payout: payoutId, type: 'charge', limit: 100 }, options)
   const chargeIds = transactions.data.map(row => typeof row.source === 'string' ? row.source : row.source?.id).filter((id): id is string => !!id)
   if (!chargeIds.length) return []

@@ -1,8 +1,10 @@
 <template>
-  <!-- Airbnb's Account settings → Payments: the cards this account keeps with the businesses it pays. -->
-  <DashboardLeafPanel id="account-payments" title="Payments" :footer="false">
-    <PaymentsAccountSettings personal-scope />
-  </DashboardLeafPanel>
+  <!-- Airbnb's Account settings → Payments: Your payments and Payment methods, the same tab the business has. -->
+  <DashboardIndexPanel id="account-payments" title="Payments">
+    <div class="mx-auto w-full max-w-3xl pb-10">
+      <PaymentsAccountSettings personal-scope />
+    </div>
+  </DashboardIndexPanel>
 </template>
 
 <script setup lang="ts">

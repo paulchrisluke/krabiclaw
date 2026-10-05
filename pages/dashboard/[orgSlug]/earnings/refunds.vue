@@ -1,6 +1,7 @@
 <template>
   <!-- Money going the other way, in plain words, each row opening the record it belongs to. -->
-  <DashboardLeafPanel id="earnings-refunds" title="Refunds and disputes" :footer="false">
+  <!-- A level of Earnings: the approval sheet opens as its leaf. -->
+  <DashboardIndexPanel id="earnings-refunds" title="Refunds and disputes">
     <UAlert v-if="error" color="error" :description="error.message" />
     <USkeleton v-else-if="pending" class="h-32" />
     <template v-else-if="refunds && disputes">
@@ -15,7 +16,7 @@
         <EditorNavigationList v-else class="mt-2" :groups="[{ id: 'disputes', items: disputes.rows.map(row => item(row, 'dispute')) }]" />
       </section>
     </template>
-  </DashboardLeafPanel>
+  </DashboardIndexPanel>
 </template>
 
 <script setup lang="ts">

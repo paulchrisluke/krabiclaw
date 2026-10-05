@@ -13441,8 +13441,8 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "payment_customers": {
-      "name": "payment_customers",
+    "stripe_connected_customers": {
+      "name": "stripe_connected_customers",
       "columns": {
         "user_id": {
           "name": "user_id",
@@ -13482,9 +13482,9 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "payment_customers_user_id_user_id_fk": {
-          "name": "payment_customers_user_id_user_id_fk",
-          "tableFrom": "payment_customers",
+        "stripe_connected_customers_user_id_user_id_fk": {
+          "name": "stripe_connected_customers_user_id_user_id_fk",
+          "tableFrom": "stripe_connected_customers",
           "tableTo": "user",
           "columnsFrom": [
             "user_id"
@@ -13497,13 +13497,13 @@
         }
       },
       "compositePrimaryKeys": {
-        "payment_customers_user_id_stripe_account_id_livemode_pk": {
+        "stripe_connected_customers_user_id_stripe_account_id_livemode_pk": {
           "columns": [
             "user_id",
             "stripe_account_id",
             "livemode"
           ],
-          "name": "payment_customers_user_id_stripe_account_id_livemode_pk"
+          "name": "stripe_connected_customers_user_id_stripe_account_id_livemode_pk"
         }
       },
       "uniqueConstraints": {},

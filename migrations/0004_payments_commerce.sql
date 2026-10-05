@@ -69,7 +69,7 @@ CREATE TABLE `payment_checkout_holds` (
 CREATE UNIQUE INDEX `payment_checkout_holds_payment_id_unique` ON `payment_checkout_holds` (`payment_id`);--> statement-breakpoint
 CREATE INDEX `payment_holds_capacity_idx` ON `payment_checkout_holds` (`session_id`,`status`,`expires_at`);--> statement-breakpoint
 CREATE INDEX `payment_holds_calendar_idx` ON `payment_checkout_holds` (`organization_id`,`calendar_group`,`status`,`expires_at`);--> statement-breakpoint
-CREATE TABLE `payment_customers` (
+CREATE TABLE `stripe_connected_customers` (
 	`user_id` text NOT NULL,
 	`stripe_account_id` text NOT NULL,
 	`livemode` integer NOT NULL,

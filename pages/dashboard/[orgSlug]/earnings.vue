@@ -34,7 +34,8 @@
 
       <section>
         <h2 class="text-xl font-semibold text-highlighted">Upcoming</h2>
-        <div v-if="upcomingPayouts.length" class="mt-4 space-y-4">
+        <UAlert v-if="payoutsError" class="mt-4" color="error" variant="soft" title="Payouts could not be loaded" :description="getErrorMessage(payoutsError, 'Payouts request failed')" />
+        <div v-else-if="upcomingPayouts.length" class="mt-4 space-y-4">
           <PayoutCard v-for="row in upcomingPayouts" :key="row.id" :payout="row" :items="payouts?.items?.[row.id]" :to="`${level.path.value}/payouts/${encodeURIComponent(row.id)}`" />
         </div>
         <div v-else-if="clearing.length" class="mt-4 space-y-4">
@@ -108,7 +109,7 @@ const paidAmount = computed(() => { const row = monthRow(thisMonthKey); return r
 const total = computed(() => money(paidAmount.value))
 
 // Upcoming is what Stripe still holds or has on its way; Paid is what it has sent, with what each payout carried.
-const { data: payouts } = await useAsyncData(() => `earnings-payouts:${route.params.orgSlug}`, () => api<PayoutsView>('/api/dashboard/payments', { query: { view: 'payouts', with_items: '1' }, validate: isPayoutsView }), { lazy: true })
+const { data: payouts, error: payoutsError } = await useAsyncData(() => `earnings-payouts:${route.params.orgSlug}`, () => api<PayoutsView>('/api/dashboard/payments', { query: { view: 'payouts', with_items: '1' }, validate: isPayoutsView }), { lazy: true })
 const upcomingPayouts = computed(() => (payouts.value?.payouts ?? []).filter(row => row.status === 'pending' || row.status === 'in_transit'))
 const clearing = computed(() => [
   ...(payouts.value?.balance?.available ?? []).map(row => ({ amount: row.amount, currency: row.currency.toUpperCase(), label: 'Ready to send' })),
