@@ -22,7 +22,8 @@ async function paymentSubject(db: DbClient, payment: Payment): Promise<PaymentSu
   }
 }
 
-export async function recordCheckoutStarted(db: DbClient, payment: Payment, savedCardsOffered: number) {
+/** `savedCardsOffered` is null on a retry that reuses the Checkout already created, where the count was not observed. */
+export async function recordCheckoutStarted(db: DbClient, payment: Payment, savedCardsOffered: number | null) {
   const subject = await paymentSubject(db, payment)
   await recordOrganizationConversionEvent(db, null, {
     organizationId: payment.organization_id, eventName: 'payment_checkout_started', stage: 'started', surface: 'website',
@@ -88,14 +89,14 @@ async function bookingSubject(db: DbClient, organizationId: string, bookingId: s
 }
 
 /** A business confirmed or declined a booking it was reviewing; decision time runs from the request. */
-export async function recordBookingDecision(db: DbClient, input: { organizationId: string; bookingId: string; decision: 'confirmed' | 'declined'; actorUserId: string | null }) {
+export async function recordBookingDecision(db: DbClient, input: { organizationId: string; bookingId: string; decision: 'confirmed' | 'declined'; actorUserId: string | null; decidedAt: string }) {
   const booking = await bookingSubject(db, input.organizationId, input.bookingId)
   await recordOrganizationConversionEvent(db, null, {
     organizationId: input.organizationId, eventName: input.decision === 'confirmed' ? 'booking_confirmed' : 'booking_declined', stage: 'completed', surface: 'dashboard',
     locationId: booking.location_id, productId: booking.product_id, variantId: booking.product_variant_id,
     entityType: 'booking', entityId: input.bookingId,
     actor: input.actorUserId ? { type: 'staff', id: input.actorUserId } : null,
-    properties: { member_id: booking.assigned_member_id, decision_seconds: Math.max(0, Math.round((Date.now() - Date.parse(booking.created_at)) / 1000)) },
+    properties: { member_id: booking.assigned_member_id, decision_seconds: Math.max(0, Math.round((Date.parse(input.decidedAt) - Date.parse(booking.created_at)) / 1000)) },
   })
 }
 
