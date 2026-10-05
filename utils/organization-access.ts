@@ -90,7 +90,7 @@ export const organizationRoles = {
     notifications: ['read', 'update', 'send'],
     analytics: ['read'],
     domains: ['read', 'create', 'update', 'delete'],
-    payments: ['read', 'create', 'refund', 'disputes', 'payouts'],
+    payments: ['read', 'create', 'refund', 'disputes', 'payouts', 'integration'],
     billing: ['read'],
     settings: ['read', 'update'],
     integrations: ['read', 'create', 'update', 'delete'],

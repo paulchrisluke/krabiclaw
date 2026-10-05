@@ -13,8 +13,13 @@ export default defineHandler(async event=>{
  const account=await getStripeConnectedAccount(db,organization.id)
  if(!account?.stripeAccountId||account.livemode!==stripeLivemodeFromKey(env.STRIPE_SECRET_KEY))throw new HTTPError({statusCode:409,statusMessage:'Scoped Stripe account is unavailable'})
  const stripe=createStripeClient(env.STRIPE_SECRET_KEY, 'payments')
- const native=await stripe.v2.core.accounts.retrieve(account.stripeAccountId)
- if(native.dashboard!=='express'||native.livemode!==account.livemode)throw new HTTPError({statusCode:409,statusMessage:'Express Dashboard financial scope mismatch'})
- const link=await stripe.accounts.createLoginLink(account.stripeAccountId)
- return jsonResponse({url:link.url})
+ try {
+  const native=await stripe.v2.core.accounts.retrieve(account.stripeAccountId)
+  if(native.dashboard!=='express'||native.livemode!==account.livemode)throw new HTTPError({statusCode:409,statusMessage:'Express Dashboard financial scope mismatch'})
+  const link=await stripe.accounts.createLoginLink(account.stripeAccountId)
+  return jsonResponse({url:link.url})
+ } catch(error) {
+  if(error instanceof HTTPError)throw error
+  throw new HTTPError({statusCode:502,statusMessage:'Stripe Express Dashboard could not be opened',cause:error})
+ }
 })

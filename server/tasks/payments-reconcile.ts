@@ -64,7 +64,7 @@ export default defineScheduledTask<{skipped?:string;attempts?:number;refunds?:nu
   if(nativeRefunds.has_more||nativeDisputes.has_more)throw new Error('Historical payment provider history requires bounded operator review')
   for(const refund of nativeRefunds.data)await reconcileRefundState(db,stripe,payment,refund.id)
   for(const dispute of nativeDisputes.data)await reconcileDisputeState(db,payment,dispute)
- }catch(error){errors.push(error instanceof Error?error:new Error(String(error)))}}
+ }catch(error){errors.push(error instanceof Error?error:new Error(String(error)));await execute(db,'UPDATE payments SET updated_at=? WHERE id=?',[now,payment.id])}}
  const active=await queryFirst(db,`SELECT 1 WHERE EXISTS(SELECT 1 FROM payments) OR EXISTS(SELECT 1 FROM stripe_connected_accounts WHERE stripe_account_id IS NOT NULL) OR EXISTS(SELECT 1 FROM payment_servicing_tenants) OR EXISTS(SELECT 1 FROM payment_fee_reports)`)
  let stripeCosts:'test_mode_unavailable'|'live_mode'|undefined
  if(active){try{stripeCosts=(await reconcileStripeCosts(db,stripe,stripeLivemodeFromKey(env.STRIPE_SECRET_KEY),env.STRIPE_SECRET_KEY)).status}catch(error){errors.push(error instanceof Error?error:new Error(String(error)))}}

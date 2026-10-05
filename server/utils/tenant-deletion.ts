@@ -44,13 +44,13 @@ export async function cleanupOrganizationBeforeDelete(
   organizationId: string,
 ): Promise<void> {
   const db = env.DB
+  await retainPaymentsForTenantDeletion(db, organizationId)
   await stageCalendarOrganizationCleanup(db, organizationId)
   await deleteOrganizationCustomDomains(env, db, organizationId)
 
   for (const imageId of await ownedImageIds(db, organizationId)) {
     await deleteImage(env, imageId)
   }
-  await retainPaymentsForTenantDeletion(db,organizationId)
 }
 
 /**

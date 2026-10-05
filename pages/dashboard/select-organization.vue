@@ -56,6 +56,9 @@ definePageMeta({ layout: 'standalone' })
 useSeoMeta({ title: 'Choose a business | Krabiclaw', robots: 'noindex, nofollow' })
 
 const route = useRoute()
+if (route.query.plan !== undefined && !isNewSalePlan(route.query.plan)) {
+  throw createError({ statusCode: 400, statusMessage: 'Unknown checkout plan', fatal: true })
+}
 const session = authClient.useSession()
 const organizationsState = authClient.useListOrganizations()
 
@@ -66,11 +69,7 @@ const entering = ref<string | null>(null)
 
 // The plan rides through the chooser so the billing destination stays decided
 // in one place — `/api/post-login` — rather than being rebuilt here.
-const plan = computed(() => {
-  if (route.query.plan === undefined) return undefined
-  if (!isNewSalePlan(route.query.plan)) throw createError({ statusCode: 400, statusMessage: 'Unknown checkout plan' })
-  return route.query.plan
-})
+const plan = computed(() => isNewSalePlan(route.query.plan) ? route.query.plan : undefined)
 
 async function enter(organization: { id: string }) {
   if (entering.value) return

@@ -96,11 +96,21 @@ test('Connect webhook work is claimed once across concurrent D1 deliveries', asy
       payload: JSON.stringify({ id: 'evt_connect_test', type: 'v2.core.account.updated' }),
       processor: 'connect_marketplace' as const,
     }
-    const work = async () => { executions += 1 }
-    await Promise.all([
-      processStripeWebhookEvent(db, event, work),
-      processStripeWebhookEvent(db, event, work),
-    ])
+    const started = Promise.withResolvers<undefined>()
+    const finish = Promise.withResolvers<undefined>()
+    const work = async () => {
+      executions += 1
+      started.resolve(undefined)
+      await finish.promise
+    }
+    const processing = processStripeWebhookEvent(db, event, work)
+    await Promise.race([started.promise, processing])
+    try {
+      assert.equal(await processStripeWebhookEvent(db, event, work), false)
+    } finally {
+      finish.resolve(undefined)
+      assert.equal(await processing, true)
+    }
     assert.equal(executions, 1)
     const row = await db.prepare("SELECT processor, status, attempt_count FROM stripe_webhook_events WHERE stripe_event_id='evt_connect_test'").first<{
       processor: string

@@ -1,10 +1,9 @@
 import {HTTPError} from 'nitro'
 import {NOT_HANDLED,type McpExecutorContext} from './execution'
-import {authorizePayments,listPayments,paymentSummary,requestRefundAuthorization,requirePayment,refundPayment} from '~/server/domain/payments'
+import {authorizePayments,listPayments,paymentSummary,paymentPayouts,requestRefundAuthorization,requirePayment,refundPayment} from '~/server/domain/payments'
 import {createPaymentCheckout} from '~/server/domain/payments/checkout'
 import {paymentsUsageStatus} from '~/server/domain/payments/usage'
 import {createStripeClient} from '~/server/utils/stripe-client'
-import {getStripeConnectedAccount} from '~/server/utils/stripe-connect'
 import {queryAll} from '~/server/db'
 import {assertRoleAllows} from '~/server/utils/member-access'
 import {organizationTool,type McpToolDefinition} from './shared'
@@ -36,13 +35,7 @@ export async function handlePaymentsTools(ctx:McpExecutorContext):Promise<unknow
    return {payment,refunds:await queryAll(db,'SELECT * FROM payment_refunds WHERE payment_id=?',[payment.id]),disputes:await queryAll(db,'SELECT * FROM payment_disputes WHERE payment_id=?',[payment.id])}
   }
   case 'get_payments_usage':await authorizePayments(principal,'read');await assertRoleAllows({organizationId,role,permissions:{billing:['read']}});return await paymentsUsageStatus(db,env,organizationId)
-  case 'get_payment_payouts':{
-   await authorizePayments(principal,'payouts')
-   const account=await getStripeConnectedAccount(db,organizationId)
-   if(!account?.stripeAccountId) return {configured:false,source:'Stripe account not connected'}
-   const client=stripe(),options={stripeAccount:account.stripeAccountId}
-   return {organization_id:organizationId,balance:await client.balance.retrieve({},options),payouts:(await client.payouts.list({limit:50},options)).data,source:'Stripe',refreshed_at:new Date().toISOString()}
-  }
+  case 'get_payment_payouts':return await paymentPayouts(db,env,principal)
   case 'request_payment_refund':{
    const dashboardUrl=dashboard()
    const prepared=await requestRefundAuthorization(db,principal,String(args.payment_id),Number(args.amount))

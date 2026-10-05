@@ -2,6 +2,9 @@ import type Stripe from 'stripe'
 import { HTTPError } from 'nitro'
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { assertRoleAllows } from '~/server/utils/member-access'
+import { getStripeConnectedAccount, stripeLivemodeFromKey } from '~/server/utils/stripe-connect'
+import { createStripeClient } from '~/server/utils/stripe-client'
+import type { CloudflareEnv } from '~/server/utils/auth'
 
 export interface Payment {
   id: string
@@ -48,6 +51,19 @@ export async function listPayments(db: DbClient, principal: FinancialPrincipal, 
   const rows = await queryAll<Payment>(db, `SELECT * FROM payments WHERE organization_id = ? AND created_at >= ? AND created_at < ? AND id > ? ORDER BY id LIMIT ?`,
     [principal.organizationId, from.toISOString(), to.toISOString(), input.after ?? '', limit + 1])
   return { organization_id: principal.organizationId, timezone: 'UTC', from: from.toISOString(), to: to.toISOString(), payments: rows.slice(0, limit), next_cursor: rows.length > limit ? rows[limit - 1]!.id : null }
+}
+export async function paymentPayouts(db: DbClient, env: CloudflareEnv, principal: FinancialPrincipal, after?: string) {
+  await authorizePayments(principal, 'payouts')
+  const account = await getStripeConnectedAccount(db, principal.organizationId)
+  if (!account?.stripeAccountId) return { organization_id: principal.organizationId, configured: false, available: [], pending: [], payouts: [], next_cursor: null, source: 'Stripe account not connected' }
+  if (!env.STRIPE_SECRET_KEY) throw new HTTPError({ statusCode: 503, statusMessage: 'Stripe is not configured' })
+  if (account.livemode !== stripeLivemodeFromKey(env.STRIPE_SECRET_KEY)) throw new HTTPError({ statusCode: 409, statusMessage: 'Connected Stripe account mode does not match configuration' })
+  const stripe = createStripeClient(env.STRIPE_SECRET_KEY, 'payments'), options = { stripeAccount: account.stripeAccountId }
+  const [balance, payouts] = await Promise.all([stripe.balance.retrieve({}, options), stripe.payouts.list({ limit: 50, ...(after ? { starting_after: after } : {}) }, options)])
+  if (balance.livemode !== account.livemode || payouts.data.some(row => row.livemode !== account.livemode)) throw new Error('Stripe payout mode does not match connected account')
+  const nextCursor = payouts.has_more ? payouts.data.at(-1)?.id : null
+  if (payouts.has_more && !nextCursor) throw new Error('Stripe payout list is missing its next cursor')
+  return { organization_id: principal.organizationId, configured: true, balance, payouts: payouts.data, next_cursor: nextCursor, source: 'Stripe', refreshed_at: new Date().toISOString() }
 }
 export async function paymentSummary(db: DbClient, principal: FinancialPrincipal, from: string, to: string) {
   await authorizePayments(principal, 'read')

@@ -12,11 +12,11 @@ export async function ownedBuyerRequest(db:DbClient,userId:string,requestId:stri
 }
 export async function buyerPayments(db:DbClient,userId:string) {
  const [payments,bookings,reservations]=await Promise.all([
-  queryAll(db,`SELECT p.*,o.fulfillment_status,json_extract(p.price_snapshot_json,'$.title') AS title FROM payments p LEFT JOIN payment_orders o ON o.payment_id=p.id WHERE p.buyer_user_id=? ORDER BY p.created_at DESC LIMIT 100`,[userId]),
+  queryAll(db,`SELECT p.id,p.currency,p.captured_amount,p.refunded_amount,p.state,p.receipt_url,o.fulfillment_status,json_extract(p.price_snapshot_json,'$.title') AS title FROM payments p LEFT JOIN payment_orders o ON o.payment_id=p.id WHERE p.buyer_user_id=? ORDER BY p.created_at DESC LIMIT 100`,[userId]),
   queryAll<{id:string;organization_id:string;request_id:string|null;status:string;title:string;starts_at:string;ends_at:string;timezone:string}>(db,'SELECT b.id,b.organization_id,b.request_id,b.status,p.name AS title,s.starts_at,s.ends_at,s.timezone FROM bookings b JOIN product_sessions s ON s.id=b.product_session_id AND s.organization_id=b.organization_id JOIN products p ON p.id=b.product_id AND p.organization_id=b.organization_id WHERE b.user_id=? ORDER BY b.created_at DESC LIMIT 100',[userId]),
   queryAll<{id:string;organization_id:string;request_id:string|null;status:string;starts_at:string;ends_at:string;timezone:string}>(db,'SELECT id,organization_id,request_id,status,starts_at,ends_at,timezone FROM reservations WHERE user_id=? ORDER BY created_at DESC LIMIT 100',[userId]),
  ])
- const refunds=await queryAll(db,'SELECT r.*,p.currency FROM payment_refunds r JOIN payments p ON p.id=r.payment_id WHERE p.buyer_user_id=? ORDER BY r.created_at DESC LIMIT 100',[userId])
+ const refunds=await queryAll(db,'SELECT r.id,r.amount,r.status,p.currency FROM payment_refunds r JOIN payments p ON p.id=r.payment_id WHERE p.buyer_user_id=? ORDER BY r.created_at DESC LIMIT 100',[userId])
  const now=new Date().toISOString()
  async function management<T extends {id:string;organization_id:string;request_id:string|null}>(visit:T) {
   if(!visit.request_id)return {...visit,can_cancel:false,contactPhone:null,contactEmail:null}
