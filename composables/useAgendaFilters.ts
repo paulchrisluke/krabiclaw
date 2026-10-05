@@ -2,19 +2,29 @@ import type { AgendaKind } from '~/server/utils/dashboard-agenda'
 
 export const AGENDA_FILTER_ALL = '__all__'
 
+const QUERY_KEYS = { locationId: 'locationId', kind: 'kinds', assignedMemberId: 'assigned_member_id' } as const
+
 /**
- * What Today and Calendar narrow the agenda by — one state, carried in the URL
- * so moving between the two keeps it, and one control (`AgendaFilters`) that
- * edits it. A value equal to `AGENDA_FILTER_ALL` means "everything".
+ * What Today and Calendar narrow the agenda by — one state, the URL query, so
+ * moving between the two keeps it and the control (`AgendaFilters`) and the
+ * page that reads it see the same answer. A value equal to `AGENDA_FILTER_ALL`
+ * means "everything" and is absent from the URL.
  */
 export function useAgendaFilters() {
   const route = useRoute()
   const router = useRouter()
   const read = (key: string) => typeof route.query[key] === 'string' && route.query[key] ? String(route.query[key]) : AGENDA_FILTER_ALL
+  const write = (patch: Partial<Record<keyof typeof QUERY_KEYS, string>>) => {
+    const query: Record<string, string | undefined> = { ...(route.query as Record<string, string>) }
+    for (const [field, value] of Object.entries(patch) as [keyof typeof QUERY_KEYS, string][]) {
+      query[QUERY_KEYS[field]] = value !== AGENDA_FILTER_ALL ? value : undefined
+    }
+    void router.replace({ query })
+  }
   const filters = reactive({
-    locationId: read('locationId'),
-    kind: read('kinds'),
-    assignedMemberId: read('assigned_member_id'),
+    locationId: computed({ get: () => read(QUERY_KEYS.locationId), set: (value: string) => write({ locationId: value }) }),
+    kind: computed({ get: () => read(QUERY_KEYS.kind), set: (value: string) => write({ kind: value }) }),
+    assignedMemberId: computed({ get: () => read(QUERY_KEYS.assignedMemberId), set: (value: string) => write({ assignedMemberId: value }) }),
   })
   const signature = computed(() => `${filters.locationId}:${filters.kind}:${filters.assignedMemberId}`)
   const active = computed(() => filters.locationId !== AGENDA_FILTER_ALL || filters.kind !== AGENDA_FILTER_ALL || filters.assignedMemberId !== AGENDA_FILTER_ALL)
@@ -24,13 +34,6 @@ export function useAgendaFilters() {
     kinds: filters.kind !== AGENDA_FILTER_ALL ? (filters.kind as AgendaKind) : undefined,
     assigned_member_id: filters.assignedMemberId !== AGENDA_FILTER_ALL ? filters.assignedMemberId : undefined,
   }))
-  function clear() {
-    filters.locationId = AGENDA_FILTER_ALL
-    filters.kind = AGENDA_FILTER_ALL
-    filters.assignedMemberId = AGENDA_FILTER_ALL
-  }
-  watch(signature, () => {
-    void router.replace({ query: { ...route.query, ...query.value } })
-  })
+  const clear = () => write({ locationId: AGENDA_FILTER_ALL, kind: AGENDA_FILTER_ALL, assignedMemberId: AGENDA_FILTER_ALL })
   return { filters, signature, active, query, clear }
 }

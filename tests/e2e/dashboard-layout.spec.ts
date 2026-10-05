@@ -171,7 +171,7 @@ test.describe('dashboard pane hierarchy', () => {
     const past = activity.activities.filter(item => item.kind === 'order' || item.kind === 'payment' || (item.status !== 'cancelled' && item.endsAt !== null && Date.parse(item.endsAt) < Date.now()))
     const cancelled = activity.activities.filter(item => (item.kind === 'booking' || item.kind === 'reservation') && item.status === 'cancelled')
     await expect(page.getByTestId('account-activity-cancelled')).toHaveCount(cancelled.length ? 1 : 0)
-    await expect(page.locator('[data-testid^="account-activity-"]')).toHaveCount(past.length)
+    await expect(page.locator('[data-testid^="account-activity-"]:not([data-testid="account-activity-cancelled"])')).toHaveCount(past.length)
     for (const item of past) {
       await expect(page.getByTestId(`account-activity-${item.kind}-${item.id}`)).toContainText(item.title)
     }
@@ -183,12 +183,13 @@ test.describe('dashboard pane hierarchy', () => {
       const read = await page.request.get(`/api/account/bookings/${item.kind}/${item.id}`)
       expect(read.status(), await read.text()).toBe(200)
       const detail = await read.json()
-      const paymentCount = isBookingDetailsResponse(detail) ? (detail.booking.payments ?? []).length : -1
-      expect(paymentCount, 'the account detail API returns the canonical record').toBeGreaterThanOrEqual(0)
+      expect(isBookingDetailsResponse(detail), 'the account detail API returns the canonical record').toBe(true)
+      if (!isBookingDetailsResponse(detail)) throw new Error('Invalid account booking details response')
+      const paymentCount = (detail.booking.payments ?? []).length
       await page.getByTestId(`account-activity-${item.kind}-${item.id}`).click()
       await expect(page).toHaveURL(`/dashboard/account/activity/${item.kind}/${item.id}`)
       await expect(page.getByRole('heading', { name: item.title, exact: true })).toBeVisible()
-      if (paymentCount) await expect(page.getByRole('heading', { name: 'Payment info', exact: true })).toHaveCount(paymentCount)
+      await expect(page.getByRole('heading', { name: 'Payment info', exact: true })).toHaveCount(paymentCount)
       await page.getByTestId('dashboard-navbar-back').click()
       await expect(page).toHaveURL('/dashboard/account/activity')
     } else {
