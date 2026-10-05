@@ -105,10 +105,17 @@ Supporting checks passed: quality, the final full typecheck and Node 24.18.1
 production build, 239 unit tests, 107 D1 tests, four migration tests, migration
 and schema guards, 44 email previews, ten dual-channel notification cases and
 the normal HTTPS OAuth/MCP smoke with its 116-tool catalog. The D1 suite has one
-explicit native Resend opt-in skip. Local CodeRabbit reviewed all 67 changed
-files; its three valid findings were corrected, with scoped lint and the final
-typecheck/build passing. Earlier full-PR review and its dispositions remain in
+explicit native Resend opt-in skip. Local CodeRabbit reviewed the 67-file
+notification and Activity revision; its three valid findings were corrected,
+with scoped lint and the final typecheck/build passing. Earlier full-PR review and its dispositions remain in
 the dated qualification notes.
+
+The previous-head CI pricing failure was a stale exact expectation of
+“Included with setup” for Commerce. The owner-tested canonical comparison uses
+“Included” and separately states the Stripe and Payments billing setup
+requirement in the row detail. The expectation now matches that exact label
+and verifies the exact visible Payments setup detail. This correction does not change pricing
+or weaken the setup requirement.
 
 Isolated persisted delivery, realtime retry and audience isolation are separate
 from the native Resend transport test addressed only to `delivered@resend.dev`.
