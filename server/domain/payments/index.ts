@@ -180,7 +180,7 @@ export async function reconcileRefundState(db:DbClient,stripe:Stripe,payment:Pay
   {query:"UPDATE payments SET state=CASE WHEN refunded_amount=captured_amount AND captured_amount>0 THEN 'refunded' ELSE state END WHERE id=?",params:[payment.id]},
   {query:`UPDATE payment_authorizations SET consumed_at=COALESCE(consumed_at,?) WHERE payment_id=? AND approved_at IS NOT NULL AND action='refund' AND EXISTS(SELECT 1 FROM payment_refunds r WHERE r.id=? AND r.payment_id=payment_authorizations.payment_id AND r.idempotency_key='approved:'||payment_authorizations.id AND r.amount=payment_authorizations.amount AND r.created_by=payment_authorizations.user_id)`,params:[now,payment.id,id]},
  ])
- if(refund.status==='succeeded')await recordPaymentRefunded(db,payment,refund,id)
  await notifyPaymentFinancialEvent(db,stripe,env,payment,{kind,nativeId:refund.id,status:refund.status!,amount:refund.amount})
+ if(refund.status==='succeeded')await recordPaymentRefunded(db,payment,refund,id)
  return {id,stripe_refund_id:refund.id,status:refund.status}
 }

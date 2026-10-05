@@ -138,8 +138,8 @@ export async function createPaymentCheckout(db: DbClient, stripe: Stripe, env: C
     expires_at:Math.floor(Date.parse(expiresAt)/1000),success_url:new URL(`/account?payment_id=${encodeURIComponent(id)}&purchase_claim=${encodeURIComponent(returnToken)}`,origin).toString(),cancel_url:new URL('/account?payment=cancelled',origin).toString(),
   },{stripeAccount:connected.stripeAccountId,idempotencyKey:key})
   if (!checkout.url || checkout.livemode !== connected.livemode) throw new Error('Stripe Checkout returned invalid scoped handoff')
-  await recordCheckoutStarted(db, await requirePayment(db,input.organizationId,id), customer?.savedCards ?? 0)
   await execute(db,`UPDATE payment_attempts SET stripe_checkout_id=?,checkout_url=?,status='open',error=NULL,updated_at=? WHERE id=?`,[checkout.id,checkout.url,new Date().toISOString(),attemptId])
+  await recordCheckoutStarted(db, await requirePayment(db,input.organizationId,id), customer?.savedCards ?? 0)
   return {payment_id:id,checkout_url:checkout.url,expires_at:expiresAt}
   } catch(error) {
     // A prior attempt may have reached Stripe even when its handoff was lost.

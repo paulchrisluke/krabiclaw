@@ -392,10 +392,11 @@ async function executeSourceMutation(
   const existing = await findEntryByDedupeKey(db, dedupeKey)
   if (existing) {
     if (!entryMatchesRequest(existing, eventName)) return conflict()
-    await recordBookingOutcome(db, context, input)
     const delivery = await getDeliveryById(db, deliveryDedupeKey(input))
     if (!delivery) throw new Error('Status update delivery receipt was not created')
-    return await sendStatusUpdate(db, context, input, existing, delivery)
+    const outcome = await sendStatusUpdate(db, context, input, existing, delivery)
+    await recordBookingOutcome(db, context, input)
+    return outcome
   }
 
   const plan = sourceMutationPlan(context, input.action)
@@ -430,15 +431,18 @@ async function executeSourceMutation(
   const applied = await findEntryByDedupeKey(db, dedupeKey)
   if (!applied) return conflict(`"${input.action}" is not a valid action for the current state`)
   if (!entryMatchesRequest(applied, eventName)) return conflict()
-  await recordBookingOutcome(db, context, input)
   if (plan.requiresNotification) {
     const delivery = await getDeliveryById(db, deliveryId)
     if (!delivery) throw new Error('Status update delivery receipt was not created')
     const refreshed = await loadThreadContext(db, input.threadId, input.organizationId)
     if ('ok' in refreshed) return refreshed
-    return await sendStatusUpdate(db, refreshed, input, applied, delivery)
+    const outcome = await sendStatusUpdate(db, refreshed, input, applied, delivery)
+    await recordBookingOutcome(db, context, input)
+    return outcome
   }
-  return await successfulOutcome(db, context)
+  const outcome = await successfulOutcome(db, context)
+  await recordBookingOutcome(db, context, input)
+  return outcome
 }
 
 async function executeReply(

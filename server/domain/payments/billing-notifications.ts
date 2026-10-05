@@ -68,8 +68,8 @@ export async function notifyPaymentsInvoiceEvent(db: DbClient, stripe: Stripe, e
     'SELECT organization_id FROM payment_billing_accounts WHERE stripe_billing_customer_id=?', [customerId])
   if (mappings.length > 1) throw new Error('Payments operating customer has ambiguous tenant attribution')
   if (!mappings[0]) return
-  if (kind === 'usage_invoice_paid') await recordPaymentsFeeInvoicePaid(db, { organizationId: mappings[0].organization_id, invoiceId: object.id, amountPaid: object.amount_paid, currency: object.currency.toUpperCase() })
   await notifyInvoice(db, stripe, env, mappings[0].organization_id, object.id, kind)
+  if (kind === 'usage_invoice_paid') await recordPaymentsFeeInvoicePaid(db, { organizationId: mappings[0].organization_id, invoiceId: object.id, amountPaid: object.amount_paid, currency: object.currency.toUpperCase() })
 }
 
 /** Read native paid invoices to recover missed status alerts, without collecting. */
