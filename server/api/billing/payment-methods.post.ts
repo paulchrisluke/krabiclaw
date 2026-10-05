@@ -1,5 +1,5 @@
 import { defineHandler, HTTPError } from 'nitro'
-import { jsonResponse, readRequiredBody } from '~/server/utils/api-response'
+import { cloudflareEnv, jsonResponse, readRequiredBody } from '~/server/utils/api-response'
 import { resolveBillingCustomer } from '~/server/utils/billing-customer'
 
 /**
@@ -12,7 +12,8 @@ export default defineHandler(async (event) => {
   if (body.action === 'setup') {
     const { stripe, customerId } = await resolveBillingCustomer(event, organizationId, { create: true })
     if (!customerId) throw new HTTPError({ statusCode: 409, statusMessage: 'Choose a plan before adding a payment method' })
-    const intent = await stripe.setupIntents.create({ customer: customerId, payment_method_types: ['card'], usage: 'off_session' })
+    const configuration = cloudflareEnv(event).STRIPE_PAYMENTS_METHOD_CONFIGURATION
+    const intent = await stripe.setupIntents.create({ customer: customerId, usage: 'off_session', ...(configuration ? { payment_method_configuration: configuration, automatic_payment_methods: { enabled: true, allow_redirects: 'never' } } : { payment_method_types: ['card'] }) })
     if (!intent.client_secret) throw new Error('Stripe returned no client secret for the card form')
     return jsonResponse({ client_secret: intent.client_secret })
   }

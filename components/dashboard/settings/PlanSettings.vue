@@ -14,8 +14,16 @@
     </div>
     <EditorNavigationList v-else :groups="groups" @act="onRowAction" />
 
+    <!-- ChatGPT's picker in our cards: every plan for sale, the current one marked, each with what it includes. -->
     <DashboardListItemDialog v-model:open="choosing" title="Change plan" :show-actions="false" :error="sheetError">
-      <EditorNavigationList :groups="planGroups" @act="choosePlan" />
+      <div class="grid gap-4 md:grid-cols-2">
+        <BillingPlanCard v-for="plan in salePlans" :key="plan.id" :plan="plan" :highlighted="plan.id === billing?.plan">
+          <template #cta>
+            <UButton v-if="plan.id === billing?.plan" label="Your current plan" color="neutral" variant="outline" size="xl" block disabled />
+            <UButton v-else :label="`Switch to ${plan.name}`" size="xl" block :loading="busy" @click="choosePlan(`plan:${plan.id}`)" />
+          </template>
+        </BillingPlanCard>
+      </div>
     </DashboardListItemDialog>
     <DashboardListItemDialog v-model:open="creditOpen" title="Verify credit note" :saving="busy" :save-disabled="!creditNote.trim()" :error="sheetError" save-label="Verify credit" @save="settleCredit">
       <UFormField label="Issued Stripe credit note ID"><UInput v-model="creditNote" placeholder="cn_…" :disabled="busy" class="w-full" /></UFormField>
@@ -92,16 +100,7 @@ const groups = computed<EditorNavigationGroup[]>(() => [{
   ],
 }])
 
-// The sheet: every plan for sale, the current one marked, as ChatGPT's picker reads in Airbnb's rows.
-const planGroups = computed<EditorNavigationGroup[]>(() => [{
-  id: 'plans',
-  items: plans.value.filter(plan => isNewSalePlan(plan.id)).map((plan) => {
-    const price = displayPrice(plan, false)
-    if (!price) throw new Error(`Monthly price is unavailable for ${plan.id}`)
-    const current = plan.id === billing.value?.plan
-    return { id: `plan:${plan.id}`, label: plan.name, summary: `${price}/mo${current ? ' · Current plan' : ''}`, ...(current ? { status: 'success' as const } : { action: { label: 'Choose' } }) }
-  }),
-}])
+const salePlans = computed(() => plans.value.filter(plan => isNewSalePlan(plan.id)))
 
 const organizationId = () => {
   const id = dashboard.organization.value?.id

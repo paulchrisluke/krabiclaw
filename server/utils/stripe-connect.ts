@@ -1,6 +1,8 @@
 import { HTTPError } from 'nitro'
 import type Stripe from 'stripe'
 import { execute, queryFirst, type DbClient } from '~/server/db'
+import { getConfig } from '~/server/utils/organization-config'
+import { organizationLogo } from '~/server/notifications/hero'
 
 export type StripeConnectStatus =
   | 'creating'
@@ -312,7 +314,32 @@ export async function refreshStripeConnectedAccount(
   const account = await stripe.v2.core.accounts.retrieve(connected.stripeAccountId, {
     include: STRIPE_CONNECT_ACCOUNT_INCLUDE,
   }, stripeContext === undefined ? {} : { stripeContext })
+  // A refresh the dashboard asked for also carries the business's brand to Stripe, so its Checkout and receipts look like the business.
+  if (stripeContext === undefined) await syncStripeConnectedBranding(db, stripe, connected.organizationId, account)
   return await projectStripeConnectedAccount(db, accountProjection(connected, account))
+}
+
+/**
+ * Stripe's Checkout, receipts and payout emails for a connected account use
+ * that account's branding. The business already has a brand colour and a logo
+ * here; this gives Stripe the same, uploading the logo once.
+ */
+export async function syncStripeConnectedBranding(db: DbClient, stripe: Stripe, organizationId: string, account: Stripe.V2.Core.Account): Promise<void> {
+  const [config, logoUrl] = await Promise.all([getConfig(db, organizationId), organizationLogo(db, organizationId)])
+  const current = account.configuration?.merchant?.branding
+  const branding: { primary_color?: string; logo?: string; icon?: string } = {}
+  const color = typeof config.brand_color === 'string' && /^#[0-9a-fA-F]{6}$/.test(config.brand_color) ? config.brand_color : null
+  if (color && current?.primary_color?.toLowerCase() !== color.toLowerCase()) branding.primary_color = color
+  if (logoUrl && !current?.logo) {
+    const response = await fetch(logoUrl)
+    if (!response.ok) throw new Error(`The business logo could not be read for Stripe (${response.status})`)
+    const type = response.headers.get('content-type') ?? 'image/png'
+    const file = await stripe.files.create({ purpose: 'business_logo', file: { data: Buffer.from(await response.arrayBuffer()), name: `logo.${type.includes('svg') ? 'svg' : type.includes('jpeg') ? 'jpg' : 'png'}`, type } })
+    branding.logo = file.id
+    branding.icon = file.id
+  }
+  if (!Object.keys(branding).length) return
+  await stripe.v2.core.accounts.update(account.id, { configuration: { merchant: { branding } } })
 }
 
 export async function ensureStripeConnectedAccount(
