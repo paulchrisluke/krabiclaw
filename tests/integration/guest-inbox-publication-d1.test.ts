@@ -8,7 +8,7 @@ import { createCanonicalNotification } from '../../server/utils/notification-cen
 
 test('every way the inbox hub can fail rejects publication, not just the ones that answered 4xx', { timeout: 30_000 }, async () => {
   const runtime = new Miniflare({ workers: [{ config: {
-    name: 'inbox-publication-proof', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'inbox-publication-proof', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: `
       export class FaultHub {
         constructor(ctx) { this.ctx = ctx }

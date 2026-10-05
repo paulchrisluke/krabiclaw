@@ -14,7 +14,7 @@ import { deleteTenantPage } from '../../server/utils/content/pages.ts'
 // key — go with it rather than being left pointing at nothing.
 test('deleting a tenant page takes its translations, placements and redirects', { timeout: 60_000 }, async () => {
   const runtime = new Miniflare({ workers: [{ config: {
-    name: 'tenant-page-delete-proof', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'tenant-page-delete-proof', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } },
     env: { DB: { type: 'd1' } },
   } }] })
@@ -100,7 +100,7 @@ test('deleting a tenant page takes its translations, placements and redirects', 
 
 test('a translation deletes alone, and a page the template renders does not delete at all', { timeout: 60_000 }, async () => {
   const runtime = new Miniflare({ workers: [{ config: {
-    name: 'tenant-page-delete-scope-proof', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'tenant-page-delete-scope-proof', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } },
     env: { DB: { type: 'd1' } },
   } }] })

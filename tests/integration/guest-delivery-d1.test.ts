@@ -27,7 +27,7 @@ import type { CloudflareEnv } from '../../server/utils/auth.ts'
 
 test('D1 claims fence concurrent sends and bound ambiguous provider retries', async () => {
   const runtime = new Miniflare({ workers: [{ config: {
-    name: 'guest-delivery-proof', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'guest-delivery-proof', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export class Hub { fetch() { return new Response(null, { status: 204 }) } } export default { fetch() { return new Response("ok") } }' } } },
     exports: { Hub: { type: 'durable-object', storage: 'sqlite' } },
     env: { DB: { type: 'd1' }, GUEST_INBOX_HUBS: { type: 'durable-object', worker: 'guest-delivery-proof', exportName: 'Hub' } },
@@ -317,7 +317,7 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
 test('D1 status-email retries preserve recorded content and reject superseded bookings', async (t) => {
   t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-10-01T10:00:00Z') })
   const runtime = new Miniflare({ workers: [{ config: {
-    name: 'status-retry-proof', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'status-retry-proof', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } },
     env: { DB: { type: 'd1' } },
   } }] })
@@ -390,7 +390,7 @@ test('D1 status-email retries preserve recorded content and reject superseded bo
 
 test('a booking move into a full session leaves the original booking exactly as it was', async () => {
   const runtime = new Miniflare({ workers: [{ config: {
-    name: 'booking-move-proof', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'booking-move-proof', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export class Hub { fetch() { return new Response(null, { status: 204 }) } } export default { fetch() { return new Response("ok") } }' } } },
     exports: { Hub: { type: 'durable-object', storage: 'sqlite' } },
     env: { DB: { type: 'd1' }, GUEST_INBOX_HUBS: { type: 'durable-object', worker: 'booking-move-proof', exportName: 'Hub' } },
@@ -464,7 +464,7 @@ test('a booking move into a full session leaves the original booking exactly as 
 
 test('a review request reads the visit from the record that holds it', async () => {
   const runtime = new Miniflare({ workers: [{ config: {
-    name: 'review-request-proof', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'review-request-proof', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export class Hub { fetch() { return new Response(null, { status: 204 }) } } export default { fetch() { return new Response("ok") } }' } } },
     exports: { Hub: { type: 'durable-object', storage: 'sqlite' } },
     env: { DB: { type: 'd1' }, GUEST_INBOX_HUBS: { type: 'durable-object', worker: 'review-request-proof', exportName: 'Hub' } },
@@ -523,7 +523,7 @@ test('a review request reads the visit from the record that holds it', async () 
 
 test('financial notification replay preserves per-recipient receipts and isolates personal, merchant and platform audiences', { timeout: 120_000 }, async () => {
   const runtime = new Miniflare({ workers: [{ config: {
-    name: 'financial-notification-proof', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'financial-notification-proof', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export class Hub { fetch() { return new Response(null, { status: 204 }) } } export default { fetch() { return new Response("ok") } }' } } },
     exports: { Hub: { type: 'durable-object', storage: 'sqlite' } },
     env: { DB: { type: 'd1' }, GUEST_INBOX_HUBS: { type: 'durable-object', worker: 'financial-notification-proof', exportName: 'Hub' } },
@@ -637,7 +637,7 @@ test('native Resend test transport persists one delivered financial email throug
 }, async (t) => {
   assert.ok(process.env.RESEND_API_KEY?.trim(), 'explicit native qualification requires the configured Resend credential')
   const runtime = new Miniflare({ workers: [{ config: {
-    name: 'native-financial-email-proof', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'native-financial-email-proof', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } },
     env: { DB: { type: 'd1' } },
   } }] })

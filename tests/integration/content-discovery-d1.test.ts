@@ -11,7 +11,7 @@ import type { CloudflareEnv } from '../../server/utils/auth.ts'
 
 test('public discovery resolves translations through current publication owners', { timeout: 60_000 }, async () => {
   const runtime = new Miniflare({ workers: [{ config: {
-    name: 'content-discovery-proof', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'content-discovery-proof', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } },
     env: { DB: { type: 'd1' } },
   } }] })

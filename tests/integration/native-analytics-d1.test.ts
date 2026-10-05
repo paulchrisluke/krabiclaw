@@ -17,7 +17,7 @@ const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0
 
 async function openDb() {
   const runtime = new Miniflare({ workers: [{ config: {
-    name: 'native-analytics', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'native-analytics', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } },
     env: { DB: { type: 'd1' } },
   } }] })

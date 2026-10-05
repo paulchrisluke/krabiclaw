@@ -15,7 +15,7 @@ import {
 
 test('document scopes, translations, block ownership and concurrent edits persist through real D1', async () => {
   const miniflare = new Miniflare({ workers: [{ config: {
-    name: 'content-document-test', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'content-document-test', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': {
       type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }',
     } } }, env: { DB: { type: 'd1' } },
@@ -179,7 +179,7 @@ test('document scopes, translations, block ownership and concurrent edits persis
 
 test('category names and hierarchy remain valid during concurrent D1 writes', async () => {
   const miniflare = new Miniflare({ workers: [{ config: {
-    name: 'article-category-test', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'article-category-test', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': {
       type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }',
     } } }, env: { DB: { type: 'd1' } },

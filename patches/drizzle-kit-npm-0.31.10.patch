@@ -1,7 +1,8 @@
-diff --git a/node_modules/drizzle-kit/bin.cjs b/node_modules/drizzle-kit/bin.cjs
---- a/node_modules/drizzle-kit/bin.cjs
-+++ b/node_modules/drizzle-kit/bin.cjs
-@@ -7173,7 +7173,11 @@
+diff --git a/api.js b/api.js
+index f4ecb91959f62fc938416a0585458c0a710af161..57d3f8e5d65d26facc36078f0bbd0ffc99ab526e 100644
+--- a/api.js
++++ b/api.js
+@@ -9409,7 +9409,11 @@ var init_sqliteSchema = __esm({
              it[0],
              {
                name: it[1].name,
@@ -14,10 +15,11 @@ diff --git a/node_modules/drizzle-kit/bin.cjs b/node_modules/drizzle-kit/bin.cjs
                indexes: squashedIndexes,
                foreignKeys: squashedFKs,
                compositePrimaryKeys: squashedPKs,
-diff --git a/node_modules/drizzle-kit/api.js b/node_modules/drizzle-kit/api.js
---- a/node_modules/drizzle-kit/api.js
-+++ b/node_modules/drizzle-kit/api.js
-@@ -9409,7 +9409,11 @@
+diff --git a/api.mjs b/api.mjs
+index a940272dfb05accf57a472c46c52652ec9ad0080..9a087de5c2d03fe681a45056dbff4d157f9b7f0a 100644
+--- a/api.mjs
++++ b/api.mjs
+@@ -9414,7 +9414,11 @@ var init_sqliteSchema = __esm({
              it[0],
              {
                name: it[1].name,
@@ -30,10 +32,11 @@ diff --git a/node_modules/drizzle-kit/api.js b/node_modules/drizzle-kit/api.js
                indexes: squashedIndexes,
                foreignKeys: squashedFKs,
                compositePrimaryKeys: squashedPKs,
-diff --git a/node_modules/drizzle-kit/api.mjs b/node_modules/drizzle-kit/api.mjs
---- a/node_modules/drizzle-kit/api.mjs
-+++ b/node_modules/drizzle-kit/api.mjs
-@@ -9414,7 +9414,11 @@
+diff --git a/bin.cjs b/bin.cjs
+index 07274ea6f53fd54a129b3d338892feda6e995cff..766de0050ecc1b57198892922768c203e2ebc5ee 100755
+--- a/bin.cjs
++++ b/bin.cjs
+@@ -7173,7 +7173,11 @@ var init_sqliteSchema = __esm({
              it[0],
              {
                name: it[1].name,

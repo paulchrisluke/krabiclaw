@@ -27,7 +27,7 @@ const NOW = '2026-09-11T00:00:00.000Z'
  */
 test('a thread and the record it refers to commit and cancel as one', { timeout: 120_000 }, async () => {
   const runtime = new Miniflare({ workers: [{ config: {
-    name: 'request-consolidation-proof', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'request-consolidation-proof', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } },
     env: { DB: { type: 'd1' } },
   } }] })
@@ -204,7 +204,7 @@ test('a thread is Current until its occurrence ends or a member archives it', ()
 
 test('archive and unarchive file a conversation without touching its booking, state or activity order', { timeout: 120_000 }, async () => {
   const runtime = new Miniflare({ workers: [{ config: {
-    name: 'guest-thread-mailbox-proof', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'guest-thread-mailbox-proof', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } },
     env: { DB: { type: 'd1' } },
   } }] })

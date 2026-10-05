@@ -8,7 +8,7 @@ import analyticsDaily from '../../server/tasks/analytics-aggregate-daily.ts'
 // Privacy Policy: MCP tool-call telemetry is deleted 180 days after creation.
 test('the daily analytics task deletes MCP tool-call events older than 180 days and keeps newer ones', { timeout: 60_000 }, async () => {
   const runtime = new Miniflare({ workers: [{ config: {
-    name: 'mcp-telemetry-retention', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'mcp-telemetry-retention', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } },
     env: { DB: { type: 'd1' } },
   } }] })
