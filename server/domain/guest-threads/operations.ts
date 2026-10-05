@@ -374,11 +374,11 @@ async function sendStatusUpdate(
 }
 
 /** A business's decision on a booking, for its analytics: recorded once per booking, on the first run and on any retry. */
-async function recordBookingOutcome(db: DbClient, context: ThreadContext, input: ExecuteOperationInput) {
+async function recordBookingOutcome(db: DbClient, context: ThreadContext, input: ExecuteOperationInput, decidedAt: string) {
   if (!context.record || context.record.kind !== 'booking') return
   const booking = { organizationId: input.organizationId, bookingId: context.record.id, actorUserId: input.actorUserId ?? null }
-  if (input.action === 'confirm') await recordBookingDecision(db, { ...booking, decision: 'confirmed' })
-  else if (input.action === 'reject') await recordBookingDecision(db, { ...booking, decision: 'declined' })
+  if (input.action === 'confirm') await recordBookingDecision(db, { ...booking, decision: 'confirmed', decidedAt })
+  else if (input.action === 'reject') await recordBookingDecision(db, { ...booking, decision: 'declined', decidedAt })
   else if (input.action === 'cancel') await recordBookingCancelled(db, { ...booking, cancelledBy: 'business' })
 }
 
@@ -395,7 +395,7 @@ async function executeSourceMutation(
     const delivery = await getDeliveryById(db, deliveryDedupeKey(input))
     if (!delivery) throw new Error('Status update delivery receipt was not created')
     const outcome = await sendStatusUpdate(db, context, input, existing, delivery)
-    await recordBookingOutcome(db, context, input)
+    await recordBookingOutcome(db, context, input, existing.occurred_at)
     return outcome
   }
 
@@ -437,11 +437,11 @@ async function executeSourceMutation(
     const refreshed = await loadThreadContext(db, input.threadId, input.organizationId)
     if ('ok' in refreshed) return refreshed
     const outcome = await sendStatusUpdate(db, refreshed, input, applied, delivery)
-    await recordBookingOutcome(db, context, input)
+    await recordBookingOutcome(db, context, input, applied.occurred_at)
     return outcome
   }
   const outcome = await successfulOutcome(db, context)
-  await recordBookingOutcome(db, context, input)
+  await recordBookingOutcome(db, context, input, applied.occurred_at)
   return outcome
 }
 
