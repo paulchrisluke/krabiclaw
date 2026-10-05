@@ -8,6 +8,7 @@ import {executeRefund,reconcileRefundState,requirePayment,type Payment} from '~/
 import {reconcilePaymentIntent,reconcileDisputeState} from '~/server/domain/payments/events'
 import {deliverPaymentsUsage,setUpPaymentsBilling} from '~/server/domain/payments/usage'
 import {reconcileStripeCosts} from '~/server/domain/payments/costs'
+import {recordCheckoutExpired} from '~/server/domain/booking-analytics'
 import {reconcilePayoutEvent} from '~/server/domain/payments/notifications'
 import {reconcilePaymentsInvoiceNotifications} from '~/server/domain/payments/billing-notifications'
 export default defineScheduledTask<{skipped?:string;attempts?:number;refunds?:number;billingAccounts?:number;billingSetUps?:number;stripeCosts?:'test_mode_unavailable'|'live_mode'}>({meta:{name:'payments:reconcile',description:'Reconcile Stripe payment attempts, durable refunds, attributable costs and Metronome usage'},async run({context}){
@@ -35,7 +36,7 @@ export default defineScheduledTask<{skipped?:string;attempts?:number;refunds?:nu
   const checkout=await stripe.checkout.sessions.retrieve(payment.stripe_checkout_id,{}, {stripeAccount:payment.stripe_account_id})
   if(checkout.livemode!==Boolean(payment.livemode) || checkout.client_reference_id!==payment.id)throw new Error('Reconciliation checkout financial scope mismatch')
   if(checkout.payment_intent){const id=typeof checkout.payment_intent==='string'?checkout.payment_intent:checkout.payment_intent.id;await reconcilePaymentIntent(db,stripe,payment,await stripe.paymentIntents.retrieve(id,{}, {stripeAccount:payment.stripe_account_id}),env);if(checkout.payment_status==='paid')await execute(db,"UPDATE payment_attempts SET status='completed',updated_at=? WHERE payment_id=?",[now,payment.id])}
-  if(checkout.status==='expired')await execute(db,"UPDATE payment_attempts SET status='expired',updated_at=? WHERE payment_id=?",[now,payment.id])
+  if(checkout.status==='expired'){await execute(db,"UPDATE payment_attempts SET status='expired',updated_at=? WHERE payment_id=?",[now,payment.id]);await recordCheckoutExpired(db,payment)}
  }catch(error){errors.push(error instanceof Error?error:new Error(String(error)));await execute(db,'UPDATE payment_attempts SET error=?,updated_at=? WHERE payment_id=?',[String(error),now,payment.id])}}
  const refunds=await queryAll<{payment_id:string;organization_id:string;amount:number;idempotency_key:string;created_by:string|null}>(db,"SELECT r.*,p.organization_id FROM payment_refunds r JOIN payments p ON p.id=r.payment_id WHERE r.status IN ('queued','creating') ORDER BY r.updated_at LIMIT 50")
  for(const refund of refunds){try{await executeRefund(db,stripe,await requirePayment(db,refund.organization_id,refund.payment_id),refund.amount,refund.idempotency_key,'requested_by_customer',refund.created_by,env)}catch(error){errors.push(error instanceof Error?error:new Error(String(error)))}}

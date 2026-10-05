@@ -7,6 +7,7 @@ import { sessionClaimQuery, sessionAssignmentQuery } from '~/server/utils/availa
 import { processStripeWebhookEvent } from '~/server/utils/stripe-webhook-events'
 import { executeRefund, reconcileRefundState, requirePayment, assertMinorAmount, type Payment } from './index'
 import { notifyPaymentFinancialEvent, reconcilePayoutEvent } from './notifications'
+import { recordCheckoutExpired, recordPaymentPaid } from '~/server/domain/booking-analytics'
 import { raiseSettledFailures } from '~/server/utils/notifications'
 
 interface Hold {
@@ -43,6 +44,10 @@ export async function reconcilePaymentIntent(db:DbClient,stripe:Stripe,payment:P
     {query:"INSERT OR IGNORE INTO payment_usage_events(id,organization_id,payment_id,kind,currency,amount,source_id,provider_occurred_at,created_at) VALUES(?,?,?,'captured_volume',?,?,?,?,?)",params:[crypto.randomUUID(),payment.organization_id,payment.id,payment.currency,intent.amount_received,`capture:${payment.stripe_account_id}:${payment.livemode}:${intent.id}`,new Date(charge.created*1000).toISOString(),now]},
   ],{operation:'Record authenticated capture and usage'})
   const recorded = await requirePayment(db,payment.organization_id,payment.id)
+  // A card Checkout offered from the buyer's saved ones existed before this Checkout did.
+  const methodId=typeof charge.payment_method==='string'?charge.payment_method:null
+  const method=checkout.customer&&methodId?await stripe.paymentMethods.retrieve(methodId,{}, {stripeAccount:payment.stripe_account_id}):null
+  await recordPaymentPaid(db,recorded,intent.id,Boolean(method&&method.created<checkout.created))
   const capture={kind:'payment_captured' as const,nativeId:intent.id,status:intent.status,amount:intent.amount_received,checkout}
   if(recorded.state==='recovery'){
     const outcomes=await Promise.allSettled([executeRefund(db,stripe,recorded,recorded.captured_amount,`unfulfillable:${intent.id}`,'requested_by_customer',null,env),notifyPaymentFinancialEvent(db,stripe,env,recorded,capture)])
@@ -107,7 +112,10 @@ export async function processPaymentEvent(db:DbClient,stripe:Stripe,event:Stripe
       if (checkout.payment_status === 'paid' && checkout.payment_intent) {
         const intentId = typeof checkout.payment_intent==='string'?checkout.payment_intent:checkout.payment_intent.id
         await reconcilePaymentIntent(db,stripe,payment,await stripe.paymentIntents.retrieve(intentId,{}, {stripeAccount:event.account}),env)
-      } else if (checkout.status === 'expired') await executeBatch(db,[{query:"UPDATE payment_checkout_holds SET status='released' WHERE payment_id=? AND status='active'",params:[payment.id]},{query:"UPDATE payment_attempts SET status='expired',updated_at=? WHERE stripe_checkout_id=?",params:[new Date().toISOString(),checkout.id]}])
+      } else if (checkout.status === 'expired') {
+        await executeBatch(db,[{query:"UPDATE payment_checkout_holds SET status='released' WHERE payment_id=? AND status='active'",params:[payment.id]},{query:"UPDATE payment_attempts SET status='expired',updated_at=? WHERE stripe_checkout_id=?",params:[new Date().toISOString(),checkout.id]}])
+        await recordCheckoutExpired(db,payment)
+      }
       return
     }
     if (event.type.startsWith('payment_intent.')) {

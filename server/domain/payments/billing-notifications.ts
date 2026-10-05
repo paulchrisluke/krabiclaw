@@ -5,6 +5,7 @@ import { stripeLivemodeFromKey } from '~/server/utils/stripe-connect'
 import { ownerPaymentMessage } from '~/server/notifications/payment-events'
 import { notifyFinancialNotification } from '~/server/utils/notifications'
 import { paymentsUsageStatus } from './usage'
+import { recordPaymentsFeeInvoicePaid } from '~/server/domain/booking-analytics'
 
 type InvoiceNotificationKind = 'usage_invoice_paid' | 'usage_invoice_payment_failed' | 'usage_invoice_action_required'
 
@@ -67,6 +68,7 @@ export async function notifyPaymentsInvoiceEvent(db: DbClient, stripe: Stripe, e
     'SELECT organization_id FROM payment_billing_accounts WHERE stripe_billing_customer_id=?', [customerId])
   if (mappings.length > 1) throw new Error('Payments operating customer has ambiguous tenant attribution')
   if (!mappings[0]) return
+  if (kind === 'usage_invoice_paid') await recordPaymentsFeeInvoicePaid(db, { organizationId: mappings[0].organization_id, invoiceId: object.id, amountPaid: object.amount_paid, currency: object.currency.toUpperCase() })
   await notifyInvoice(db, stripe, env, mappings[0].organization_id, object.id, kind)
 }
 

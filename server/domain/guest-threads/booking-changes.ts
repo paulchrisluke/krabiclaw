@@ -1,4 +1,5 @@
 import { refreshProductBusy } from '~/server/domain/member-scheduling'
+import { recordBookingChangeAnswer } from '~/server/domain/booking-analytics'
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { HTTPError } from 'nitro'
 import { z } from 'zod'
@@ -411,6 +412,11 @@ export async function respondToBookingChange(db: DbClient, env: ChangeEnv, input
   const summary = await sourceSummary(db, thread as GuestThreadRow)
   if (result && input.decision) {
     const accepted = result.event_name === 'booking_change.accepted'
+    if (!result.payload_json) throw new Error('A booking change answer has no recorded payload')
+    const answered = JSON.parse(result.payload_json) as { operational_booking_id?: unknown }
+    if (thread.kind === 'booking' && typeof answered.operational_booking_id === 'string') {
+      await recordBookingChangeAnswer(db, { organizationId: thread.organization_id, bookingId: answered.operational_booking_id, changeRequestId: entry.id, accepted })
+    }
     await deliverEmail(db, env, thread as GuestThreadRow, result.id, {
       subject: `Your ${noun} change was ${accepted ? 'accepted' : 'declined'}`,
       intro: accepted

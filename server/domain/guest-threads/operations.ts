@@ -1,4 +1,5 @@
 import { bookingRefundQueries } from '~/server/domain/payments/booking-refund'
+import { recordBookingCancelled, recordBookingDecision } from '~/server/domain/booking-analytics'
 import { executeBatch, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { isReservedTestDomain, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import type { ReplyEmailEnv } from '~/server/utils/submission-messages'
@@ -372,6 +373,15 @@ async function sendStatusUpdate(
   return { ok: false, status: 504, reason: 'delivery_unknown', message: outcome.error ?? 'Email delivery outcome is unknown' }
 }
 
+/** A business's decision on a booking, for its analytics: recorded once per booking, on the first run and on any retry. */
+async function recordBookingOutcome(db: DbClient, context: ThreadContext, input: ExecuteOperationInput) {
+  if (!context.record || context.record.kind !== 'booking') return
+  const booking = { organizationId: input.organizationId, bookingId: context.record.id, actorUserId: input.actorUserId ?? null }
+  if (input.action === 'confirm') await recordBookingDecision(db, { ...booking, decision: 'confirmed' })
+  else if (input.action === 'reject') await recordBookingDecision(db, { ...booking, decision: 'declined' })
+  else if (input.action === 'cancel') await recordBookingCancelled(db, { ...booking, cancelledBy: 'business' })
+}
+
 async function executeSourceMutation(
   db: DbClient,
   context: ThreadContext,
@@ -382,6 +392,7 @@ async function executeSourceMutation(
   const existing = await findEntryByDedupeKey(db, dedupeKey)
   if (existing) {
     if (!entryMatchesRequest(existing, eventName)) return conflict()
+    await recordBookingOutcome(db, context, input)
     const delivery = await getDeliveryById(db, deliveryDedupeKey(input))
     if (!delivery) throw new Error('Status update delivery receipt was not created')
     return await sendStatusUpdate(db, context, input, existing, delivery)
@@ -419,6 +430,7 @@ async function executeSourceMutation(
   const applied = await findEntryByDedupeKey(db, dedupeKey)
   if (!applied) return conflict(`"${input.action}" is not a valid action for the current state`)
   if (!entryMatchesRequest(applied, eventName)) return conflict()
+  await recordBookingOutcome(db, context, input)
   if (plan.requiresNotification) {
     const delivery = await getDeliveryById(db, deliveryId)
     if (!delivery) throw new Error('Status update delivery receipt was not created')

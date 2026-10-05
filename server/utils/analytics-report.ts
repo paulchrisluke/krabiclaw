@@ -34,7 +34,7 @@ const eventList = (predicate: (definition: typeof CONVERSION_EVENT_CATALOG[keyof
   ORGANIZATION_CONVERSION_EVENT_NAMES.filter(name => predicate(CONVERSION_EVENT_CATALOG[name])).map(name => `'${name}'`).join(', ')
 const OUTCOME_EVENT_NAMES = new Set<string>(ORGANIZATION_CONVERSION_EVENT_NAMES.filter(name => CONVERSION_EVENT_CATALOG[name].outcome))
 const OUTCOME_EVENT_SQL_LIST = eventList(definition => definition.outcome)
-const SERVER_DELIVERED_EVENT_SQL_LIST = eventList(definition => definition.ga4Sender !== 'browser')
+const SERVER_DELIVERED_EVENT_SQL_LIST = eventList(definition => definition.ga4 !== null && definition.ga4Sender !== 'browser')
 
 export async function resolveOrganizationAnalyticsContext(db: DbClient, organizationId: string): Promise<OrganizationContext> {
   const row = await queryFirst<{ organization_id: string; analytics_data_start_at: string | null; timezone: string | null }>(db, `

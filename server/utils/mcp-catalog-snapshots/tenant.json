@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:bbaa6dbae4c8acc8dab277416d32918b80b460db80f5771b39eef64967ba33a8",
+  "fingerprint": "sha256:12b1bd04271092314b00896f82574acecf6d635fd10169b804568a4d2679b3ab",
   "tools": [
     {
       "name": "append_content_block",
@@ -12077,6 +12077,8 @@
                 "conversion_type",
                 "attribution_basis",
                 "actor_id",
+                "member_id",
+                "tenant_organization_id",
                 "ga4_delivery_status",
                 "source",
                 "medium",
@@ -12196,6 +12198,10 @@
                 "description": "medium on the requested attribution_basis (observed: as the event carried it; event_snapshot: the attribution in force for the event when it happened; session_last_touch: the session's current last touch)",
                 "type": "string"
               },
+              "member_id": {
+                "description": "the team member a paid booking or booking decision is with",
+                "type": "string"
+              },
               "msclkid": {
                 "description": "msclkid on the requested attribution_basis (observed: as the event carried it; event_snapshot: the attribution in force for the event when it happened; session_last_touch: the session's current last touch)",
                 "type": "string"
@@ -12261,6 +12267,10 @@
                 "description": "the surface that produced the event",
                 "type": "string"
               },
+              "tenant_organization_id": {
+                "description": "on the platform organization: the business a Payments volume or fee invoice belongs to",
+                "type": "string"
+              },
               "term": {
                 "description": "term on the requested attribution_basis (observed: as the event carried it; event_snapshot: the attribution in force for the event when it happened; session_last_touch: the session's current last touch)",
                 "type": "string"
@@ -12295,7 +12305,7 @@
             "type": "integer"
           },
           "metrics": {
-            "description": "breakdown only: 1-8 metrics. events (events); page_views (page views); interactions (interactions); outcomes (outcome events); sessions (distinct sessions); visitors (distinct visitors); entities (distinct business subjects); quoted_value_minor (minor units of the group currency); purchase_value_minor (minor units of the group currency); collected_minor (minor units of the group currency); refunded_minor (minor units of the group currency); net_collected_minor (minor units of the group currency); converting_sessions (distinct eligible sessions that completed the selected outcome in the range); eligible_sessions (distinct sessions with a pageview); session_conversion_rate (percent: converting sessions / eligible sessions, over the same sessions)",
+            "description": "breakdown only: 1-8 metrics. events (events); page_views (page views); interactions (interactions); outcomes (outcome events); sessions (distinct sessions); visitors (distinct visitors); entities (distinct business subjects); quoted_value_minor (minor units of the group currency); purchase_value_minor (minor units of the group currency); collected_minor (minor units of the group currency); refunded_minor (minor units of the group currency); net_collected_minor (minor units of the group currency); converting_sessions (distinct eligible sessions that completed the selected outcome in the range); eligible_sessions (distinct sessions with a pageview); session_conversion_rate (percent: converting sessions / eligible sessions, over the same sessions); checkouts_started (checkouts); payments_paid (payments); refunds_sent (refunds); checkout_conversion_rate (percent: payments captured / checkouts started); refund_rate (percent: refunds sent / payments captured); payments_volume_minor (minor units of the group currency); avg_decision_seconds (seconds)",
             "items": {
               "enum": [
                 "events",
@@ -12312,7 +12322,14 @@
                 "net_collected_minor",
                 "converting_sessions",
                 "eligible_sessions",
-                "session_conversion_rate"
+                "session_conversion_rate",
+                "checkouts_started",
+                "payments_paid",
+                "refunds_sent",
+                "checkout_conversion_rate",
+                "refund_rate",
+                "payments_volume_minor",
+                "avg_decision_seconds"
               ],
               "type": "string"
             },

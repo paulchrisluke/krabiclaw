@@ -62,7 +62,7 @@ export async function listCustomerCards(stripe: Stripe, customerId: string, opti
  * Stripe's cloning is the documented way to pay a connected account with a
  * platform card; the only state kept here is which connected customer is theirs.
  */
-export async function connectedCustomerWithSavedCards(db: DbClient, stripe: Stripe, env: CloudflareEnv, userId: string, stripeAccountId: string, livemode: boolean): Promise<string | null> {
+export async function connectedCustomerWithSavedCards(db: DbClient, stripe: Stripe, env: CloudflareEnv, userId: string, stripeAccountId: string, livemode: boolean): Promise<{ customerId: string; savedCards: number } | null> {
   const user = await queryFirst<{ stripeCustomerId: string | null; email: string; name: string | null }>(db, 'SELECT "stripeCustomerId", email, name FROM user WHERE id = ?', [userId])
   if (!user?.stripeCustomerId) return null
   const platform = createStripeClient(env.STRIPE_SECRET_KEY!)
@@ -87,5 +87,5 @@ export async function connectedCustomerWithSavedCards(db: DbClient, stripe: Stri
     await stripe.paymentMethods.attach(copy.id, { customer: mapping.stripe_customer_id }, connected)
     fingerprints.add(card.card.fingerprint)
   }
-  return mapping.stripe_customer_id
+  return { customerId: mapping.stripe_customer_id, savedCards: fingerprints.size }
 }

@@ -465,6 +465,16 @@ onMounted(async () => {
   if (organizationId) {
     trackDashboardVisited(scope.value, organizationId)
   }
+  // Which page and tab of a business's dashboard was opened (Earnings, Transactions, a payout, the Payments tabs), on the same event.
+  let lastSection = ''
+  watch(() => [route.name, route.query.tab] as const, ([name, tab]) => {
+    const id = organization.value?.id
+    if (!id || typeof name !== 'string' || !name.startsWith('dashboard-orgSlug-')) return
+    const section = `${name.slice('dashboard-orgSlug-'.length)}${typeof tab === 'string' && tab ? `:${tab}` : ''}`
+    if (section === lastSection) return
+    lastSection = section
+    trackDashboardVisited(section, id)
+  }, { immediate: true })
 })
 
 async function stopImpersonating() {
