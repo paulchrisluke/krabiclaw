@@ -217,7 +217,11 @@ test.describe('dashboard pane hierarchy', () => {
     expect(updates.notifications.every(item => item.scope === 'global' && (item.target_user_id === viewer.user.id || item.target_user_id === null)), 'personal Updates carry only this account\'s notifications').toBe(true)
     await expect(page).toHaveURL('/dashboard/account/messages?view=updates')
     if (updates.notifications.length) {
-      for (const item of updates.notifications) await expect(page.getByText(item.title ?? '', { exact: true }).first()).toBeVisible()
+      for (const item of updates.notifications) {
+        const row = page.getByTestId(`notification-${item.id}`)
+        await expect(row).toBeVisible()
+        if (item.title) await expect(row).toContainText(item.title)
+      }
     } else {
       await expect(page.getByText('No updates yet.', { exact: true })).toBeVisible()
     }

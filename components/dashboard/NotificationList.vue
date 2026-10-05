@@ -47,6 +47,7 @@
         <button
           v-for="notification in notifications"
           :key="notification.id"
+          :data-testid="`notification-${notification.id}`"
           type="button"
           class="flex w-full items-start gap-4 py-5 text-left transition-colors hover:bg-elevated/60"
           @click="openNotification(notification)"
