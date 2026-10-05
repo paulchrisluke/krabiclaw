@@ -1,6 +1,6 @@
 import { assertCalendarDate, isValidTimezone, instantDate, localDateAt, addLocalDays } from '~/utils/timezone'
 import { HTTPError } from 'nitro'
-import { queryAll, type DbClient } from '~/server/db'
+import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { resolveOrganizationCmsCapabilities } from '~/server/utils/cms-capabilities'
 import type { ResolvedMembership } from '~/server/utils/member-access'
@@ -180,6 +180,17 @@ export async function listAgenda(
     // A class's schedule is the product's own; the calendar carries who is
     // coming to it, not every session it could run.
     if (features.has('products')) available.add('booking')
+  }
+  // A business that has taken bookings or reservations sees them whatever its
+  // site template says: the record exists, so the calendar shows it.
+  if (capabilityOrganizations.length) {
+    const ids = JSON.stringify(capabilityOrganizations.map(organization => organization.id))
+    const [bookable, reserving] = await Promise.all([
+      queryFirst(db, `SELECT 1 FROM product_booking_configs WHERE organization_id IN (SELECT value FROM json_each(?)) LIMIT 1`, [ids]),
+      queryFirst(db, `SELECT 1 FROM reservations WHERE organization_id IN (SELECT value FROM json_each(?)) LIMIT 1`, [ids]),
+    ])
+    if (bookable) available.add('booking')
+    if (reserving) available.add('reservation')
   }
   const availableKinds = AGENDA_KINDS.filter(kind => available.has(kind))
   const requestedKinds = new Set((query.kinds?.length ? query.kinds : availableKinds).filter(kind => available.has(kind)))
