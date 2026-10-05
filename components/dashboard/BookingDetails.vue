@@ -69,7 +69,11 @@
             variant="soft"
             icon="i-lucide-clock"
             :title="`Change requested · ${booking.pendingChange.afterLabel} · ${booking.pendingChange.partySize} ${booking.pendingChange.partySize === 1 ? 'guest' : 'guests'}`"
-            :description="personalScope ? `${booking.organizationName} asked to change this ${noun}. Accept or decline from the email we sent you; nothing moves until you do.` : `Waiting for ${firstName(booking.guestName ?? '')} to accept. The ${noun} stays as it is until then.`"
+            :description="personalScope ? `${booking.organizationName} asked to change this ${noun}. Nothing moves until you accept.` : `Waiting for ${firstName(booking.guestName ?? '')} to accept. The ${noun} stays as it is until then.`"
+            :actions="personalScope ? [
+              { label: 'Accept', color: 'primary' as const, loading: answering === 'accept', onClick: () => answerChange('accept') },
+              { label: 'Decline', color: 'neutral' as const, variant: 'soft' as const, loading: answering === 'decline', onClick: () => answerChange('decline') },
+            ] : undefined"
           />
           <div class="mt-6 space-y-2">
             <UButton
@@ -356,6 +360,26 @@ const callTo = computed(() => booking.value?.guestPhone ? `tel:${booking.value.g
 
 const policyOpen = ref(false)
 const session = authClient.useSession()
+// The buyer's answer to a change, on the record itself; the email link records the same decision.
+const answering = ref<'accept' | 'decline' | null>(null)
+async function answerChange(decision: 'accept' | 'decline') {
+  const change = booking.value?.pendingChange
+  if (!change || !booking.value?.threadId || answering.value) return
+  answering.value = decision
+  actionError.value = null
+  try {
+    await applicationFetch('/api/account/bookings/change', {
+      method: 'POST',
+      body: { thread_id: booking.value.threadId, request_id: change.requestId, decision },
+      validate: (value: unknown): value is Record<string, unknown> => isRecord(value),
+    })
+    await refreshDetails()
+  } catch (cause) {
+    actionError.value = getErrorMessage(cause, 'Your answer could not be saved')
+  } finally {
+    answering.value = null
+  }
+}
 const cancelOpen = ref(false)
 const cancelNote = ref('')
 // What a cancellation gives back: everything still captured, as Airbnb's host cancellation does.

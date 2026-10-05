@@ -18,7 +18,7 @@ import { bookingChangeProposalMessage } from '~/server/notifications/guest-event
 import { organizationLogo } from '~/server/notifications/hero'
 import { getPlatformDomain } from '~/server/utils/dashboard-notification-links'
 import { updateThreadProjection } from './repository'
-import { getGuestRequest, getThreadOperationalRecord, requestSummary } from '~/server/domain/requests'
+import { getGuestRequest, getThreadOperationalRecord, requestSummary, REQUEST_CURRENT_BUYER_SQL } from '~/server/domain/requests'
 import type { GuestThreadRow } from './types'
 
 /**
@@ -319,9 +319,14 @@ export async function requestBookingChange(db: DbClient, env: CloudflareEnv, thr
 }
 
 /** GET only reads the immutable proposal. POST records one idempotent guest decision. */
-export async function respondToBookingChange(db: DbClient, env: ChangeEnv, input: { threadId: string; requestId: string; token: string; decision?: 'accept' | 'decline' }) {
-  const expected = linkToken(env, input.threadId, input.requestId)
-  if (!/^[a-f0-9]{64}$/.test(input.token) || !timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(input.token, 'hex'))) throw new HTTPError({ statusCode: 404, message: 'Change request not found' })
+export async function respondToBookingChange(db: DbClient, env: ChangeEnv, input: { threadId: string; requestId: string; decision?: 'accept' | 'decline' } & ({ token: string } | { buyerUserId: string })) {
+  // The guest answers from the email link, or signed in as the account that owns the booking.
+  if ('token' in input) {
+    const expected = linkToken(env, input.threadId, input.requestId)
+    if (!/^[a-f0-9]{64}$/.test(input.token) || !timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(input.token, 'hex'))) throw new HTTPError({ statusCode: 404, message: 'Change request not found' })
+  } else if (!await queryFirst(db, `SELECT 1 FROM requests r WHERE r.id = ? AND r.user_id = ? AND ${REQUEST_CURRENT_BUYER_SQL}`, [input.threadId, input.buyerUserId])) {
+    throw new HTTPError({ statusCode: 404, message: 'Change request not found' })
+  }
   const entry = await getEntryById(db, input.requestId)
   if (!entry || entry.request_id !== input.threadId || entry.event_name !== 'booking_change.requested') throw new HTTPError({ statusCode: 404, message: 'Change request not found' })
   const thread = await getGuestRequest(db, entry.request_id)

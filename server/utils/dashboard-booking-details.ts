@@ -104,7 +104,7 @@ export interface DashboardBookingDetails {
   policy: RenderedBookingPolicySummary | null
   notes: DashboardBookingNote[]
   /** A change the business proposed that the guest has not answered; Airbnb's "Change requested". */
-  pendingChange: { requestedAt: string; afterLabel: string; partySize: number } | null
+  pendingChange: { requestId: string; requestedAt: string; afterLabel: string; partySize: number } | null
   locations: Array<{ id: string; title: string; imageUrl: string | null }>
   payments: Array<{payment:PaymentDisplay;refunds:PaymentRefundDisplay[];order:PaymentOrderDisplay|null}> | null
   /** The guest's own self-service cancellation is still open. */
@@ -194,8 +194,8 @@ async function loadResourceImage(db: DbClient, row: BookingRow, type: DashboardB
 /** The latest proposal on the thread with no acceptance or decline answering it. */
 async function pendingBookingChange(db: DbClient, threadId: string | null): Promise<DashboardBookingDetails['pendingChange']> {
   if (!threadId) return null
-  const row = await queryFirst<{ created_at: string; payload_json: string | null }>(db, `
-    SELECT e.created_at, e.payload_json FROM activity_entries e
+  const row = await queryFirst<{ id: string; created_at: string; payload_json: string | null }>(db, `
+    SELECT e.id, e.created_at, e.payload_json FROM activity_entries e
      WHERE e.request_id = ? AND e.event_name = 'booking_change.requested'
        AND NOT EXISTS (SELECT 1 FROM activity_entries r WHERE r.request_id = e.request_id
                          AND r.event_name IN ('booking_change.accepted', 'booking_change.declined')
@@ -204,7 +204,7 @@ async function pendingBookingChange(db: DbClient, threadId: string | null): Prom
   if (!row) return null
   const proposal: unknown = JSON.parse(row.payload_json || '{}')
   if (!isRecord(proposal) || typeof proposal.afterLabel !== 'string' || !isRecord(proposal.after) || typeof proposal.after.partySize !== 'number') throw new Error('Booking change proposal has invalid required state')
-  return { requestedAt: row.created_at, afterLabel: proposal.afterLabel, partySize: proposal.after.partySize }
+  return { requestId: row.id, requestedAt: row.created_at, afterLabel: proposal.afterLabel, partySize: proposal.after.partySize }
 }
 
 async function listInternalNotes(db: DbClient, threadId: string | null): Promise<DashboardBookingNote[]> {
