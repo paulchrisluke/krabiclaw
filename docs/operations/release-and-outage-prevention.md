@@ -203,6 +203,22 @@ Cloudflare reported WNAM before loading:
 - `krabiclaw-production-v11`: `ef5d6da1-7feb-4b6e-93a9-aa3677eefea7`
 - `krabiclaw-staging-v11`: `6ec294fd-6ac9-4da6-9463-1e1f088f49d3`
 
+Prepared copies do not change deployed Workers. Before switching their bindings,
+finish the ordinary final source delta and inspect changed or deleted keys. Copy
+each environment from its own live v8 source:
+
+```sh
+node --experimental-strip-types scripts/pull-production-snapshot.ts --staging --source krabiclaw-staging-v8 --out staging-v11-initial.sqlite
+node --experimental-strip-types scripts/pull-production-snapshot.ts --production --source krabiclaw-production-v8 --out production-v11-initial.sqlite
+node --experimental-strip-types scripts/pull-production-snapshot.ts --staging --source krabiclaw-staging-v8 --out staging-v11-final.sqlite --delta-from staging-v11-initial.sqlite
+node --experimental-strip-types scripts/pull-production-snapshot.ts --production --source krabiclaw-production-v8 --out production-v11-final.sqlite --delta-from production-v11-initial.sqlite
+```
+
+Prepare the load before the binding repoint. Inspect changes and deletions since
+the initial load immediately before deployment; carry important edits explicitly
+and preserve writes to the new database. After each deployment, verify schema,
+foreign keys and customer journeys on the new binding before promoting further.
+
 The v11-to-v12 replacement drops `organization.feature_overrides` and
 `business_locations.feature_overrides` and their CHECK constraints (#1267):
 site capabilities come from the organization's vertical and theme alone.
@@ -223,22 +239,6 @@ node --experimental-strip-types scripts/pull-production-snapshot.ts --production
 node --experimental-strip-types scripts/pull-production-snapshot.ts --staging --source krabiclaw-staging-v11 --out staging-v12-final.sqlite --delta-from staging-v12-initial.sqlite
 node --experimental-strip-types scripts/pull-production-snapshot.ts --production --source krabiclaw-production-v11 --out production-v12-final.sqlite --delta-from production-v12-initial.sqlite
 ```
-
-Prepared copies do not change deployed Workers. Before switching their bindings,
-finish the ordinary final source delta and inspect changed or deleted keys. Copy
-each environment from its own live v8 source:
-
-```sh
-node --experimental-strip-types scripts/pull-production-snapshot.ts --staging --source krabiclaw-staging-v8 --out staging-v11-initial.sqlite
-node --experimental-strip-types scripts/pull-production-snapshot.ts --production --source krabiclaw-production-v8 --out production-v11-initial.sqlite
-node --experimental-strip-types scripts/pull-production-snapshot.ts --staging --source krabiclaw-staging-v8 --out staging-v11-final.sqlite --delta-from staging-v11-initial.sqlite
-node --experimental-strip-types scripts/pull-production-snapshot.ts --production --source krabiclaw-production-v8 --out production-v11-final.sqlite --delta-from production-v11-initial.sqlite
-```
-
-Prepare the load before the binding repoint. Inspect changes and deletions since
-the initial load immediately before deployment; carry important edits explicitly
-and preserve writes to the new database. After each deployment, verify schema,
-foreign keys and customer journeys on the new binding before promoting further.
 
 Before dropping or retiring a legacy table or writer:
 
