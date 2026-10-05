@@ -35,6 +35,7 @@
 import EditorNavigationList from '~/components/dashboard/EditorNavigationList.vue'
 import type { EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import DashboardListItemDialog from '~/components/dashboard/DashboardListItemDialog.vue'
+import { authClient } from '~/lib/auth-client'
 import { STARTER_PLAN_ID, isKnownBillingPlan, isNewSalePlan } from '~/shared/billing-model'
 import { paymentMoney } from '~/shared/payment-display'
 import { isCurrencyCode } from '~/shared/currencies'
@@ -54,10 +55,11 @@ const sheetError = ref('')
 const busy = ref(false)
 const choosing = ref(false)
 
-interface BillingStatus { organizationId: string; plan: string; stripeCustomerId?: string; stripeSubscriptionId?: string; subscriptionStatus?: string; currentPeriodEnd?: string; cancelAtPeriodEnd?: boolean }
+interface BillingStatus { organizationId: string; plan: string; stripeCustomerId?: string; stripeSubscriptionId?: string; subscriptionStatus?: string; currentPeriodEnd?: string; cancelAtPeriodEnd?: boolean; scheduledPlan?: { plan: string; at: string } | null }
 const isBillingResponse = (value: unknown): value is { success: true; billing: BillingStatus } =>
   isRecord(value) && value.success === true && isRecord(value.billing) && typeof value.billing.organizationId === 'string' && isKnownBillingPlan(value.billing.plan)
-const { data: billingResponse, error: billingError, pending: loading } = await useAsyncData(
+  && (value.billing.scheduledPlan === undefined || value.billing.scheduledPlan === null || (isRecord(value.billing.scheduledPlan) && isKnownBillingPlan(value.billing.scheduledPlan.plan) && typeof value.billing.scheduledPlan.at === 'string'))
+const { data: billingResponse, error: billingError, pending: loading, refresh: refreshBilling } = await useAsyncData(
   computed(() => `dashboard-billing:${String(route.params.orgSlug || '')}`),
   () => dashboardApi('/api/billing/status', { validate: isBillingResponse }),
 )
@@ -76,6 +78,10 @@ const { data: usage, refresh: refreshUsage } = await useAsyncData(() => `payment
 
 const currentPlan = computed(() => plans.value.find(plan => plan.id === billing.value?.plan) ?? null)
 const onStarter = computed(() => billing.value?.plan === STARTER_PLAN_ID)
+const scheduledPlan = computed(() => {
+  const scheduled = billing.value?.scheduledPlan
+  return scheduled ? { name: plans.value.find(plan => plan.id === scheduled.plan)?.name ?? scheduled.plan, at: scheduled.at } : null
+})
 const planSummary = computed(() => {
   const status = billing.value
   if (!status) return ''
@@ -84,6 +90,7 @@ const planSummary = computed(() => {
   const price = currentPlan.value ? displayPrice(currentPlan.value, false) : null
   if (price) parts.push(`${price}/mo`)
   if (status.subscriptionStatus === 'past_due') parts.push('Payment past due')
+  else if (scheduledPlan.value) parts.push(`Changes to ${scheduledPlan.value.name} on ${formatExactDateTime(scheduledPlan.value.at)}`)
   else if (status.currentPeriodEnd) parts.push(`${status.cancelAtPeriodEnd ? 'Ends' : 'Renews'} ${formatExactDateTime(status.currentPeriodEnd)}`)
   return parts.join(' · ')
 })
@@ -93,10 +100,11 @@ const groups = computed<EditorNavigationGroup[]>(() => [{
   items: [
     { id: 'plan', label: currentPlan.value?.name ?? 'Plan', summary: planSummary.value, action: { label: onStarter.value ? 'Choose a plan' : 'Manage' } },
     ...(usage.value?.pricing ? [{ id: 'fees', label: 'Payments fees', summary: `${usage.value.pricing.captured_volume_rate_percent}% of each payment, plus Stripe’s fees. Fees aren’t returned after a refund or dispute.` }] : []),
-    ...(usage.value && usage.value.configured === false && billing.value?.plan === 'commerce' ? [{ id: 'usage:provision', label: 'Payments billing', summary: 'Not set up yet. Payments can’t be accepted until it is.', status: 'error' as const, action: { label: 'Set up' } }] : []),
+    ...(usage.value && usage.value.configured === false && billing.value?.plan === 'commerce' ? [{ id: 'usage:pending', label: 'Payments fees', summary: 'Getting ready. Fees for payments you take before then are billed once it’s done.' }] : []),
     ...(usage.value?.account && ['servicing', 'closing'].includes(usage.value.account.status) ? [{ id: 'usage:finalize', label: 'Previous Payments billing', summary: 'Charges from earlier payments still apply; end it once they are settled.', action: { label: 'End' } }] : []),
     ...(usage.value?.credits ?? []).map(credit => ({ id: `credit:${credit.id}`, label: `Pending credit ${paymentMoney(-credit.amount, credit.currency)}`, summary: 'Issue the credit in Stripe, then verify its credit note here.', action: { label: 'Verify' } })),
-    ...(!onStarter.value && billing.value && !billing.value.cancelAtPeriodEnd ? [{ id: 'cancel', label: 'Cancel plan', summary: 'If you cancel, you keep full access to your plan features until the end of your billing period.', action: { label: 'Cancel' } }] : []),
+    ...(billing.value && (scheduledPlan.value || billing.value.cancelAtPeriodEnd) && currentPlan.value ? [{ id: 'restore', label: `Keep ${currentPlan.value.name}`, summary: scheduledPlan.value ? `Stay on ${currentPlan.value.name} instead of changing to ${scheduledPlan.value.name}.` : `Stay on ${currentPlan.value.name} after ${formatExactDateTime(billing.value.currentPeriodEnd!)}.`, action: { label: 'Keep plan' } }] : []),
+    ...(!onStarter.value && billing.value && !billing.value.cancelAtPeriodEnd && !scheduledPlan.value ? [{ id: 'cancel', label: 'Cancel plan', summary: 'If you cancel, you keep full access to your plan features until the end of your billing period.', action: { label: 'Cancel' } }] : []),
   ],
 }])
 
@@ -116,9 +124,14 @@ async function onRowAction(id: string) {
   busy.value = true
   try {
     if (id === 'cancel') await startOrganizationCheckout(organizationId(), STARTER_PLAN_ID)
-    else if (id === 'usage:provision') { await dashboardApi('/api/dashboard/payments/billing', { method: 'POST', body: { action: 'provision' }, validate: (value: unknown): value is Record<string, unknown> => isRecord(value) && typeof value.metronome_contract_id === 'string' }); await refreshUsage() }
+    else if (id === 'restore') {
+      // Better Auth's restore releases the schedule or the pending cancellation at Stripe.
+      const restored = await authClient.subscription.restore({ referenceId: organizationId(), customerType: 'organization' })
+      if (restored.error) throw new Error(restored.error.message ?? 'Your plan could not be kept')
+      await refreshBilling()
+    }
     else if (id === 'usage:finalize') { await dashboardApi('/api/dashboard/payments/billing', { method: 'POST', body: { action: 'finalize' }, validate: (value: unknown): value is Record<string, unknown> => isRecord(value) && value.closed === true }); await refreshUsage() }
-    else if (id !== 'fees') throw new Error('Unknown billing action')
+    else if (id !== 'fees' && id !== 'usage:pending') throw new Error('Unknown billing action')
   } catch (error) {
     errorMessage.value = getErrorMessage(error, 'Billing is unavailable right now')
   } finally {
