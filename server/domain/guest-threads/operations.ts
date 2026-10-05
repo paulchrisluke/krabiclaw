@@ -1,4 +1,5 @@
 import { bookingRefundQueries } from '~/server/domain/payments/booking-refund'
+import { recordBookingCancelled, recordBookingDecision } from '~/server/domain/booking-analytics'
 import { executeBatch, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { isReservedTestDomain, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import type { ReplyEmailEnv } from '~/server/utils/submission-messages'
@@ -372,6 +373,15 @@ async function sendStatusUpdate(
   return { ok: false, status: 504, reason: 'delivery_unknown', message: outcome.error ?? 'Email delivery outcome is unknown' }
 }
 
+/** A business's decision on a booking, for its analytics: recorded once per booking, on the first run and on any retry. */
+async function recordBookingOutcome(db: DbClient, context: ThreadContext, input: ExecuteOperationInput, decidedAt: string) {
+  if (!context.record || context.record.kind !== 'booking') return
+  const booking = { organizationId: input.organizationId, bookingId: context.record.id, actorUserId: input.actorUserId ?? null }
+  if (input.action === 'confirm') await recordBookingDecision(db, { ...booking, decision: 'confirmed', decidedAt })
+  else if (input.action === 'reject') await recordBookingDecision(db, { ...booking, decision: 'declined', decidedAt })
+  else if (input.action === 'cancel') await recordBookingCancelled(db, { ...booking, cancelledBy: 'business' })
+}
+
 async function executeSourceMutation(
   db: DbClient,
   context: ThreadContext,
@@ -384,7 +394,9 @@ async function executeSourceMutation(
     if (!entryMatchesRequest(existing, eventName)) return conflict()
     const delivery = await getDeliveryById(db, deliveryDedupeKey(input))
     if (!delivery) throw new Error('Status update delivery receipt was not created')
-    return await sendStatusUpdate(db, context, input, existing, delivery)
+    const outcome = await sendStatusUpdate(db, context, input, existing, delivery)
+    await recordBookingOutcome(db, context, input, existing.occurred_at)
+    return outcome
   }
 
   const plan = sourceMutationPlan(context, input.action)
@@ -424,9 +436,13 @@ async function executeSourceMutation(
     if (!delivery) throw new Error('Status update delivery receipt was not created')
     const refreshed = await loadThreadContext(db, input.threadId, input.organizationId)
     if ('ok' in refreshed) return refreshed
-    return await sendStatusUpdate(db, refreshed, input, applied, delivery)
+    const outcome = await sendStatusUpdate(db, refreshed, input, applied, delivery)
+    await recordBookingOutcome(db, context, input, applied.occurred_at)
+    return outcome
   }
-  return await successfulOutcome(db, context)
+  const outcome = await successfulOutcome(db, context)
+  await recordBookingOutcome(db, context, input, applied.occurred_at)
+  return outcome
 }
 
 async function executeReply(

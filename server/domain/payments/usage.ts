@@ -9,6 +9,7 @@ import {validatePaymentsRateCard} from './rate-card'
 import {tokenHash} from './buyer'
 import {describeErrorForTelemetry} from '~/server/utils/error-telemetry'
 import {stripeLivemodeFromKey} from '~/server/utils/stripe-connect'
+import {recordPaymentsVolumeBilled} from '~/server/domain/booking-analytics'
 
 export function metronomeCurrencyAmount(minor:number,currency:CurrencyCode):string {
  if(currency!=='USD')throw new Error('Payments usage billing requires USD cents')
@@ -214,7 +215,7 @@ export async function paymentsUsageStatus(db:DbClient,env:CloudflareEnv,organiza
  return {configured:true,pending,pricing,account:{...account,status},invoices:collected,credits,source:'Metronome',refreshed_at:new Date().toISOString()}
 }
 export async function deliverPaymentsUsage(db:DbClient,env:CloudflareEnv,organizationId:string) {
- const events=await queryAll<{id:string;kind:string;currency:CurrencyCode;amount:number;source_id:string;provider_occurred_at:string;created_at:string;billing_timestamp:string|null}>(db,`SELECT * FROM payment_usage_events WHERE organization_id=? AND delivery_at IS NULL AND dead_letter_at IS NULL ORDER BY created_at LIMIT 100`,[organizationId])
+ const events=await queryAll<{id:string;payment_id:string|null;kind:string;currency:CurrencyCode;amount:number;source_id:string;provider_occurred_at:string;created_at:string;billing_timestamp:string|null}>(db,`SELECT * FROM payment_usage_events WHERE organization_id=? AND delivery_at IS NULL AND dead_letter_at IS NULL ORDER BY created_at LIMIT 100`,[organizationId])
  if(!events.length)return {delivered:0}
  const account=await queryFirst<BillingAccount>(db,'SELECT * FROM payment_billing_accounts WHERE organization_id=?',[organizationId])
  if(!account?.metronome_customer_id||!account.metronome_contract_id) throw new Error('Payments billing mapping missing; accrued usage remains undelivered')
@@ -244,6 +245,7 @@ export async function deliverPaymentsUsage(db:DbClient,env:CloudflareEnv,organiz
   }
   try {
    await metronomeRequest(env,'/v1/ingest',[{transaction_id:`payments:${await tokenHash(event.source_id)}`,customer_id:account.metronome_customer_id,timestamp,event_type:`payments_${event.kind}`,properties:{amount_minor:String(event.amount),currency:event.currency,pricing_amount:metronomeCurrencyAmount(event.amount,event.currency),provider_occurred_at:event.provider_occurred_at,payment_source:event.source_id,billing_adjustment:decision.adjustment?'closed_period_roll_forward':'original_period'}}])
+   if(event.kind==='captured_volume'){if(!event.payment_id)throw new Error(`Captured volume ${event.id} has no payment`);await recordPaymentsVolumeBilled(db,{organizationId,paymentId:event.payment_id,volumeMinor:event.amount,currency:event.currency})}
    await execute(db,'UPDATE payment_usage_events SET delivery_at=?,error=NULL WHERE id=?',[new Date().toISOString(),event.id]);delivered++
   }catch(error){
    const status=error instanceof HTTPError?error.data?.provider_status:undefined

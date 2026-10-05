@@ -9,7 +9,7 @@
 export const CONVERSION_STAGES = ['schedule_navigation', 'external_booking_handoff', 'submitted', 'external_handoff', 'completed', 'viewed', 'started', 'occurred'] as const
 export type ConversionStage = typeof CONVERSION_STAGES[number]
 
-export const CONVERSION_ENTITY_TYPES = ['request', 'product', 'content_block', 'content_document', 'user', 'organization', 'invoice', 'refund'] as const
+export const CONVERSION_ENTITY_TYPES = ['request', 'product', 'content_block', 'content_document', 'user', 'organization', 'invoice', 'refund', 'payment', 'booking'] as const
 export type ConversionEntityType = typeof CONVERSION_ENTITY_TYPES[number]
 
 // quoted: the price the guest was shown when the booking was created — not revenue.
@@ -89,6 +89,21 @@ export const CONVERSION_EVENT_CATALOG = {
   media_library_viewed: interaction({ origin: 'authenticated', stages: ['occurred'], entityType: 'organization', ga4: { name: 'media_library_viewed' }, ga4Sender: 'browser' }),
   dashboard_visited: interaction({ origin: 'authenticated', stages: ['occurred'], entityType: 'organization', ga4: { name: 'dashboard_visited' }, ga4Sender: 'browser', properties: ['dashboard_section'] }),
   error_encountered: interaction({ origin: 'authenticated', stages: ['occurred'], entityType: null, ga4: { name: 'error_encountered' }, ga4Sender: 'browser', properties: ['error_type', 'error_context'] }),
+  // Paid bookings and orders on a business's own site, recorded by the server where each thing
+  // happens. `member_id` is the team member the booking is with; the money is the business's, in minor units.
+  payment_checkout_started: { kind: 'interaction', producer: 'server', origin: 'public', stages: ['started'], entityType: 'payment', valueBasis: 'quoted', conversionType: 'booking', ga4: null, ga4Sender: 'measurement_protocol', outcome: false, properties: ['member_id', 'saved_cards_offered'] },
+  payment_checkout_expired: { kind: 'interaction', producer: 'server', origin: 'public', stages: ['occurred'], entityType: 'payment', valueBasis: null, conversionType: 'booking', ga4: null, ga4Sender: 'measurement_protocol', outcome: false, properties: ['member_id'] },
+  payment_paid: { kind: 'conversion', producer: 'server', origin: 'public', stages: ['completed'], entityType: 'payment', valueBasis: 'purchase', conversionType: 'booking', ga4: null, ga4Sender: 'measurement_protocol', outcome: true, properties: ['member_id', 'saved_card'] },
+  payment_refunded: { kind: 'conversion', producer: 'server', origin: 'authenticated', stages: ['completed'], entityType: 'refund', valueBasis: 'refund', conversionType: 'booking', ga4: null, ga4Sender: 'measurement_protocol', outcome: false, properties: ['member_id', 'full', 'with_cancellation', 'approval_seconds'] },
+  booking_confirmed: { kind: 'conversion', producer: 'server', origin: 'authenticated', stages: ['completed'], entityType: 'booking', valueBasis: null, conversionType: 'booking', ga4: null, ga4Sender: 'measurement_protocol', outcome: false, properties: ['member_id', 'decision_seconds'] },
+  booking_declined: { kind: 'conversion', producer: 'server', origin: 'authenticated', stages: ['completed'], entityType: 'booking', valueBasis: null, conversionType: 'booking', ga4: null, ga4Sender: 'measurement_protocol', outcome: false, properties: ['member_id', 'decision_seconds'] },
+  booking_cancelled: { kind: 'conversion', producer: 'server', origin: 'public', stages: ['completed'], entityType: 'booking', valueBasis: null, conversionType: 'booking', ga4: null, ga4Sender: 'measurement_protocol', outcome: false, properties: ['member_id', 'cancelled_by'] },
+  booking_change_accepted: { kind: 'conversion', producer: 'server', origin: 'public', stages: ['completed'], entityType: 'request', valueBasis: null, conversionType: 'booking', ga4: null, ga4Sender: 'measurement_protocol', outcome: false, properties: ['member_id'] },
+  booking_change_declined: { kind: 'conversion', producer: 'server', origin: 'public', stages: ['completed'], entityType: 'request', valueBasis: null, conversionType: 'booking', ga4: null, ga4Sender: 'measurement_protocol', outcome: false, properties: ['member_id'] },
+  // The platform's side of Payments, measured on the platform organization: the volume each business
+  // reports to Metronome, and the fee invoices it pays. `tenant_organization_id` is the business.
+  payments_volume_billed: { kind: 'interaction', producer: 'server', origin: 'authenticated', stages: ['occurred'], entityType: 'payment', valueBasis: null, conversionType: null, ga4: null, ga4Sender: 'measurement_protocol', outcome: false, properties: ['tenant_organization_id', 'volume_minor', 'currency'] },
+  payments_fee_invoice_paid: { kind: 'conversion', producer: 'server', origin: 'authenticated', stages: ['completed'], entityType: 'invoice', valueBasis: 'purchase', conversionType: null, ga4: null, ga4Sender: 'measurement_protocol', outcome: false, properties: ['tenant_organization_id'] },
 } as const satisfies Record<string, ConversionEventDefinition>
 
 export type OrganizationConversionEventName = keyof typeof CONVERSION_EVENT_CATALOG

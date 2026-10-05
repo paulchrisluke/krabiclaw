@@ -7,6 +7,7 @@ import { createStripeClient } from '~/server/utils/stripe-client'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { notifyPaymentFinancialEvent } from './notifications'
 import { readPaymentOrder } from './orders'
+import { recordPaymentRefunded } from '~/server/domain/booking-analytics'
 
 export interface Payment {
   id: string
@@ -94,13 +95,15 @@ export async function paymentSummary(db: DbClient, principal: FinancialPrincipal
 
 /** Only an authenticated browser approval may approve this request. MCP receives a handoff. */
 export type RefundAuthorizationAction = 'refund' | 'reject_booking' | 'cancel_booking'
+/** How long a business has to approve a refund it asked for. */
+export const AUTHORIZATION_WINDOW_SECONDS = 600
 export async function requestRefundAuthorization(db: DbClient, principal: FinancialPrincipal, paymentId: string, amount: number, action: RefundAuthorizationAction = 'refund', note?: string) {
   await authorizePayments(principal, 'refund')
   assertMinorAmount(amount)
   const payment = await requirePayment(db, principal.organizationId, paymentId)
   if (amount > payment.captured_amount - payment.refunded_amount) throw new HTTPError({ statusCode: 409, statusMessage: 'Amount exceeds refundable principal' })
   const id = crypto.randomUUID()
-  await execute(db, `INSERT INTO payment_authorizations(id,organization_id,user_id,payment_id,action,amount,note,expires_at) VALUES(?,?,?,?,?,?,?,?)`, [id, principal.organizationId, principal.userId, paymentId, action, amount, note?.trim() || null, new Date(Date.now()+10*60*1000).toISOString()])
+  await execute(db, `INSERT INTO payment_authorizations(id,organization_id,user_id,payment_id,action,amount,note,expires_at) VALUES(?,?,?,?,?,?,?,?)`, [id, principal.organizationId, principal.userId, paymentId, action, amount, note?.trim() || null, new Date(Date.now()+AUTHORIZATION_WINDOW_SECONDS*1000).toISOString()])
   return { authorization_id: id, payment_id: paymentId, amount, currency: payment.currency, confirmation_required: true }
 }
 export async function approveRefundAuthorization(db: DbClient, principal: FinancialPrincipal, id: string) {
@@ -178,5 +181,6 @@ export async function reconcileRefundState(db:DbClient,stripe:Stripe,payment:Pay
   {query:`UPDATE payment_authorizations SET consumed_at=COALESCE(consumed_at,?) WHERE payment_id=? AND approved_at IS NOT NULL AND action='refund' AND EXISTS(SELECT 1 FROM payment_refunds r WHERE r.id=? AND r.payment_id=payment_authorizations.payment_id AND r.idempotency_key='approved:'||payment_authorizations.id AND r.amount=payment_authorizations.amount AND r.created_by=payment_authorizations.user_id)`,params:[now,payment.id,id]},
  ])
  await notifyPaymentFinancialEvent(db,stripe,env,payment,{kind,nativeId:refund.id,status:refund.status!,amount:refund.amount})
+ if(refund.status==='succeeded')await recordPaymentRefunded(db,payment,refund,id)
  return {id,stripe_refund_id:refund.id,status:refund.status}
 }

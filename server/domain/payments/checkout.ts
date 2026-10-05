@@ -12,6 +12,7 @@ import type { CloudflareEnv } from '~/server/utils/auth'
 import { tokenHash } from './buyer'
 import { connectedCustomerWithSavedCards } from '~/server/utils/billing-customer'
 import { assertMinorAmount, requirePayment } from './index'
+import { recordCheckoutStarted } from '~/server/domain/booking-analytics'
 
 export interface CheckoutInput {
   organizationId: string
@@ -103,7 +104,11 @@ export async function createPaymentCheckout(db: DbClient, stripe: Stripe, env: C
   const returnHash=await tokenHash(returnToken)
   const expiresAt = previous?.expires_at ?? new Date(Date.now()+60*60*1000).toISOString()
   if (expiresAt<=now) throw new HTTPError({statusCode:409,statusMessage:'Checkout hold expired; start a new request',data:{code:'checkout_expired'}})
-  if (previous?.checkout_url) return {payment_id:previous.payment_id,checkout_url:previous.checkout_url,expires_at:expiresAt}
+  if (previous?.checkout_url) {
+    // The first response may have failed after Stripe and D1 held the Checkout; its started event is recorded once, here or there.
+    await recordCheckoutStarted(db, await requirePayment(db,input.organizationId,previous.payment_id), null)
+    return {payment_id:previous.payment_id,checkout_url:previous.checkout_url,expires_at:expiresAt}
+  }
   if (!previous) {
     if(session) await refreshProductBusy(db,env,input.organizationId,input.productId)
     try { await executeBatch(db,[
@@ -131,14 +136,15 @@ export async function createPaymentCheckout(db: DbClient, stripe: Stripe, env: C
   }
   // Airbnb offers the cards you keep: a signed-in buyer's saved cards are cloned onto this business's Stripe account so Checkout shows them.
   const customer=input.buyerUserId?await connectedCustomerWithSavedCards(db,stripe,env,input.buyerUserId,connected.stripeAccountId,connected.livemode):null
+  let opened:string
   try {
-  const checkout = await stripe.checkout.sessions.create({mode:'payment',integration_identifier:'krabiclaw_payments_aqpfkmvz',...(customer?{customer,saved_payment_method_options:{payment_method_save:'enabled' as const,allow_redisplay_filters:['always' as const]}}:{}),automatic_tax:{enabled:automaticTax},line_items:[{price_data:{currency:price.currency.toLowerCase(),unit_amount:price.unit_amount,tax_behavior:price.tax_behavior,product_data:{name:projectionTitle,...(projectionTaxCode?{tax_code:projectionTaxCode}:{}),metadata:{krabiclaw_variant_id:input.variantId}}},quantity:input.quantity}],payment_method_configuration:methodConfigurationId,
+  const checkout = await stripe.checkout.sessions.create({mode:'payment',integration_identifier:'krabiclaw_payments_aqpfkmvz',...(customer?{customer:customer.customerId,saved_payment_method_options:{payment_method_save:'enabled' as const,allow_redisplay_filters:['always' as const]}}:{}),automatic_tax:{enabled:automaticTax},line_items:[{price_data:{currency:price.currency.toLowerCase(),unit_amount:price.unit_amount,tax_behavior:price.tax_behavior,product_data:{name:projectionTitle,...(projectionTaxCode?{tax_code:projectionTaxCode}:{}),metadata:{krabiclaw_variant_id:input.variantId}}},quantity:input.quantity}],payment_method_configuration:methodConfigurationId,
     payment_intent_data:{application_fee_amount:0,metadata:{krabiclaw_payment_id:id}},metadata:{krabiclaw_payment_id:id},client_reference_id:id,
     expires_at:Math.floor(Date.parse(expiresAt)/1000),success_url:new URL(`/account?payment_id=${encodeURIComponent(id)}&purchase_claim=${encodeURIComponent(returnToken)}`,origin).toString(),cancel_url:new URL('/account?payment=cancelled',origin).toString(),
   },{stripeAccount:connected.stripeAccountId,idempotencyKey:key})
   if (!checkout.url || checkout.livemode !== connected.livemode) throw new Error('Stripe Checkout returned invalid scoped handoff')
   await execute(db,`UPDATE payment_attempts SET stripe_checkout_id=?,checkout_url=?,status='open',error=NULL,updated_at=? WHERE id=?`,[checkout.id,checkout.url,new Date().toISOString(),attemptId])
-  return {payment_id:id,checkout_url:checkout.url,expires_at:expiresAt}
+  opened=checkout.url
   } catch(error) {
     // A prior attempt may have reached Stripe even when its handoff was lost.
     // Only a first-call content/auth rejection proves no Checkout was created.
@@ -153,4 +159,6 @@ export async function createPaymentCheckout(db: DbClient, stripe: Stripe, env: C
     ],{operation:'Record rejected or uncertain Checkout creation'})
     throw error
   }
+  await recordCheckoutStarted(db, await requirePayment(db,input.organizationId,id), customer?.savedCards ?? 0)
+  return {payment_id:id,checkout_url:opened,expires_at:expiresAt}
 }

@@ -117,6 +117,8 @@ const EVENT_FIELDS: Record<string, EventField> = {
   conversion_type: { sql: () => payload('$.conversion_type'), description: 'contact, reservation, booking or subscription' },
   attribution_basis: { sql: () => payload('$.attribution_basis'), description: 'how the event snapshot arose: own_touch, inherited, session_current, checkout or none' },
   actor_id: { sql: () => payload('$.actor.id'), description: 'the staff member, agent or user who acted, when not the subject' },
+  member_id: { sql: () => payload('$.properties.member_id'), description: 'the team member a paid booking or booking decision is with' },
+  tenant_organization_id: { sql: () => payload('$.properties.tenant_organization_id'), description: 'on the platform organization: the business a Payments volume or fee invoice belongs to' },
   ga4_delivery_status: { sql: () => payload('$.ga4_delivery.status'), description: 'the outcome of the optional GA4 delivery' },
   ...Object.fromEntries((Object.keys(ATTRIBUTION_FIELDS) as AttributionField[]).map(field => [field, {
     sql: attributionSql(field),
@@ -146,6 +148,9 @@ const SESSION_HAS_OUTCOME = `EXISTS (SELECT 1 FROM analytics_events o WHERE o.or
   AND o.created_at >= @start AND o.created_at < @end AND o.received_at <= @asof)`
 const valueSum = (basis: string, column: string) => `COALESCE(SUM(CASE WHEN ${payload('$.value.basis')} = '${basis}' THEN ${payload(column)} END), 0)`
 
+/** Whether the checkout this started-event is about was paid. */
+const CHECKOUT_PAID = `EXISTS (SELECT 1 FROM analytics_events p WHERE p.organization_id = e.organization_id AND p.kind = 'conversion'
+  AND json_extract(p.payload_json, '$.event_name') = 'payment_paid' AND json_extract(p.payload_json, '$.entity_id') = ${payload('$.entity_id')} AND p.received_at <= @asof)`
 interface Metric { sql: string; unit: string; monetary?: boolean; needsOutcome?: boolean; nullable?: boolean; description: string }
 const METRICS: Record<string, Metric> = {
   events: { sql: 'COUNT(*)', unit: 'events', description: 'every matching event' },
@@ -163,6 +168,13 @@ const METRICS: Record<string, Metric> = {
   converting_sessions: { sql: `COUNT(DISTINCT CASE WHEN e.kind = 'pageview' AND ${SESSION_HAS_OUTCOME} THEN e.session_id END)`, unit: 'distinct eligible sessions that completed the selected outcome in the range', needsOutcome: true, description: 'sessions in the group with a pageview that also completed outcome_event in the range; always a subset of eligible_sessions' },
   eligible_sessions: { sql: `COUNT(DISTINCT CASE WHEN e.kind = 'pageview' THEN e.session_id END)`, unit: 'distinct sessions with a pageview', description: 'the denominator population: sessions with a pageview in the group' },
   session_conversion_rate: { sql: `CASE WHEN COUNT(DISTINCT CASE WHEN e.kind = 'pageview' THEN e.session_id END) = 0 THEN NULL ELSE 100.0 * COUNT(DISTINCT CASE WHEN e.kind = 'pageview' AND ${SESSION_HAS_OUTCOME} THEN e.session_id END) / COUNT(DISTINCT CASE WHEN e.kind = 'pageview' THEN e.session_id END) END`, unit: 'percent: converting sessions / eligible sessions, over the same sessions', needsOutcome: true, nullable: true, description: 'converting_sessions / eligible_sessions within the group, computed over one session population; null when the group has no eligible session' },
+  checkouts_started: { sql: `COALESCE(SUM(${EVENT_NAME_SQL} = 'payment_checkout_started'), 0)`, unit: 'checkouts', description: 'Stripe Checkouts started for a paid booking or order' },
+  payments_paid: { sql: `COALESCE(SUM(${EVENT_NAME_SQL} = 'payment_paid'), 0)`, unit: 'payments', description: 'payments captured' },
+  refunds_sent: { sql: `COALESCE(SUM(${EVENT_NAME_SQL} = 'payment_refunded'), 0)`, unit: 'refunds', description: 'refunds that reached the buyer' },
+  checkout_conversion_rate: { sql: `CASE WHEN SUM(${EVENT_NAME_SQL} = 'payment_checkout_started') = 0 THEN NULL ELSE 100.0 * SUM(${EVENT_NAME_SQL} = 'payment_checkout_started' AND ${CHECKOUT_PAID}) / SUM(${EVENT_NAME_SQL} = 'payment_checkout_started') END`, unit: 'percent: checkouts started that were paid / checkouts started', nullable: true, description: 'share of the checkouts started in the group that were paid; null with no checkout' },
+  refund_rate: { sql: `CASE WHEN SUM(${EVENT_NAME_SQL} = 'payment_paid') = 0 THEN NULL ELSE 100.0 * SUM(${EVENT_NAME_SQL} = 'payment_refunded') / SUM(${EVENT_NAME_SQL} = 'payment_paid') END`, unit: 'percent: refunds sent / payments captured', nullable: true, description: 'refunds sent per payment captured in the group; null with no payment' },
+  payments_volume_minor: { sql: `COALESCE(SUM(CASE WHEN ${EVENT_NAME_SQL} = 'payments_volume_billed' THEN ${payload('$.properties.volume_minor')} END), 0)`, unit: 'minor units of the group currency', monetary: true, description: 'on the platform organization: captured volume businesses reported for their Payments fee' },
+  avg_decision_seconds: { sql: `AVG(CASE WHEN ${EVENT_NAME_SQL} IN ('booking_confirmed', 'booking_declined') THEN ${payload('$.properties.decision_seconds')} END)`, unit: 'seconds', nullable: true, description: 'average time from a booking request to the business confirming or declining it' },
 }
 export const ANALYTICS_QUERY_METRICS = Object.fromEntries(Object.entries(METRICS).map(([name, metric]) => [name, { unit: metric.unit, description: metric.description }]))
 

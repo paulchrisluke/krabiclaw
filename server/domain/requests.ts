@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { recordBookingCancelled } from '~/server/domain/booking-analytics'
 import { executeBatch, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { isBookingComplete, type BookingStatus } from '~/shared/bookings'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
@@ -217,6 +218,7 @@ export async function cancelBookingRequest(db: DbClient, input: {
     if (!entry) return null
     const before = JSON.parse(entry.payload_json).beforeStatus
     if (!['pending', 'confirmed'].includes(before)) throw new Error('Cancellation audit has no valid prior status')
+    if (cancelled.kind === 'booking') await recordBookingCancelled(db, { organizationId: input.organizationId, bookingId: cancelled.id, cancelledBy: 'guest', actorUserId: input.buyerUserId ?? null })
     return { request, record: cancelled, wasConfirmed: before === 'confirmed', changed: false }
   }
   if (record.status === 'cancelled') return await readCancelled()
@@ -260,5 +262,6 @@ export async function cancelBookingRequest(db: DbClient, input: {
 
   const request = parseGuestRequest(row)
   if (request.kind === 'contact') throw new Error('Cancellation returned a contact thread')
+  if (record.kind === 'booking') await recordBookingCancelled(db, { organizationId: input.organizationId, bookingId: record.id, cancelledBy: 'guest', actorUserId: input.buyerUserId ?? null })
   return { request, record: { ...record, status: 'cancelled' }, wasConfirmed: record.status === 'confirmed', changed: true }
 }
