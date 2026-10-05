@@ -1,95 +1,89 @@
 <template>
-  <!-- A row on Menu, with its own controls: nothing here saves from a footer. -->
-  <DashboardLeafPanel id="organization-payouts" title="Payouts" lead="Stripe verifies your business through its hosted onboarding so payment capabilities can be enabled." :footer="false">
-    <div class="space-y-4">
-      <UAlert
-        v-if="errorMessage"
-        color="error"
-        variant="soft"
-        icon="i-lucide-triangle-alert"
-        title="Stripe Connect is unavailable"
-        :description="errorMessage"
-      />
+  <!-- Airbnb's Payouts tab: How you get paid, the bank rows with Edit, Add payout method, and a Need help card. -->
+  <div class="space-y-8">
+    <UAlert
+      v-if="errorMessage"
+      color="error"
+      variant="soft"
+      icon="i-lucide-triangle-alert"
+      title="Stripe Connect is unavailable"
+      :description="errorMessage"
+    />
 
-      <div>
-        <UBadge v-if="account" :color="statusPresentation.color" variant="soft" size="lg" class="mb-4 rounded-full">
-          {{ statusPresentation.label }}
-        </UBadge>
+    <section>
+      <h2 class="text-2xl font-semibold text-highlighted">How you get paid</h2>
+      <p class="mt-2 text-base text-muted">Your money goes to the bank account on file with Stripe. To change it, use Edit next to the account.</p>
 
-        <div v-if="loading" class="space-y-3" aria-label="Loading Stripe Connect status">
-          <USkeleton class="h-5 w-48" />
-          <USkeleton class="h-10 w-full" />
-        </div>
-
-        <div v-else-if="!account" class="space-y-5">
-          <UAlert
-            color="neutral"
-            variant="soft"
-            icon="i-lucide-shield-check"
-            title="Choose the business's registered country"
-            description="This cannot be changed after the Stripe account is created. Krabiclaw does not store the identity details you enter at Stripe."
-          />
-          <UFormField label="Business country" description="The country where the business is legally registered.">
-            <USelectMenu
-              v-model="selectedCountry"
-              :items="countryOptions"
-              value-key="value"
-              label-key="label"
-              :loading="countriesLoading"
-              placeholder="Select a country"
-              class="w-full sm:max-w-sm"
-            />
-          </UFormField>
-          <UButton :disabled="!selectedCountry" :loading="starting" icon="i-lucide-external-link" @click="startOnboarding">
-            Continue to Stripe
-          </UButton>
-        </div>
-
-        <div v-else class="space-y-5">
-          <p class="text-sm text-muted">{{ statusPresentation.description }}</p>
-
-          <div class="grid gap-3 sm:grid-cols-2">
-            <div class="rounded-lg border border-default p-3">
-              <p class="text-xs font-medium uppercase tracking-wide text-muted">Business country</p>
-              <p class="mt-1 text-sm font-medium text-highlighted">{{ account.country }}</p>
-            </div>
-            <div class="rounded-lg border border-default p-3">
-              <p class="text-xs font-medium uppercase tracking-wide text-muted">Card payments</p>
-              <p class="mt-1 text-sm font-medium capitalize text-highlighted">{{ cardPaymentsLabel }}</p>
-            </div>
-          </div>
-
-          <UAlert
-            v-if="account.requirements.length"
-            color="warning"
-            variant="soft"
-            icon="i-lucide-list-checks"
-            title="Stripe requirements"
-            :description="requirementsSummary"
-          />
-
-          <div class="flex flex-wrap gap-2">
-            <UButton
-              v-if="canContinueOnboarding"
-              :loading="starting"
-              icon="i-lucide-external-link"
-              @click="startOnboarding"
-            >
-              {{ account.status === 'creation_failed' ? 'Retry Stripe setup' : 'Continue Stripe onboarding' }}
-            </UButton>
-            <UButton v-if="account.stripeAccountId" color="neutral" variant="outline" :loading="refreshing" icon="i-lucide-refresh-cw" @click="refreshStatus">
-              Refresh status
-            </UButton>
-          </div>
-        </div>
+      <div v-if="loading" class="mt-6 space-y-3" aria-label="Loading payout method">
+        <USkeleton class="h-5 w-48" />
+        <USkeleton class="h-10 w-full" />
       </div>
-    </div>
-  </DashboardLeafPanel>
+
+      <template v-else-if="!account && !errorMessage">
+        <UFormField class="mt-6" label="Business country" hint="This cannot be changed after the Stripe account is created">
+          <USelectMenu
+            v-model="selectedCountry"
+            :items="countryOptions"
+            value-key="value"
+            label-key="label"
+            :loading="countriesLoading"
+            placeholder="Select a country"
+            class="w-full sm:max-w-sm"
+          />
+        </UFormField>
+        <UButton class="mt-6" size="xl" :disabled="!selectedCountry" :loading="starting" label="Add payout method" @click="startOnboarding" />
+      </template>
+
+      <template v-else-if="account">
+        <div v-if="payout" class="mt-6 flex items-center gap-4 py-4">
+          <UIcon name="i-lucide-landmark" class="size-8 shrink-0 text-highlighted" />
+          <div class="min-w-0 flex-1">
+            <p class="flex items-center gap-2 text-base font-medium text-highlighted">Bank account <UBadge color="neutral" variant="subtle" size="sm" label="DEFAULT" /></p>
+            <p class="mt-0.5 text-sm text-muted">{{ payout.bankName ?? 'Bank account' }}, ••••{{ payout.last4 }} ({{ payout.currency }})</p>
+          </div>
+          <UButton label="Edit" color="neutral" variant="outline" :loading="openingDashboard" @click="openDashboard" />
+        </div>
+
+        <UAlert
+          v-if="account.requirements.length"
+          class="mt-6"
+          color="warning"
+          variant="soft"
+          icon="i-lucide-list-checks"
+          title="Stripe needs more information"
+          :description="statusPresentation.description"
+        />
+        <p v-else-if="account.status !== 'ready'" class="mt-6 text-base text-muted">{{ statusPresentation.description }}</p>
+
+        <UButton
+          v-if="canContinueOnboarding"
+          class="mt-6"
+          size="xl"
+          :loading="starting"
+          :label="account.status === 'creation_failed' ? 'Retry Stripe setup' : 'Continue Stripe setup'"
+          @click="startOnboarding"
+        />
+        <UButton v-else-if="!payout" class="mt-6" size="xl" label="Add payout method" :loading="openingDashboard" @click="openDashboard" />
+      </template>
+    </section>
+
+    <section v-if="account" class="rounded-2xl p-6 ring ring-default">
+      <h3 class="text-xl font-semibold text-highlighted">Need help?</h3>
+      <div class="mt-2 divide-y divide-default">
+        <div v-if="payout" class="py-4">
+          <p class="text-base font-medium text-highlighted">When you’ll get your payout</p>
+          <p class="mt-1 text-sm text-muted">{{ scheduleLabel }}.</p>
+        </div>
+        <NuxtLink :to="`/dashboard/${route.params.orgSlug}/earnings/transactions`" class="flex items-center justify-between gap-4 py-4">
+          <span class="text-base font-medium text-highlighted underline underline-offset-4">Go to your transactions</span>
+          <UIcon name="i-lucide-chevron-right" class="size-5 shrink-0 text-muted" />
+        </NuxtLink>
+      </div>
+    </section>
+  </div>
 </template>
 
 <script setup lang="ts">
-definePageMeta({ layout: 'dashboard' })
-useSeoMeta({ title: 'Payouts | Krabiclaw Dashboard', robots: 'noindex, nofollow' })
 
 type ConnectStatus = 'creating' | 'creation_failed' | 'action_required' | 'pending_review' | 'restricted' | 'ready'
 type CapabilityStatus = 'active' | 'pending' | 'restricted' | 'unsupported'
@@ -101,6 +95,7 @@ interface ConnectRequirement {
   errors: string[]
 }
 
+interface PayoutMethod { bankName: string | null; last4: string; currency: string; schedule: { interval: string; delayDays: number } }
 interface ConnectedAccount {
   id: string
   organizationId: string
@@ -146,8 +141,9 @@ function isConnectedAccount(value: unknown): value is ConnectedAccount {
     && typeof value.updatedAt === 'string'
 }
 
-const isAccountResponse = (value: unknown): value is { success: true; account: ConnectedAccount | null } =>
-  isRecord(value) && value.success === true && (value.account === null || isConnectedAccount(value.account))
+const isPayoutMethod = (value: unknown): value is PayoutMethod | null => value === null || (isRecord(value) && (value.bankName === null || typeof value.bankName === 'string') && typeof value.last4 === 'string' && typeof value.currency === 'string' && isRecord(value.schedule) && typeof value.schedule.interval === 'string' && Number.isSafeInteger(value.schedule.delayDays))
+const isAccountResponse = (value: unknown): value is { success: true; account: ConnectedAccount | null; payout: PayoutMethod | null } =>
+  isRecord(value) && value.success === true && (value.account === null || isConnectedAccount(value.account)) && isPayoutMethod(value.payout)
 const isOnboardingResponse = (value: unknown): value is { success: true; account: ConnectedAccount; onboardingUrl: string } =>
   isRecord(value) && value.success === true && isConnectedAccount(value.account) && typeof value.onboardingUrl === 'string'
 const isCountriesResponse = (value: unknown): value is { success: true; countries: string[] } =>
@@ -160,21 +156,27 @@ const dashboardApi = useDashboardApi()
 const route = useRoute()
 const router = useRouter()
 const account = ref<ConnectedAccount | null>(null)
+const payout = ref<PayoutMethod | null>(null)
+const scheduleLabel = computed(() => {
+  const schedule = payout.value?.schedule
+  if (!schedule) return ''
+  const when = schedule.interval === 'daily' ? 'Sent daily' : schedule.interval === 'weekly' ? 'Sent weekly' : schedule.interval === 'monthly' ? 'Sent monthly' : 'Sent when you ask'
+  return schedule.delayDays ? `${when}, ${schedule.delayDays} days after a payment` : when
+})
 const countries = ref<string[]>([])
 const selectedCountry = ref<string | undefined>(undefined)
 const loading = ref(true)
 const countriesLoading = ref(false)
 const starting = ref(false)
 const refreshing = ref(false)
+const openingDashboard = ref(false)
 const errorMessage = ref<string | null>(null)
 
 const countryNames = new Intl.DisplayNames(['en'], { type: 'region' })
 const countryOptions = computed(() => countries.value
   .map(code => ({ label: countryNames.of(code) === undefined ? code : countryNames.of(code)!, value: code }))
   .sort((left, right) => left.label.localeCompare(right.label)))
-const cardPaymentsLabel = computed(() => account.value?.cardPaymentsStatus === null ? 'Not available yet' : account.value?.cardPaymentsStatus.replace('_', ' '))
 const canContinueOnboarding = computed(() => account.value !== null && account.value.status !== 'ready')
-const requirementsSummary = computed(() => account.value === null ? '' : account.value.requirements.map(requirement => requirement.description).join(' '))
 const statusPresentation = computed<{ label: string; description: string; color: 'success' | 'warning' | 'error' | 'neutral' }>(() => {
   switch (account.value?.status) {
     case 'ready': return { label: 'Ready', description: 'Stripe has enabled card payments for this business.', color: 'success' }
@@ -186,6 +188,15 @@ const statusPresentation = computed<{ label: string; description: string; color:
     default: return { label: 'Not started', description: 'Stripe onboarding has not started.', color: 'neutral' }
   }
 })
+
+async function openDashboard() {
+  openingDashboard.value = true
+  try {
+    const result = await dashboardApi<{url:string}>('/api/dashboard/connect/dashboard',{method:'POST',validate:(value):value is {url:string}=>isRecord(value)&&typeof value.url==='string'})
+    await navigateTo(result.url,{external:true})
+  } catch(error) {errorMessage.value=getErrorMessage(error,'Stripe Dashboard could not be opened')}
+  finally {openingDashboard.value=false}
+}
 
 async function loadCountries() {
   countriesLoading.value = true
@@ -203,8 +214,9 @@ async function loadAccount() {
   loading.value = true
   errorMessage.value = null
   try {
-    const response = await dashboardApi<{ success: true; account: ConnectedAccount | null }>('/api/dashboard/connect', { validate: isAccountResponse })
+    const response = await dashboardApi<{ success: true; account: ConnectedAccount | null; payout: PayoutMethod | null }>('/api/dashboard/connect', { validate: isAccountResponse })
     account.value = response.account
+    payout.value = response.payout
     if (response.account === null) await loadCountries()
   } catch (error) {
     errorMessage.value = getErrorMessage(error, 'Stripe Connect status could not be loaded')
@@ -252,11 +264,14 @@ async function refreshStatus() {
 
 onMounted(async () => {
   await loadAccount()
-  if (route.query.stripe_connect === 'returned' && account.value?.stripeAccountId) {
+  // Stripe's own state is asked for whenever setup is still open, not on a button: the status is read, not managed.
+  if (account.value?.stripeAccountId && (route.query.stripe_connect === 'returned' || account.value.status !== 'ready')) {
     await refreshStatus()
-    const query = { ...route.query }
-    delete query.stripe_connect
-    await router.replace({ query })
+    if (route.query.stripe_connect === 'returned') {
+      const query = { ...route.query }
+      delete query.stripe_connect
+      await router.replace({ query })
+    }
   }
 })
 </script>

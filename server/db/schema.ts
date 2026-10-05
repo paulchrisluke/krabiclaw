@@ -1154,27 +1154,7 @@ export const stripe_connected_accounts = sqliteTable("stripe_connected_accounts"
 	check("stripe_connected_accounts_instants_check", sql`(stripe_refreshed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', stripe_refreshed_at, '+0 days') IS stripe_refreshed_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
 ]);
 
-export const stripe_catalog_mappings = sqliteTable("stripe_catalog_mappings", {
-	id: text().primaryKey(),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
-	// 'product_variant' | 'price' (registry in shared/). Which local relation
-	// `local_id` points at.
-	local_entity: text().notNull(),
-	local_id: text().notNull(),
-	stripe_account_id: text().notNull(),
-	livemode: integer({ mode: "boolean" }).notNull(),
-	// 'prod_...' for a variant, 'price_...' for a price.
-	stripe_id: text().notNull(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-}, (table) => [
-	check("stripe_catalog_mappings_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
-	unique("stripe_catalog_mappings_local_unique").on(table.local_entity, table.local_id, table.stripe_account_id, table.livemode),
-	unique("stripe_catalog_mappings_stripe_unique").on(table.stripe_account_id, table.livemode, table.stripe_id),
-	index("stripe_catalog_mappings_org_idx").on(table.organization_id, table.local_entity),
-	check("stripe_catalog_mappings_livemode_check", sql`livemode IN (0, 1)`),
-	check("stripe_catalog_mappings_ids_check", sql`trim(local_id) <> '' AND trim(stripe_id) <> '' AND trim(stripe_account_id) <> ''`),
-]);
+
 
 
 
@@ -1690,23 +1670,20 @@ export const stripe_webhook_events = sqliteTable("stripe_webhook_events", {
 	id: text().primaryKey(),
 	stripe_event_id: text().notNull().unique(),
 	event_type: text(),
-	// 'platform_billing' | 'connect_marketplace'. Both processors share this
-	// table's lease, retry, retention and operator requeue contract.
-	processor: text().default("platform_billing").notNull(),
+	// Platform subscriptions remain owned by Better Auth. Connect and one-time
+	// payment handlers use this receipt only for concurrent delivery deduplication.
+	processor: text().notNull(),
 	status: text().default("pending").notNull(),
 	payload: text(),
 	error: text(),
 	claimed_at: text(),
 	lease_expires_at: text(),
 	claim_token: text(),
-	next_attempt_at: text(),
-	dead_lettered_at: text(),
 	attempt_count: integer().default(0).notNull(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-}, (table) => [
-	check("stripe_webhook_events_instants_check", sql`(claimed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', claimed_at, '+0 days') IS claimed_at) AND (lease_expires_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', lease_expires_at, '+0 days') IS lease_expires_at) AND (next_attempt_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', next_attempt_at, '+0 days') IS next_attempt_at) AND (dead_lettered_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', dead_lettered_at, '+0 days') IS dead_lettered_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at)`),
+}, () => [
+	check("stripe_webhook_events_instants_check", sql`(claimed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', claimed_at, '+0 days') IS claimed_at) AND (lease_expires_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', lease_expires_at, '+0 days') IS lease_expires_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at)`),
 	check("stripe_webhook_events_payload_check", sql`payload IS NULL OR (json_valid(payload))`),
-	index("stripe_webhook_events_retry_idx").on(table.status, table.next_attempt_at, table.processor),
 ]);
 
 
@@ -2267,6 +2244,217 @@ export const google_calendar_cleanup_jobs = sqliteTable("google_calendar_cleanup
  index("google_calendar_cleanup_due_idx").on(table.state, table.next_attempt_at),
  check("google_calendar_cleanup_state_check", sql`state IN ('pending', 'error', 'deleted')`),
 ]);
+// Financial tenant IDs are immutable historical references. Canonical tenant cleanup
+// retains a servicing tombstone; financial parent FKs protect evidence after deletion.
+export const payments = sqliteTable("payments", {
+ id: text().primaryKey(),
+ organization_id: text().notNull(),
+ buyer_user_id: text().references(() => user.id, { onDelete: "set null" }),
+ stripe_account_id: text().notNull(),
+ livemode: integer({ mode: "boolean" }).notNull(),
+ subject_type: text().$type<'booking' | 'order' | 'reservation' | 'invoice'>().notNull(),
+ subject_id: text(),
+ location_id: text(),
+ currency: text().notNull(),
+ amount: integer().notNull(),
+ price_snapshot_json: text().notNull(),
+ tax_amount: integer().default(0).notNull(),
+ captured_amount: integer().default(0).notNull(),
+ refunded_amount: integer().default(0).notNull(),
+ state: text().$type<'pending' | 'captured' | 'failed' | 'recovery' | 'refunded'>().default("pending").notNull(),
+ stripe_payment_intent_id: text(),
+ stripe_charge_id: text(),
+ receipt_url: text(),
+ created_at: text().notNull(),
+ updated_at: text().notNull(),
+}, t => [
+ unique("payments_provider_unique").on(t.stripe_account_id, t.livemode, t.stripe_payment_intent_id),
+ index("payments_tenant_created_idx").on(t.organization_id, t.created_at),
+ index("payments_buyer_idx").on(t.buyer_user_id, t.created_at),
+ check("payments_amounts_check", sql`amount >= 0 AND captured_amount >= 0 AND refunded_amount >= 0 AND refunded_amount <= captured_amount`),
+ check("payments_currency_check", sql`length(currency) = 3 AND currency = upper(currency)`),
+]);
+
+export const payment_attempts = sqliteTable("payment_attempts", {
+ id: text().primaryKey(),
+ payment_id: text().notNull().references(() => payments.id, { onDelete: "restrict" }),
+ idempotency_key: text().notNull().unique(),
+ stripe_checkout_id: text(),
+ checkout_url: text(),
+ return_token: text().notNull(),
+ status: text().default("creating").notNull(),
+ expires_at: text().notNull(),
+ error: text(),
+ created_at: text().notNull(),
+ updated_at: text().notNull(),
+});
+
+export const payment_checkout_holds = sqliteTable("payment_checkout_holds", {
+ id: text().primaryKey(),
+ organization_id: text().notNull(),
+ product_id: text().notNull(),
+ variant_id: text().notNull(),
+ price_id: text().notNull(),
+ session_id: text().notNull(),
+ assigned_member_id: text(),
+ buyer_user_id: text().references(() => user.id, { onDelete: "set null" }),
+ request_id: text(),
+ payment_id: text().notNull().unique().references(() => payments.id, { onDelete: "restrict" }),
+ quantity: integer().notNull(),
+ amount: integer().notNull(),
+ currency: text().notNull(),
+ calendar_group: text(),
+ starts_at: text().notNull(),
+ ends_at: text().notNull(),
+ status: text().$type<'active' | 'converted' | 'released'>().default("active").notNull(),
+ expires_at: text().notNull(),
+ created_at: text().notNull(),
+ converted_booking_id: text(),
+}, t => [
+ index("payment_holds_capacity_idx").on(t.session_id, t.status, t.expires_at),
+ index("payment_holds_calendar_idx").on(t.organization_id, t.calendar_group, t.status, t.expires_at),
+ check("payment_holds_quantity_check", sql`quantity > 0 AND amount > 0`),
+]);
+
+export const payment_orders = sqliteTable("payment_orders", {
+ id: text().primaryKey(),
+ organization_id: text().notNull(),
+ buyer_user_id: text().references(() => user.id, { onDelete: "set null" }),
+ payment_id: text().notNull().unique().references(() => payments.id, { onDelete: "restrict" }),
+ currency: text().notNull(),
+ amount: integer().notNull(),
+ created_at: text().notNull(),
+});
+export const payment_order_lines = sqliteTable("payment_order_lines", {
+ id: text().primaryKey(),
+ order_id: text().notNull().references(() => payment_orders.id, { onDelete: "restrict" }),
+ product_id: text().notNull(),
+ variant_id: text().notNull(),
+ price_id: text().notNull(),
+ title: text().notNull(),
+ unit_amount: integer().notNull(),
+ quantity: integer().notNull(),
+ currency: text().notNull(),
+ tax_behavior: text().notNull(),
+}, () => [check("payment_order_lines_amount_check", sql`unit_amount >= 0 AND quantity > 0`)]);
+
+export const payment_refunds = sqliteTable("payment_refunds", {
+ id: text().primaryKey(),
+ payment_id: text().notNull().references(() => payments.id, { onDelete: "restrict" }),
+ idempotency_key: text().notNull().unique(),
+ stripe_refund_id: text(),
+ amount: integer().notNull(),
+ reason: text().notNull(),
+ /** What the business told the buyer when it sent the money, as Airbnb's refund carries a message. */
+ note: text(),
+ status: text().notNull(),
+ error: text(),
+ attempted_at: text(),
+ created_by: text().references(() => user.id, { onDelete: "set null" }),
+ created_at: text().notNull(),
+ updated_at: text().notNull(),
+}, t => [unique("payment_refunds_provider_unique").on(t.payment_id,t.stripe_refund_id),check("payment_refunds_amount_check", sql`amount > 0`)]);
+export const payment_disputes = sqliteTable("payment_disputes", {
+ id: text().primaryKey(),
+ payment_id: text().notNull().references(() => payments.id, { onDelete: "restrict" }),
+ stripe_dispute_id: text().notNull(),
+ amount: integer().notNull(),
+ currency: text().notNull(),
+ reason: text().notNull(),
+ status: text().notNull(),
+ evidence_due_at: text(),
+ updated_at: text().notNull(),
+},t=>[unique('payment_disputes_provider_unique').on(t.payment_id,t.stripe_dispute_id)]);
+
+// Metronome owns rating/invoices. This is only a delivery outbox, not a ledger.
+export const payment_usage_events = sqliteTable("payment_usage_events", {
+ id: text().primaryKey(),
+ organization_id: text().notNull(),
+ payment_id: text().references(() => payments.id, { onDelete: "restrict" }),
+ kind: text().$type<'captured_volume' | 'stripe_cost' | 'stripe_cost_adjustment'>().notNull(),
+ currency: text().notNull(),
+ amount: integer().notNull(),
+ source_id: text().notNull().unique(),
+ provider_occurred_at: text().notNull(),
+ delivery_at: text(),
+ error: text(),
+ billing_timestamp: text(),
+ credit_note_id: text().unique(),
+ dead_letter_at: text(),
+ created_at: text().notNull(),
+});
+export const payment_billing_accounts = sqliteTable("payment_billing_accounts", {
+ organization_id: text().primaryKey(),
+ stripe_billing_customer_id: text().notNull(),
+ metronome_customer_id: text(),
+ metronome_contract_id: text(),
+ contract_start_at: text().notNull(),
+ currency: text().notNull(),
+ status: text().$type<'provisioning' | 'active' | 'servicing' | 'closing' | 'closed'>().notNull(),
+ updated_at: text().notNull(),
+});
+
+export const payment_authorizations = sqliteTable("payment_authorizations", {
+ id: text().primaryKey(),
+ organization_id: text().notNull(),
+ user_id: text().references(() => user.id, { onDelete: "set null" }),
+ payment_id: text().notNull().references(() => payments.id, { onDelete: "restrict" }),
+ action: text().notNull(),
+ amount: integer().notNull(),
+ note: text(),
+ expires_at: text().notNull(),
+ approved_at: text(),
+ consumed_at: text(),
+});
+
+/** The buyer's Stripe Customer on a business's connected account: Stripe keeps the cards, this keeps which customer is theirs. */
+export const stripe_connected_customers = sqliteTable("stripe_connected_customers", {
+ user_id: text().notNull().references(() => user.id, { onDelete: "cascade" }),
+ stripe_account_id: text().notNull(),
+ livemode: integer().notNull(),
+ stripe_customer_id: text().notNull(),
+ created_at: text().notNull(),
+}, t => [primaryKey({ columns: [t.user_id, t.stripe_account_id, t.livemode] })]);
+export const payment_claims = sqliteTable("payment_claims", {
+ token_hash: text().primaryKey(),
+ payment_id: text().notNull().references(() => payments.id, { onDelete: "restrict" }),
+ expires_at: text().notNull(),
+ claimed_at: text(),
+ claimed_user_id: text().references(() => user.id, { onDelete: "set null" }),
+});
+
+// Provider report progress and attributable cost snapshots support late correction;
+// Stripe remains the financial record authority. Unattributed fees are never billed.
+export const payment_fee_reports = sqliteTable("payment_fee_reports", {
+ id: text().primaryKey(),
+ stripe_report_id: text(),
+ livemode: integer({mode:"boolean"}).notNull(),
+ interval_start: integer().notNull(),
+ interval_end: integer().notNull(),
+ status: text().notNull(),
+ error: text(),
+ created_at: text().notNull(),
+ updated_at: text().notNull(),
+});
+export const payment_cost_snapshots = sqliteTable("payment_cost_snapshots", {
+ source_id: text().primaryKey(),
+ organization_id: text(),
+ payment_id: text().references(()=>payments.id,{onDelete:"restrict"}),
+ incurred_by: text().notNull(),
+ currency: text().notNull(),
+ amount: integer().notNull(),
+ incurred_at: text().notNull(),
+ revision: integer().default(1).notNull(),
+ updated_at: text().notNull(),
+});
+
+export const payment_servicing_tenants = sqliteTable("payment_servicing_tenants", {
+ organization_id: text().notNull(),
+ stripe_account_id: text().notNull(),
+ livemode: integer({mode:"boolean"}).notNull(),
+ retained_at: text().notNull(),
+},t=>[primaryKey({columns:[t.stripe_account_id,t.livemode]})]);
+
 // Domain settings reference existing Better Auth membership. Assignment IDs on
 // historical operational records deliberately survive membership deletion.
 export const member_scheduling = sqliteTable("member_scheduling", {

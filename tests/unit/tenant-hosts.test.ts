@@ -149,6 +149,27 @@ test('tenant headers are confined to local hosts', () => {
   assert.equal(usesTenantHeader('pottery-house-staging.krabiclaw.com'), false)
 })
 
+test('Cloudflare Quick Tunnels are development hosts without implicit tenant or platform identity', () => {
+  const hostname = 'construct-engineer-wings-smile.trycloudflare.com'
+  assert.equal(isNonProductionHost(hostname), true)
+  assert.equal(isNonProductionHost(`${hostname.toUpperCase()}.:443`), true)
+  assert.equal(usesTenantHeader(hostname), false)
+  assert.equal(isPlatformHost(hostname, prodEnv), false)
+  assert.equal(isPlatformHost(hostname, { NUXT_PUBLIC_PLATFORM_DOMAIN: `https://${hostname}` }), true)
+
+  for (const host of [
+    'trycloudflare.com',
+    `nested.${hostname}`,
+    `${hostname}.example.com`,
+    'trycloudflare.com.example.com',
+    'example.ngrok.app',
+    'example.workers.dev',
+  ]) {
+    assert.equal(isNonProductionHost(host), false)
+    assert.equal(usesTenantHeader(host), false)
+  }
+})
+
 test('environment tenant aliases use first-level staging hostnames', () => {
   assert.equal(
     environmentTenantAliasHostname('staging.krabiclaw.com', 'pottery-house'),

@@ -1,4 +1,6 @@
-import { execute, type DbClient } from '~/server/db'
+import { REQUEST_CURRENT_BUYER_SQL } from '~/server/domain/requests'
+import { listThreadEntries, isBuyerVisibleThreadEntry } from '~/server/domain/guest-threads/entries'
+import { d1JsonStringSet, execute, type DbClient } from '~/server/db'
 
 interface NotificationVisibility {
   userId: string
@@ -49,4 +51,19 @@ export async function acknowledgeThreadNotifications(
     'n.parent_id IN (SELECT id FROM activity_entries WHERE request_id = ?)',
     [threadId],
   )
+}
+
+/** Explicit buyer read receipt on existing public conversation facts, scoped to the current owner. */
+export async function acknowledgeBuyerThreadEntries(db:DbClient,userId:string,threadId:string,entryIds:string[]):Promise<number> {
+ const visible=(await listThreadEntries(db,threadId)).filter(isBuyerVisibleThreadEntry).filter(entry=>entryIds.includes(entry.id)).map(entry=>entry.id)
+ if(!visible.length)return 0
+ const now=new Date().toISOString()
+ const result=await execute(db,`INSERT INTO activity_entries (id,kind,scope_kind,request_id,parent_id,actor_kind,actor_user_id,dedupe_key,occurred_at,created_at)
+  SELECT ? || ':' || e.id, 'acknowledgement','request',e.request_id,e.id,'guest',?,? || e.id,?,?
+  FROM activity_entries e JOIN requests r ON r.id=e.request_id
+  WHERE e.request_id=? AND r.user_id=? AND e.id IN (SELECT value FROM json_each(?))
+   AND ${REQUEST_CURRENT_BUYER_SQL}
+   AND NOT EXISTS(SELECT 1 FROM activity_entries ack WHERE ack.kind='acknowledgement' AND ack.parent_id=e.id AND ack.actor_user_id=?)
+  ON CONFLICT(dedupe_key) DO NOTHING`,[crypto.randomUUID(),userId,`buyer-read:${userId}:${threadId}:`,now,now,threadId,userId,d1JsonStringSet(visible),userId])
+ return Number(result.meta.changes??0)
 }

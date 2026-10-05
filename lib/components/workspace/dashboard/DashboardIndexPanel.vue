@@ -70,13 +70,21 @@ const pair = computed(() => level.mode.value === 'pair')
 
 const pane = useDashboardPane()
 const router = useRouter()
+const scope = getCurrentScope()
+if (!scope) throw createError({ statusCode: 500, statusMessage: 'Dashboard pane scope is unavailable.', fatal: true })
 // Every arrival at the bare index opens the child again — Back from deeper
 // included. Opening it makes this level a pair, which is what stops the watch.
-watch((): [RouteLocationRaw | null | undefined, boolean, RouteLevelMode] => [props.autoOpen, pane.value, level.mode.value], ([target, wide, mode]) => {
-  // An index on its way out after a navigation elsewhere yields, so it opens nothing.
-  if (!target || !wide || mode !== 'index') return
-  // An index whose rows are still loading offers itself as the first row; its own URL opens nothing.
-  if (router.resolve(target).path === level.path.value) return
-  void navigateTo(target, { replace: true })
-}, { immediate: true })
+// Initial auto-navigation waits for Nuxt to finish hydrating the route's panes.
+onNuxtReady(() => {
+  if (!scope.active) return
+  scope.run(() => {
+    watch((): [RouteLocationRaw | null | undefined, boolean, RouteLevelMode] => [props.autoOpen, pane.value, level.mode.value], ([target, wide, mode]) => {
+      // An index on its way out after a navigation elsewhere yields, so it opens nothing.
+      if (!target || !wide || mode !== 'index') return
+      // An index whose rows are still loading offers itself as the first row; its own URL opens nothing.
+      if (router.resolve(target).path === level.path.value) return
+      void navigateTo(target, { replace: true })
+    }, { immediate: true })
+  })
+})
 </script>

@@ -2,7 +2,8 @@
 import type { H3Event } from 'nitro'
 import type { HTTPEvent } from 'nitro/h3'
 import { useRuntimeConfig } from 'nitro/runtime-config'
-import { usesTenantHeader } from '~/server/utils/tenant-hosts'
+import { hostnameOf, isNonProductionHost } from '~/server/utils/tenant-hosts'
+import { isNonIndexableHost } from '~/server/utils/seo-policy'
 
 /**
  * Cached HTML references the `/_nuxt/` asset hashes of the build that rendered
@@ -11,9 +12,9 @@ import { usesTenantHeader } from '~/server/utils/tenant-hosts'
  * gets a page whose every module 400s and never hydrates.
  *
  * The build id is therefore part of the key, not a property of the value: a new
- * deploy simply misses, and no HTML can outlive the assets it points at. This
- * replaced a skip that disabled the cache entirely on preview and staging,
- * which treated the same defect by not caching where it was noticed.
+ * deploy simply misses, and no HTML can outlive the assets it points at.
+ * Private non-production hosts use the same policy as public-html-cache: no
+ * shared HTML entry may be read or written for them.
  */
 export function buildHtmlCacheKey(event: H3Event | HTTPEvent): string | null {
 
@@ -24,21 +25,12 @@ export function buildHtmlCacheKey(event: H3Event | HTTPEvent): string | null {
     ?? request.headers.get('host')
     ?? request.headers.get('x-forwarded-host')
   if (!host) return null
+  const hostname = hostnameOf(host)
+  if (isNonProductionHost(hostname) || isNonIndexableHost(hostname)) return null
   const buildId = useRuntimeConfig().app?.buildId
   if (!buildId) return null
-  const hostname = host.split(':')[0] ?? host
-  // Only hosts that cannot express tenant identity in their hostname carry it in
-  // x-preview-tenant, and there it must be part of the key or two tenants share
-  // one entry. Asking isNonProductionHost instead put an untrusted header in the
-  // key on deployed staging aliases, which resolve their tenant from the
-  // hostname and would have fragmented on a header a client chose.
-  const previewTenant = usesTenantHeader(hostname)
-    ? (cfRequest?.headers.get('x-preview-tenant')
-      ?? request.headers.get('x-preview-tenant'))
-    : null
-  const tenantSuffix = previewTenant ? `:${previewTenant}` : ''
   const path = 'path' in event ? event.path : new URL(request.url).pathname
-  return `html:${host}${tenantSuffix}:${buildId}:${path}`
+  return `html:${host}:${buildId}:${path}`
 }
 
 /**
@@ -46,9 +38,9 @@ export function buildHtmlCacheKey(event: H3Event | HTTPEvent): string | null {
  * Called after any mutating MCP tool call so the next browser load gets
  * fresh SSR HTML with the correct /_nuxt/ asset hashes.
  *
- * KV keys are structured as: html:<host>[:<preview tenant>]:<build id>:<pathname>
+ * KV keys are structured as: html:<host>:<build id>:<pathname>
  * We list by prefix html:<host>: and delete all matches, so a purge clears the
- * host's entries for every build id and preview tenant.
+ * host's entries for every build id.
  */
 export async function purgeOrganizationKvCache(
   kv: KVNamespace,

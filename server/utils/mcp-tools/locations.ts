@@ -198,7 +198,7 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
       const requested = Array.isArray(args.kinds)
         ? args.kinds.filter((kind): kind is AgendaKind => AGENDA_KINDS.includes(kind as AgendaKind))
         : undefined;
-      const agenda = await listAgenda(organization.db, organization.organizationId, {
+      const agenda = await listAgenda(organization.db, { organizationId: organization.organizationId }, {
         from, to, locationId: location.id, kinds: requested, organizationSlug: organization.organizationSlug,
         principal: { env: organization.env, membership: organization.membership },
       });

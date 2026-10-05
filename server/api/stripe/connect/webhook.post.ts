@@ -1,10 +1,8 @@
 import { defineHandler, HTTPError } from 'nitro'
 import { readRawBody } from 'nitro/h3'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getCloudflareWaitUntil } from '~/server/utils/mcp-route-helpers'
 import { createStripeClient } from '~/server/utils/stripe-client'
 import { processStripeConnectEvent } from '~/server/utils/stripe-connect-events'
-import { enqueueStripeWebhookEvent } from '~/server/utils/stripe-webhook-events'
 
 const MAX_STRIPE_WEBHOOK_BYTES = 512 * 1024
 
@@ -24,7 +22,7 @@ export default defineHandler(async (event) => {
   const signature = event.req.headers.get('stripe-signature')
   if (!signature) throw new HTTPError({ statusCode: 400, statusMessage: 'Stripe signature is required' })
 
-  const stripe = createStripeClient(env.STRIPE_SECRET_KEY)
+  const stripe = createStripeClient(env.STRIPE_SECRET_KEY, 'payments')
   let notification
   try {
     notification = await stripe.parseEventNotificationAsync(payload, signature, env.STRIPE_CONNECT_WEBHOOK_SECRET)
@@ -35,21 +33,9 @@ export default defineHandler(async (event) => {
     throw new HTTPError({ statusCode: 400, statusMessage: 'Stripe signature is invalid' })
   }
 
-  await enqueueStripeWebhookEvent(env.DB, {
-    id: notification.id,
-    type: notification.type,
-    payload,
-    processor: 'connect_marketplace',
-  })
-  const processing = processStripeConnectEvent(env.DB, stripe, notification, payload).catch((error) => {
-    console.error('stripe_connect_webhook_immediate_processing_failed', {
-      stripeEventId: notification.id,
-      error: error instanceof Error ? error.message : String(error),
-    })
-  })
-  const waitUntil = getCloudflareWaitUntil(event)
-  if (waitUntil) waitUntil(processing)
-  else await processing
+  if (!await processStripeConnectEvent(env.DB, stripe, notification, payload)) {
+    throw new HTTPError({ statusCode: 503, statusMessage: 'Stripe Connect event processing is in progress' })
+  }
 
   return jsonResponse({ received: true })
 })

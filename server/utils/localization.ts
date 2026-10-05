@@ -1,7 +1,7 @@
 import { HTTPError } from 'nitro'
 import { platformLocale } from '~/shared/platform-locales'
 import { executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
-import { getOrganizationPlan, isSubscriptionStateInvalid } from '~/server/utils/billing-access'
+import { getOrganizationEntitlements, isSubscriptionStateInvalid } from '~/server/utils/billing-access'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import {
   createContentDocumentWithBlocks,
@@ -162,14 +162,14 @@ export async function assertOrganizationLanguageEntitlement(
      LIMIT 1
   `, [locale, organizationId])
   if (!row) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Organization was not found', { organization_id: organizationId })
-  const plan = await getOrganizationPlan(env, organizationId)
-  // Authoring only needs the language to exist on a Growth site. Requiring
+  const entitlements = await getOrganizationEntitlements(env, organizationId)
+  // Authoring only needs the language to exist on an entitled site. Requiring
   // `published` here made translate-before-publish impossible, which is why a
   // language went public with nothing in it. The public gate below is what
   // still insists on `published`.
   const satisfied = requires === 'published' ? row.locale_status === 'published' : Boolean(row.locale_status)
-  if (plan !== 'growth' || !satisfied) {
-    localizationError(402, 'LANGUAGE_ENTITLEMENT_REQUIRED', `A ${requires === 'published' ? 'published ' : ''}language on the Growth plan is required`, {
+  if (typeof entitlements.additional_languages !== 'number' || entitlements.additional_languages <= 0 || !satisfied) {
+    localizationError(402, 'LANGUAGE_ENTITLEMENT_REQUIRED', `A ${requires === 'published' ? 'published ' : ''}language and an eligible paid plan are required`, {
       organization_id: organizationId,
       locale,
       billing_url: billingUrl(row.organization_slug),

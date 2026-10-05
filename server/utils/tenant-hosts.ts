@@ -97,8 +97,8 @@ export function usesTenantHeader(host: string): boolean {
   return hostname === 'localhost' || hostname.endsWith('.localhost') || hostname === '127.0.0.1'
 }
 
-// Returns true for non-production hosts: local development, the staging
-// environment, and its tenant aliases. This is about *which
+// Returns true for non-production hosts: local development and Cloudflare Quick
+// Tunnels, the staging environment, and its tenant aliases. This is about *which
 // environment* a request is in — not about the preview of an unpublished site,
 // which is server/utils/preview-token.ts and means one owner looking at their
 // own site. Call usesTenantHeader() when deciding how tenant identity is
@@ -108,6 +108,7 @@ export function isNonProductionHost(host: string): boolean {
   const hostname = hostnameOf(host).toLowerCase().replace(/\.$/, '')
   if (usesTenantHeader(hostname)) return true
   if (hostname === 'staging.krabiclaw.com') return true
+  if (/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.trycloudflare\.com$/.test(hostname)) return true
   return isEnvironmentTenantAliasHost(hostname)
 }
 

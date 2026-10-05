@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { dismissPreviewToolbar, waitForNuxtHydration } from './helpers'
+import { blawbyBaseURL, blawbyExtraHeaders, dismissPreviewToolbar, openTenantPage, waitForNuxtHydration } from './helpers'
 import { loginAs } from './helpers/auth'
 import { MCP_GROWTH_ORGANIZATION_ID, mcpRequest, mcpData } from './helpers/mcp'
 import { E2E_POTTERY_ORGANIZATION_ID, tenantTestExtraHeaders } from './test-env'
@@ -466,7 +466,7 @@ test.describe('stateless MCP server', () => {
     expect(mcpData<{ items: unknown[] }>(await qaList.json()).items).toEqual(expect.any(Array))
   })
 
-  test('authored Q&A has MCP writers while reviews remain read-only', async ({ request, baseURL }) => {
+  test('authored Q&A shares scoped CMS and MCP writers while reviews remain read-only', async ({ page, browser, request, baseURL }, testInfo) => {
     await loginAs(request, baseURL!)
     const organizationId = MCP_GROWTH_ORGANIZATION_ID
     for (const [toolName, key] of [['list_organization_qa', 'items'], ['list_organization_reviews', 'reviews']]) {
@@ -491,6 +491,94 @@ test.describe('stateless MCP server', () => {
     expect(qaWrite.status(), await qaWrite.text()).toBe(400)
     const reviewWrite = await request.post(`${baseURL}/api/editor/organizations/${organizationId}/reviews`, { data: {} })
     expect([404, 405]).toContain(reviewWrite.status())
+
+    const qaOrganizationId = 'org-ncls-blawby'
+    const qaUrl = `${baseURL}/api/editor/organizations/${qaOrganizationId}/qa`
+    const pagePath = '/pricing'
+    const question = `Page-scoped CMS question ${crypto.randomUUID()}`
+    const answer = 'This published answer belongs only to the pricing page.'
+    const publicPage = await browser.newPage()
+    const release = await acquireTenantMutationLock(testInfo, qaOrganizationId)
+    let createdId: string | undefined
+    try {
+      const before = await openTenantPage(publicPage, `${blawbyBaseURL}${pagePath}`, blawbyExtraHeaders)
+      expect(before?.status()).toBe(200)
+      expect(before?.headers()['cache-control']).toBe('private, no-store, max-age=0')
+      expect(before?.headers()['x-edge-cache']).toBeUndefined()
+      await expect(publicPage.getByRole('heading', { name: question, exact: true })).toHaveCount(0)
+      await loginAs(page.request, baseURL!, 'user-e2e-ncls-owner')
+      const organizationRead = await mcpRequest(page.request, baseURL!, { method: 'tools/call', toolName: 'get_organization', args: { organization_id: qaOrganizationId } })
+      expect(organizationRead.status()).toBe(200)
+      const slug = mcpData<{ context: { organization_slug: string } }>(await organizationRead.json()).context.organization_slug
+      expect(slug).toBeTruthy()
+      await page.setViewportSize({ width: 900, height: 800 })
+      await openTenantPage(page, `${baseURL}/dashboard/${encodeURIComponent(slug)}/qa`, {})
+      await page.getByRole('combobox', { name: 'Q&A page scope', exact: true }).click()
+      await page.getByRole('option', { name: 'Pricing', exact: true }).click()
+      await page.getByRole('button', { name: 'Add a question', exact: true }).click()
+      await expect(page).toHaveURL(url => url.pathname.includes('/qa/new') && url.searchParams.get('page_path') === pagePath)
+      await page.getByRole('button', { name: 'Start with Question', exact: true }).click()
+      await expect(page).toHaveURL(url => url.pathname.endsWith('/qa/new/question') && url.searchParams.get('page_path') === pagePath)
+      await page.getByRole('textbox', { name: /^Question/ }).fill(question)
+      await page.getByTestId('dashboard-navbar-close').click()
+      await page.getByRole('link', { name: /^Answer / }).click()
+      await expect(page).toHaveURL(url => url.pathname.endsWith('/qa/new/answer') && url.searchParams.get('page_path') === pagePath)
+      await page.getByRole('textbox', { name: 'Answer', exact: true }).fill(answer)
+      await page.getByTestId('dashboard-navbar-close').click()
+      await page.getByRole('link', { name: 'Visibility Published', exact: true }).click()
+      await expect(page).toHaveURL(url => url.pathname.endsWith('/qa/new/visibility') && url.searchParams.get('page_path') === pagePath)
+      await expect(page.locator('#dashboard-panel-organization-qa-visibility').getByRole('switch')).toBeChecked()
+      const [created] = await Promise.all([
+        page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === new URL(qaUrl).pathname),
+        page.getByRole('button', { name: 'Create question', exact: true }).last().click(),
+      ])
+      expect(created.status(), await created.text()).toBe(201)
+      createdId = (await created.json()).id
+      expect(createdId).toBeTruthy()
+      await expect(page).toHaveURL(url => url.pathname === `/dashboard/${encodeURIComponent(slug)}/qa/${createdId}` && url.searchParams.get('page_path') === pagePath)
+      await page.getByTestId('dashboard-navbar-back').filter({ visible: true }).click()
+      await expect(page).toHaveURL(url => url.pathname === `/dashboard/${encodeURIComponent(slug)}/qa` && url.searchParams.get('page_path') === pagePath)
+      await expect(page.getByRole('combobox', { name: 'Q&A page scope', exact: true })).toBeVisible()
+      await expect(page.getByRole('combobox', { name: 'Q&A page scope', exact: true })).toHaveText('Pricing')
+      const readback = await page.request.get(qaUrl, { params: { id: createdId! } })
+      expect(readback.status()).toBe(200)
+      expect((await readback.json()).qa).toEqual([expect.objectContaining({ id: createdId, organization_id: qaOrganizationId, location_id: null, page_path: pagePath, question, answer, status: 'published', source: 'manual' })])
+      const scoped = await mcpRequest(page.request, baseURL!, { method: 'tools/call', toolName: 'list_organization_qa', args: { organization_id: qaOrganizationId, page_path: pagePath, limit: 100 } })
+      expect(scoped.status()).toBe(200)
+      expect(mcpData<{ items: Array<{ id: string; page_path: string }> }>(await scoped.json()).items).toContainEqual(expect.objectContaining({ id: createdId, page_path: pagePath, question, answer }))
+      const general = await page.request.get(qaUrl)
+      expect(general.status()).toBe(200)
+      expect((await general.json()).qa.map((row: { id: string }) => row.id)).not.toContain(createdId)
+      await page.setViewportSize({ width: 1000, height: 800 })
+      const freshRecord = await openTenantPage(page, `${baseURL}/dashboard/${encodeURIComponent(slug)}/qa/${createdId}?page_path=${encodeURIComponent(pagePath)}`, {})
+      expect(freshRecord?.status()).toBe(200)
+      await expect(page).toHaveURL(url => url.pathname === `/dashboard/${encodeURIComponent(slug)}/qa/${createdId}/question` && url.searchParams.get('page_path') === pagePath)
+      await expect(page.getByRole('heading', { name: question, exact: true })).toBeVisible()
+      await expect(page.getByRole('textbox', { name: /^Question/ })).toBeVisible()
+      await expect(page.getByRole('textbox', { name: /^Question/ })).toHaveValue(question)
+      await expect(page.getByTestId('dashboard-navbar-close')).not.toBeVisible()
+      const published = await publicPage.reload()
+      expect(published?.status()).toBe(200)
+      expect(published?.headers()['cache-control']).toBe('private, no-store, max-age=0')
+      expect(published?.headers()['x-edge-cache']).toBeUndefined()
+      await expect(publicPage.locator('[data-parity-section="qa"]').getByRole('heading', { name: question, exact: true })).toBeVisible()
+      await expect(publicPage.locator('[data-parity-section="qa"]').getByText(answer, { exact: true })).toBeVisible()
+    } finally {
+      try {
+        if (createdId) {
+          const readback = await page.request.get(qaUrl, { params: { id: createdId } })
+          expect(readback.status()).toBe(200)
+          const row = (await readback.json()).qa[0] as { page_path: string | null }
+          const deleted = await page.request.delete(`${qaUrl}/${createdId}`, { params: row.page_path === null ? undefined : { page_path: row.page_path } })
+          expect(deleted.status(), await deleted.text()).toBe(200)
+          const after = await page.request.get(qaUrl, { params: { id: createdId } })
+          expect(after.status()).toBe(200)
+          expect((await after.json()).qa).toEqual([])
+        }
+      } finally {
+        await Promise.all([publicPage.close(), release()])
+      }
+    }
   })
 
   test.describe('owner management workflows', () => {
@@ -554,7 +642,21 @@ test.describe('stateless MCP server', () => {
         expect(mcpData<{ rules: unknown[] }>(await call('replace_product_weekly_schedule', { product_id: productId, location_id: locationId, slots: [] })).rules).toEqual([])
         expect((await (await request.get(`${productUrl}/availability?location_id=${locationId}`)).json()).rules).toEqual([])
 
-        const policy = { confirmation_mode: 'review', online_payment_required: true, online_timezone: 'America/New_York', calendar_group: `parity-${productId}` }
+        const policy = { confirmation_mode: 'review', online_payment_required: false, online_timezone: 'America/New_York', calendar_group: `parity-${productId}` }
+        const beforePaymentPolicy = mcpData<{ product: { booking: unknown } }>(await call('get_product', { product_id: productId })).product.booking
+        const paymentRequiredPolicy = { ...policy, online_payment_required: true }
+        const httpPaymentPolicy = await request.put(`${productUrl}/booking`, { data: paymentRequiredPolicy })
+        expect(httpPaymentPolicy.status()).toBe(403)
+        expect((await httpPaymentPolicy.json()).message).toBe('Commerce is required to collect online payment for paid sessions')
+        const httpRejectedPolicyReadback = await request.get(productUrl)
+        expect(httpRejectedPolicyReadback.status()).toBe(200)
+        expect((await httpRejectedPolicyReadback.json()).product.booking).toEqual(beforePaymentPolicy)
+        const mcpPaymentPolicy = await call('set_product_booking_config', { product_id: productId, ...paymentRequiredPolicy })
+        expect(mcpPaymentPolicy.result.isError).toBe(true)
+        expect(mcpPaymentPolicy.result.content).toEqual([{ type: 'text', text: 'Commerce is required to collect online payment for paid sessions' }])
+        const mcpRejectedPolicyReadback = await request.get(productUrl)
+        expect(mcpRejectedPolicyReadback.status()).toBe(200)
+        expect((await mcpRejectedPolicyReadback.json()).product.booking).toEqual(beforePaymentPolicy)
         expect((await call('set_product_booking_config', { product_id: productId, ...policy })).result.isError).not.toBe(true)
         const policyRead = await request.get(productUrl)
         expect(policyRead.status()).toBe(200)

@@ -20,6 +20,7 @@ import { requestInsertQueries, threadPayloadForGuest, getThreadOperationalRecord
 import { executeGuestThreadOperation } from '../../server/domain/guest-threads/operations.ts'
 import { occurrenceKey } from '../../shared/bookings.ts'
 import { addLocalDays, localDateTimeToInstant, localNow } from '../../utils/timezone.ts'
+import type { CloudflareEnv } from '../../server/utils/auth.ts'
 
 const ORG = 'org-sessions'
 const LOCATION = 'loc-sessions'
@@ -234,6 +235,35 @@ test('the occurrence key is the intended local start, not the actual instant', (
   assert.equal(occurrenceKey('rule-1', '2026-10-04', '14:00'), 'rule-1:2026-10-04T14:00')
 })
 
+
+test('required online collection follows the canonical subscription entitlement while disabling remains available', { timeout: 120_000 }, async () => {
+  const { runtime, db } = await boot()
+  const scope = { organizationId: ORG, productId: PRODUCT, actorId: ACTOR }
+  const env = { DB: db, STRIPE_SECRET_KEY: 'sk_test_local_d1_no_stripe_requests', BETTER_AUTH_URL: 'https://proof.example', BETTER_AUTH_SECRET: 'local-proof-secret-long-enough-for-auth', NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://krabiclaw.test' } as CloudflareEnv
+  try {
+    const before = await db.prepare('SELECT online_payment_required, updated_at FROM product_booking_configs WHERE product_id = ?').bind(PRODUCT).first()
+    const invalidations = await db.prepare('SELECT COUNT(*) FROM public_resource_cache_invalidations').first('COUNT(*)')
+    await assert.rejects(() => setProductBookingConfig(db, { ...scope, patch: { online_payment_required: true } }), { statusCode: 403 })
+    await assert.rejects(() => setProductBookingConfig(db, { ...scope, env, patch: { online_payment_required: true } }), { statusCode: 403 })
+    await db.prepare("INSERT INTO subscription(id,plan,referenceId,status,periodEnd) VALUES('booking-entitlement','growth',?,'active',4070908800)").bind(ORG).run()
+    await assert.rejects(() => setProductBookingConfig(db, { ...scope, env, patch: { online_payment_required: true } }), { statusCode: 403 })
+    await db.prepare("UPDATE subscription SET plan='commerce',status='past_due' WHERE id='booking-entitlement'").run()
+    await assert.rejects(() => setProductBookingConfig(db, { ...scope, env, patch: { online_payment_required: true } }), { statusCode: 403 })
+    assert.deepEqual(await db.prepare('SELECT online_payment_required, updated_at FROM product_booking_configs WHERE product_id = ?').bind(PRODUCT).first(), before)
+    assert.equal(await db.prepare('SELECT COUNT(*) FROM public_resource_cache_invalidations').first('COUNT(*)'), invalidations)
+
+    await db.prepare("UPDATE subscription SET status='active' WHERE id='booking-entitlement'").run()
+    await setProductBookingConfig(db, { ...scope, env, patch: { online_payment_required: true } })
+    assert.equal(await db.prepare('SELECT online_payment_required FROM product_booking_configs WHERE product_id = ?').bind(PRODUCT).first('online_payment_required'), 1)
+    await db.prepare("UPDATE subscription SET status='canceled' WHERE id='booking-entitlement'").run()
+    await setProductBookingConfig(db, { ...scope, patch: { duration_minutes: 60 } })
+    assert.equal(await db.prepare('SELECT online_payment_required FROM product_booking_configs WHERE product_id = ?').bind(PRODUCT).first('online_payment_required'), 1, 'other settings preserve the saved policy after downgrade')
+    await setProductBookingConfig(db, { ...scope, env, patch: { online_payment_required: false } })
+    assert.equal(await db.prepare('SELECT online_payment_required FROM product_booking_configs WHERE product_id = ?').bind(PRODUCT).first('online_payment_required'), 0)
+    await setProductBookingConfig(db, { ...scope, patch: { online_payment_required: false } })
+    assert.equal(await db.prepare('SELECT online_payment_required FROM product_booking_configs WHERE product_id = ?').bind(PRODUCT).first('online_payment_required'), 0)
+  } finally { await runtime.dispose() }
+})
 
 test('shared booking defaults retain omissions, zero and null; all history blocks removal', { timeout: 120_000 }, async () => {
   const { runtime, db } = await boot()

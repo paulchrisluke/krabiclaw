@@ -5,7 +5,7 @@ import { getQuery, redirect } from 'nitro/h3';
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { createAuth, getAuthSession } from '~/server/utils/auth'
 import { resolvePostLoginRoute } from '~/server/utils/post-login-routing'
-import { NEW_SALE_PLAN_ID } from '~/shared/billing-model'
+import { isNewSalePlan } from '~/shared/billing-model'
 import { buildLoginUrl, buildPostLoginUrl, validatedInternalPath } from '~/shared/auth/return-target'
 
 export default defineHandler(async (event) => {
@@ -13,7 +13,7 @@ export default defineHandler(async (event) => {
   const db = env.DB
 
   const plan = getQuery(event).plan
-  if (plan !== undefined && plan !== NEW_SALE_PLAN_ID) {
+  if (plan !== undefined && !isNewSalePlan(plan)) {
     throw new HTTPError({ statusCode: 400, message: 'Unknown checkout plan' })
   }
   const session = await getAuthSession(event, env)
@@ -64,7 +64,7 @@ export default defineHandler(async (event) => {
       if (route.kind === 'choose') {
         return redirect(`${route.destination}?plan=${encodeURIComponent(plan)}`, 302)
       }
-      return redirect(`${route.destination}/settings/billing?plan=${encodeURIComponent(plan)}`, 302)
+      return redirect(`${route.destination}/settings/payments?tab=plan&plan=${encodeURIComponent(plan)}`, 302)
     }
     return redirect(route.destination, 302)
   } catch (error) {

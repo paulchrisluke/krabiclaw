@@ -1,35 +1,39 @@
 import type Stripe from 'stripe'
-
-export const GROWTH_MONTHLY_AMOUNT_CENTS = 4900
-export const GROWTH_ANNUAL_AMOUNT_CENTS = 58800
+import { assertNewSalePlan, PAID_PLAN_PRICES } from '~/shared/billing-model'
 
 /**
- * New-sale Growth is one fixed application offer. Stripe catalog metadata may
+ * Each new-sale plan is one fixed application offer. Stripe catalog metadata may
  * identify the product, but it cannot change this price contract.
  */
-export function assertGrowthStripeCatalogPrices(
+export function assertStripeCatalogPrices(
+  planId: string,
   monthly: Stripe.Price | null | undefined,
   annual?: Stripe.Price | null,
 ): asserts monthly is Stripe.Price {
+  const plan = assertNewSalePlan(planId)
+  const amounts = PAID_PLAN_PRICES[plan]
   if (
     !monthly
     || typeof monthly.unit_amount !== 'number'
-    || monthly.unit_amount !== GROWTH_MONTHLY_AMOUNT_CENTS
+    || monthly.unit_amount !== amounts.monthly
     || typeof monthly.currency !== 'string'
     || monthly.currency.trim().toLowerCase() !== 'usd'
   ) {
-    throw new Error(`Growth monthly price must be exactly USD ${GROWTH_MONTHLY_AMOUNT_CENTS} cents`)
+    throw new Error(`${plan} monthly price must be exactly USD ${amounts.monthly} cents`)
   }
   if (
     annual
     && (
-      typeof annual.unit_amount !== 'number'
-      || annual.unit_amount !== GROWTH_ANNUAL_AMOUNT_CENTS
+      amounts.annual === undefined
+      || typeof annual.unit_amount !== 'number'
+      || annual.unit_amount !== amounts.annual
       || typeof annual.currency !== 'string'
       || annual.currency.trim().toLowerCase() !== 'usd'
     )
   ) {
-    throw new Error(`Growth annual price must be exactly USD ${GROWTH_ANNUAL_AMOUNT_CENTS} cents`)
+    throw new Error(amounts.annual === undefined
+      ? `${plan} has no authorized annual price`
+      : `${plan} annual price must be exactly USD ${amounts.annual} cents`)
   }
 }
 

@@ -36,7 +36,7 @@
 
 <script setup lang="ts">
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
-import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities, type ProductFeature } from '~/config/cms-registry'
+import { resolveCmsCapabilities, type ProductFeature } from '~/config/cms-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { getTodayHoursLabel, type OpeningHours } from '~/shared/reservation-hours'
 import { normalizeVertical, type OrganizationVertical } from '~/utils/vertical-copy'
@@ -104,10 +104,7 @@ const capabilities = computed(() => {
   // Deliberately unguarded: swallowing a capability error left the index with an
   // empty feature set, which removes every content and reservation row and
   // leaves a location that looks like it holds nothing.
-  return resolveCmsCapabilities(normalizeVertical(vertical) as OrganizationVertical, resolvePublicTemplate({ themeId: dashboard.organization.value?.theme_id, vertical }).slug, {
-    organization: parseCmsFeatureOverrideDelta(dashboard.organization.value?.feature_overrides),
-    location: parseCmsFeatureOverrideDelta(dashboardLocationRow.value?.feature_overrides),
-  })
+  return resolveCmsCapabilities(normalizeVertical(vertical) as OrganizationVertical, resolvePublicTemplate({ themeId: dashboard.organization.value?.theme_id, vertical }).slug)
 })
 const featureSet = computed(() => new Set<ProductFeature>([
   ...(capabilities.value?.pages.map(page => page.feature) ?? []),

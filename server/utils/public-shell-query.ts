@@ -43,7 +43,7 @@ export function appendPublicShellQueries(
                      bl.review_count, bl.status,
                      bl.description, bl.short_description,
                      bl.last_synced_at, bl.seo_title, bl.seo_description,
-                     bl.canonical_url, bl.feature_overrides
+                     bl.canonical_url
                 FROM business_locations bl
                WHERE bl.organization_id = ?  AND bl.status = 'active'
                ORDER BY bl.title ASC`, [organizationId]),
@@ -170,14 +170,11 @@ export function buildPublicShellPayload(
     ...(() => {
       const rows = (results[indexes.productLocations]?.results ?? []) as Array<{ location_id: string; bookable: number; unbookable: number }>
       const byLocation = new Map(rows.map(row => [String(row.location_id), row]))
-      const carries = (pick: (_row: { bookable: number; unbookable: number }) => number) => rawLocations.some((location) => {
+      const { capabilities } = resolveOrganizationCmsCapabilities(String(organization.vertical), organization.theme_id)
+      const offersLocationProducts = capabilities.managers.some(manager => manager.key === 'location.products')
+      const carries = (pick: (_row: { bookable: number; unbookable: number }) => number) => offersLocationProducts && rawLocations.some((location) => {
         const row = byLocation.get(String(location.id))
-        if (!row || pick(row) !== 1) return false
-        const { capabilities } = resolveOrganizationCmsCapabilities(String(organization.vertical), organization.theme_id, {
-          organizationEnabledFeatures: organization.feature_overrides,
-          locationEnabledFeatures: location.feature_overrides as string | null,
-        })
-        return capabilities.managers.some(manager => manager.key === 'location.products')
+        return row !== undefined && pick(row) === 1
       })
       return { hasProducts: carries(row => row.unbookable), hasBookableProducts: carries(row => row.bookable) }
     })(),

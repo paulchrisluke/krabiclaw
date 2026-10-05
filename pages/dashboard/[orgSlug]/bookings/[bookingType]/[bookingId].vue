@@ -12,7 +12,7 @@ useSeoMeta({ title: 'Booking details | Krabiclaw', robots: 'noindex, nofollow' }
 const route = useRoute()
 const level = useRouteLevel()
 const rawType = typeof route.params.bookingType === 'string' ? route.params.bookingType : undefined
-const bookingType = rawType === 'reservation' || rawType === 'booking' ? rawType : null
+const bookingType = rawType === 'reservation' || rawType === 'booking' || rawType === 'order' || rawType === 'payment' ? rawType : null
 const bookingId = String(route.params.bookingId || '')
 // Raised, not thrown: the dashboard renders on the client, where a throw in a nested page's setup leaves a blank screen (DESIGN.md).
 if (!bookingType || !bookingId) showError(createError({ statusCode: 404, statusMessage: 'Booking not found' }))

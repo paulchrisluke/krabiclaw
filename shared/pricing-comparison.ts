@@ -1,4 +1,5 @@
 import { getPlanEntitlements } from '../server/utils/billing-entitlements'
+import { STARTER_PLAN_ID, NEW_SALE_PAID_PLAN_IDS } from './billing-model'
 
 // Reviewed comparison copy, not Stripe's paid marketing_features. Source ownership
 // and unresolved policies are recorded in docs/design/pricing/implementation-plan.md.
@@ -9,8 +10,6 @@ export interface PricingComparisonRow {
   detail: string
   included?: string
   entitlement?: string
-  free?: string
-  growth?: string
   limits?: Readonly<Record<string, number>>
 }
 
@@ -36,6 +35,7 @@ export const PRICING_COMPARISON: ReadonlyArray<{ title: string; rows: readonly P
     { id: 'bookings.requests', label: 'Bookings and consultation requests', detail: 'Availability depends on your business type and configured offerings.', included: 'Included' },
     { id: 'bookings.member-availability', label: 'Team availability', detail: 'Set working hours and time off, and assign a team member to a service.', included: 'Included' },
     { id: 'catalog.products', label: 'Ticketed experiences', detail: 'For configured experience products. Payment processing terms apply.', included: 'Included' },
+    { id: 'payments.acceptance', label: 'Online payments', detail: 'Payments fees are billed separately. Set up your Stripe account and Payments billing to accept payments.', entitlement: 'payments' },
     { id: 'notifications.email-dashboard', label: 'Booking email notifications', detail: 'Automatic booking email is separate from an explicit review request.', included: 'Included' },
     { id: 'inbox.submissions', label: 'Guest inquiries', detail: 'Read contact and reservation inquiries for your organization.', included: 'Included' },
     { id: 'reviews.read', label: 'Review records', detail: 'Read available imported and guest reviews. Display and provenance depend on the review source.', included: 'Included' },
@@ -47,21 +47,25 @@ export const PRICING_COMPARISON: ReadonlyArray<{ title: string; rows: readonly P
     { id: 'places.refresh', label: 'Google Places re-import', detail: 'Connect a selected Place and explicitly refresh its details.', entitlement: 'google_places' },
     { id: 'places.refresh', label: 'Weekly Google review refresh', detail: 'Scheduled review and rating refresh for connected Places; not continuous synchronization of all business details.', entitlement: 'google_places' },
     { id: 'content.locales', label: 'English source website', detail: 'Source content remains available while additional languages are authored.', included: 'Included' },
-    { id: 'content.additional-locales', label: 'Additional website languages', detail: 'Manually author and publish Japanese and Thai; up to two secondary languages. No automatic translation.', free: 'English only', growth: 'Up to 2 additional languages', limits: { free: 0, growth: 2 } },
+    { id: 'content.additional-locales', label: 'Additional website languages', detail: 'Manually author and publish Japanese and Thai; no automatic translation.', limits: Object.fromEntries([STARTER_PLAN_ID, ...NEW_SALE_PAID_PLAN_IDS].map(plan => {
+      const limit = getPlanEntitlements(plan).additional_languages
+      if (typeof limit !== 'number') throw new Error(`Missing language allowance for plan ${plan}`)
+      return [plan, limit]
+    })) },
   ] },
   { title: 'Help', rows: [
     { id: 'support.docs-help', label: 'Documentation and help form', detail: 'Browse the docs or contact us through the platform help form.', included: 'Included' },
   ] },
 ]
 
-export function comparisonValue(row: { included?: string; entitlement?: string; free?: string; growth?: string }, planId: string): string {
+export function comparisonValue(row: Pick<PricingComparisonRow, 'included' | 'entitlement' | 'limits'>, planId: string): string {
   if (row.included) return row.included
   if (row.entitlement) {
     const value = getPlanEntitlements(planId)[row.entitlement]
     if (typeof value !== 'boolean') throw new Error(`Unknown capability ${row.entitlement}`)
     return value ? 'Included' : 'Not included'
   }
-  if (planId === 'free' && row.free) return row.free
-  if (planId === 'growth' && row.growth) return row.growth
+  const limit = row.limits?.[planId]
+  if (limit !== undefined) return limit === 0 ? 'English only' : `Up to ${limit} additional languages`
   throw new Error(`No comparison value for plan ${planId}`)
 }

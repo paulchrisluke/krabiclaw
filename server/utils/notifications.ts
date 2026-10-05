@@ -1,6 +1,7 @@
-import { formatCalendarDate, formatTime } from '~/utils/timezone'
-import { getGuestRequest } from '~/server/domain/requests'
-import type { DbClient } from '~/server/db'
+import { createHash } from 'node:crypto'
+import { formatCalendarDate, formatTime, localPartsAt } from '~/utils/timezone'
+import { getGuestRequest, requestSummary, type cancelBookingRequest } from '~/server/domain/requests'
+import { queryFirst, type DbClient } from '~/server/db'
 import { getEmailDeliveryMode, hashEmail, isReservedTestDomain, sendEmail } from '~/server/utils/email-delivery'
 import { buildWhatsAppTemplatePayload, sendWhatsAppNotification, type WhatsAppTemplate } from '~/server/utils/whatsapp'
 import { hasOrganizationEntitlement } from '~/server/utils/billing'
@@ -159,7 +160,7 @@ interface EmailTemplate {
 }
 
 interface ThreadDeliveryContext {
-  threadId: string
+  threadId: string | null
   entryId: string
   purpose: GuestThreadDeliveryPurpose
   idempotencyKey: string
@@ -174,7 +175,7 @@ interface GuestThreadReplyNotificationInput extends OrganizationContext {
   guestName: string
   guestEmail?: string | null
   guestPhone?: string | null
-  inboundChannel: 'email' | 'whatsapp'
+  inboundChannel: 'email' | 'whatsapp' | 'web'
   messagePreview: string
 }
 
@@ -268,10 +269,12 @@ async function resolveOwnerRecipients(
   opts: {
     organizationId: string
     category: NotificationCategory
+    /** The team member a booking is assigned to hears about it alongside the owners. */
+    assignedMemberId?: string | null
   },
 ): Promise<OwnerRecipient[]> {
   const [members, messagingEnabled] = await Promise.all([
-    listOrganizationNotificationMembers(env, opts.organizationId),
+    listOrganizationNotificationMembers(env, opts.organizationId, { includeMemberIds: opts.assignedMemberId ? [opts.assignedMemberId] : [] }),
     hasOrganizationEntitlement(env, opts.organizationId, 'messaging'),
   ])
   const recipients = await Promise.all(members.map(async (member) => {
@@ -334,6 +337,7 @@ async function sendEmailNotification(
     // left to do; if it settled as failed, this call has no delivery either, and
     // says so rather than resolving as though it had one.
     if (!succeeded) throw new Error(`Email delivery already settled as ${settled.status}: ${settled.error ?? 'no provider error recorded'}`)
+    if (deliveryContext?.threadId) await publishGuestInboxThreadEvent(env, db, { threadId: deliveryContext.threadId, type: 'delivery.changed' })
     return
   }
 
@@ -354,7 +358,7 @@ async function sendEmailNotification(
       providerMessageId: result.status === 'sent' ? result.messageId : null,
       error: result.status === 'sent' ? null : result.error,
     })
-    await publishGuestInboxThreadEvent(env, db, { threadId: deliveryContext.threadId, type: 'delivery.changed' })
+    if (deliveryContext.threadId) await publishGuestInboxThreadEvent(env, db, { threadId: deliveryContext.threadId, type: 'delivery.changed' })
     const eligibility = getDeliveryClaimEligibility(outcome)
     requestWebhookRetry = outcome.provider === 'resend' && (eligibility === 'claimable' || eligibility === 'in_flight')
   }
@@ -417,7 +421,7 @@ async function sendWhatsAppThreadNotification(
       status: 'unknown',
       error: error instanceof Error ? error.message : String(error),
     })
-    await publishGuestInboxThreadEvent(env, db, { threadId: opts.delivery.threadId, type: 'delivery.changed' })
+    if (opts.delivery.threadId) await publishGuestInboxThreadEvent(env, db, { threadId: opts.delivery.threadId, type: 'delivery.changed' })
     throw error
   }
 
@@ -427,7 +431,7 @@ async function sendWhatsAppThreadNotification(
     providerMessageId: result.status === 'sent' ? result.messageId ?? null : null,
     error: result.status === 'skipped' ? result.reason : result.success ? null : result.error,
   })
-  await publishGuestInboxThreadEvent(env, db, { threadId: opts.delivery.threadId, type: 'delivery.changed' })
+  if (opts.delivery.threadId) await publishGuestInboxThreadEvent(env, db, { threadId: opts.delivery.threadId, type: 'delivery.changed' })
   return result.success
 }
 
@@ -444,18 +448,21 @@ async function getOpeningThreadContext(
 }
 
 function threadDelivery(
-  context: { guestThreadId: string; sourceEntryId: string } | null,
+  context: { guestThreadId: string | null; sourceEntryId: string } | null,
   purpose: GuestThreadDeliveryPurpose,
   channel: NotificationChannel,
   template: string,
   recipient: string,
+  eventKey?: string,
 ): ThreadDeliveryContext | null {
   if (!context) return null
   return {
     threadId: context.guestThreadId,
     entryId: context.sourceEntryId,
     purpose,
-    idempotencyKey: `${context.sourceEntryId}:${purpose}:${channel}:${template}:${hashEmail(recipient)}`,
+    idempotencyKey: eventKey
+      ? createHash('sha256').update(JSON.stringify([eventKey, purpose, channel, hashEmail(recipient)])).digest('hex')
+      : `${context.sourceEntryId}:${purpose}:${channel}:${template}:${hashEmail(recipient)}`,
   }
 }
 
@@ -469,9 +476,9 @@ async function recordGuestCancellation(
     body: string
     wasConfirmed: boolean
   },
-): Promise<{ guestThreadId: string; sourceEntryId: string } | null> {
+): Promise<{ guestThreadId: string; sourceEntryId: string }> {
   const thread = await getGuestRequest(db, input.submissionId, undefined, input.submissionType)
-  if (!thread) return null
+  if (!thread) throw new Error('Guest cancellation has no canonical request')
   const entry = await appendEntry(db, {
     threadId: thread.id,
     kind: 'operation',
@@ -539,6 +546,8 @@ async function notifyOwner(
     notificationSource?: { threadId: string; entryId: string }
     /** Keys the in-app notification for an event that has no guest thread. */
     idempotencyKey?: string
+    /** Native financial event identity, independent of later buyer linking. */
+    deliveryEventKey?: string
   }
 ) {
   const threadContext = opts.notificationSource
@@ -546,7 +555,7 @@ async function notifyOwner(
     : opts.submissionType && opts.submissionType !== 'invitation' && opts.submissionId
       ? await getOpeningThreadContext(db, opts.submissionType, opts.submissionId)
       : null
-  await createCanonicalNotification(db, {
+  const notificationId = await createCanonicalNotification(db, {
     publishEnv: env,
     scope: 'organization',
     template: opts.template,
@@ -555,13 +564,20 @@ async function notifyOwner(
     sourceEntryId: threadContext?.sourceEntryId ?? null,
     idempotencyKey: threadContext ? `notification:${threadContext.sourceEntryId}:${opts.template}` : opts.idempotencyKey,
     title: opts.title,
+    message: opts.message.facts.map(fact => `${fact.label}: ${fact.value}`).join('\n'),
     threadId: threadContext?.guestThreadId ?? null,
     deepLink: opts.payload.deep_link || null,
   })
+  const deliveryContext = threadContext ?? { guestThreadId: null, sourceEntryId: notificationId }
 
+  // Owners and admins hear about every booking; the member it is assigned to hears about theirs.
+  const assigned = opts.submissionType === 'booking' && opts.submissionId
+    ? await queryFirst<{ assigned_member_id: string | null }>(db, 'SELECT assigned_member_id FROM bookings WHERE organization_id = ? AND (request_id = ? OR id = ?) LIMIT 1', [opts.organizationId, opts.submissionId, opts.submissionId])
+    : null
   const recipients = await resolveOwnerRecipients(env, db, {
     organizationId: opts.organizationId,
     category: opts.message.category,
+    assignedMemberId: assigned?.assigned_member_id ?? null,
   })
 
   // The owner reads mail sent for their business, framed by its own mark.
@@ -594,7 +610,7 @@ async function notifyOwner(
           to,
           email: { subject: sanitizeEmailHeaderValue(message.title), html: rendered.html, text: rendered.text },
           unsubscribeOneClickUrl: recipient.unsubscribeOneClickUrl,
-          delivery: threadDelivery(threadContext, 'owner_alert', 'email', opts.template, to),
+          delivery: threadDelivery(deliveryContext, 'owner_alert', 'email', opts.template, to, opts.deliveryEventKey),
         })
       })())
     }
@@ -607,7 +623,7 @@ async function notifyOwner(
         template: opts.whatsappTemplate,
         vars: whatsappVars.vars,
       }
-      const delivery = threadDelivery(threadContext, 'owner_alert', 'whatsapp', opts.template, toPhone)
+      const delivery = threadDelivery(deliveryContext, 'owner_alert', 'whatsapp', opts.template, toPhone, opts.deliveryEventKey)
       // A refused send resolves rather than throwing, so without this the
       // settled-failure check sees a fulfilled promise and reports nothing —
       // the alert is lost exactly as quietly as the console line it replaced.
@@ -628,6 +644,84 @@ async function notifyOwner(
   }))
   raiseSettledFailures('notifyOwner', `organization ${opts.organizationId}`, results,
     results.map(() => 'ownerAlert'))
+}
+
+/** Financial status mail shares the canonical notification and delivery ledger. */
+export async function notifyFinancialNotification(
+  env: NotificationEnv,
+  db: DbClient,
+  input: {
+    organizationId: string | null
+    eventKey: string
+    ownerMessage?: NotificationMessage
+    guest?: { userId: string | null; email: string | null; message: NotificationMessage }
+    sourceEntryId?: string | null
+    threadId?: string | null
+    deepLink?: string | null
+  },
+): Promise<void> {
+  if (!input.eventKey.trim()) throw new Error('Financial notification requires its native event identity')
+  if (Boolean(input.sourceEntryId) !== Boolean(input.threadId)) throw new Error('Financial conversation activity requires both its entry and thread')
+  const ownerDeliveryAnchor = async () => {
+    if (input.sourceEntryId) return input.sourceEntryId
+    if (!input.organizationId || !input.ownerMessage) throw new Error('Contact-only financial mail has no retained notification delivery anchor')
+    return await createCanonicalNotification(db, {
+      publishEnv: env, scope: 'organization', organizationId: input.organizationId,
+      template: input.eventKey, idempotencyKey: `${input.eventKey}:owner`,
+      title: input.ownerMessage.title,
+      message: input.ownerMessage.facts.map(fact => `${fact.label}: ${fact.value}`).join('\n'),
+      deepLink: input.deepLink ?? input.ownerMessage.primaryAction?.url ?? null,
+    })
+  }
+  const tasks: Array<Promise<unknown>> = []
+  const taskNames: string[] = []
+  if (input.ownerMessage) {
+    if (!input.organizationId) throw new Error('Merchant financial notification requires its organization')
+    tasks.push(notifyOwner(env, db, {
+      organizationId: input.organizationId,
+      organizationName: input.ownerMessage.organizationName,
+      template: input.eventKey,
+      title: input.ownerMessage.title,
+      payload: { deep_link: input.deepLink ?? input.ownerMessage.primaryAction?.url ?? '' },
+      message: input.ownerMessage,
+      notificationSource: input.sourceEntryId && input.threadId ? { entryId: input.sourceEntryId, threadId: input.threadId } : undefined,
+      idempotencyKey: `${input.eventKey}:owner`,
+      deliveryEventKey: `${input.eventKey}:owner`,
+    }))
+    taskNames.push('merchant')
+  }
+  if (input.guest && (input.guest.userId || input.guest.email)) {
+    const guest = input.guest
+    tasks.push((async () => {
+      // The native checkout contact is an email destination, never an account
+      // identity. Only Better Auth's explicit buyer owns the personal alert.
+      const id = guest.userId
+        ? await createCanonicalNotification(db, {
+            scope: 'global', template: input.eventKey, targetUserId: guest.userId,
+            idempotencyKey: `${input.eventKey}:buyer`,
+            title: guest.message.title,
+            message: guest.message.facts.map(fact => `${fact.label}: ${fact.value}`).join('\n'),
+            deepLink: guest.message.primaryAction?.url ?? '/dashboard/account/activity',
+          })
+        : await ownerDeliveryAnchor()
+      if (!guest.email) return
+      // Mail receipts survive personal account deletion with the merchant's
+      // financial activity. Deleting a personal alert must not allow a resend.
+      const emailEntryId = input.organizationId && input.ownerMessage ? await ownerDeliveryAnchor() : id
+      const rendered = await renderNotificationEmail(guest.message, {
+        platformDomain: getPlatformDomain(env),
+        preferencesUrl: `https://${getPlatformDomain(env)}/dashboard/account/profile/notifications`,
+      })
+      await sendEmailNotification(env, db, {
+        organizationId: input.organizationId, organizationName: guest.message.organizationName,
+        to: guest.email, template: input.eventKey, title: guest.message.title, payload: {},
+        email: { subject: sanitizeEmailHeaderValue(guest.message.title), html: rendered.html, text: rendered.text },
+        delivery: threadDelivery({ guestThreadId: input.threadId ?? null, sourceEntryId: emailEntryId }, 'status_update', 'email', input.eventKey, guest.email, `${input.eventKey}:buyer`),
+      })
+    })())
+    taskNames.push('buyer')
+  }
+  raiseSettledFailures('Financial notification', input.eventKey, await Promise.allSettled(tasks), taskNames)
 }
 
 // Email subjects go into a header context, not HTML — strip CR/LF so a guest name can't
@@ -776,6 +870,10 @@ export async function notifyReservationCancelled(
       ...opts,
       submissionType: 'reservation',
       submissionId: opts.reservationId,
+      // The opening entry already carries the new_reservation alert and a source
+      // entry holds one notification, so this one hangs off the cancellation
+      // entry recorded above.
+      notificationSource: { threadId: threadContext.guestThreadId, entryId: threadContext.sourceEntryId },
       template: 'reservation_cancelled',
       title: ownerMessage.title,
       payload,
@@ -954,7 +1052,7 @@ export async function notifyReviewRequest(
 export async function notifyBookingCreated(
   env: NotificationEnv,
   db: DbClient,
-  opts: BookingNotificationInput
+  opts: BookingNotificationInput & { status: 'pending' | 'confirmed' }
 ) {
   const studio = organizationName(opts)
   const prettyDate = new Intl.DateTimeFormat('en-US', { timeZone: opts.timezone, dateStyle: 'medium' }).format(new Date(opts.startsAt))
@@ -1092,6 +1190,10 @@ export async function notifyBookingCancelled(
       ...opts,
       submissionType: 'booking',
       submissionId: opts.bookingId,
+      // The opening entry already carries the new_booking alert and a source
+      // entry holds one notification, so this one hangs off the cancellation
+      // entry recorded above.
+      notificationSource: { threadId: threadContext.guestThreadId, entryId: threadContext.sourceEntryId },
       template: 'booking_cancelled',
       title: ownerMessage.title,
       payload,
@@ -1188,24 +1290,6 @@ export async function notifyGuestThreadReply(
   db: DbClient,
   opts: GuestThreadReplyNotificationInput,
 ) {
-  try {
-    await notifyGuestThreadReplyInner(env, db, opts)
-  } catch (error) {
-    console.error('notifyGuestThreadReply_failed', {
-      threadId: opts.threadId,
-      submissionType: opts.submissionType,
-      submissionId: opts.submissionId,
-      error: error instanceof Error ? error.message : String(error),
-    })
-    throw error
-  }
-}
-
-async function notifyGuestThreadReplyInner(
-  env: NotificationEnv,
-  db: DbClient,
-  opts: GuestThreadReplyNotificationInput,
-) {
   const threadContext = { guestThreadId: opts.threadId, sourceEntryId: opts.sourceEntryId }
   const replyUrl = await buildOwnerThreadInboxUrl(env, db, {
     organizationId: opts.organizationId,
@@ -1225,7 +1309,7 @@ async function notifyGuestThreadReplyInner(
 
   const title = `New guest reply from ${opts.guestName}`
 
-  const template = opts.inboundChannel === 'email' ? 'submission_reply_email' : 'submission_reply_whatsapp'
+  const template = `submission_reply_${opts.inboundChannel}`
   await createCanonicalNotification(db, {
     publishEnv: env,
     scope: 'organization',
@@ -1422,4 +1506,43 @@ export async function renderNotificationCatalog(origin: string): Promise<Catalog
       whatsapp,
     }
   }))
+}
+
+/** Cancellation delivery is shared by emailed capabilities and authenticated buyers. */
+export async function notifyGuestCancellation(env: NotificationEnv, db: DbClient, cancelled: NonNullable<Awaited<ReturnType<typeof cancelBookingRequest>>>) {
+  const request = cancelled.request
+  const record = cancelled.record
+  const organizationId = request.organization_id
+  if (record.kind === 'booking' && !record.product_name?.trim()) throw new Error('Booking cancellation delivery requires its canonical offering')
+  await publishGuestInboxThreadEvent(env, db, { threadId: request.id, type: 'thread.changed' })
+
+  const organization = await queryFirst<{ name?: string | null }>(db, 'SELECT name FROM organization WHERE id = ? LIMIT 1', [organizationId])
+
+  if (record.kind === 'booking') {
+    await notifyBookingCancelled(env, db, {
+      organizationId: request.organization_id, organizationName: organization?.name,
+      locationId: record.location_id, bookingId: request.id, guestName: request.payload.guest.name,
+      email: request.payload.guest.email, guestPhone: request.payload.guest.phone,
+      productTitle: record.product_name!,
+      startsAt: record.starts_at, timezone: record.timezone, partySize: record.party_size,
+      notes: request.payload.notes, wasConfirmed: cancelled.wasConfirmed,
+    })
+  } else {
+    const summary = await requestSummary(db, request)
+    // The reservation email states a calendar date and a clock time, so the
+    // instant is read back in the reservation's own zone rather than the
+    // worker's.
+    const parts = localPartsAt(new Date(record.starts_at), record.timezone)
+    const localDate = `${String(parts.year).padStart(4, '0')}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`
+    const localTime = `${String(parts.hour).padStart(2, '0')}:${String(parts.minute).padStart(2, '0')}`
+    await notifyReservationCancelled(env, db, {
+      organizationId: request.organization_id, organizationName: organization?.name,
+      locationId: record.location_id, locationName: summary.locationTitle, reservationId: request.id,
+      guestName: request.payload.guest.name, email: request.payload.guest.email, phone: request.payload.guest.phone,
+      date: localDate, time: localTime,
+      guests: `${record.party_size}${request.payload.party_size_is_minimum ? '+' : ''}`,
+      requests: request.payload.notes, wasConfirmed: cancelled.wasConfirmed,
+    })
+  }
+
 }

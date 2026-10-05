@@ -10,7 +10,7 @@ import { createStripeClient } from '~/server/utils/stripe-client'
 import { organizationAccessControl, organizationRoles } from '~/utils/organization-access'
 import { assertNewSalePlan } from '~/shared/billing-model'
 import {
-  assertGrowthStripeCatalogPrices,
+  assertStripeCatalogPrices,
   resolveStripeCatalogPrice,
   selectStripeCatalogPrice,
 } from '~/server/utils/stripe-catalog'
@@ -122,9 +122,9 @@ export async function getPriceIdForPlan(env: BillingEnv, plan: string, interval:
 
   const monthly = resolveStripeCatalogPrice(products, prices, validatedPlan, 'month')
   const annual = selectStripeCatalogPrice(monthly.product, prices, 'year')
-  assertGrowthStripeCatalogPrices(monthly.price, annual)
+  assertStripeCatalogPrices(validatedPlan, monthly.price, annual)
   if (interval === 'year') {
-    if (!annual) throw new Error('No active Stripe year price found for plan growth')
+    if (!annual) throw new Error(`No active Stripe year price found for plan ${validatedPlan}`)
     return annual.id
   }
   return monthly.price.id

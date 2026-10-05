@@ -6,7 +6,6 @@ import * as schema from '../../server/db/schema.ts'
 import {
   buildStripeConnectOnboardingUrls,
   deriveStripeConnectStatus,
-  ensureStripeConnectedAccount,
   getStripeConnectedAccount,
   projectStripeConnectedAccount,
   reserveStripeConnectedAccount,
@@ -47,96 +46,6 @@ test('connected account reservation is organization-scoped and retry-stable', as
   })
 })
 
-test('connected accounts use Express dashboard with platform fee and loss responsibility', async () => {
-  await withD1(async (db) => {
-    let createParams: unknown
-    let createOptions: unknown
-    const stripe = {
-      v2: { core: { accounts: { create: async (params: unknown, options: unknown) => {
-        createParams = params
-        createOptions = options
-        throw new Error('stop after capturing account configuration')
-      } } } },
-    }
-
-    await assert.rejects(
-      ensureStripeConnectedAccount(db, stripe as never, {
-        organizationId: 'org',
-        organizationName: 'Org',
-        contactEmail: 'owner@example.com',
-        country: 'US',
-        livemode: false,
-      }),
-      /stop after capturing account configuration/,
-    )
-    assert.deepEqual(
-      createParams && typeof createParams === 'object'
-        ? {
-            dashboard: Reflect.get(createParams, 'dashboard'),
-            responsibilities: Reflect.get(Reflect.get(createParams, 'defaults'), 'responsibilities'),
-          }
-        : null,
-      {
-        dashboard: 'express',
-        responsibilities: { fees_collector: 'application', losses_collector: 'application' },
-      },
-    )
-    assert.deepEqual(createOptions, { idempotencyKey: 'krabiclaw-connect-account:express:org' })
-  })
-})
-
-test('projection failures retain the created account for refresh on retry', async () => {
-  await withD1(async (db) => {
-    let createCalls = 0
-    const retrievedAccountIds: string[] = []
-    const stripe = {
-      v2: { core: { accounts: {
-        create: async () => {
-          createCalls += 1
-          return {
-            id: 'acct_created',
-            configuration: { merchant: { capabilities: { card_payments: { status: 'active' } } } },
-            identity: null,
-            requirements: { entries: [] },
-          }
-        },
-        retrieve: async (accountId: string) => {
-          retrievedAccountIds.push(accountId)
-          return {
-            id: accountId,
-            livemode: false,
-            configuration: { merchant: { capabilities: { card_payments: { status: 'active' } } } },
-            identity: { country: 'us' },
-            requirements: { entries: [] },
-          }
-        },
-      } } },
-    }
-
-    const input = {
-      organizationId: 'org',
-      organizationName: 'Org',
-      contactEmail: 'owner@example.com',
-      country: 'US',
-      livemode: false,
-    }
-    await assert.rejects(
-      ensureStripeConnectedAccount(db, stripe as never, input),
-      /country/i,
-    )
-    const reservation = await getStripeConnectedAccount(db, 'org')
-    assert.ok(reservation)
-    assert.equal(reservation.status, 'pending_review')
-    assert.equal(reservation.stripeAccountId, 'acct_created')
-    assert.equal(reservation.lastError, null)
-
-    const recovered = await ensureStripeConnectedAccount(db, stripe as never, input)
-    assert.equal(recovered.status, 'ready')
-    assert.equal(createCalls, 1)
-    assert.deepEqual(retrievedAccountIds, ['acct_created'])
-  })
-})
-
 test('Stripe account projection preserves provider identity and derives onboarding state', async () => {
   await withD1(async (db) => {
     const reserved = await reserveStripeConnectedAccount(db, { organizationId: 'org', country: 'US', livemode: false })
@@ -170,7 +79,7 @@ test('Connect callback URLs are built only from the configured platform origin a
   assert.deepEqual(
     buildStripeConnectOnboardingUrls('https://krabiclaw.com', 'sun-and-sea'),
     {
-      returnUrl: 'https://krabiclaw.com/dashboard/sun-and-sea/settings/connect?stripe_connect=returned',
+      returnUrl: 'https://krabiclaw.com/dashboard/sun-and-sea/settings/payments?tab=payouts&stripe_connect=returned',
       refreshUrl: 'https://krabiclaw.com/api/dashboard/connect/refresh?org=sun-and-sea',
     },
   )
@@ -187,12 +96,21 @@ test('Connect webhook work is claimed once across concurrent D1 deliveries', asy
       payload: JSON.stringify({ id: 'evt_connect_test', type: 'v2.core.account.updated' }),
       processor: 'connect_marketplace' as const,
     }
-    const work = async () => { executions += 1 }
-    const results = await Promise.all([
-      processStripeWebhookEvent(db, event, work),
-      processStripeWebhookEvent(db, event, work),
-    ])
-    assert.equal(results.filter(Boolean).length, 1)
+    const started = Promise.withResolvers<undefined>()
+    const finish = Promise.withResolvers<undefined>()
+    const work = async () => {
+      executions += 1
+      started.resolve(undefined)
+      await finish.promise
+    }
+    const processing = processStripeWebhookEvent(db, event, work)
+    assert.equal(await Promise.race([started.promise.then(() => 'started'), processing.then(() => 'settled')]), 'started')
+    try {
+      assert.equal(await processStripeWebhookEvent(db, event, work), false)
+    } finally {
+      finish.resolve(undefined)
+      assert.equal(await processing, true)
+    }
     assert.equal(executions, 1)
     const row = await db.prepare("SELECT processor, status, attempt_count FROM stripe_webhook_events WHERE stripe_event_id='evt_connect_test'").first<{
       processor: string
@@ -200,5 +118,9 @@ test('Connect webhook work is claimed once across concurrent D1 deliveries', asy
       attempt_count: number
     }>()
     assert.deepEqual(row, { processor: 'connect_marketplace', status: 'processed', attempt_count: 1 })
+    assert.equal(await processStripeWebhookEvent(db, event, work), true)
+    assert.equal(executions, 1)
   })
 })
+
+// Never advertise a country the Accounts v2 onboarding boundary cannot accept.

@@ -19,6 +19,13 @@ interface PageNode {
 
 const BOOKING_PATH = '/dashboard/:orgSlug()/bookings/:bookingType()/:bookingId()'
 const DAY_PATH = '/dashboard/:orgSlug()/calendar/:day()'
+// The account's own record lives under Past activity on its Menu (the file
+// path; its public `/dashboard/account/activity` is a definePageMeta path the
+// hook runs before). Today opens it at `/dashboard/account/bookings` with Back
+// to Today, and its calendar day mounts it a third time, as the business's does.
+const ACCOUNT_RECORD_PATH = '/dashboard/account/menu/activity/:kind()/:id()'
+const ACCOUNT_BOOKING_PATH = '/dashboard/account/bookings/:kind()/:id()'
+const ACCOUNT_DAY_PATH = '/dashboard/account/calendar/:day()'
 
 /** The node at a full path in Nuxt's nested page tree, whose children carry paths relative to their parent. */
 function nodeAt(nodes: readonly PageNode[], target: string, parent = ''): PageNode | undefined {
@@ -48,4 +55,15 @@ export function mountBookingRoutes(pages: PageNode[]): void {
   clone.path = ':bookingType()/:bookingId()'
   day.children = [...(day.children ?? []), clone]
   booking.meta = { ...booking.meta, back: 'dashboard-orgSlug' }
+
+  const record = nodeAt(pages, ACCOUNT_RECORD_PATH)
+  const accountDay = nodeAt(pages, ACCOUNT_DAY_PATH)
+  if (!record || !accountDay) throw new Error('The account activity record and calendar day pages were not both found; the account calendar cannot open a booking')
+  const accountClone = renamed(record, 'dashboard-account-menu-activity', 'dashboard-account-calendar-day')
+  accountClone.path = ':kind()/:id()'
+  accountDay.children = [...(accountDay.children ?? []), accountClone]
+  const accountBooking = renamed(record, 'dashboard-account-menu-activity', 'dashboard-account-bookings')
+  accountBooking.path = ACCOUNT_BOOKING_PATH
+  accountBooking.meta = { ...accountBooking.meta, back: 'dashboard-account' }
+  pages.push(accountBooking)
 }

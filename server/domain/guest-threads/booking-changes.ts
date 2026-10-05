@@ -18,7 +18,7 @@ import { bookingChangeProposalMessage } from '~/server/notifications/guest-event
 import { organizationLogo } from '~/server/notifications/hero'
 import { getPlatformDomain } from '~/server/utils/dashboard-notification-links'
 import { updateThreadProjection } from './repository'
-import { getGuestRequest, getThreadOperationalRecord, requestSummary } from '~/server/domain/requests'
+import { getGuestRequest, getThreadOperationalRecord, requestSummary, REQUEST_CURRENT_BUYER_SQL } from '~/server/domain/requests'
 import type { GuestThreadRow } from './types'
 
 /**
@@ -152,6 +152,10 @@ async function validateDestination(db: DbClient, thread: GuestThreadRow, before:
     const booking = await queryFirst<{ product_variant_id: string; user_id: string | null }>(db,
       'SELECT product_variant_id, user_id FROM bookings WHERE id = ?', [before.recordId])
     if (!booking) throw new HTTPError({ statusCode: 409, message: 'The original booking is missing' })
+    if (after.partySize !== before.partySize || target.location_id !== before.locationId) {
+      const paid = await queryFirst(db, "SELECT id FROM payments WHERE organization_id=? AND subject_type='booking' AND subject_id=? AND captured_amount>refunded_amount LIMIT 1", [thread.organization_id, before.recordId])
+      if (paid) throw new HTTPError({ statusCode: 409, message: 'Refund the paid booking before changing its quantity or location' })
+    }
     const location = target.location_id
       ? await queryFirst<{ title: string }>(db, 'SELECT title FROM business_locations WHERE id = ? AND organization_id = ?', [target.location_id, thread.organization_id])
       : null
@@ -315,9 +319,14 @@ export async function requestBookingChange(db: DbClient, env: CloudflareEnv, thr
 }
 
 /** GET only reads the immutable proposal. POST records one idempotent guest decision. */
-export async function respondToBookingChange(db: DbClient, env: ChangeEnv, input: { threadId: string; requestId: string; token: string; decision?: 'accept' | 'decline' }) {
-  const expected = linkToken(env, input.threadId, input.requestId)
-  if (!/^[a-f0-9]{64}$/.test(input.token) || !timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(input.token, 'hex'))) throw new HTTPError({ statusCode: 404, message: 'Change request not found' })
+export async function respondToBookingChange(db: DbClient, env: ChangeEnv, input: { threadId: string; requestId: string; decision?: 'accept' | 'decline' } & ({ token: string } | { buyerUserId: string })) {
+  // The guest answers from the email link, or signed in as the account that owns the booking.
+  if ('token' in input) {
+    const expected = linkToken(env, input.threadId, input.requestId)
+    if (!/^[a-f0-9]{64}$/.test(input.token) || !timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(input.token, 'hex'))) throw new HTTPError({ statusCode: 404, message: 'Change request not found' })
+  } else if (!await queryFirst(db, `SELECT 1 FROM requests r WHERE r.id = ? AND r.user_id = ? AND ${REQUEST_CURRENT_BUYER_SQL}`, [input.threadId, input.buyerUserId])) {
+    throw new HTTPError({ statusCode: 404, message: 'Change request not found' })
+  }
   const entry = await getEntryById(db, input.requestId)
   if (!entry || entry.request_id !== input.threadId || entry.event_name !== 'booking_change.requested') throw new HTTPError({ statusCode: 404, message: 'Change request not found' })
   const thread = await getGuestRequest(db, entry.request_id)

@@ -1,7 +1,10 @@
 <template>
   <UModal v-model:open="isOpen" :ui="{ content: 'max-w-lg' }">
     <template #content>
-      <div class="p-6">
+      <div v-if="unavailable" class="p-6">
+        <UAlert color="error" variant="soft" icon="i-lucide-circle-alert" :description="unavailable" />
+      </div>
+      <div v-else-if="content" class="p-6">
         <!-- Team strip -->
         <div class="flex items-center gap-3 mb-5">
           <div class="flex -space-x-2">
@@ -90,9 +93,6 @@
 </template>
 
 <script setup lang="ts">
-import type { UpsellType } from '~/composables/useServiceUpsell'
-import { NEW_SALE_PLAN_ID } from '~/shared/billing-model'
-
 const config = useRuntimeConfig()
 
 // --- Team photo URLs ---
@@ -109,7 +109,7 @@ watch(isOpen, (open) => {
 })
 
 const dashboard = useDashboardOrganization()
-const isExperience = computed(() => dashboard.organization.value?.vertical === 'experience')
+const { plans, displayPrice } = await usePlans()
 
 interface UpsellContent {
   headline: string
@@ -120,37 +120,32 @@ interface UpsellContent {
   cta: string
 }
 
-function buildContentMap(experience: boolean): Record<UpsellType, UpsellContent> {
-  const foodWord = experience ? 'craft' : 'food'
-  const menuCapitalized = experience ? 'Offerings' : 'Menu'
-
+// A plan or monthly price that can't be read is the modal's own error, not a render crash.
+const unavailable = computed(() => {
+  if (!type.value) return null
+  const plan = plans.value.find(plan => plan.id === type.value)
+  return plan && displayPrice(plan, false) ? null : `The ${type.value} plan's monthly price could not be loaded.`
+})
+const content = computed<UpsellContent | null>(() => {
+  if (!type.value || unavailable.value) return null
+  const plan = plans.value.find(plan => plan.id === type.value)!
+  const price = displayPrice(plan, false)!
   return {
-    growth: {
-      headline: 'Your own domain, synced everywhere',
-      subheading: `You focus on the ${foodWord} — we keep your organization accurate, notified, and found by tourists.`,
-      bullets: [
-        'Your own domain (yourbusiness.com)',
-        `${menuCapitalized} updates via ChatGPT — just send us a message`,
-        'WhatsApp booking & reservation notifications',
-        'Facebook & Instagram publishing',
-        'Google Places imports',
-        'Post-booking review requests',
-      ],
-      price: '$49',
-      priceNote: '/ month',
-      cta: 'Get Growth — $49/mo',
-    },
+    headline: `Get ${plan.name}`,
+    subheading: plan.tagline,
+    bullets: plan.features,
+    price,
+    priceNote: '/ month',
+    cta: `Get ${plan.name} — ${price}/mo`,
   }
-}
-
-const content = computed<UpsellContent>(() => buildContentMap(isExperience.value)[type.value ?? 'growth'])
+})
 
 async function handleCta() {
-  if (!type.value) return
+  if (unavailable.value || !content.value) return
   error.value = null
   loading.value = true
   try {
-    if (type.value !== NEW_SALE_PLAN_ID) return
+    if (!type.value) throw new Error('Choose a plan before starting checkout')
     const organizationId = dashboard.organizationId.value
     if (!organizationId) throw new Error('Choose an organization before starting checkout')
     await startOrganizationCheckout(organizationId, type.value)

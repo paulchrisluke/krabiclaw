@@ -65,7 +65,7 @@ const locations = computed(() => locationsData.value?.locations ?? [])
 const capabilities = computed(() => {
   const vertical = organization.value?.vertical
   if (!vertical) return null
-  return resolveCmsCapabilities(normalizeVertical(vertical) as OrganizationVertical, resolvePublicTemplate({ vertical }).slug, {})
+  return resolveCmsCapabilities(normalizeVertical(vertical) as OrganizationVertical, resolvePublicTemplate({ vertical }).slug)
 })
 const usesServiceAreaVocabulary = computed(() => capabilities.value?.locationVocabulary === 'office/service area')
 const locationsLabel = computed(() => (usesServiceAreaVocabulary.value ? 'Offices / Service Areas' : 'Locations'))

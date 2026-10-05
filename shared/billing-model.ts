@@ -5,20 +5,27 @@
  */
 
 export const STARTER_PLAN_ID = 'free' as const
-export const NEW_SALE_PLAN_ID = 'growth' as const
+export const GROWTH_PLAN_ID = 'growth' as const
+export const COMMERCE_PLAN_ID = 'commerce' as const
 
 /** Paid plans that may be purchased or attached to a new handoff. */
-export const NEW_SALE_PAID_PLAN_IDS = Object.freeze([NEW_SALE_PLAN_ID] as const)
+export const NEW_SALE_PAID_PLAN_IDS = Object.freeze([GROWTH_PLAN_ID, COMMERCE_PLAN_ID] as const)
 
 /** Recurring plan identities accepted by runtime billing projections. */
 export const KNOWN_RECURRING_PLAN_IDS = Object.freeze([
-  NEW_SALE_PLAN_ID,
+  ...NEW_SALE_PAID_PLAN_IDS,
 ] as const)
 
 export type StarterPlanId = typeof STARTER_PLAN_ID
 export type NewSalePlanId = typeof NEW_SALE_PAID_PLAN_IDS[number]
 export type KnownRecurringPlanId = typeof KNOWN_RECURRING_PLAN_IDS[number]
 export type BillingPlanId = StarterPlanId | KnownRecurringPlanId
+
+/** Fixed USD recurring offers. An absent annual amount authorizes no annual offer. */
+export const PAID_PLAN_PRICES: Readonly<Record<NewSalePlanId, { monthly: number; annual?: number }>> = Object.freeze({
+  [GROWTH_PLAN_ID]: Object.freeze({ monthly: 4900, annual: 58800 }),
+  [COMMERCE_PLAN_ID]: Object.freeze({ monthly: 8900 }),
+})
 
 /**
  * A serializable view for consumers that need to render or test the policy

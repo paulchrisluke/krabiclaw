@@ -1,5 +1,4 @@
 import type { Plan } from '~/server/api/billing/plans.get'
-import { NEW_SALE_PLAN_ID, STARTER_PLAN_ID } from '~/shared/billing-model'
 
 export type { Plan, PlanPrice, PlanLimits } from '~/server/api/billing/plans.get'
 
@@ -43,8 +42,6 @@ export const usePlans = async () => {
   if (!data.value) throw createError({ statusCode: 500, statusMessage: 'Billing plans were not loaded' })
 
   const plans = computed(() => data.value!)
-  const freePlan = computed(() => plans.value.find(p => p.id === STARTER_PLAN_ID) ?? null)
-  const growthPlan = computed(() => plans.value.find(p => p.id === NEW_SALE_PLAN_ID) ?? null)
 
   function monthlyPrice(plan: Plan): number | null {
     return plan.prices.find(p => p.interval === 'month')?.amount ?? null
@@ -76,5 +73,5 @@ export const usePlans = async () => {
     return cents === null ? null : formatPrice(cents)
   }
 
-  return { plans, freePlan, growthPlan, monthlyPrice, annualPrice, formatPrice, displayPrice, status, error }
+  return { plans, monthlyPrice, annualPrice, formatPrice, displayPrice, status, error }
 }

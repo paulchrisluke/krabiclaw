@@ -13,7 +13,6 @@ import {
 } from '~/server/utils/member-access'
 import { getMediaAsset, listMediaAssets } from '~/server/utils/media-asset-manager'
 import { getDashboardLocationContext } from '~/server/utils/dashboard-context'
-import { resolveLocationCapabilitySummary } from '~/server/utils/location-management'
 import { parseLocationPayload } from '~/server/utils/location-payload'
 import { getProduct, hydrateProductMedia, summarizeLocationProducts } from '~/server/utils/product-management'
 import { getLocationReservationConfig } from '~/server/utils/reservations'
@@ -23,14 +22,12 @@ import { isArticleCollection } from '~/utils/article-collections'
 import { createPreviewToken, PREVIEW_TOKEN_TTL_MS } from '~/server/utils/preview-token'
 import { resolveOrganizationCmsCapabilities } from '~/server/utils/cms-capabilities'
 import { getEditablePages } from '~/config/content-registry'
-import { parseCmsFeatureOverrideDelta } from '~/config/cms-registry'
 
 interface EditorLocationRow {
   id: string
   slug: string
   title: string
   status: 'active' | 'inactive' | 'sync_error'
-  feature_overrides: string | null
 }
 
 export async function loadDashboardEditorContext(event: H3Event, organizationId: string) {
@@ -42,7 +39,7 @@ export async function loadDashboardEditorContext(event: H3Event, organizationId:
   // bought a second read of the same member row.
   const [locationRows, entitlements] = await Promise.all([
     queryAll<EditorLocationRow>(db, `
-      SELECT id, slug, title, status, feature_overrides
+      SELECT id, slug, title, status
         FROM business_locations
        WHERE organization_id = ?  AND status = 'active'
        ORDER BY title ASC
@@ -54,9 +51,7 @@ export async function loadDashboardEditorContext(event: H3Event, organizationId:
     throw new HTTPError({ statusCode: 500, statusMessage: 'PREVIEW_SECRET is required for editor previews' })
   }
   const previewToken = await createPreviewToken(env.PREVIEW_SECRET, organizationId, Date.now() + PREVIEW_TOKEN_TTL_MS)
-  const { vertical, template } = resolveOrganizationCmsCapabilities(organization.vertical, organization.theme_id, {
-    organizationEnabledFeatures: organization.feature_overrides,
-  })
+  const { vertical, template } = resolveOrganizationCmsCapabilities(organization.vertical, organization.theme_id)
   return {
     success: true as const,
     context: {
@@ -68,7 +63,6 @@ export async function loadDashboardEditorContext(event: H3Event, organizationId:
         onboarding_status: organization.onboarding_status,
         vertical,
         template,
-        feature_overrides: organization.feature_overrides,
         entitlements,
       },
       locations,
@@ -77,9 +71,7 @@ export async function loadDashboardEditorContext(event: H3Event, organizationId:
         ...locations.map(location => ({ id: location.id, label: location.title, type: 'location' as const })),
       ],
       previewToken,
-      editablePages: getEditablePages(vertical, template, {
-        organization: parseCmsFeatureOverrideDelta(organization.feature_overrides),
-      }),
+      editablePages: getEditablePages(vertical, template),
     },
   }
 }
@@ -202,12 +194,7 @@ export async function loadDashboardLocationOverview(
   }
   const principal = memberAccessPrincipal(organization, { env, event })
   await assertLocationAccess(db, { ...principal, locationId })
-  const [capabilities, catalog, reservationConfig, counts] = await Promise.all([
-    resolveLocationCapabilitySummary(
-      db,
-      organization.id,
-      location.feature_overrides as string | null ?? null,
-    ),
+  const [catalog, reservationConfig, counts] = await Promise.all([
     options.includeProducts
       ? summarizeLocationProducts(db, { organizationId: organization.id, locationId })
       : Promise.resolve({ total: 0, experiences: 0 }),
@@ -218,7 +205,6 @@ export async function loadDashboardLocationOverview(
     location: {
       success: true as const,
       location: parseLocationPayload(location)!,
-      ...capabilities,
     },
     catalog,
     reservationConfig,

@@ -15,7 +15,6 @@
       -->
       <div class="flex items-center gap-2">
         <UDropdownMenu
-          v-if="typeOptions.length"
           :items="typeMenuItems"
           :content="{ align: 'start' }"
           :ui="{
@@ -32,16 +31,17 @@
           -->
           <UButton
             color="neutral"
-            :variant="activeType ? 'solid' : 'outline'"
+            :variant="activeType || updatesView ? 'solid' : 'outline'"
             class="h-10 rounded-full px-4 text-sm font-normal"
             trailing-icon="i-lucide-chevron-down"
             aria-label="All, filter by message type"
           >
-            All
+            {{ updatesView ? 'Updates' : 'All' }}
           </UButton>
         </UDropdownMenu>
 
         <UButton
+          v-if="!updatesView"
           class="h-10 rounded-full px-4 text-sm font-normal"
           color="neutral"
           :variant="unreadOnly ? 'solid' : 'outline'"
@@ -53,7 +53,9 @@
       </div>
     </header>
 
-    <div class="min-h-0 flex-1 overflow-y-auto">
+    <!-- Updates: what the platform told this account or business, under the same pills. -->
+    <NotificationList v-if="updatesView" :personal-scope="personalScope" class="min-h-0 flex-1 overflow-y-auto px-4 pb-4" />
+    <div v-else class="min-h-0 flex-1 overflow-y-auto">
       <UAlert
         v-if="realtimeFailed"
         color="warning"
@@ -146,7 +148,7 @@
                 <span class="shrink-0">{{ formatRelativeTime(thread.lastActivityAt) }}</span>
               </div>
               <div class="flex items-baseline justify-between gap-3">
-                <p class="min-w-0 flex-1 truncate text-sm font-medium text-highlighted">{{ thread.guestName }}</p>
+                <p class="min-w-0 flex-1 truncate text-sm font-medium text-highlighted">{{ threadName(thread) }}</p>
                 <span v-if="!occurrenceLine(thread)" class="shrink-0 text-xs text-muted">{{ formatRelativeTime(thread.lastActivityAt) }}</span>
               </div>
               <p class="mt-0.5 line-clamp-2 text-sm leading-snug text-muted">{{ thread.preview?.text || 'New conversation' }}</p>
@@ -161,7 +163,7 @@
               <span
                 v-if="thread.unread"
                 class="mt-2 block size-2.5 shrink-0 rounded-full bg-primary"
-                :aria-label="`${thread.guestName}: unread`"
+                :aria-label="`${threadName(thread)}: unread`"
               />
             </Transition>
           </NuxtLink>
@@ -183,7 +185,7 @@
               variant="ghost"
               class="absolute right-2 top-1/2 -translate-y-1/2 rounded-full sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100 sm:data-[state=open]:opacity-100"
               :loading="mailboxSaving === thread.id"
-              :aria-label="`Conversation actions for ${thread.guestName}`"
+              :aria-label="`Conversation actions for ${threadName(thread)}`"
             />
           </UDropdownMenu>
         </div>
@@ -225,6 +227,9 @@
   </div>
 </template>
 <script setup lang="ts">
+import { useIntervalFn, useDocumentVisibility } from '@vueuse/core'
+import NotificationList from '~/components/dashboard/NotificationList.vue'
+import { authClient } from '~/lib/auth-client'
 import type { LocationQueryRaw } from 'vue-router'
 import { getErrorMessage } from '~/utils/errors'
 import {
@@ -234,7 +239,7 @@ import {
   type SubmissionType,
   type ThreadListItem,
 } from '~/lib/components/workspace/messages/guest-thread-client'
-import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities, type ProductFeature } from '~/config/cms-registry'
+import { resolveCmsCapabilities, type ProductFeature } from '~/config/cms-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { normalizeVertical, type OrganizationVertical } from '~/utils/vertical-copy'
 import { useDashboardInvalidations } from '~/composables/useDashboardInvalidations'
@@ -245,6 +250,8 @@ import { useDashboardInvalidations } from '~/composables/useDashboardInvalidatio
   a conversation, and this component draws no panel or navbar of its own — the
   route parent owns that chrome.
 */
+const props = withDefaults(defineProps<{personalScope?:boolean}>(),{personalScope:false})
+const session = authClient.useSession()
 const emit = defineEmits<{ first: [target: { path: string; query: LocationQueryRaw } | null] }>()
 
 const dashboard = useDashboardOrganization()
@@ -256,7 +263,7 @@ const router = useRouter()
 const organizationId = computed(() => dashboard.organizationId.value)
 
 const listRoute = computed(() => {
-  return `/dashboard/${String(route.params.orgSlug)}/messages`
+  return props.personalScope ? '/dashboard/account/messages' : `/dashboard/${String(route.params.orgSlug)}/messages`
 })
 
 // The open thread, for the selected row. It is the segment below this list, so
@@ -274,6 +281,7 @@ const activeType = computed<SubmissionType | null>(() => {
   return value === 'contact' || value === 'reservation' || value === 'booking' ? value : null
 })
 const unreadOnly = computed(() => route.query.unread === '1')
+const updatesView = computed(() => route.query.view === 'updates')
 
 function setQuery(patch: Record<string, string | undefined>) {
   void router.replace({ path: route.path, query: { ...route.query, ...patch } })
@@ -283,21 +291,25 @@ function clearFilters() {
   void router.replace({ path: route.path, query: {} })
 }
 
-const typeMenuItems = computed(() => [typeOptions.value.map(option => ({
-  label: option.label,
-  icon: option.icon,
-  type: 'checkbox' as const,
-  checked: activeType.value === option.value,
-  onSelect: () => setQuery({ filter: option.value ?? undefined }),
-  ui: { itemLabel: 'text-base' },
-}))])
+const typeMenuItems = computed(() => [[
+  ...typeOptions.value.map(option => ({
+    label: option.label,
+    icon: option.icon,
+    type: 'checkbox' as const,
+    checked: !updatesView.value && activeType.value === option.value,
+    onSelect: () => setQuery({ filter: option.value ?? undefined, view: undefined }),
+    ui: { itemLabel: 'text-base' },
+  })),
+  // Updates replaces the conversation pane, so an open conversation closes with it.
+  { label: 'Updates', icon: 'i-lucide-bell', type: 'checkbox' as const, checked: updatesView.value, onSelect: () => void router.replace({ path: listRoute.value, query: { ...route.query, view: 'updates', filter: undefined, unread: undefined } }), ui: { itemLabel: 'text-base' } },
+]])
 
 const filtersApplied = computed(() => Boolean(route.query.query || route.query.filter || route.query.unread))
 
 const listHydrated = ref(false)
 
 const realtime = useDashboardInvalidations()
-const realtimeFailed = computed(() => realtime.status.value === 'failed')
+const realtimeFailed = computed(() => !props.personalScope && realtime.status.value === 'failed')
 
 onMounted(() => {
   listHydrated.value = true
@@ -307,9 +319,7 @@ const capabilities = computed(() => {
   const vertical = dashboard.organization.value?.vertical
   if (!vertical) return null
   const template = resolvePublicTemplate({ themeId: dashboard.organization.value?.theme_id, vertical }).slug
-  return resolveCmsCapabilities(normalizeVertical(vertical) as OrganizationVertical, template, {
-    organization: parseCmsFeatureOverrideDelta(dashboard.organization.value?.feature_overrides),
-  })
+  return resolveCmsCapabilities(normalizeVertical(vertical) as OrganizationVertical, template)
 })
 
 const dashboardScope = useDashboardRouteScope()
@@ -327,10 +337,12 @@ const effectiveFeatureSet = computed(() => new Set<ProductFeature>([
 */
 const vertical = computed(() => dashboard.organization.value?.vertical ?? null)
 const typeOptions = computed(() => {
+  // The account has no kinds to narrow by: its choices are All and Updates.
+  if (props.personalScope) return [{ value: null, label: 'All', icon: 'i-lucide-message-square' }]
   const kinds: SubmissionType[] = []
   if (effectiveFeatureSet.value.has('reservations')) kinds.push('reservation')
   if (effectiveFeatureSet.value.has('products')) kinds.push('booking')
-  if (kinds.length === 0) return []
+  if (kinds.length === 0) return [{ value: null, label: 'All', icon: 'i-lucide-message-square' }]
   return [
     { value: null, label: 'All', icon: 'i-lucide-message-square' },
     ...kinds.map(kind => ({
@@ -350,7 +362,7 @@ const emptyDescription = computed(() => {
   if (route.query.query) return `Nothing matched “${route.query.query}”.`
   if (filtersApplied.value) return 'Try a different filter, or clear them to see everything.'
   if (pastOnly.value) return 'Conversations move here when their reservation or experience ends, or when you archive them.'
-  return 'New guest conversations will appear here.'
+  return props.personalScope ? 'Your conversations with businesses will appear here.' : 'New guest conversations will appear here.'
 })
 
 const listQuery = computed(() => ({
@@ -360,7 +372,7 @@ const listQuery = computed(() => ({
 }))
 
 const listKey = computed(() => [
-  'dashboard-guest-threads',
+  props.personalScope ? `account-guest-threads:${session.value.data?.user.id}` : 'dashboard-guest-threads',
   String(route.params.orgSlug ?? ''),
   organizationId.value,
   activeType.value ?? 'all',
@@ -371,6 +383,7 @@ const listKey = computed(() => [
 // One loader for the list: the first render, a filter change and a live
 // update all go through it, and a refresh keeps the rows already on screen.
 const { data, pending, error: threadsError, refresh } = await useAsyncData<{ threads: ThreadListItem[] }>(listKey, async () => {
+  if (props.personalScope) return await applicationFetch<{threads:ThreadListItem[]}>('/api/account/messages',{query:listQuery.value,validate:isThreadListResponse})
   if (!dashboardScope.value) {
     throw createError({ statusCode: 400, statusMessage: 'Dashboard route scope is incomplete' })
   }
@@ -378,12 +391,16 @@ const { data, pending, error: threadsError, refresh } = await useAsyncData<{ thr
     `/api/dashboard/organizations/${organizationId.value}/guest-threads`,
     { query: listQuery.value, validate: isThreadListResponse },
   )
-})
+}, { server: !props.personalScope })
 const threads = computed(() => data.value?.threads ?? [])
+
+const documentVisibility=useDocumentVisibility()
+useIntervalFn(()=>{if(props.personalScope&&documentVisibility.value==='visible')void refresh()},15_000)
 
 // The newest thread, for the index above to open into its second column on
 // arrival. The list only says which; whether there is a column is the shell's.
-watch([threads, openThreadId], ([rows, open]) => {
+watch([threads, openThreadId, updatesView], ([rows, open, updates]) => {
+  if (updates) { emit('first', null); return }
   if (open) return
   const first = rows[0]
   emit('first', first ? { path: threadRoute(first), query: route.query } : null)
@@ -399,6 +416,13 @@ function threadRoute(thread: ThreadListItem) {
  * server in the record's own timezone. A thread with no booking says where it
  * came from instead.
  */
+function threadName(thread:ThreadListItem) {
+  if (props.personalScope) {
+    if (!thread.organizationName) throw createError({statusCode:500,statusMessage:'Conversation has no business name',fatal:true})
+    return thread.organizationName
+  }
+  return thread.guestName
+}
 function occurrenceLine(thread: ThreadListItem) {
   if (thread.whenLabel) return thread.whenLabel
   return thread.locationLabel ?? ''
@@ -452,13 +476,13 @@ async function moveThread(thread: ThreadListItem, transition: 'archive' | 'unarc
 }
 
 function refreshThreads() {
-  realtime.connect()
+  if (!props.personalScope) realtime.connect()
   void refresh()
 }
 
 
 watch(realtime.event, (event) => {
-  if (!event || !('threadId' in event)) return
+  if (props.personalScope || !event || !('threadId' in event)) return
   if (organizationId.value && event.organizationId !== organizationId.value) return
   void refresh()
 })
