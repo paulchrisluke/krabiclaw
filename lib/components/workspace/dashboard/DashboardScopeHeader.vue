@@ -21,6 +21,8 @@
 
 <script setup lang="ts">
 export interface DashboardScopeHeaderPeer {
+  /** The organization, so a list can look up what the switcher does not load (its mark). */
+  id?: string
   label: string
   to?: string
   active: boolean

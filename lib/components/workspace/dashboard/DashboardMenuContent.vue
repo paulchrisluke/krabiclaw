@@ -74,7 +74,6 @@ const visitPhotos = computed(() => (activity.value?.activities ?? []).filter(ite
 const cards = computed(() => personal.value
   ? [
       { to: '/dashboard/account/activity', label: 'Past activity', subline: 'Visits and purchases', icon: 'i-lucide-history', figure: '', photos: visitPhotos.value, testId: 'dashboard-menu-past-activity' },
-      { to: '/dashboard/account/payments', label: 'Payments', subline: 'What you paid and refunds', icon: 'i-lucide-receipt', figure: '', photos: [] as string[], testId: 'dashboard-menu-payments' },
     ]
   : business.value
     ? [

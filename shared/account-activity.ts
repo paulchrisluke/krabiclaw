@@ -41,30 +41,6 @@ export function isAccountActivityResponse(value: unknown): value is AccountActiv
   return record(value) && Array.isArray(value.activities) && value.activities.every(isAccountActivityItem)
 }
 /** One line of Airbnb's "Your payments": money the account paid, or money that came back. */
-export interface BuyerPaymentEntry {
-  id: string
-  kind: 'paid' | 'refunded'
-  occurredAt: string
-  title: string
-  organizationName: string | null
-  /** Positive for a payment, negative for a refund, in minor units. */
-  amount: number
-  currency: string
-  /** The record this line belongs to, as an Activity path. */
-  to: string
-  imageUrl: string | null
-  /** The visit this paid for, when it still exists. */
-  visitStartsAt: string | null
-  visitEndsAt: string | null
-  timeZone: string | null
-}
-export function isBuyerPaymentEntry(value: unknown): value is BuyerPaymentEntry {
-  return record(value) && typeof value.id === 'string' && (value.kind === 'paid' || value.kind === 'refunded') && isValidInstant(value.occurredAt)
-    && nullableString(value.imageUrl) && nullableString(value.visitStartsAt) && nullableString(value.visitEndsAt) && nullableString(value.timeZone)
-    && typeof value.title === 'string' && !!value.title.trim() && nullableString(value.organizationName)
-    && typeof value.amount === 'number' && Number.isSafeInteger(value.amount) && (value.kind === 'paid' ? value.amount > 0 : value.amount < 0)
-    && typeof value.currency === 'string' && isAccountActivityPath(value.to)
-}
 
 export function isAccountActivityPath(value: unknown): value is string {
   return typeof value === 'string' && /^\/dashboard\/account\/activity\/(booking|reservation|order|payment)\/[^/?#]+$/u.test(value)

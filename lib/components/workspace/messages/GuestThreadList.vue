@@ -15,7 +15,6 @@
       -->
       <div class="flex items-center gap-2">
         <UDropdownMenu
-          v-if="typeOptions.length"
           :items="typeMenuItems"
           :content="{ align: 'start' }"
           :ui="{
@@ -32,16 +31,17 @@
           -->
           <UButton
             color="neutral"
-            :variant="activeType ? 'solid' : 'outline'"
+            :variant="activeType || updatesView ? 'solid' : 'outline'"
             class="h-10 rounded-full px-4 text-sm font-normal"
             trailing-icon="i-lucide-chevron-down"
             aria-label="All, filter by message type"
           >
-            All
+            {{ updatesView ? 'Updates' : 'All' }}
           </UButton>
         </UDropdownMenu>
 
         <UButton
+          v-if="!updatesView"
           class="h-10 rounded-full px-4 text-sm font-normal"
           color="neutral"
           :variant="unreadOnly ? 'solid' : 'outline'"
@@ -53,7 +53,9 @@
       </div>
     </header>
 
-    <div class="min-h-0 flex-1 overflow-y-auto">
+    <!-- Updates: what the platform told this account or business, under the same pills. -->
+    <NotificationList v-if="updatesView" :personal-scope="personalScope" class="min-h-0 flex-1 overflow-y-auto px-4 pb-4" />
+    <div v-else class="min-h-0 flex-1 overflow-y-auto">
       <UAlert
         v-if="realtimeFailed"
         color="warning"
@@ -226,6 +228,7 @@
 </template>
 <script setup lang="ts">
 import { useIntervalFn, useDocumentVisibility } from '@vueuse/core'
+import NotificationList from '~/components/dashboard/NotificationList.vue'
 import { authClient } from '~/lib/auth-client'
 import type { LocationQueryRaw } from 'vue-router'
 import { getErrorMessage } from '~/utils/errors'
@@ -278,6 +281,7 @@ const activeType = computed<SubmissionType | null>(() => {
   return value === 'contact' || value === 'reservation' || value === 'booking' ? value : null
 })
 const unreadOnly = computed(() => route.query.unread === '1')
+const updatesView = computed(() => route.query.view === 'updates')
 
 function setQuery(patch: Record<string, string | undefined>) {
   void router.replace({ path: route.path, query: { ...route.query, ...patch } })
@@ -287,14 +291,17 @@ function clearFilters() {
   void router.replace({ path: route.path, query: {} })
 }
 
-const typeMenuItems = computed(() => [typeOptions.value.map(option => ({
-  label: option.label,
-  icon: option.icon,
-  type: 'checkbox' as const,
-  checked: activeType.value === option.value,
-  onSelect: () => setQuery({ filter: option.value ?? undefined }),
-  ui: { itemLabel: 'text-base' },
-}))])
+const typeMenuItems = computed(() => [[
+  ...typeOptions.value.map(option => ({
+    label: option.label,
+    icon: option.icon,
+    type: 'checkbox' as const,
+    checked: !updatesView.value && activeType.value === option.value,
+    onSelect: () => setQuery({ filter: option.value ?? undefined, view: undefined }),
+    ui: { itemLabel: 'text-base' },
+  })),
+  { label: 'Updates', icon: 'i-lucide-bell', type: 'checkbox' as const, checked: updatesView.value, onSelect: () => setQuery({ view: 'updates', filter: undefined, unread: undefined }), ui: { itemLabel: 'text-base' } },
+]])
 
 const filtersApplied = computed(() => Boolean(route.query.query || route.query.filter || route.query.unread))
 
@@ -331,11 +338,12 @@ const effectiveFeatureSet = computed(() => new Set<ProductFeature>([
 */
 const vertical = computed(() => dashboard.organization.value?.vertical ?? null)
 const typeOptions = computed(() => {
-  if (props.personalScope) return []
+  // The account has no kinds to narrow by: its choices are All and Updates.
+  if (props.personalScope) return [{ value: null, label: 'All', icon: 'i-lucide-message-square' }]
   const kinds: SubmissionType[] = []
   if (effectiveFeatureSet.value.has('reservations')) kinds.push('reservation')
   if (effectiveFeatureSet.value.has('products')) kinds.push('booking')
-  if (kinds.length === 0) return []
+  if (kinds.length === 0) return [{ value: null, label: 'All', icon: 'i-lucide-message-square' }]
   return [
     { value: null, label: 'All', icon: 'i-lucide-message-square' },
     ...kinds.map(kind => ({

@@ -205,7 +205,8 @@ test.describe('dashboard pane hierarchy', () => {
     await expect(page).toHaveURL('/dashboard/account/messages')
     const personalUpdates = page.waitForResponse(response => new URL(response.url()).pathname === '/api/dashboard/notifications'
       && new URL(response.url()).searchParams.get('scope') === 'personal')
-    await page.getByRole('tab', { name: 'Updates', exact: true }).click()
+    await page.getByRole('button', { name: 'All, filter by message type' }).click()
+    await page.getByRole('menuitemcheckbox', { name: 'Updates', exact: true }).click()
     expect((await personalUpdates).status()).toBe(200)
     await expect(page).toHaveURL('/dashboard/account/messages?view=updates')
     await expect(mobileNav.getByRole('link')).toHaveText(['Today', 'Calendar', 'Messages', 'Menu'])

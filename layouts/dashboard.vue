@@ -299,6 +299,7 @@ const scopeHeaderModel = computed<DashboardScopeHeaderModel>(() => {
     // active organization only — drawing anything for a peer would claim
     // "no logo" where the truth is "not loaded".
     peers: [{ label: 'Personal', active: isAccountRoute.value, onSelect: () => void selectOrganization(null) }, ...organizations.value.map((org) => ({
+      id: org.id,
       label: org.name,
       active: !isAccountRoute.value && org.id === organization.value?.id,
       // Which one is a plain link is the *session's* question, not the route's.
