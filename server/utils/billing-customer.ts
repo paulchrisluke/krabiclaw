@@ -77,11 +77,13 @@ export async function connectedCustomerWithSavedCards(db: DbClient, stripe: Stri
     if (!mapping) throw new Error('The connected customer was not recorded')
     if (mapping.stripe_customer_id !== created.id) await stripe.customers.del(created.id, connected)
   }
+  // Checkout offers a saved card only when Stripe may redisplay it, so every copy says so.
   const present = await stripe.customers.listPaymentMethods(mapping.stripe_customer_id, { type: 'card', limit: 50 }, connected)
   const fingerprints = new Set(present.data.map(method => method.card?.fingerprint).filter(Boolean))
+  for (const method of present.data) if (method.allow_redisplay !== 'always') await stripe.paymentMethods.update(method.id, { allow_redisplay: 'always' }, connected)
   for (const card of cards.data) {
     if (!card.card?.fingerprint || fingerprints.has(card.card.fingerprint)) continue
-    const copy = await stripe.paymentMethods.create({ customer: user.stripeCustomerId, payment_method: card.id }, connected)
+    const copy = await stripe.paymentMethods.create({ customer: user.stripeCustomerId, payment_method: card.id, allow_redisplay: 'always' }, connected)
     await stripe.paymentMethods.attach(copy.id, { customer: mapping.stripe_customer_id }, connected)
     fingerprints.add(card.card.fingerprint)
   }

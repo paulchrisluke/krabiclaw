@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:d2175e2c05fc851b54479a03c77fd6c16e202d9ca8c78f282ba3fc631edd6d9b",
+  "fingerprint": "sha256:bbaa6dbae4c8acc8dab277416d32918b80b460db80f5771b39eef64967ba33a8",
   "tools": [
     {
       "name": "append_content_block",
@@ -10425,8 +10425,19 @@
           "after": {
             "type": "string"
           },
+          "earnings_type": {
+            "description": "Only payments still paid, or only ones with a refund",
+            "enum": [
+              "paid",
+              "refunded"
+            ],
+            "type": "string"
+          },
           "from": {
             "description": "Inclusive UTC ISO instant",
+            "type": "string"
+          },
+          "location_id": {
             "type": "string"
           },
           "organization_id": {
@@ -15478,6 +15489,11 @@
             "description": "Refund principal in the Payment currency minor units",
             "minimum": 1,
             "type": "integer"
+          },
+          "note": {
+            "description": "What the buyer is told about this refund",
+            "maxLength": 500,
+            "type": "string"
           },
           "organization_id": {
             "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
