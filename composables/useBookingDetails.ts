@@ -1,3 +1,4 @@
+import { isRecord } from '~/utils/api-clients'
 import { localDateAt } from '~/utils/timezone'
 import { resolveBookingPresentation, type BookingPresentation } from '~/utils/booking-presentation'
 import { paymentStateLabel } from '~/shared/payment-display'

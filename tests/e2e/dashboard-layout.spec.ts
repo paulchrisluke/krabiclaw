@@ -192,7 +192,8 @@ test.describe('dashboard pane hierarchy', () => {
       await expect(page).toHaveURL(`/dashboard/account/activity/${item.kind}/${item.id}`)
       await expect(page.getByRole('heading', { name: item.title, exact: true })).toBeVisible()
       await expect(page.getByRole('heading', { name: 'Payment info', exact: true })).toHaveCount(paymentCount)
-      await page.getByTestId('dashboard-navbar-back').click()
+      // The record opens beside Past activity; its own Back returns to that list.
+      await page.locator('#dashboard-panel-account-booking-details [data-testid="dashboard-navbar-back"]').click()
       await expect(page).toHaveURL('/dashboard/account/activity')
     } else {
       await expect(page.getByText('No past activity yet', { exact: true })).toBeVisible()
