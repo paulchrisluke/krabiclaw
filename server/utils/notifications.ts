@@ -1294,10 +1294,10 @@ export async function notifyBookingChangeOwner(
 export async function notifyBookingReassigned(
   env: NotificationEnv,
   db: DbClient,
-  opts: { organizationId: string; bookingId: string; previousMemberId: string | null; sourceEntryId: string },
+  opts: { organizationId: string; bookingId: string; previousMemberId: string | null; memberId: string; sourceEntryId: string },
 ) {
-  const row = await queryFirst<{ request_id: string; location_id: string | null; title: string; starts_at: string; timezone: string; party_size: number; guest_name: string | null; organization_name: string; assigned_member_id: string }>(db, `
-    SELECT b.request_id, r.location_id, p.name title, s.starts_at, s.timezone, b.party_size, json_extract(r.payload_json,'$.guest.name') guest_name, o.name organization_name, b.assigned_member_id
+  const row = await queryFirst<{ request_id: string; location_id: string | null; title: string; starts_at: string; timezone: string; party_size: number; guest_name: string | null; organization_name: string }>(db, `
+    SELECT b.request_id, r.location_id, p.name title, s.starts_at, s.timezone, b.party_size, json_extract(r.payload_json,'$.guest.name') guest_name, o.name organization_name
     FROM bookings b JOIN product_sessions s ON s.id=b.product_session_id AND s.organization_id=b.organization_id
       JOIN products p ON p.id=b.product_id AND p.organization_id=b.organization_id
       JOIN organization o ON o.id=b.organization_id
@@ -1306,8 +1306,8 @@ export async function notifyBookingReassigned(
   if (!row) throw new Error(`Booking ${opts.bookingId} disappeared before its reassignment was announced`)
   const memberName = async (memberId: string) => (await queryFirst<{ name: string }>(db, `SELECT COALESCE(NULLIF(ms.public_name,''), u.name, u.email) name FROM member m JOIN user u ON u.id=m.userId
     LEFT JOIN member_scheduling ms ON ms.member_id=m.id WHERE m.id=? AND m.organizationId=?`, [memberId, opts.organizationId]))?.name ?? null
-  const toName = await memberName(row.assigned_member_id)
-  if (!toName) throw new Error(`Team member ${row.assigned_member_id} is not in this organization`)
+  const toName = await memberName(opts.memberId)
+  if (!toName) throw new Error(`Team member ${opts.memberId} is not in this organization`)
   const fromName = opts.previousMemberId ? await memberName(opts.previousMemberId) : null
   const replyUrl = await buildOwnerThreadInboxUrl(env, db, { organizationId: opts.organizationId, locationId: row.location_id, threadId: row.request_id })
   const message = bookingReassignedMessage({
@@ -1330,7 +1330,7 @@ export async function notifyBookingReassigned(
     submissionId: opts.bookingId,
     notificationSource: { threadId: row.request_id, entryId: opts.sourceEntryId },
     message,
-    memberIds: opts.previousMemberId ? [opts.previousMemberId] : [],
+    memberIds: [opts.memberId, ...(opts.previousMemberId ? [opts.previousMemberId] : [])],
   })
 }
 

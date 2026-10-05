@@ -48,7 +48,7 @@ export async function reassignBookingProvider(actor: SchedulingActor, input: {bo
   await publishGuestInboxThreadEvent(actor.env,db,{threadId:thread.request_id,type:'thread.changed'})
   if(!outcome.ok)throw new HTTPError({statusCode:outcome.status,message:`Assignment saved; guest notification requires retry (${outcome.reason}). Retry with the same key.`})
  }
- const sources=await queryAll<{id:string;booking_id:string;previous:string|null}>(db,"SELECT a.id,json_extract(a.payload_json,'$.operational_booking_id') booking_id,json_extract(a.payload_json,'$.old_member_id') previous FROM activity_entries a JOIN requests r ON r.id=a.request_id AND r.organization_id=? WHERE a.event_name='booking.reassign' AND a.scope_kind='request' AND a.dedupe_key=?||':'||json_extract(a.payload_json,'$.operational_booking_id')",[actor.organizationId,key])
- for(const source of sources)await notifyBookingReassigned(actor.env,db,{organizationId:actor.organizationId,bookingId:source.booking_id,previousMemberId:source.previous,sourceEntryId:source.id})
+ const sources=await queryAll<{id:string;booking_id:string;previous:string|null;target:string}>(db,"SELECT a.id,json_extract(a.payload_json,'$.operational_booking_id') booking_id,json_extract(a.payload_json,'$.old_member_id') previous,json_extract(a.payload_json,'$.new_member_id') target FROM activity_entries a JOIN requests r ON r.id=a.request_id AND r.organization_id=? WHERE a.event_name='booking.reassign' AND a.scope_kind='request' AND a.dedupe_key=?||':'||json_extract(a.payload_json,'$.operational_booking_id')",[actor.organizationId,key])
+ for(const source of sources)await notifyBookingReassigned(actor.env,db,{organizationId:actor.organizationId,bookingId:source.booking_id,previousMemberId:source.previous,memberId:source.target,sourceEntryId:source.id})
  return {session_id:booking.product_session_id,assigned_member_id:input.member_id}
 }
