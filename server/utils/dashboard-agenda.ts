@@ -261,7 +261,7 @@ export async function listAgenda(
     const locationSegment = row.location_slug ? `/locations/${row.location_slug}` : ''
     // The business reads who is coming; the buyer reads where they are going.
     const to = scope.buyerUserId
-      ? `/dashboard/account/activity/${row.kind}/${encodeURIComponent(row.id)}`
+      ? `/dashboard/account/bookings/${row.kind}/${encodeURIComponent(row.id)}`
       : row.kind === 'post'
         ? `${organizationBase}${locationSegment}/posts`
         : `/dashboard/${organizationSlug}/bookings/${row.kind}/${encodeURIComponent(row.id)}`

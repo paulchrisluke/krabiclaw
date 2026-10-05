@@ -213,7 +213,9 @@
         {{ booking.organizationName }} is told the {{ noun }} was cancelled. Cancelling doesn’t refund a payment by itself. This cannot be undone.
       </p>
       <p v-else class="text-sm text-muted">
-        {{ firstName(booking.guestName ?? '') }} is told the {{ noun }} was cancelled{{ cancelNote.trim() ? ', with your note' : '' }}. This cannot be undone.
+        {{ firstName(booking.guestName ?? '') }} is told the {{ noun }} was cancelled{{ cancelNote.trim() ? ', with your note' : '' }}.
+        <template v-if="refundable">Their {{ paymentMoney(refundable, booking.payments![0]!.payment.currency) }} payment is refunded in full; you approve that next.</template>
+        This cannot be undone.
       </p>
       <div class="flex items-center justify-between gap-4 pt-1">
         <UButton :label="`Keep ${noun}`" color="neutral" variant="ghost" @click="cancelOpen = false" />
@@ -268,6 +270,7 @@ export const bookingEditorKey = Symbol('booking-editor') as InjectionKey<Booking
 
 <script setup lang="ts">
 import PaymentDetails from '~/components/dashboard/PaymentDetails.vue'
+import { paymentMoney } from '~/shared/payment-display'
 import { authClient } from '~/lib/auth-client'
 import { NuxtLink } from '#components'
 import { formatCalendarDate, formatTime, formatTimestamp } from '~/utils/timezone'
@@ -344,6 +347,8 @@ const callTo = computed(() => booking.value?.guestPhone ? `tel:${booking.value.g
 const policyOpen = ref(false)
 const cancelOpen = ref(false)
 const cancelNote = ref('')
+// What a cancellation gives back: everything still captured, as Airbnb's host cancellation does.
+const refundable = computed(() => (booking.value?.payments ?? []).reduce((sum, entry) => sum + entry.payment.captured_amount - entry.payment.refunded_amount, 0))
 const changeSaving = ref(false)
 const changeDraft = useState(
   `booking-change-draft:${orgSlug.value}:${props.bookingType}:${props.bookingId}`,

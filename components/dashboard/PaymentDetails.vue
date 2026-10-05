@@ -17,9 +17,10 @@
       <p class="text-base font-medium text-highlighted">Refunded</p>
       <p class="mt-1 text-base text-muted">{{ paymentMoney(payment.refunded_amount, payment.currency) }}</p>
     </div>
-    <div v-for="refund in openRefunds" :key="refund.id" class="mt-4">
+    <div v-for="refund in shownRefunds" :key="refund.id" class="mt-4">
       <p class="text-base font-medium text-highlighted">{{ refundLabel(refund.status) }}</p>
       <p class="mt-1 text-base text-muted">{{ paymentMoney(refund.amount, payment.currency) }}</p>
+      <p v-if="refund.note" class="mt-1 text-base text-muted">“{{ refund.note }}”</p>
     </div>
     <div class="mt-4">
       <NuxtLink v-if="payment.receipt_url" :to="payment.receipt_url" target="_blank" rel="noopener noreferrer" class="flex items-center gap-4 border-t border-default py-4">
@@ -38,7 +39,7 @@ import {paymentMoney,paymentStateLabel,type PaymentDisplay,type PaymentRefundDis
 const props=withDefaults(defineProps<{payment:PaymentDisplay;refunds?:PaymentRefundDisplay[];order?:PaymentOrderDisplay|null}>(),{refunds:()=>[],order:null})
 // Money that has landed reads "Amount paid"; anything else reads its state.
 const amountLabel=computed(()=>props.payment.captured_amount>0?'Amount paid':paymentStateLabel(props.payment))
-// A succeeded refund is already in the refunded amount; the rest are still moving or did not.
-const openRefunds=computed(()=>props.refunds.filter(refund=>refund.status!=='succeeded'))
-function refundLabel(status:string){return status==='failed'?'Refund failed':status==='canceled'?'Refund cancelled':'Refund on its way'}
+// A succeeded refund is in the refunded amount and shows again only for what the business said; the rest are still moving or did not.
+const shownRefunds=computed(()=>props.refunds.filter(refund=>refund.status!=='succeeded'||refund.note))
+function refundLabel(status:string){return status==='succeeded'?'Refund sent':status==='failed'?'Refund failed':status==='canceled'?'Refund cancelled':'Refund on its way'}
 </script>

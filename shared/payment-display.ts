@@ -10,7 +10,7 @@ export interface PaymentDisplay {
  state:string
  receipt_url:string|null
 }
-export interface PaymentRefundDisplay {id:string;amount:number;status:string}
+export interface PaymentRefundDisplay {id:string;amount:number;status:string;note:string|null}
 export interface PaymentOrderDisplay {
  lines:Array<{id:string;title:string;quantity:number;unit_amount:number;currency:CurrencyCode}>
 }
@@ -24,7 +24,7 @@ export function paymentRefundsDisplay(value:unknown):PaymentRefundDisplay[] {
  return value.map((refund:unknown)=>{
   if(!refund||typeof refund!=='object'||!('id' in refund)||typeof refund.id!=='string'||!('amount' in refund)||typeof refund.amount!=='number'||!Number.isSafeInteger(refund.amount)||refund.amount<0||!('status' in refund)||typeof refund.status!=='string')throw new Error('Invalid payment refund')
   if(!['queued','creating','pending','requires_action','succeeded','failed','canceled'].includes(refund.status))throw new Error('Invalid payment refund state')
-  return {id:refund.id,amount:refund.amount,status:refund.status}
+  return {id:refund.id,amount:refund.amount,status:refund.status,note:'note' in refund&&typeof refund.note==='string'?refund.note:null}
  })
 }
 export function paymentOrderDisplay(value:unknown):PaymentOrderDisplay|null {

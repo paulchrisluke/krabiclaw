@@ -6,13 +6,16 @@
     :lead="payment ? `Up to ${paymentMoney(remaining, payment.currency)} can be refunded. It comes from your Stripe balance; KrabiClaw Payments fees aren’t returned.` : ''"
     :ready="Boolean(payment)"
     :saving="preparing"
-    :disabled="!amount.trim()"
+    :disabled="!amount.trim() || !note.trim()"
     save-label="Review refund"
     :error="failure"
     @save="prepare"
   >
     <UFormField v-if="payment" :label="`Amount (${payment.currency})`">
       <UInput v-model="amount" inputmode="decimal" class="w-full" />
+    </UFormField>
+    <UFormField v-if="payment" label="Reason" :hint="`${b.firstName(b.booking.value?.guestName ?? '')} will see this`">
+      <UTextarea v-model="note" :rows="3" maxlength="500" class="w-full" placeholder="Tell them why you’re sending this refund." />
     </UFormField>
   </DashboardLeafPanel>
 </template>
@@ -28,6 +31,7 @@ const route = useRoute()
 const api = useDashboardApi()
 const b = inject(bookingEditorKey)!
 const amount = ref('')
+const note = ref('')
 const preparing = ref(false)
 const failure = ref('')
 const payment = computed(() => b.booking.value?.payments?.find(entry => entry.payment.id === route.query.payment)?.payment ?? null)
@@ -40,7 +44,7 @@ async function prepare() {
   try {
     const approval = await api<{ authorization_id: string }>('/api/dashboard/payments/refund', {
       method: 'POST',
-      body: { action: 'prepare', payment_id: payment.value.id, amount: majorAmountToMinor(amount.value, payment.value.currency) },
+      body: { action: 'prepare', payment_id: payment.value.id, amount: majorAmountToMinor(amount.value, payment.value.currency), note: note.value.trim() },
       validate: (value: unknown): value is { authorization_id: string } => isRecord(value) && typeof value.authorization_id === 'string',
     })
     await navigateTo(`/dashboard/${route.params.orgSlug}/earnings/refunds/approve?id=${approval.authorization_id}`)

@@ -1,4 +1,4 @@
-import { rejectedBookingRefundQueries } from '~/server/domain/payments/rejection'
+import { bookingRefundQueries } from '~/server/domain/payments/booking-refund'
 import { executeBatch, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { isReservedTestDomain, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import type { ReplyEmailEnv } from '~/server/utils/submission-messages'
@@ -387,10 +387,6 @@ async function executeSourceMutation(
     return await sendStatusUpdate(db, context, input, existing, delivery)
   }
 
-  if(input.action==='cancel' && context.thread.kind==='booking' && context.record?.status==='pending'){
-    const paid=await queryFirst(db,"SELECT id FROM payments WHERE organization_id=? AND subject_type='booking' AND subject_id=? AND captured_amount>refunded_amount",[input.organizationId,context.record.id])
-    if(paid) return conflict('Use Reject for a paid pending review request so the full-principal refund is authorized and committed')
-  }
   const plan = sourceMutationPlan(context, input.action)
   if (!plan) return conflict(`"${input.action}" is not a valid action for the current state`)
   const summary = await requestSummary(db, context.thread)
@@ -404,8 +400,9 @@ async function executeSourceMutation(
   const subject = plan.requiresNotification
     ? operationSubject(plan.action, await getOrganizationBrandName(db, context.thread.organization_id))
     : null
-  const refundPlan = plan.kind === 'booking' && plan.action === 'reject' && context.record
-    ? await rejectedBookingRefundQueries(db,{organizationId:input.organizationId,actorUserId:input.actorUserId,bookingId:context.record.id,authorizationId:input.financialAuthorizationId,entryId,now}) : {queries:[],guard:null}
+  // Declining or cancelling a paid booking returns the payment in the same batch, once the operator approved it.
+  const refundPlan = plan.kind === 'booking' && (plan.action === 'reject' || plan.action === 'cancel') && context.record
+    ? await bookingRefundQueries(db,{action:plan.action,organizationId:input.organizationId,actorUserId:input.actorUserId,bookingId:context.record.id,authorizationId:input.financialAuthorizationId,note:input.body,entryId,now}) : {queries:[],guard:null}
   const queries = [
     operationEntryQuery(context, plan, input, entryId, dedupeKey, now, subject,refundPlan.guard),
     sourceUpdateQuery(context, plan, input, entryId, now),

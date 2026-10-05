@@ -7047,6 +7047,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "expires_at": {
           "name": "expires_at",
           "type": "text",
@@ -7837,14 +7844,6 @@
           "notNull": true,
           "autoincrement": false
         },
-        "fulfillment_status": {
-          "name": "fulfillment_status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'unfulfilled'"
-        },
         "currency": {
           "name": "currency",
           "type": "text",
@@ -7951,6 +7950,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "status": {

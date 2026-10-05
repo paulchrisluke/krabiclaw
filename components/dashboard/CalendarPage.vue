@@ -151,9 +151,10 @@
           </div>
         </div>
 
-        <!-- List: every day of the month as a row, Airbnb's agenda, with the rows the day leaf draws. -->
+        <!-- List: the days of the month that have something, Airbnb's agenda, with the rows the day leaf draws. -->
+        <p v-else-if="!scheduledDays.length" class="py-10 text-center text-sm text-muted">Nothing scheduled in {{ periodLabel }}.</p>
         <div v-else class="divide-y divide-default border-y border-default">
-          <div v-for="dayKey in monthDays" :key="dayKey" class="grid grid-cols-[3.5rem_1fr] gap-3 py-3" :data-day="dayKey">
+          <div v-for="dayKey in scheduledDays" :key="dayKey" class="grid grid-cols-[3.5rem_1fr] gap-3 py-3" :data-day="dayKey">
             <NuxtLink :to="dayTo(dayKey)" class="pt-1 text-center">
               <span
                 class="mx-auto flex size-7 items-center justify-center rounded-full text-sm font-medium"
@@ -162,10 +163,7 @@
               <span class="block text-[11px] text-muted">{{ formatCalendarDate(dayKey, 'en', { weekday: 'short' }) }}</span>
             </NuxtLink>
             <div class="min-w-0">
-              <template v-if="itemsOn(dayKey).length">
-                <AgendaRow v-for="item in itemsOn(dayKey)" :key="item.id" :item="item" :to="personalScope ? undefined : `${dayTo(dayKey)}/${item.kind}/${encodeURIComponent(item.id.slice(item.kind.length + 1))}`" />
-              </template>
-              <p v-else class="py-2 text-sm text-muted">{{ isUnavailableKey(dayKey) ? 'Unavailable' : 'Nothing scheduled' }}</p>
+              <AgendaRow v-for="item in itemsOn(dayKey)" :key="item.id" :item="item" :to="personalScope ? undefined : `${dayTo(dayKey)}/${item.kind}/${encodeURIComponent(item.id.slice(item.kind.length + 1))}`" />
             </div>
           </div>
         </div>
@@ -302,6 +300,7 @@ const viewItems = computed(() => [
 ])
 const locationItems = computed(() => [locationOptions.value.map(option => ({
   label: option.label,
+  ...(option.imageUrl ? { avatar: { src: option.imageUrl } } : option.value !== AGENDA_FILTER_ALL ? { icon: 'i-lucide-map-pin' } : {}),
   type: 'checkbox' as const,
   checked: filters.locationId === option.value,
   onSelect: () => { filters.locationId = option.value },
@@ -373,6 +372,7 @@ const monthDays = computed(() => {
   const count = shownMonth.value.add({ months: 1 }).subtract({ days: 1 }).day
   return Array.from({ length: count }, (_, index) => shownMonth.value.add({ days: index }).toString())
 })
+const scheduledDays = computed(() => monthDays.value.filter(dayKey => itemsOn(dayKey).length))
 const yearKeys = computed(() => Array.from({ length: 12 }, (_, index) => `${shownYear.value}-${String(index + 1).padStart(2, '0')}`))
 const yearMonths = computed(() => yearKeys.value.map((key) => {
   const first = firstOf(key)
@@ -555,7 +555,7 @@ async function writeSelection(action: 'block' | 'open'): Promise<void> {
   }
 }
 
-const locationOptions = computed(() => [{ label: 'All locations', value: AGENDA_FILTER_ALL }, ...locations.value.map(location => ({ label: location.title, value: location.id }))])
+const locationOptions = computed(() => [{ label: 'All locations', value: AGENDA_FILTER_ALL, imageUrl: null as string | null }, ...locations.value.map(location => ({ label: location.title, value: location.id, imageUrl: location.imageUrl }))])
 
 onMounted(async () => {
   await ensureLoaded(neededKeys())

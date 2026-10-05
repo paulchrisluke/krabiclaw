@@ -56,14 +56,16 @@ export async function readPaymentDetails(db:DbClient,organizationId:string,payme
  ])
  return {payment,refunds,disputes,booking_request_id:booking?.request_id??null,order}
 }
-export async function listPayments(db: DbClient, principal: FinancialPrincipal, input: { from: string; to: string; after?: string; limit?: number }) {
+export type PaymentsEarningsType = 'paid' | 'refunded'
+export async function listPayments(db: DbClient, principal: FinancialPrincipal, input: { from: string; to: string; after?: string; limit?: number; location_id?: string; earnings_type?: PaymentsEarningsType }) {
   await authorizePayments(principal, 'read')
   const from = new Date(input.from), to = new Date(input.to)
   if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime()) || from >= to) throw new HTTPError({ statusCode: 400, statusMessage: 'Valid UTC period is required' })
   const limit = Math.min(input.limit ?? 50, 100)
   if (!Number.isInteger(limit) || limit < 1) throw new HTTPError({statusCode:400,statusMessage:'Page size must be a positive integer'})
-  const rows = await queryAll<Payment>(db, `SELECT * FROM payments WHERE organization_id = ? AND created_at >= ? AND created_at < ? AND id > ? ORDER BY id LIMIT ?`,
-    [principal.organizationId, from.toISOString(), to.toISOString(), input.after ?? '', limit + 1])
+  if (input.earnings_type !== undefined && input.earnings_type !== 'paid' && input.earnings_type !== 'refunded') throw new HTTPError({ statusCode: 400, statusMessage: 'earnings_type must be paid or refunded' })
+  const rows = await queryAll<Payment>(db, `SELECT * FROM payments WHERE organization_id = ? AND created_at >= ? AND created_at < ? AND id > ? AND (? IS NULL OR location_id = ?) AND (? IS NULL OR (CASE WHEN ? = 'refunded' THEN refunded_amount > 0 ELSE refunded_amount < captured_amount END)) ORDER BY id LIMIT ?`,
+    [principal.organizationId, from.toISOString(), to.toISOString(), input.after ?? '', input.location_id ?? null, input.location_id ?? null, input.earnings_type ?? null, input.earnings_type ?? null, limit + 1])
   return { organization_id: principal.organizationId, timezone: 'UTC', from: from.toISOString(), to: to.toISOString(), payments: rows.slice(0, limit), next_cursor: rows.length > limit ? rows[limit - 1]!.id : null }
 }
 export async function paymentPayouts(db: DbClient, env: CloudflareEnv, principal: FinancialPrincipal, after?: string) {
@@ -91,42 +93,43 @@ export async function paymentSummary(db: DbClient, principal: FinancialPrincipal
 }
 
 /** Only an authenticated browser approval may approve this request. MCP receives a handoff. */
-export async function requestRefundAuthorization(db: DbClient, principal: FinancialPrincipal, paymentId: string, amount: number, action: 'refund' | 'reject_booking' = 'refund') {
+export type RefundAuthorizationAction = 'refund' | 'reject_booking' | 'cancel_booking'
+export async function requestRefundAuthorization(db: DbClient, principal: FinancialPrincipal, paymentId: string, amount: number, action: RefundAuthorizationAction = 'refund', note?: string) {
   await authorizePayments(principal, 'refund')
   assertMinorAmount(amount)
   const payment = await requirePayment(db, principal.organizationId, paymentId)
   if (amount > payment.captured_amount - payment.refunded_amount) throw new HTTPError({ statusCode: 409, statusMessage: 'Amount exceeds refundable principal' })
   const id = crypto.randomUUID()
-  await execute(db, `INSERT INTO payment_authorizations(id,organization_id,user_id,payment_id,action,amount,expires_at) VALUES(?,?,?,?,?,?,?)`, [id, principal.organizationId, principal.userId, paymentId, action, amount, new Date(Date.now()+10*60*1000).toISOString()])
+  await execute(db, `INSERT INTO payment_authorizations(id,organization_id,user_id,payment_id,action,amount,note,expires_at) VALUES(?,?,?,?,?,?,?,?)`, [id, principal.organizationId, principal.userId, paymentId, action, amount, note?.trim() || null, new Date(Date.now()+10*60*1000).toISOString()])
   return { authorization_id: id, payment_id: paymentId, amount, currency: payment.currency, confirmation_required: true }
 }
 export async function approveRefundAuthorization(db: DbClient, principal: FinancialPrincipal, id: string) {
   await authorizePayments(principal, 'refund')
   const now = new Date().toISOString()
-  const result = await execute(db, `UPDATE payment_authorizations SET approved_at=COALESCE(approved_at,?) WHERE id=? AND organization_id=? AND user_id=? AND action IN ('refund','reject_booking') AND expires_at>? AND consumed_at IS NULL`, [now,id,principal.organizationId,principal.userId,now])
+  const result = await execute(db, `UPDATE payment_authorizations SET approved_at=COALESCE(approved_at,?) WHERE id=? AND organization_id=? AND user_id=? AND action IN ('refund','reject_booking','cancel_booking') AND expires_at>? AND consumed_at IS NULL`, [now,id,principal.organizationId,principal.userId,now])
   if (result.meta.changes !== 1) {
-    const replay=await queryFirst(db,`SELECT a.id FROM payment_authorizations a WHERE a.id=? AND a.organization_id=? AND a.user_id=? AND a.approved_at IS NOT NULL AND a.consumed_at IS NOT NULL AND EXISTS(SELECT 1 FROM payment_refunds r JOIN payments p ON p.id=r.payment_id WHERE r.payment_id=a.payment_id AND (r.idempotency_key='approved:'||a.id OR (a.action='reject_booking' AND r.idempotency_key='rejected:'||p.subject_id)))`,[id,principal.organizationId,principal.userId])
+    const replay=await queryFirst(db,`SELECT a.id FROM payment_authorizations a WHERE a.id=? AND a.organization_id=? AND a.user_id=? AND a.approved_at IS NOT NULL AND a.consumed_at IS NOT NULL AND EXISTS(SELECT 1 FROM payment_refunds r JOIN payments p ON p.id=r.payment_id WHERE r.payment_id=a.payment_id AND (r.idempotency_key='approved:'||a.id OR (a.action='reject_booking' AND r.idempotency_key='rejected:'||p.subject_id) OR (a.action='cancel_booking' AND r.idempotency_key='cancelled:'||p.subject_id)))`,[id,principal.organizationId,principal.userId])
     if(!replay)throw new HTTPError({statusCode:409,statusMessage:'Financial authorization expired or unavailable'})
   }
 }
 export async function refundPayment(db: DbClient, stripe: Stripe, principal: FinancialPrincipal, authorizationId: string, env: CloudflareEnv) {
   await authorizePayments(principal, 'refund')
   // Expiry prevents a new financial instruction; an already-authorized durable intent still needs recovery.
-  const authorization = await queryFirst<{payment_id:string;amount:number}>(db, `SELECT a.payment_id,a.amount FROM payment_authorizations a WHERE a.id=? AND a.organization_id=? AND a.user_id=? AND a.action='refund' AND a.approved_at IS NOT NULL AND (a.expires_at>? OR a.consumed_at IS NOT NULL OR EXISTS(SELECT 1 FROM payment_refunds r WHERE r.payment_id=a.payment_id AND r.idempotency_key='approved:'||a.id AND r.amount=a.amount AND r.created_by=a.user_id AND r.created_at>=a.approved_at AND r.created_at<=a.expires_at))`, [authorizationId,principal.organizationId,principal.userId,new Date().toISOString()])
+  const authorization = await queryFirst<{payment_id:string;amount:number;note:string|null}>(db, `SELECT a.payment_id,a.amount,a.note FROM payment_authorizations a WHERE a.id=? AND a.organization_id=? AND a.user_id=? AND a.action='refund' AND a.approved_at IS NOT NULL AND (a.expires_at>? OR a.consumed_at IS NOT NULL OR EXISTS(SELECT 1 FROM payment_refunds r WHERE r.payment_id=a.payment_id AND r.idempotency_key='approved:'||a.id AND r.amount=a.amount AND r.created_by=a.user_id AND r.created_at>=a.approved_at AND r.created_at<=a.expires_at))`, [authorizationId,principal.organizationId,principal.userId,new Date().toISOString()])
   if (!authorization) throw new HTTPError({ statusCode: 403, statusMessage: 'Explicit browser financial approval is required' })
-  return await executeRefund(db,stripe,await requirePayment(db,principal.organizationId,authorization.payment_id),authorization.amount,`approved:${authorizationId}`,'requested_by_customer',principal.userId,env)
+  return await executeRefund(db,stripe,await requirePayment(db,principal.organizationId,authorization.payment_id),authorization.amount,`approved:${authorizationId}`,'requested_by_customer',principal.userId,env,authorization.note)
 }
 /** Private financial boundary used by merchant approval and automatic unfulfillable capture recovery. */
-export async function executeRefund(db: DbClient, stripe: Stripe, payment: Payment, amount: number, key: string, reason: Stripe.RefundCreateParams.Reason, actor: string | null, env: CloudflareEnv) {
+export async function executeRefund(db: DbClient, stripe: Stripe, payment: Payment, amount: number, key: string, reason: Stripe.RefundCreateParams.Reason, actor: string | null, env: CloudflareEnv, note: string | null = null) {
   assertMinorAmount(amount)
   if (!payment.stripe_payment_intent_id) throw new HTTPError({ statusCode: 409, statusMessage: 'Payment has no captured provider object' })
-  const existing = await queryFirst<{id:string;stripe_refund_id:string|null;amount:number;attempted_at:string|null}>(db,'SELECT id,stripe_refund_id,amount,attempted_at FROM payment_refunds WHERE payment_id=? AND idempotency_key=?',[payment.id,key])
+  const existing = await queryFirst<{id:string;stripe_refund_id:string|null;amount:number;attempted_at:string|null;note:string|null}>(db,'SELECT id,stripe_refund_id,amount,attempted_at,note FROM payment_refunds WHERE payment_id=? AND idempotency_key=?',[payment.id,key])
   if(existing && existing.amount!==amount) throw new HTTPError({statusCode:409,statusMessage:'Refund retry amount differs from durable intent'})
   if (existing?.stripe_refund_id) return await reconcileRefundState(db,stripe,payment,existing.stripe_refund_id,env)
   const now = new Date().toISOString(), id = existing?.id ?? crypto.randomUUID()
   if (!existing) {
-    const result = await execute(db, `INSERT INTO payment_refunds(id,payment_id,idempotency_key,amount,reason,status,created_by,created_at,updated_at)
-      SELECT ?,?,?,?,?, 'creating',?,?,? WHERE ? <= (SELECT captured_amount-refunded_amount-COALESCE((SELECT SUM(amount) FROM payment_refunds WHERE payment_id=? AND status IN ('queued','creating','pending','requires_action')),0) FROM payments WHERE id=?)`, [id,payment.id,key,amount,reason,actor,now,now,amount,payment.id,payment.id])
+    const result = await execute(db, `INSERT INTO payment_refunds(id,payment_id,idempotency_key,amount,reason,note,status,created_by,created_at,updated_at)
+      SELECT ?,?,?,?,?,?, 'creating',?,?,? WHERE ? <= (SELECT captured_amount-refunded_amount-COALESCE((SELECT SUM(amount) FROM payment_refunds WHERE payment_id=? AND status IN ('queued','creating','pending','requires_action')),0) FROM payments WHERE id=?)`, [id,payment.id,key,amount,reason,note,actor,now,now,amount,payment.id,payment.id])
     if (result.meta.changes !== 1) throw new HTTPError({ statusCode: 409, statusMessage: 'Refund exceeds remaining principal' })
   }
   let refund:Stripe.Refund|undefined
@@ -145,7 +148,8 @@ export async function executeRefund(db: DbClient, stripe: Stripe, payment: Payme
     }
     if(!refund){
       await execute(db,"UPDATE payment_refunds SET status='creating',attempted_at=COALESCE(attempted_at,?),updated_at=? WHERE id=?",[now,now,id])
-      refund=await stripe.refunds.create({payment_intent:payment.stripe_payment_intent_id,amount,reason,metadata:{krabiclaw_refund_id:id}},{stripeAccount:payment.stripe_account_id,idempotencyKey:`krabiclaw-refund:${payment.id}:${key}`})
+      const message=existing?.note??note
+      refund=await stripe.refunds.create({payment_intent:payment.stripe_payment_intent_id,amount,reason,metadata:{krabiclaw_refund_id:id,...(message?{note:message.slice(0,500)}:{})}},{stripeAccount:payment.stripe_account_id,idempotencyKey:`krabiclaw-refund:${payment.id}:${key}`})
     }
   }catch(error){
     await execute(db,'UPDATE payment_refunds SET error=?,updated_at=? WHERE id=?',[error instanceof Error?error.message:String(error),new Date().toISOString(),id])

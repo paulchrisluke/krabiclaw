@@ -1,14 +1,23 @@
 <template>
   <!--
-    Airbnb's transaction list: a month chosen from a pill, then one line per
-    payment — the picture, "Paid Oct 4", who and what, the amount — a total and
-    Export CSV at the foot. A line opens the record it paid for.
+    Airbnb's transaction list: pills for dates, listings (our locations) and
+    earnings type, then one line per payment — the picture, "Paid Oct 4", who
+    and what, the amount — a total and Export CSV at the foot. A line opens the
+    record it paid for.
   -->
   <DashboardIndexPanel id="earnings-transactions" title="Transactions">
     <div class="mx-auto w-full max-w-3xl pb-24">
-      <UDropdownMenu :items="monthItems" :content="{ align: 'start' }" :ui="{ content: 'w-56' }">
-        <UButton :label="periodLabel" trailing-icon="i-lucide-chevron-down" color="neutral" variant="soft" class="rounded-full" />
-      </UDropdownMenu>
+      <div class="flex flex-wrap items-center gap-2">
+        <UDropdownMenu :items="monthItems" :content="{ align: 'start' }" :ui="{ content: 'w-56' }">
+          <UButton :label="periodLabel" trailing-icon="i-lucide-chevron-down" color="neutral" :variant="from ? 'solid' : 'soft'" class="rounded-full" />
+        </UDropdownMenu>
+        <UDropdownMenu v-if="locations.length > 1" :items="locationItems" :content="{ align: 'start' }" :ui="{ content: 'w-64' }">
+          <UButton :label="locationLabel" trailing-icon="i-lucide-chevron-down" color="neutral" :variant="locationId ? 'solid' : 'soft'" class="rounded-full" />
+        </UDropdownMenu>
+        <UDropdownMenu :items="typeItems" :content="{ align: 'start' }" :ui="{ content: 'w-56' }">
+          <UButton :label="typeLabel" trailing-icon="i-lucide-chevron-down" color="neutral" :variant="earningsType ? 'solid' : 'soft'" class="rounded-full" />
+        </UDropdownMenu>
+      </div>
 
       <UAlert v-if="error" class="mt-6" color="error" :description="error.message" />
       <div v-else-if="pending && !data" class="mt-6 space-y-4"><USkeleton v-for="index in 4" :key="index" class="h-20 rounded-2xl" /></div>
@@ -58,41 +67,81 @@ const router = useRouter()
 const api = useDashboardApi()
 const now = new Date()
 const monthKey = (date: Date) => `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`
-// The period is a UTC month; a report or the performance page can hand one in.
-const from = ref(typeof route.query.from === 'string' ? route.query.from : `${monthKey(now)}-01`)
-const through = ref(typeof route.query.through === 'string' ? route.query.through : now.toISOString().slice(0, 10))
+const queryString = (key: string) => typeof route.query[key] === 'string' && route.query[key] ? String(route.query[key]) : ''
+// The filters live in the URL, as Airbnb's do: a UTC month or nothing (the last year), a location, an earnings type.
+const from = ref(queryString('from'))
+const through = ref(queryString('through'))
+const locationId = ref(queryString('location_id'))
+const earningsType = ref<'' | 'paid' | 'refunded'>(route.query.earnings_type === 'paid' || route.query.earnings_type === 'refunded' ? route.query.earnings_type : '')
 const after = ref<string | null>(null)
 const loaded = ref<TransactionRow[]>([])
-watch([from, through], () => { after.value = null; void router.replace({ query: { ...route.query, from: from.value, through: through.value } }) })
+watch([from, through, locationId, earningsType], () => {
+  after.value = null
+  void router.replace({ query: { ...route.query, from: from.value || undefined, through: through.value || undefined, location_id: locationId.value || undefined, earnings_type: earningsType.value || undefined } })
+})
 
 const months = Array.from({ length: 12 }, (_, offset) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - offset, 1)))
-const monthItems = computed(() => [months.map(date => ({
-  label: formatCalendarDate(date.toISOString().slice(0, 10), 'en', { month: 'long', year: 'numeric' }),
-  type: 'checkbox' as const,
-  checked: from.value === `${monthKey(date)}-01`,
-  onSelect: () => {
-    from.value = `${monthKey(date)}-01`
-    through.value = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).toISOString().slice(0, 10)
-  },
-}))])
-const periodLabel = computed(() => from.value.slice(0, 7) === through.value.slice(0, 7)
-  ? formatCalendarDate(from.value, 'en', { month: 'long', year: 'numeric' })
-  : `${formatCalendarDate(from.value, 'en', { month: 'short', day: 'numeric' })} – ${formatCalendarDate(through.value, 'en', { month: 'short', day: 'numeric', year: 'numeric' })}`)
+const monthItems = computed(() => [[
+  { label: 'All dates', type: 'checkbox' as const, checked: !from.value, onSelect: () => { from.value = ''; through.value = '' } },
+  ...months.map(date => ({
+    label: formatCalendarDate(date.toISOString().slice(0, 10), 'en', { month: 'long', year: 'numeric' }),
+    type: 'checkbox' as const,
+    checked: from.value === `${monthKey(date)}-01`,
+    onSelect: () => {
+      from.value = `${monthKey(date)}-01`
+      through.value = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).toISOString().slice(0, 10)
+    },
+  })),
+]])
+const periodLabel = computed(() => !from.value
+  ? 'All dates'
+  : from.value.slice(0, 7) === through.value.slice(0, 7)
+    ? formatCalendarDate(from.value, 'en', { month: 'long', year: 'numeric' })
+    : `${formatCalendarDate(from.value, 'en', { month: 'short', day: 'numeric' })} – ${formatCalendarDate(through.value, 'en', { month: 'short', day: 'numeric', year: 'numeric' })}`)
+
+// Airbnb's "All listings": the business's locations, each with its picture.
+type LocationPill = { id: string; title: string; imageUrl: string | null }
+const isLocationList = (value: unknown): value is { locations: LocationPill[] } => isRecord(value) && Array.isArray(value.locations)
+  && value.locations.every(row => isRecord(row) && typeof row.id === 'string' && typeof row.title === 'string' && (row.imageUrl === null || typeof row.imageUrl === 'string'))
+const { data: locationData } = await useAsyncData(() => `earnings-transaction-locations:${route.params.orgSlug}`, () => api<{ locations: LocationPill[] }>('/api/dashboard/locations', { validate: isLocationList }), { lazy: true })
+const locations = computed(() => locationData.value?.locations ?? [])
+const locationItems = computed(() => [[
+  { label: 'All locations', type: 'checkbox' as const, checked: !locationId.value, onSelect: () => { locationId.value = '' } },
+  ...locations.value.map(location => ({
+    label: location.title,
+    ...(location.imageUrl ? { avatar: { src: location.imageUrl } } : { icon: 'i-lucide-map-pin' }),
+    type: 'checkbox' as const,
+    checked: locationId.value === location.id,
+    onSelect: () => { locationId.value = location.id },
+  })),
+]])
+const locationLabel = computed(() => locations.value.find(location => location.id === locationId.value)?.title ?? 'All locations')
+
+const TYPES = [{ value: '' as const, label: 'All earnings types' }, { value: 'paid' as const, label: 'Paid' }, { value: 'refunded' as const, label: 'Refunded' }]
+const typeItems = computed(() => [TYPES.map(type => ({ label: type.label, type: 'checkbox' as const, checked: earningsType.value === type.value, onSelect: () => { earningsType.value = type.value } }))])
+const typeLabel = computed(() => TYPES.find(type => type.value === earningsType.value)!.label)
 
 const { data, pending, error } = await useAsyncData(
-  () => `earnings-transactions:${route.params.orgSlug}:${from.value}:${through.value}:${after.value ?? ''}`,
+  () => `earnings-transactions:${route.params.orgSlug}:${from.value}:${through.value}:${locationId.value}:${earningsType.value}:${after.value ?? ''}`,
   async () => {
-    const start = new Date(`${from.value}T00:00:00.000Z`), end = new Date(`${through.value}T00:00:00.000Z`)
+    // "All dates" is the last twelve months, the span the month list offers.
+    const start = from.value ? new Date(`${from.value}T00:00:00.000Z`) : months.at(-1)!
+    const end = through.value ? new Date(`${through.value}T00:00:00.000Z`) : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
     if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || start > end) throw new Error('Choose a valid period')
     end.setUTCDate(end.getUTCDate() + 1)
     const page = await api<{ payments: TransactionRow[]; next_cursor: string | null }>('/api/dashboard/payments', {
-      query: { view: 'transactions', from: start.toISOString(), to: end.toISOString(), ...(after.value ? { after: after.value } : {}) },
+      query: {
+        view: 'transactions', from: start.toISOString(), to: end.toISOString(),
+        ...(locationId.value ? { location_id: locationId.value } : {}),
+        ...(earningsType.value ? { earnings_type: earningsType.value } : {}),
+        ...(after.value ? { after: after.value } : {}),
+      },
       validate: isTransactionsView,
     })
     loaded.value = after.value ? [...loaded.value, ...page.payments] : page.payments
     return page
   },
-  { lazy: true, watch: [from, through, after] },
+  { lazy: true, watch: [from, through, locationId, earningsType, after] },
 )
 // Newest first, as Airbnb lists them.
 const rows = computed(() => [...loaded.value].sort((a, b) => b.created_at.localeCompare(a.created_at)))
@@ -108,7 +157,7 @@ function whenLabel(row: TransactionRow): string {
   return `${row.title} · ${start === end ? start : `${start}–${end}`}`
 }
 function exportCsv() {
-  downloadCsv(`transactions-${String(route.params.orgSlug)}-${from.value}.csv`, ['Date', 'Status', 'Buyer', 'Item', 'Paid', 'Refunded', 'Currency', 'Payment ID'],
+  downloadCsv(`transactions-${String(route.params.orgSlug)}-${from.value || 'all'}.csv`, ['Date', 'Status', 'Buyer', 'Item', 'Paid', 'Refunded', 'Currency', 'Payment ID'],
     rows.value.map(row => [row.created_at.slice(0, 10), paymentStateLabel(row), row.buyer_name ?? '', row.title, (row.captured_amount / 100).toFixed(2), (row.refunded_amount / 100).toFixed(2), row.currency, row.id]))
 }
 </script>

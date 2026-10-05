@@ -35,7 +35,7 @@ export default defineHandler(async event=>{
   const year=Number(query.year??now.getUTCFullYear()),month=typeof query.month==='string'?query.month:`${now.getUTCFullYear()}-${String(now.getUTCMonth()+1).padStart(2,'0')}`
   return jsonResponse(await paymentPerformance(db,principal,year,month))
  }
- if(query.view==='transactions')return jsonResponse(await paymentTransactions(db,principal,organization.slug,await listPayments(db,principal,{from,to,after})))
+ if(query.view==='transactions')return jsonResponse(await paymentTransactions(db,principal,organization.slug,await listPayments(db,principal,{from,to,after,location_id:typeof query.location_id==='string'&&query.location_id?query.location_id:undefined,earnings_type:query.earnings_type==='paid'||query.earnings_type==='refunded'?query.earnings_type:undefined})))
  if(query.view==='refunds' || query.view==='disputes'){
   if(query.view==='disputes') await authorizePayments(principal,'disputes')
   const table=query.view==='refunds'?'payment_refunds':'payment_disputes'
