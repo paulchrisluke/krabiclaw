@@ -203,6 +203,27 @@ Cloudflare reported WNAM before loading:
 - `krabiclaw-production-v11`: `ef5d6da1-7feb-4b6e-93a9-aa3677eefea7`
 - `krabiclaw-staging-v11`: `6ec294fd-6ac9-4da6-9463-1e1f088f49d3`
 
+The v11-to-v12 replacement drops `organization.feature_overrides` and
+`business_locations.feature_overrides` and their CHECK constraints (#1267):
+site capabilities come from the organization's vertical and theme alone.
+`organization` is the parent of nearly every table and `business_locations` is
+referenced too, so neither column could be dropped in place. The v11 chain,
+including its forward migrations `0001`–`0005`, is archived in
+`migrations-history/v11/`; an older chain reaches v11 through those forward
+migrations before the copy. A non-null override fails the transfer; staging and
+production held none on 2026-10-05. Both v12 databases were created with
+`--location wnam` and Cloudflare reported WNAM before loading:
+
+- `krabiclaw-production-v12`: `27366e55-3b79-48db-9593-29a163a00dff`
+- `krabiclaw-staging-v12`: `799c4af0-5d61-4102-ad3a-d3f8f8fedaaf`
+
+```sh
+node --experimental-strip-types scripts/pull-production-snapshot.ts --staging --source krabiclaw-staging-v11 --out staging-v12-initial.sqlite
+node --experimental-strip-types scripts/pull-production-snapshot.ts --production --source krabiclaw-production-v11 --out production-v12-initial.sqlite
+node --experimental-strip-types scripts/pull-production-snapshot.ts --staging --source krabiclaw-staging-v11 --out staging-v12-final.sqlite --delta-from staging-v12-initial.sqlite
+node --experimental-strip-types scripts/pull-production-snapshot.ts --production --source krabiclaw-production-v11 --out production-v12-final.sqlite --delta-from production-v12-initial.sqlite
+```
+
 Prepared copies do not change deployed Workers. Before switching their bindings,
 finish the ordinary final source delta and inspect changed or deleted keys. Copy
 each environment from its own live v8 source:
