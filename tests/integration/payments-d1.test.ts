@@ -188,6 +188,7 @@ test('failed historical reconciliation rotates later payments while reporting ev
 })
 
 test('owner-serviced credits leave the usage batch without hiding credits or starving later delivery', {timeout:120000},async(t)=>{
+ t.mock.timers.enable({apis:['Date'],now:new Date('2026-10-05T00:00:00.000Z')})
  const {db,runtime}=await boot();try{
   const customer='11111111-1111-4111-8111-111111111111',contractId='22222222-2222-4222-8222-222222222222',rateCard='33333333-3333-4333-8333-333333333333'
   const start='2026-09-01T00:00:00.000Z',occurred='2026-09-30T23:00:00.000Z'
