@@ -192,27 +192,24 @@ relationships without retaining merchant credentials or recreating the tenant.
 
 ### Saved cards
 
-A personal account's cards live on its platform Customer (`user.stripeCustomerId`),
-added through Profile → Payments. The Add card details sheet tells the buyer that
-businesses they pay through KrabiClaw can offer the card at checkout, and that
-removing it removes it from every business. At a business's Checkout a signed-in
-buyer's cards are cloned onto their Customer on that business's connected account
-(`stripe_connected_customers`) with `allow_redisplay: always`, so Checkout offers
-them; Stripe's own checkbox can also save a new card for that business only. A
-Customer on the connected account is what lets that business charge the card again
-later, as Stripe's recurring-payment guidance requires.
+A buyer's cards are saved with each business, never on KrabiClaw. At a business's
+Checkout a signed-in buyer pays as their Customer on that business's connected
+account (`stripe_connected_customers`); Stripe's own checkbox saves a new card
+there, Checkout offers those saved cards again at that business only, and lets the
+buyer remove them. A Customer on the connected account is also what lets that
+business charge a saved card later, as Stripe's recurring-payment guidance
+requires. A guest pays without a Customer; Link remains Stripe's way to reuse cards
+across businesses. KrabiClaw creates no platform Customer for buyers: the Better
+Auth Stripe plugin's customers are the businesses' operating customers for their
+subscriptions.
 
-Clones are independent Stripe objects. Removing an account card detaches its
-copies (matched by card fingerprint) on every connected account, then the platform
-card. Deleting the account deletes the buyer's Customers, on the platform and on
-each connected account, in Better Auth's user delete database hook, which every
-deletion path runs (self-service, admin removal, anonymous-account merge) while the
-mappings still exist. Stripe removes their cards with them and cancels any
-subscription the buyer holds with a business. Each business keeps its charges,
-receipts, refunds and disputes, and no connected account or business billing is
-touched. A business's own cards
-(its operating Customer) are never cloned, and deleting a business does not touch
-buyers' cards.
+Deleting the account deletes the buyer's Customer at every business it paid, in
+Better Auth's user delete database hook, which every deletion path runs
+(self-service, admin removal, anonymous-account merge) while the mappings still
+exist. Stripe removes the cards saved there and cancels any subscription the buyer
+holds with that business. Each business keeps its charges, receipts, refunds and
+disputes, and no connected account or business billing is touched. Deleting a
+business does not touch buyers' Customers.
 
 ## Metronome operating billing
 

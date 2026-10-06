@@ -53,7 +53,7 @@
       <section>
         <h2 class="text-lg font-semibold text-highlighted">Delete account</h2>
         <div class="mt-3 space-y-4">
-          <p class="text-sm text-muted">Permanently deletes your account and removes your saved cards, including from businesses you paid. Businesses keep their records of your payments. Organizations are managed separately. This cannot be undone.</p>
+          <p class="text-sm text-muted">Permanently deletes your account and the cards you saved with businesses. Businesses keep their records of your payments. Organizations are managed separately. This cannot be undone.</p>
           <UAlert v-if="account.deleteError.value" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="account.deleteError.value" />
           <UFormField label="Type DELETE to confirm">
             <UInput v-model="account.deleteConfirmText.value" placeholder="DELETE" :disabled="account.deleting.value" class="w-full" />

@@ -1,9 +1,9 @@
 <template>
   <!--
     Airbnb's Payments tab, the same for an account and a business: "Your
-    payments" with Manage payments, then "Payment methods" — the cards on the
-    Stripe customer Better Auth keeps for it, each with Set default / Remove,
-    and Add payment method opening Stripe's own card form in a sheet.
+    payments" with Manage payments, then, for a business, "Payment methods" —
+    the cards on the Stripe customer Better Auth keeps for it, each with Set
+    default / Remove, and Add payment method opening Stripe's own card form in a sheet.
   -->
   <div class="space-y-12">
     <section>
@@ -12,7 +12,8 @@
       <UButton class="mt-6" size="lg" label="Manage payments" :to="paymentsTo" />
     </section>
 
-    <section>
+    <!-- A buyer's cards are saved with each business, in that business's Stripe Checkout; only a business keeps cards here, for its own billing. -->
+    <section v-if="!personalScope">
       <h2 class="text-xl font-semibold text-highlighted">Payment methods</h2>
       <p class="mt-1 text-base text-muted">Add and manage your payment methods using our secure payment system.</p>
       <UAlert v-if="error" class="mt-6" color="error" variant="soft" :description="getErrorMessage(error, 'Payment methods could not be loaded')" />
@@ -39,7 +40,6 @@
     <!-- Airbnb's "Add card details": Stripe's card form, Cancel and Done. -->
     <DashboardListItemDialog v-model:open="adding" title="Add card details" :saving="saving" :save-disabled="!ready" :error="formError" save-label="Done" @save="confirmCard">
       <div ref="mount" class="min-h-40" />
-      <p v-if="props.personalScope" class="mt-4 text-sm text-muted">Businesses you pay through KrabiClaw can offer this card at their checkout. Removing it here removes it from every business.</p>
     </DashboardListItemDialog>
   </div>
 </template>
@@ -67,7 +67,7 @@ const paymentsTo = computed(() => props.personalScope ? `${level.path.value}/you
 const { data, pending, error, refresh } = await useAsyncData(
   () => `payment-methods:${props.personalScope ? 'account' : String(route.params.orgSlug)}`,
   () => applicationFetch<Methods>('/api/billing/payment-methods', { query: scope.value, validate: isMethods }),
-  { lazy: true },
+  { lazy: true, immediate: !props.personalScope },
 )
 const failure = ref('')
 const BRANDS: Record<string, string> = { visa: 'Visa', mastercard: 'Mastercard', amex: 'Amex', discover: 'Discover', jcb: 'JCB', unionpay: 'UnionPay', diners: 'Diners' }

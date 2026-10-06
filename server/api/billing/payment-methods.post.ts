@@ -8,11 +8,12 @@ import { resolveBillingCustomer } from '~/server/utils/billing-customer'
  */
 export default defineHandler(async (event) => {
   const body = await readRequiredBody<{ organizationId?: string; action?: string; payment_method_id?: string }>(event)
-  const organizationId = typeof body.organizationId === 'string' && body.organizationId ? body.organizationId : null
+  if (typeof body.organizationId !== 'string' || !body.organizationId) throw new HTTPError({ statusCode: 400, statusMessage: 'Organization is required' })
+  const organizationId = body.organizationId
   if (body.action === 'setup') {
     const { stripe, customerId } = await resolveBillingCustomer(event, organizationId)
     if (!customerId) throw new HTTPError({ statusCode: 409, statusMessage: 'Choose a plan before adding a payment method' })
-    // Cards only: they are what this page lists and what businesses' Checkout is offered. The Payments method configuration is a parent for connected accounts and does not exist on the platform.
+    // Cards only: they are what this page lists. The Payments method configuration is a parent for connected accounts and does not exist on the platform.
     const intent = await stripe.setupIntents.create({ customer: customerId, usage: 'off_session', payment_method_types: ['card'] })
     if (!intent.client_secret) throw new Error('Stripe returned no client secret for the card form')
     return jsonResponse({ client_secret: intent.client_secret })

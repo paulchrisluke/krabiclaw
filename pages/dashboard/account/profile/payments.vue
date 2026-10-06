@@ -1,5 +1,5 @@
 <template>
-  <!-- Airbnb's Account settings → Payments: Your payments and Payment methods, the same tab the business has. -->
+  <!-- Airbnb's Account settings → Payments: Your payments, the same tab the business has; cards are saved with each business at its Checkout. -->
   <DashboardIndexPanel id="account-payments" title="Payments">
     <div class="mx-auto w-full max-w-3xl pb-10">
       <PaymentsAccountSettings personal-scope />
