@@ -60,7 +60,7 @@ export async function linkGuestIdentitiesByVerifiedEmail(db: DbClient, user: { i
   const identities = await queryAll<{ user_id: string }>(db, `
     SELECT DISTINCT r.user_id FROM requests r JOIN user u ON u.id = r.user_id AND u."isAnonymous" = 1
     WHERE lower(r.payload_json ->> '$.guest.email') = lower(?)
-      AND NOT EXISTS (SELECT 1 FROM requests other WHERE other.user_id = r.user_id AND lower(other.payload_json ->> '$.guest.email') <> lower(?))`,
+      AND NOT EXISTS (SELECT 1 FROM requests other WHERE other.user_id = r.user_id AND lower(other.payload_json ->> '$.guest.email') IS NOT lower(?))`,
   [user.email, user.email])
   const now = new Date().toISOString()
   for (const { user_id: from } of identities) await executeBatch(db, anonymousLinkQueries(from, user.id, now), { operation: 'verified-email-guest-link' })
