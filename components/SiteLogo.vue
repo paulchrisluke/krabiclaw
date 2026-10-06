@@ -1,6 +1,6 @@
 <template>
   <span v-if="logo" class="inline-flex shrink-0" data-site-logo>
-    <span v-for="entry in shown" :key="entry.logo.slot" :class="[frameClass(entry.logo), entry.modeClass]" :data-logo-shape="entry.logo.presentation.shape">
+    <span v-for="entry in shown" :key="entry.logo.slot" :class="[frameClass(entry.logo), entry.modeClass]" :data-logo-slot="entry.logo.slot" :data-logo-shape="entry.logo.presentation.shape">
       <img
         :src="source(entry.logo)"
         :alt="alt"
@@ -28,8 +28,8 @@ const logo = logos.find(item => item.slot === 'logo') ?? null
 const dark = logos.find(item => item.slot === 'logo_dark') ?? null
 const shown = logo
   ? dark
-    ? [{ logo, modeClass: 'dark:hidden' }, { logo: dark, modeClass: 'hidden dark:inline-flex' }]
-    : [{ logo, modeClass: '' }]
+    ? [{ logo, modeClass: 'inline-flex dark:hidden' }, { logo: dark, modeClass: 'hidden dark:inline-flex' }]
+    : [{ logo, modeClass: 'inline-flex' }]
   : []
 
 const HEIGHT = { sm: 'h-10', md: 'h-14', lg: 'h-16' } as const
@@ -37,9 +37,11 @@ const BOX = { sm: 'size-10', md: 'size-14', lg: 'size-16' } as const
 const MAX_WIDTH = { sm: 'max-w-40', md: 'max-w-56', lg: 'max-w-40 sm:max-w-56' } as const
 const PIXELS = { sm: 80, md: 112, lg: 128 } as const
 
+// The display comes only from the mode class; a second display utility here
+// would beat `hidden` and show both logos.
 function frameClass(entry: SiteLogo) {
-  if (entry.presentation.shape === 'original') return 'inline-flex'
-  return ['inline-flex overflow-hidden', BOX[props.size], entry.presentation.shape === 'circle' ? 'rounded-full' : 'rounded-md']
+  if (entry.presentation.shape === 'original') return ''
+  return ['overflow-hidden', BOX[props.size], entry.presentation.shape === 'circle' ? 'rounded-full' : 'rounded-md']
 }
 function imageClass(entry: SiteLogo) {
   return entry.presentation.shape === 'original'

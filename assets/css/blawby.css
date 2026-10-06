@@ -31,10 +31,6 @@
   --ui-border-accented:   var(--blawby-primary-200);
   --ui-border-inverted:   var(--blawby-primary-dark);
   --ui-text-inverted:     var(--site-surface);
-  --ui-success:           #10B981;
-  --ui-info:              #3B82F6;
-  --ui-warning:           #F59E0B;
-  --ui-error:             #EF4444;
   --ui-radius:            0.5rem;
 
   --text-xs: 0.75rem;
