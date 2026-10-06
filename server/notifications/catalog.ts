@@ -9,6 +9,7 @@ import {
   bookingCreatedMessage,
   contactReceivedMessage,
   domainUpdateMessage,
+  onboardingCompletedMessage,
   guestReplyMessage,
   reservationCancelledMessage,
   reservationCreatedMessage,
@@ -224,6 +225,17 @@ export const NOTIFICATION_CATALOG: CatalogEntry[] = [
       headline: 'emberslice.com is live', message: 'Your custom domain is verified and serving traffic.',
       domain: 'emberslice.com', status: 'active',
       dashboardUrl: 'https://demo.krabiclaw.com/dashboard/ember-slice/settings/website/domains',
+    }),
+  },
+
+  {
+    id: 'onboarding-completed',
+    audience: 'owner',
+    title: 'Operator — a business finished onboarding',
+    message: onboardingCompletedMessage({
+      organizationName: studio, ownerName: 'Priya Shah', ownerEmail: 'priya@example.com',
+      siteUrl: 'https://pottery-house.krabiclaw.com/',
+      viewCustomerUrl: 'https://krabiclaw.com/dashboard/krabiclaw/settings/people?user=preview-user&organization=preview-organization',
     }),
   },
 

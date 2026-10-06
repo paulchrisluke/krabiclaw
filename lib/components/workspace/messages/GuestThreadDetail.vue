@@ -169,26 +169,13 @@
           <UAlert
             v-for="failure in thread.deliveryFailures"
             :key="failure.id"
-            :color="failure.status === 'failed' ? 'error' : 'warning'"
+            color="error"
             variant="soft"
             icon="i-lucide-mail-warning"
             :title="deliveryFailureTitle(failure)"
             :description="deliveryFailureDescription(failure)"
             class="mb-1"
-          >
-            <template v-if="failure.retryable" #actions>
-              <UButton
-                size="xs"
-                :color="failure.status === 'failed' ? 'error' : 'warning'"
-                variant="soft"
-                :loading="retryingDeliveryId === failure.id"
-                :disabled="retryingDeliveryId !== null && retryingDeliveryId !== failure.id"
-                @click="retryDelivery(failure.id)"
-              >
-                Retry sending
-              </UButton>
-            </template>
-          </UAlert>
+          />
         </TransitionGroup>
 
         <!-- Airbnb's composer, measured at 1440: a ~112px box, 20px insets,
@@ -345,7 +332,6 @@ const threadPath = computed(() => props.personalScope ? `/api/account/messages/$
 const draft = ref('')
 const actionError = ref<string | null>(null)
 const readError = ref<string | null>(null)
-const retryingDeliveryId = ref<string | null>(null)
 
 /*
   A reply shows the moment it is sent, dimmed and "Sending…" until the server
@@ -446,27 +432,6 @@ function replyForm(body: string, photos: ChosenPhoto[], idempotencyKey: string) 
 onBeforeUnmount(() => {
   for (const photo of chosen.value) URL.revokeObjectURL(photo.url)
 })
-
-const retryKeys = ref<Record<string, string>>({})
-
-async function retryDelivery(deliveryId: string) {
-  retryKeys.value[deliveryId] ||= crypto.randomUUID()
-  retryingDeliveryId.value = deliveryId
-  actionError.value = null
-  try {
-    data.value = await dashboardApi<{ thread: ThreadDetail }>(`${threadPath.value}/operations/retry_delivery`, {
-      method: 'POST',
-      body: { deliveryId, idempotencyKey: retryKeys.value[deliveryId] },
-      validate: isThreadDetailResponse,
-    })
-    const { [deliveryId]: _done, ...remaining } = retryKeys.value
-    retryKeys.value = remaining
-  } catch (err) {
-    actionError.value = getErrorMessage(err, 'Retry failed')
-  } finally {
-    retryingDeliveryId.value = null
-  }
-}
 
 function refreshThreadState() {
   if (!props.personalScope) realtime.connect()
@@ -751,13 +716,10 @@ const DELIVERY_PURPOSE_LABELS = {
 
 function deliveryFailureTitle(failure: GuestThreadDeliveryFailureViewModel) {
   const delivery = `${failure.channel === 'whatsapp' ? 'WhatsApp' : 'Email'} ${DELIVERY_PURPOSE_LABELS[failure.purpose]}`
-  return failure.status === 'failed' ? `${delivery} could not be sent` : `${delivery} delivery could not be confirmed`
+  return `${delivery} could not be sent`
 }
 
 function deliveryFailureDescription(failure: GuestThreadDeliveryFailureViewModel) {
-  if (failure.error) return failure.error
-  return failure.status === 'failed'
-    ? `The ${failure.channel} provider rejected this delivery.`
-    : `The ${failure.channel} provider did not report a final delivery outcome.`
+  return failure.error ?? `The ${failure.channel} provider rejected this delivery.`
 }
 </script>

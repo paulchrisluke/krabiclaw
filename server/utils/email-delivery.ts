@@ -12,7 +12,6 @@ type EmailDeliveryEnv = {
 export type EmailSendResult =
   | { status: 'sent'; messageId: string | null }
   | { status: 'failed'; error: string }
-  | { status: 'unknown'; error: string }
 
 // Fails closed: an unset/blank/invalid EMAIL_DELIVERY_MODE must never fall through to
 // real sends. Production is the only environment that should send real email, and it does
@@ -127,14 +126,7 @@ export async function sendEmail(
 
   const from = emailSender(env, input.fromName)
   const resend = getResendClient(env)
-  // The SDK takes no abort signal, so the deadline is raced rather than
-  // cancelled. Either way the outcome is 'unknown': the request may still have
-  // reached Resend, and the idempotency key is what makes a retry safe.
-  let timeout: ReturnType<typeof setTimeout> | undefined
-  const deadline = new Promise<EmailSendResult>((resolve) => {
-    timeout = setTimeout(() => resolve({ status: 'unknown', error: 'Email request timed out after 10 seconds' }), 10_000)
-  })
-  const send = resend.emails.send({
+  const response = await resend.emails.send({
     from,
     to: [input.to],
     ...(input.replyTo ? { replyTo: input.replyTo } : {}),
@@ -149,19 +141,7 @@ export async function sendEmail(
           },
         }
       : {}),
-  }, input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : undefined).then((response): EmailSendResult => {
-    if (!response.error) return { status: 'sent', messageId: response.data.id }
-    // The SDK reports a request that never got an answer (network failure,
-    // no response) with a null statusCode: whether Resend accepted it is
-    // unknown. Any answered rejection is a failure Resend stated.
-    return response.error.statusCode === null
-      ? { status: 'unknown', error: response.error.message }
-      : { status: 'failed', error: `${response.error.statusCode} ${response.error.name}: ${response.error.message}` }
-  })
-
-  try {
-    return await Promise.race([send, deadline])
-  } finally {
-    clearTimeout(timeout)
-  }
+  }, input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : undefined)
+  if (!response.error) return { status: 'sent', messageId: response.data.id }
+  return { status: 'failed', error: `${response.error.statusCode ?? 'no response'} ${response.error.name}: ${response.error.message}` }
 }

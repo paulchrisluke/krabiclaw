@@ -313,3 +313,28 @@ export function domainUpdateMessage(input: DomainEventInput): NotificationMessag
     category: 'organization_and_billing',
   }
 }
+
+export interface OnboardingCompletedInput {
+  organizationName: string
+  ownerName: string
+  ownerEmail: string
+  siteUrl: string
+  viewCustomerUrl: string
+}
+
+/** Tells the KrabiClaw operator a new business finished onboarding and is live. */
+export function onboardingCompletedMessage(input: OnboardingCompletedInput): NotificationMessage {
+  return {
+    title: `${input.organizationName} is live on KrabiClaw`,
+    preheader: `${input.ownerName} finished onboarding`,
+    hero: null,
+    facts: facts(
+      fact('business', 'Business', input.organizationName, true),
+      fact('owner', 'Owner', `${input.ownerName} (${input.ownerEmail})`, true),
+      fact('site', 'Site', input.siteUrl),
+    ),
+    primaryAction: { url: input.viewCustomerUrl, label: 'View customer' },
+    secondaryAction: { url: input.siteUrl, label: 'Open site' },
+    category: 'organization_and_billing',
+  }
+}

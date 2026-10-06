@@ -41,7 +41,7 @@ function expectOwnerDispatch(state: NotificationState) {
   expect(state.deliveries.some(row => row.purpose === 'guest_acknowledgement' && row.channel === 'email' && row.status === 'sent')).toBe(true)
   // Whatever channels this tenant does dispatch on, none of them may have failed.
   // Asserting only that one channel succeeded let a second channel sit in
-  // 'failed' or 'unknown' forever with the journey still green.
+  // 'failed' forever with the journey still green.
   const unsettled = state.deliveries.filter(row => row.status !== 'sent')
   expect(unsettled, `deliveries not settled as sent: ${JSON.stringify(unsettled)}`).toHaveLength(0)
 }

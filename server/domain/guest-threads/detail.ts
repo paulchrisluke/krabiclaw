@@ -4,7 +4,7 @@ import { getGuestRequest, getThreadOperationalRecord, requestSummary, requestAct
 import { formatOperationalStatusLabel } from './status-labels'
 import { resolveGuestThreadMailbox } from './mailbox'
 import { listThreadEntries, parseEntryPayload, isBuyerVisibleThreadEntry } from './entries'
-import { getDeliveryRetryEligibility, isVisibleDeliveryFailure, listThreadDeliveries } from './deliveries'
+import { isVisibleDeliveryFailure, listThreadDeliveries } from './deliveries'
 import { listMessagePhotos } from './attachments'
 import type { GuestThreadDetailViewModel, GuestThreadEntryDeliveryViewModel, GuestThreadEntryViewModel } from './types'
 
@@ -29,15 +29,14 @@ export async function getGuestThreadDetail(
   ])
 
   // One read of the deliveries answers both questions the thread asks of them:
-  // where each entry went, and which sends still need a human.
-  const nowMs = Date.now()
+  // where each entry went, and which sends failed.
   const deliveriesByEntry = new Map<string, GuestThreadEntryDeliveryViewModel[]>()
   for (const delivery of deliveryRows) {
     const forEntry = deliveriesByEntry.get(delivery.entry_id) ?? []
     forEntry.push({ id: delivery.id, channel: delivery.channel, purpose: delivery.purpose, status: delivery.status })
     deliveriesByEntry.set(delivery.entry_id, forEntry)
   }
-  const deliveryFailureRows = deliveryRows.filter(delivery => isVisibleDeliveryFailure(delivery, nowMs))
+  const deliveryFailureRows = deliveryRows.filter(isVisibleDeliveryFailure)
 
   const photos = await listMessagePhotos(db, entryRows.filter(entry => entry.kind === 'message').map(entry => entry.id))
 
@@ -122,8 +121,6 @@ export async function getGuestThreadDetail(
       channel: d.channel,
       purpose: d.purpose,
       error: d.error,
-      status: d.status as 'failed' | 'unknown',
-      retryable: getDeliveryRetryEligibility(d) === 'retryable',
       createdAt: d.created_at,
     })),
     createdAt: thread.created_at,
