@@ -139,8 +139,8 @@ async function impersonate(userId: string, organizationId?: string) {
         .catch((error: unknown) => ({ data: null, error: { message: error instanceof Error ? error.message : String(error) } }))
       if (active.error || !active.data) {
         const stopped = await authClient.admin.stopImpersonating()
-        if (stopped.error) throw new Error(`${active.error?.message ?? 'The business could not be opened'}, and impersonation could not be stopped: ${stopped.error.message}`)
-        throw new Error(`This person cannot open that business: ${active.error?.message ?? 'it was not found'}`)
+        if (stopped.error) throw new Error(`${active.error?.message ?? 'The organization could not be opened'}, and impersonation could not be stopped: ${stopped.error.message}`)
+        throw new Error(`This person cannot open that organization: ${active.error?.message ?? 'it was not found'}`)
       }
       await refreshSession()
       await navigateTo(`/dashboard/${active.data.slug}`)

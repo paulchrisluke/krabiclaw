@@ -8,5 +8,5 @@ definePageMeta({layout:'dashboard'})
 const route=useRoute(),organizationId=String(route.params.organizationId)
 const {data,error,pending}=await useAsyncData(`my-scheduling-member:${organizationId}`,()=>applicationFetch<{members:{id:string;self:boolean}[]}>(`/api/organizations/${organizationId}/members/scheduling`,{validate:(v):v is {members:{id:string;self:boolean}[]}=>isRecord(v)&&Array.isArray(v.members)&&v.members.every(m=>isRecord(m)&&typeof m.id==='string'&&typeof m.self==='boolean')}))
 const member=computed(()=>data.value?.members.find(m=>m.self))
-if(data.value&&!member.value)throw createError({statusCode:403,statusMessage:'You are not a member of this business.'})
+if(data.value&&!member.value)throw createError({statusCode:403,statusMessage:'You are not a member of this organization.'})
 </script>

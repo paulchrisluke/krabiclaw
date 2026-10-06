@@ -163,7 +163,7 @@
                   <p class="text-xs tabular-nums text-muted">{{ Math.round(stage.count / analytics.signupCohort.signups * 100) }}%</p>
                 </div>
               </div>
-              <p class="text-xs text-muted">Progress of people who signed up in this period, through the businesses they own.</p>
+              <p class="text-xs text-muted">Progress of people who signed up in this period, through the organizations they own.</p>
               <details class="border-t border-default pt-4">
                 <summary class="cursor-pointer text-sm font-medium text-highlighted">By campaign</summary>
                 <div class="mt-4 overflow-x-auto">
