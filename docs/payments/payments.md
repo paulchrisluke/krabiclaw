@@ -190,6 +190,30 @@ proofs; the server retrieves native Checkout and PaymentIntent before conversion
 Financial parent FKs retain evidence; tenant deletion stores minimal servicing
 relationships without retaining merchant credentials or recreating the tenant.
 
+### Saved cards
+
+A personal account's cards live on its platform Customer (`user.stripeCustomerId`),
+added through Profile → Payments. The Add card details sheet tells the buyer that
+businesses they pay through KrabiClaw can offer the card at checkout, and that
+removing it removes it from every business. At a business's Checkout a signed-in
+buyer's cards are cloned onto their Customer on that business's connected account
+(`stripe_connected_customers`) with `allow_redisplay: always`, so Checkout offers
+them; Stripe's own checkbox can also save a new card for that business only. A
+Customer on the connected account is what lets that business charge the card again
+later, as Stripe's recurring-payment guidance requires.
+
+Clones are independent Stripe objects. Removing an account card detaches its
+copies (matched by card fingerprint) on every connected account, then the platform
+card. Deleting the account deletes the buyer's Customers, on the platform and on
+each connected account, in Better Auth's user delete database hook, which every
+deletion path runs (self-service, admin removal, anonymous-account merge) while the
+mappings still exist. Stripe removes their cards with them and cancels any
+subscription the buyer holds with a business. Each business keeps its charges,
+receipts, refunds and disputes, and no connected account or business billing is
+touched. A business's own cards
+(its operating Customer) are never cloned, and deleting a business does not touch
+buyers' cards.
+
 ## Metronome operating billing
 
 KrabiClaw Payments: **1.4% of payment volume, plus Stripe fees.** Billed after

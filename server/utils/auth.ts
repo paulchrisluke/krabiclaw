@@ -29,6 +29,7 @@ import { handleStripeGa4Event } from '~/server/utils/stripe-ga4'
 import { notifyPaymentsInvoiceEvent } from '~/server/domain/payments/billing-notifications'
 import { setUpPaymentsBillingForSubscriptionEvent } from '~/server/domain/payments/usage'
 import { createStripeClient } from '~/server/utils/stripe-client'
+import { deleteAccountCustomers } from '~/server/utils/billing-customer'
 import { unwrapInstrumentedD1 } from '~/server/utils/request-metrics'
 import { timingSafeEqualText } from '~/server/utils/dev-route-auth'
 import { notifyOrganizationInvited } from '~/server/utils/notifications'
@@ -357,6 +358,8 @@ export function createAuth(env: CloudflareEnv) {
       user: {
         delete: {
           before: async (user) => {
+            // A deleted account's Stripe Customers go with it, on the platform and at every business it paid.
+            await deleteAccountCustomers(db, stripeClient, user.id)
             await execute(db, "DELETE FROM activity_entries WHERE kind='notification' AND scope_kind='global' AND target_user_id=?", [user.id])
           },
         },

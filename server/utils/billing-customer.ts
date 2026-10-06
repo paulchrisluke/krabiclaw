@@ -1,7 +1,7 @@
 import type { H3Event } from 'h3'
 import type Stripe from 'stripe'
 import { HTTPError } from 'nitro'
-import { execute, queryFirst, type DbClient } from '~/server/db'
+import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { getAuthSession, type CloudflareEnv } from '~/server/utils/auth'
 import { getOrganizationBillingStatus } from '~/server/utils/billing'
@@ -25,18 +25,18 @@ export async function resolveBillingCustomer(event: H3Event, organizationId: str
     if (!organization) throw new HTTPError({ statusCode: 404, statusMessage: 'No organization found' })
     if (organization.role !== 'owner' && organization.role !== 'admin') throw new HTTPError({ statusCode: 403, statusMessage: 'Only owners and admins manage billing' })
     const billing = await getOrganizationBillingStatus(env, env.DB, organization.id)
-    return { stripe, customerId: billing.stripeCustomerId ?? null, label: organization.name }
+    return { stripe, customerId: billing.stripeCustomerId ?? null, label: organization.name, userId: session.user.id }
   }
   const row = await queryFirst<{ stripeCustomerId: string | null; email: string; name: string | null }>(env.DB, 'SELECT "stripeCustomerId", email, name FROM user WHERE id = ?', [session.user.id])
   if (!row) throw new HTTPError({ statusCode: 404, statusMessage: 'Account not found' })
-  if (row.stripeCustomerId || !options.create) return { stripe, customerId: row.stripeCustomerId, label: row.name ?? row.email }
+  if (row.stripeCustomerId || !options.create) return { stripe, customerId: row.stripeCustomerId, label: row.name ?? row.email, userId: session.user.id }
   // The plugin creates a user's customer on sign-up or first subscription; an account that has neither gets the same customer here, in the plugin's column.
   const customer = await stripe.customers.create({ email: row.email, name: row.name ?? undefined, metadata: { userId: session.user.id } })
   await execute(env.DB, 'UPDATE user SET "stripeCustomerId" = ? WHERE id = ? AND "stripeCustomerId" IS NULL', [customer.id, session.user.id])
   const settled = await queryFirst<{ stripeCustomerId: string }>(env.DB, 'SELECT "stripeCustomerId" FROM user WHERE id = ?', [session.user.id])
   if (!settled?.stripeCustomerId) throw new Error('The account customer was not recorded')
   if (settled.stripeCustomerId !== customer.id) await stripe.customers.del(customer.id)
-  return { stripe, customerId: settled.stripeCustomerId, label: row.name ?? row.email }
+  return { stripe, customerId: settled.stripeCustomerId, label: row.name ?? row.email, userId: session.user.id }
 }
 
 export interface PaymentMethodRow { id: string; brand: string; last4: string; exp_month: number; exp_year: number; default: boolean }
@@ -83,9 +83,37 @@ export async function connectedCustomerWithSavedCards(db: DbClient, stripe: Stri
   for (const method of present.data) if (method.allow_redisplay !== 'always') await stripe.paymentMethods.update(method.id, { allow_redisplay: 'always' }, connected)
   for (const card of cards.data) {
     if (!card.card?.fingerprint || fingerprints.has(card.card.fingerprint)) continue
-    const copy = await stripe.paymentMethods.create({ customer: user.stripeCustomerId, payment_method: card.id, allow_redisplay: 'always' }, connected)
+    // Cloning takes no redisplay setting, so the attached copy is given it.
+    const copy = await stripe.paymentMethods.create({ customer: user.stripeCustomerId, payment_method: card.id }, connected)
     await stripe.paymentMethods.attach(copy.id, { customer: mapping.stripe_customer_id }, connected)
+    await stripe.paymentMethods.update(copy.id, { allow_redisplay: 'always' }, connected)
     fingerprints.add(card.card.fingerprint)
   }
   return { customerId: mapping.stripe_customer_id, savedCards: fingerprints.size }
+}
+
+/**
+ * Detaches the buyer's matching cards from their customer on every business's
+ * connected account: the copies made above, and cards they saved during that
+ * business's Checkout. A detached card cannot be used again.
+ */
+export async function detachConnectedCards(db: DbClient, stripe: Stripe, userId: string, matches: (method: Stripe.PaymentMethod) => boolean) {
+  const mappings = await queryAll<{ stripe_account_id: string; stripe_customer_id: string }>(db, 'SELECT stripe_account_id,stripe_customer_id FROM stripe_connected_customers WHERE user_id=?', [userId])
+  for (const mapping of mappings) {
+    const connected = { stripeAccount: mapping.stripe_account_id }
+    const methods = await stripe.customers.listPaymentMethods(mapping.stripe_customer_id, { limit: 100 }, connected).autoPagingToArray({ limit: 10000 })
+    for (const method of methods.filter(matches)) await stripe.paymentMethods.detach(method.id, {}, connected)
+  }
+}
+
+/**
+ * Deletes the account's Stripe Customers, on the platform and on every business
+ * it paid; Stripe removes their cards with them. Each business keeps its charges,
+ * refunds, disputes and receipts, which do not depend on the Customer.
+ */
+export async function deleteAccountCustomers(db: DbClient, stripe: Stripe, userId: string) {
+  const mappings = await queryAll<{ stripe_account_id: string; stripe_customer_id: string }>(db, 'SELECT stripe_account_id,stripe_customer_id FROM stripe_connected_customers WHERE user_id=?', [userId])
+  for (const mapping of mappings) await stripe.customers.del(mapping.stripe_customer_id, {}, { stripeAccount: mapping.stripe_account_id })
+  const account = await queryFirst<{ stripeCustomerId: string | null }>(db, 'SELECT "stripeCustomerId" FROM user WHERE id = ?', [userId])
+  if (account?.stripeCustomerId) await stripe.customers.del(account.stripeCustomerId)
 }

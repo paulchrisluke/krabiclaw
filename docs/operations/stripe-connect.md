@@ -66,3 +66,12 @@ inferring readiness from the return redirect.
 The country and live/test mode are immutable after reservation. A mismatch is a
 conflict, not a fallback. Account Links are single-use and short-lived, so every
 start or refresh request creates a new link and never stores its URL.
+
+## Buyer Customers on connected accounts
+
+Checkout creates a signed-in buyer's Customer on the business's connected
+account and clones their platform cards onto it; `stripe_connected_customers`
+records which Customer is theirs. Removing an account card detaches its clones on
+every connected account; deleting the account deletes those Customers before the
+mapping is lost. The connected account and its payment history are never closed by
+buyer cleanup. See Saved cards in `docs/payments/payments.md`.

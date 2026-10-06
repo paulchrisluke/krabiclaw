@@ -39,6 +39,7 @@
     <!-- Airbnb's "Add card details": Stripe's card form, Cancel and Done. -->
     <DashboardListItemDialog v-model:open="adding" title="Add card details" :saving="saving" :save-disabled="!ready" :error="formError" save-label="Done" @save="confirmCard">
       <div ref="mount" class="min-h-40" />
+      <p v-if="props.personalScope" class="mt-4 text-sm text-muted">Businesses you pay through KrabiClaw can offer this card at their checkout. Removing it here removes it from every business.</p>
     </DashboardListItemDialog>
   </div>
 </template>

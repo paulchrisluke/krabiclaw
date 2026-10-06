@@ -64,4 +64,6 @@ the domains, locations, content, bookings, reservations, integration
 selections, media and the onboarding draft that created the site with it, so
 signing up again starts a new draft rather than resuming the deleted site. The
 user's linked provider accounts belong to the user, not the organization, and
-remain.
+remain. Deleting an account first deletes its Stripe Customers, on the platform
+and on businesses' connected accounts, with their saved cards; see Saved cards in
+`docs/payments/payments.md`.
