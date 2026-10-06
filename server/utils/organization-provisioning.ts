@@ -216,7 +216,8 @@ async function recordOnboardingComplete(env: SetupEnv, db: D1Database, organizat
 async function emailOperatorOnboardingComplete(env: SetupEnv, db: D1Database, organizationId: string): Promise<void> {
   const platformOrganizationId = (await getPlatformOrganization(db)).id
   if (organizationId === platformOrganizationId) return
-  const recipients = [...new Set(platformOperatorEmails(env))]
+  // One mailbox is one recipient, however its address is cased.
+  const recipients = platformOperatorEmails(env).filter((email, index, all) => all.findIndex(other => hashEmail(other) === hashEmail(email)) === index)
   if (!recipients.length) throw new Error('PLATFORM_OWNER_EMAILS is not configured')
 
   const ownerId = await originatingOwnerId(db, platformOrganizationId, organizationId)

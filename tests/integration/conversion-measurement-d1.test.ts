@@ -500,11 +500,11 @@ test('a completed onboarding emails each operator once, with a link to that cust
     await db.prepare(`INSERT INTO organization_domains (id, organization_id, domain, type, role, status) VALUES ('dom-1', 'org-customer', 'clay-corner.krabiclaw.com', 'system', 'canonical', 'active')`).run()
     await db.prepare(`INSERT INTO user (id, name, email) VALUES ('user-owner', 'Mina Park', 'mina@clay-corner.com')`).run()
     await db.prepare(`INSERT INTO member (id, "organizationId", "userId", role) VALUES ('m-owner', 'org-customer', 'user-owner', 'owner')`).run()
-    const env = { DB: db, EMAIL_DELIVERY_MODE: 'provider', RESEND_API_KEY: 're_test_operator', NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://krabiclaw.com', PLATFORM_OWNER_EMAILS: 'ops@krabiclaw.com, ops@krabiclaw.com' } as unknown as Parameters<typeof completeOnboarding>[0]
+    const env = { DB: db, EMAIL_DELIVERY_MODE: 'provider', RESEND_API_KEY: 're_test_operator', NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://krabiclaw.com', PLATFORM_OWNER_EMAILS: 'ops@krabiclaw.com, OPS@KrabiClaw.com ' } as unknown as Parameters<typeof completeOnboarding>[0]
 
     const completion = await completeOnboarding(env, db, 'org-customer', null)
     assert.deepEqual(completion.operator_email, { status: 'sent' })
-    assert.equal(sent.length, 1, 'a repeated operator address is one email')
+    assert.equal(sent.length, 1, 'a repeated operator address, however cased, is one email')
     const [email] = sent
     assert.deepEqual(email!.body.to, ['ops@krabiclaw.com'])
     assert.equal(email!.body.subject, 'Clay Corner is live on KrabiClaw')
