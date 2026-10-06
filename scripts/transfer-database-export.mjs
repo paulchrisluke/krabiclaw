@@ -25,6 +25,8 @@ import { CONTENT_DOCUMENT_SCOPE_QUERY, MEDIA_PLACEMENT_OWNER_AUDIT_QUERY } from 
 import { isSupportedMediaPlacement } from '../shared/media-placement-contract.ts'
 import { organizationRoles } from '../utils/organization-access.ts'
 import { validateProductDetails, assertProductKind } from '../shared/product-details.ts'
+import { TEMPLATE_PALETTES, parseSitePalette } from '../shared/site-palette.ts'
+import { getDarkModeVariant } from '../utils/color-utils.ts'
 
 /** The roles the access matrix declares. Anything else evaluates to no permissions. */
 const DECLARED_ORGANIZATION_ROLES = new Set(Object.keys(organizationRoles))
@@ -87,6 +89,51 @@ const INTEGRATION_KEYS = {
   instagram: { target_id: 'instagram_user_id', target_name: 'username' },
   google_analytics: { target_id: 'property_id', target_name: 'property_name' },
   google_search_console: { target_id: 'site_url', target_name: 'site_url' },
+}
+
+/**
+ * Blawby's built-in colors before v13, as `settings_json.theme_by_template`
+ * stored them. v13 has no per-template token store; stored tokens equal to
+ * these are the template's own palette, and any other value fails the transfer.
+ */
+const BLAWBY_V12_TOKENS = {
+  bg: '#fbfaf7', surface: '#ffffff', primary: '#25356c', primaryDark: '#161f3b', primary100: '#f2f5ff',
+  primary200: '#b4c5e5', primary800: '#1d294f', accent: '#c19855', accent100: '#faf5ea', accent200: '#f8f0e1',
+  accentButton: '#b58c4f', accentStrong: '#a37732', border: '#e5e7eb', ink: '#162033',
+}
+const SAYA_THEME_ID = 'saya-theme-v1'
+const SAYA_LOGO_PRESENTATION = JSON.stringify({ shape: 'circle', focus: { x: 0.5, y: 0.5 } })
+
+/**
+ * v13 replaces `config.brand_color` (Saya's one accent) and the unwritten
+ * `theme_by_template` tokens with `config.palette`. A Saya brand color becomes
+ * the action color of Saya's palette, lightened for dark mode once, here.
+ */
+function sitePaletteChanges(stage) {
+  let changes = 0
+  const update = stage.prepare('UPDATE organization SET settings_json = ? WHERE id = ?')
+  for (const organization of stage.prepare("SELECT id, theme_id, settings_json FROM organization WHERE json_type(settings_json, '$.config.brand_color') IS NOT NULL OR json_type(settings_json, '$.theme_by_template') IS NOT NULL").all()) {
+    const settings = JSON.parse(organization.settings_json)
+    const brandColor = settings.config?.brand_color
+    if (brandColor !== undefined) {
+      assert(typeof brandColor === 'string' && /^#[0-9a-f]{6}$/iu.test(brandColor), `organization ${organization.id} brand_color ${JSON.stringify(brandColor)} is not a #RRGGBB color; no rows were copied`)
+      assert(organization.theme_id === SAYA_THEME_ID, `organization ${organization.id} has a brand_color outside Saya; nothing maps it; no rows were copied`)
+      const saya = TEMPLATE_PALETTES.saya
+      settings.config.palette = parseSitePalette({
+        light: { ...saya.light, action: brandColor },
+        dark: { ...saya.dark, action: getDarkModeVariant(brandColor) },
+      })
+      delete settings.config.brand_color
+    }
+    for (const [template, theme] of Object.entries(settings.theme_by_template ?? {})) {
+      assert(template === 'blawby' && JSON.stringify(theme.tokens) === JSON.stringify(BLAWBY_V12_TOKENS),
+        `organization ${organization.id} theme_by_template.${template} holds tokens other than Blawby's defaults; nothing maps them; no rows were copied`)
+    }
+    delete settings.theme_by_template
+    update.run(JSON.stringify(settings), organization.id)
+    changes++
+  }
+  return changes
 }
 
 function integrationRows(stage) {
@@ -378,7 +425,7 @@ export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = n
     let sourceFiles = files
     assert(ledger.length > 0, 'Source migration ledger is missing')
     let recognized = false
-    for (const directory of [MIGRATIONS_DIRECTORY, 'migrations-history/v11', 'migrations-history/v10', 'migrations-history/v9', 'migrations-history/v8', 'migrations-history/v7']) {
+    for (const directory of [MIGRATIONS_DIRECTORY, 'migrations-history/v12', 'migrations-history/v11', 'migrations-history/v10', 'migrations-history/v9', 'migrations-history/v8', 'migrations-history/v7']) {
       const candidates = readdirSync(resolve(directory)).filter(name => /^\d{4}_.+\.sql$/u.test(name)).sort()
       if (ledger.length > candidates.length || !ledger.every((name, index) => name === candidates[index])) continue
       const expected = new Database(':memory:')
@@ -481,11 +528,27 @@ export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = n
       stage.exec(normalizedTable)
     }
     // An older archived chain reaches v11 through v11's forward migrations, which the v12 baseline absorbed.
-    if (sourceDirectory !== MIGRATIONS_DIRECTORY && sourceDirectory !== 'migrations-history/v11') {
+    if (![MIGRATIONS_DIRECTORY, 'migrations-history/v12', 'migrations-history/v11'].includes(sourceDirectory)) {
       for (const name of readdirSync('migrations-history/v11').filter(name => /^\d{4}_.+\.sql$/u.test(name)).sort().slice(1)) {
         stage.exec(readFileSync(resolve('migrations-history/v11', name), 'utf8'))
       }
     }
+    // An older archived chain reaches v12 through v12's forward migrations, which the v13 baseline absorbed.
+    if (sourceDirectory !== MIGRATIONS_DIRECTORY && sourceDirectory !== 'migrations-history/v12') {
+      for (const name of readdirSync('migrations-history/v12').filter(name => /^\d{4}_.+\.sql$/u.test(name)).sort().slice(1)) {
+        stage.exec(readFileSync(resolve('migrations-history/v12', name), 'utf8'))
+      }
+    }
+    // v13: one site palette, and a presentation on each logo placement. Saya
+    // drew every logo as a circle, so its logos keep that shape.
+    if (!columns(stage, 'media_placements').includes('presentation_json')) {
+      stage.exec('ALTER TABLE media_placements ADD COLUMN presentation_json TEXT')
+      const logos = stage.prepare(`UPDATE media_placements SET presentation_json = ? WHERE owner_type = 'organization' AND slot = 'logo'
+        AND organization_id IN (SELECT id FROM organization WHERE theme_id = ?)`).run(SAYA_LOGO_PRESENTATION, SAYA_THEME_ID).changes
+      manifest.transforms.push({ name: 'saya_logo_circle_presentation', changes: logos })
+    }
+    const paletteChanges = sitePaletteChanges(stage)
+    if (paletteChanges) manifest.transforms.push({ name: 'brand_color_and_theme_tokens_to_site_palette', changes: paletteChanges })
     if (sourceDirectory !== MIGRATIONS_DIRECTORY) {
       for (const name of files.slice(1)) stage.exec(readFileSync(resolve(MIGRATIONS_DIRECTORY, name), 'utf8'))
     }

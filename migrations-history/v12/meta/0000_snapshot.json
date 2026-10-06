@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "804a5ed3-31bd-4358-a4ea-c42ac6baddcb",
+  "id": "dfec1eb7-1970-4c49-a22b-d9f22ac2ece0",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -4313,13 +4313,6 @@
           "autoincrement": false,
           "default": "'active'"
         },
-        "presentation_json": {
-          "name": "presentation_json",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "text",
@@ -4400,10 +4393,6 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {
-        "media_placements_presentation_check": {
-          "name": "media_placements_presentation_check",
-          "value": "presentation_json IS NULL OR (json_valid(presentation_json) AND json_extract(presentation_json, '$.shape') IN ('original', 'square', 'circle') AND json_type(presentation_json, '$.focus.x') IN ('integer', 'real') AND json_type(presentation_json, '$.focus.y') IN ('integer', 'real')) IS TRUE"
-        },
         "media_placements_instants_check": {
           "name": "media_placements_instants_check",
           "value": "(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)"
@@ -5952,13 +5941,9 @@
           "name": "organization_consultation_settings_check",
           "value": "consultation_settings_json IS NULL OR (json_valid(consultation_settings_json) AND json_type(consultation_settings_json) IS 'object' AND json_extract(consultation_settings_json, '$.mode') IN ('external_url', 'native_disabled', 'native') AND json_type(consultation_settings_json, '$.cta_label') IS 'text' AND json_type(consultation_settings_json, '$.schedule_path') IS 'text' AND json_extract(consultation_settings_json, '$.schedule_path') LIKE '/%' AND json_type(consultation_settings_json, '$.confirmation_path') IS 'text' AND json_extract(consultation_settings_json, '$.confirmation_path') LIKE '/%' AND json_type(consultation_settings_json, '$.tracking_enabled') IN ('true', 'false') AND (json_type(consultation_settings_json, '$.metadata_json') IS NULL OR json_type(consultation_settings_json, '$.metadata_json') IN ('null', 'object')) AND (json_type(consultation_settings_json, '$.external_url') IS NULL OR json_type(consultation_settings_json, '$.external_url') IN ('null', 'text'))) IS TRUE"
         },
-        "organization_config_palette_check": {
-          "name": "organization_config_palette_check",
-          "value": "json_type(settings_json, '$.config.palette') IS NULL OR (json_type(settings_json, '$.config.palette.light') IS 'object' AND json_type(settings_json, '$.config.palette.dark') IS 'object') IS TRUE"
-        },
-        "organization_config_font_preset_check": {
-          "name": "organization_config_font_preset_check",
-          "value": "json_type(settings_json, '$.config.font_preset') IS NULL OR json_type(settings_json, '$.config.font_preset') IS 'text'"
+        "organization_config_brand_color_check": {
+          "name": "organization_config_brand_color_check",
+          "value": "json_type(settings_json, '$.config.brand_color') IS NULL OR json_type(settings_json, '$.config.brand_color') IS 'text'"
         },
         "organization_config_press_email_check": {
           "name": "organization_config_press_email_check",
@@ -5984,9 +5969,21 @@
           "name": "organization_compliance_metadata_check",
           "value": "json_type(settings_json, '$.compliance.metadata_json') IS NULL OR json_type(settings_json, '$.compliance.metadata_json') IN ('null', 'object')"
         },
+        "organization_theme_saya_check": {
+          "name": "organization_theme_saya_check",
+          "value": "json_type(settings_json, '$.theme_by_template.saya') IS NULL OR (json_type(settings_json, '$.theme_by_template.saya') IS 'object' AND json_type(settings_json, '$.theme_by_template.saya.tokens') IS 'object' AND json_extract(settings_json, '$.theme_by_template.saya.status') IN ('active', 'disabled')) IS TRUE"
+        },
+        "organization_theme_blawby_check": {
+          "name": "organization_theme_blawby_check",
+          "value": "json_type(settings_json, '$.theme_by_template.blawby') IS NULL OR (json_type(settings_json, '$.theme_by_template.blawby') IS 'object' AND json_type(settings_json, '$.theme_by_template.blawby.tokens') IS 'object' AND json_extract(settings_json, '$.theme_by_template.blawby.status') IN ('active', 'disabled')) IS TRUE"
+        },
         "organization_config_object_check": {
           "name": "organization_config_object_check",
           "value": "json_type(settings_json, '$.config') IS NULL OR json_type(settings_json, '$.config') IS 'object'"
+        },
+        "organization_theme_by_template_object_check": {
+          "name": "organization_theme_by_template_object_check",
+          "value": "json_type(settings_json, '$.theme_by_template') IS NULL OR json_type(settings_json, '$.theme_by_template') IS 'object'"
         },
         "organization_compliance_object_check": {
           "name": "organization_compliance_object_check",
@@ -11026,13 +11023,6 @@
             "created_at"
           ],
           "isUnique": false
-        },
-        "requests_guest_email_idx": {
-          "name": "requests_guest_email_idx",
-          "columns": [
-            "lower(payload_json ->> '$.guest.email')"
-          ],
-          "isUnique": false
         }
       },
       "foreignKeys": {
@@ -13571,13 +13561,6 @@
       "idx_invitation_org_email_pending_unique": {
         "columns": {
           "lower(\"email\")": {
-            "isExpression": true
-          }
-        }
-      },
-      "requests_guest_email_idx": {
-        "columns": {
-          "lower(payload_json ->> '$.guest.email')": {
             "isExpression": true
           }
         }

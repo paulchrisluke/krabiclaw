@@ -27,13 +27,13 @@ test('a new organization initializes analytics time without inventing a location
     }
     await assert.rejects(setConfig(db, 'org', 'default_timezone', 'Unknown/Timezone'), /valid analytics timezone/)
     await assert.rejects(deleteConfig(db, 'org', 'default_timezone'), /cannot be removed/)
-    await setConfig(db, 'org', 'brand_color', '#123456')
+    await setConfig(db, 'org', 'press_email', 'press@example.test')
     await setConfig(db, 'mcp-fixture', 'default_timezone', 'Asia/Bangkok')
     for (const { id, zone } of [{ id: 'org', zone: 'UTC' }, { id: 'platform', zone: 'UTC' }, { id: 'mcp-fixture', zone: 'Asia/Bangkok' }]) {
       const report = await getAnalyticsReport(db, { organizationId: id, startDate: '2026-09-05', endDate: '2026-09-06', now: new Date('2026-09-06T12:00:00Z') })
       assert.equal(report.period.timezone, zone)
     }
-    assert.equal(await db.prepare("SELECT settings_json ->> '$.config.brand_color' AS color FROM organization WHERE id = 'org'").first('color'), '#123456')
+    assert.equal(await db.prepare("SELECT settings_json ->> '$.config.press_email' AS email FROM organization WHERE id = 'org'").first('email'), 'press@example.test')
     assert.equal(await db.prepare("SELECT timezone FROM business_locations WHERE id = 'location'").first('timezone'), null)
   } finally { await runtime.dispose() }
 })
