@@ -4,6 +4,84 @@ Payments extends canonical Products, variant-owned Prices, Sessions and Bookings
 It does not introduce a consultation table, shipping engine, customer subscription,
 FX conversion or replacement for Better Auth platform subscriptions.
 
+## October 6 release qualification
+
+Provider configuration is installed on staging and production. Native Stripe
+reads verify platform `acct_1SXZfREm0pkzLQDb` in the matching test/live modes,
+connected Payments webhook scope, the required events and API version, and the
+live Growth/Commerce catalog and customer portal. The existing Better Auth
+subscription lifecycle remains canonical. Dedicated Payments configurations
+allow Card, Apple Pay, Google Pay and Link; the staging merchant's native child
+configuration independently confirms this exact set. Native Metronome mappings
+and USD-cents rate cards pass the application's validation, with automatic
+collection enabled.
+
+The dedicated staging canary completed a paid Growth subscription Checkout and
+Stripe's existing-subscription confirmation for Commerce through normal Better
+Auth owner authentication. Independent native reads confirm the same active
+subscription at $89/month, the unchanged billing anchor and Payments entitlement.
+Its operating Stripe customer and native Metronome customer/contract match. The
+connected Sandbox merchant completed hosted onboarding and is Ready with its
+test bank.
+
+On 2026-10-06 the canary took a real paid booking and refund. The service
+needed its Blawby surfaces: a `/services/sandbox-booking` page bound to the
+product, a `page_grid` on `/services` naming it, consultation mode `native`,
+and an online weekly schedule (the booking picker lists online sessions only).
+A guest booked through `POST /api/public/products/sandbox-booking-2/book` and
+paid USD 10.00 on hosted Sandbox Checkout with Stripe's 4242 card. Independent
+Stripe reads: Checkout complete/paid, intent `pi_3UNMbcEsC8iRCsIQ128bxOD2`
+succeeded with 1000 received and no application fee, on
+`acct_1UNLlgEsC8iRCsIQ`, livemode false. Both signed webhooks
+(`checkout.session.completed`, `payment_intent.succeeded`) processed; the hold
+converted to confirmed booking `24bbbe2e-40e5-4005-b41f-51902a6e71ae`; the
+captured-volume usage row is queued for Metronome; guest acknowledgement,
+status update and owner alerts were delivered (log-only). The owner refunded
+USD 10.00 from the dashboard (prepare, then same-origin approval): Stripe
+refund `re_3UNMbcEsC8iRCsIQ1wmWEhdA` succeeded with the note in metadata; the
+application shows the payment refunded 1000/1000, the authorization consumed,
+the thread entry, owner and buyer notifications, and the guest's Activity page
+"Refunded $10.00 · Refund sent".
+
+The return to the app after Checkout failed with 500 on the first attempt. The
+cause was in `createCanonicalNotification`: after `ON CONFLICT DO NOTHING` it
+re-read the row and threw when any field differed, so the second delivery of
+the capture event (the purchase now attached to the account that proved the
+return) was refused. The re-read is removed; the id is the event's identity
+and the first write wins (staging `25b8f00`). Stripe and Better Auth behaved
+correctly throughout.
+
+Production moved to the v12 replacement on 2026-10-06 at 02:03 UTC (PR 1272,
+`main` `c81705e04`). Before the merge, a fresh v11 read against the independent
+destination checkpoint carried the owner's Terms and Privacy edits of 01:27 to
+01:29 UTC as four guarded full-row compare-and-swap updates, read back equal to
+v11, and then the insert-only delta wrote the rows the checkpoint lacked. The
+remaining source changes were `updatedAt` bumps, rate-limit leases and expired
+cache invalidations. After the deploy switched the binding, a second checkpoint
+and delta found a gap of five NCLS pageviews, one session summary and one
+rate-limit lease: the pageviews were inserted and read back, the session summary
+was left to v12's own later row for the same session, and the lease expires
+within the hour. Foreign keys are clean after every write. Production answers
+200 for the platform, docs, pricing and policies pages, both verified tenant
+sites, the dashboard Payments, Plan, Payouts and Earnings surfaces and the MCP
+workspace read. NCLS was not upgraded.
+
+Current native evidence also supersedes the earlier shortened-period test
+below. Contract `66a54a7c-fffe-4bf7-8b72-f8b9ebeea38d` is already reopened, with
+its original monthly schedule. The current USAGE invoice is
+`d16029da-c5b5-5fc7-b237-dc60cc8bcec9`: DRAFT, 48,000 USD cents of volume at
+0.014, total 672 USD cents, October 4 at 09:00 UTC through November 1. It has
+no external Stripe invoice. The former 140-cent shortened-period invoice is
+absent from the current native invoice list. Stripe independently shows only
+the paid $89 subscription invoice for that operating customer. The subscription
+remains active at $89/month, with no scheduled cancellation. Fee collection and
+the earlier collection/restoration/acceptance test remain unqualified.
+
+Sanitized provider and release observations are recorded in
+[the October 6 proof](release-verification-2026-10-06.json). Historical snapshots
+below remain dated observations; they do not describe the current contract or
+prove a paid usage invoice.
+
 ## Coordinated dependencies
 
 Payments builds on Calendar/member scheduling, now merged into staging. The
@@ -89,7 +167,7 @@ verifies the resulting alert and normal authenticated readback. Collection stays
 pending until the genuine invoice issue time; an hourly check does not guarantee
 collection at that exact minute.
 
-October 5 verification includes the production Worker with development routes
+October 5 verification used the locally built Cloudflare Worker with development routes
 disabled and normal Better Auth authentication. The actual $100 order appears
 in Activity and its product detail, with immutable items, Payment info and the
 native receipt. A genuinely disposable existing contact received one web reply:
@@ -119,12 +197,12 @@ or weaken the setup requirement.
 
 Isolated persisted delivery, realtime retry and audience isolation are separate
 from the native Resend transport test addressed only to `delivered@resend.dev`.
-That transport proof does not claim an actual merchant inbox or the pending
-Metronome/Stripe collection event. The genuine 140-cent invoice remains DRAFT
+That transport proof did not claim an actual merchant inbox or the pending
+Metronome/Stripe collection event. The October 5 read showed the 140-cent invoice as DRAFT
 with no external Stripe invoice and a native issue time of October 5 11:00 UTC
 after the native grace period.
-The PR remains a draft until native collection, monthly restoration, acceptance
-and the resulting alerts are verified.
+That verification did not qualify native collection, monthly restoration, acceptance
+or the resulting alerts. The October 6 observation above supersedes its provider state.
 
 ## Native financial contract
 
@@ -431,11 +509,12 @@ invoice could not be found in the contract. These attempts did not qualify an
 earlier issue date. Evidence is `.tmp/payments-native-short-issue-attempt.json`
 and `.tmp/payments-native-ended-period-issue-attempt.json`.
 
-The native end intentionally pauses new payment acceptance. Keep this PR a
-draft until the actual Metronome invoice and corresponding Stripe collection
-invoice are issued and paid, with identities, totals, amount paid and amount
-remaining independently verified. Then remove the native end from this same
-contract and verify the unchanged monthly schedule and restored acceptance.
+The native end intentionally paused new payment acceptance. The planned
+qualification required the actual Metronome invoice and corresponding Stripe
+collection invoice to be issued and paid, with identities, totals, amount paid
+and amount remaining independently verified, before removing that native end
+and verifying the unchanged monthly schedule and restored acceptance. The
+October 6 read shows the contract reopened before that qualification was recorded.
 Native `all_fees` itemization remains unavailable in test mode; reconciliation
 reports `test_mode_unavailable`, and no estimated Stripe costs were ingested.
 [Contract end semantics](https://docs.metronome.com/api-reference/contracts/update-the-contract-end-date),
