@@ -15,9 +15,9 @@
 import { authClient } from '~/lib/auth-client'
 import { validatePassword } from '~/utils/password-validation'
 
-const props = defineProps<{ callbackUrl: string }>()
+const props = withDefaults(defineProps<{ callbackUrl: string; initialEmail?: string }>(), { initialEmail: '' })
 const emit = defineEmits<{ success: [email: string] }>()
-const email = ref('')
+const email = ref(props.initialEmail)
 const password = ref('')
 const emailError = ref('')
 const passwordError = ref('')

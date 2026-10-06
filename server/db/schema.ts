@@ -124,7 +124,9 @@ export const requests = sqliteTable("requests", {
  index("requests_org_kind_idx").on(table.kind, table.location_id, table.updated_at),
  index("requests_org_user_idx").on(table.organization_id, table.user_id),
  index("requests_org_archive_activity_idx").on(table.organization_id, table.archived_at, table.updated_at),
- index("requests_org_created_idx").on(table.organization_id, table.created_at)
+ index("requests_org_created_idx").on(table.organization_id, table.created_at),
+ // Guest requests join the account whose verified email they were made with (#1282).
+ index("requests_guest_email_idx").on(sql`lower(payload_json ->> '$.guest.email')`)
 ]);
 
 
