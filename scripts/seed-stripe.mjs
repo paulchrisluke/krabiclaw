@@ -2,7 +2,8 @@
 //
 // Default mode is read-only: provider reads produce a deterministic plan JSON
 // and SHA-256. Applying requires that reviewed plan, an exact SHA confirmation,
-// an unchanged provider snapshot, and a Stripe test-mode key. The explicit
+// an unchanged provider snapshot, and the explicitly selected account mode.
+// Apply defaults to test mode; live apply requires --require-live-mode. The explicit
 // --ownership-file cutover mode instead pins its inventory account and mode.
 //
 // Examples:
@@ -23,7 +24,7 @@ import {
   OFFERED_PLAN_IDS,
   PLAN_DEFINITIONS,
   applyCatalogPlan,
-  assertTestModeKey,
+  assertCatalogModeKey,
   createCatalogPlan,
   imageMimeType,
   keyMode,
@@ -181,6 +182,7 @@ export function parseCli(argv) {
       'dry-run': { type: 'boolean' },
       apply: { type: 'boolean' },
       'require-test-mode': { type: 'boolean' },
+      'require-live-mode': { type: 'boolean' },
       'retirement-only': { type: 'boolean' },
       'plan-file': { type: 'string' },
       'journal-file': { type: 'string' },
@@ -194,6 +196,7 @@ export function parseCli(argv) {
     allowPositionals: false,
   })
   if (values['dry-run'] && values.apply) throw new Error('Choose either --dry-run or --apply, not both.')
+  if (values['require-test-mode'] && values['require-live-mode']) throw new Error('Choose either --require-test-mode or --require-live-mode, not both.')
   const apply = Boolean(values.apply)
   const ownershipFile = values['ownership-file'] ? resolve(values['ownership-file']) : null
   const verifyOwnership = Boolean(values['verify-ownership'])
@@ -227,6 +230,7 @@ export function parseCli(argv) {
     verifyOwnership,
     rollbackOwnership,
     requireTestMode: Boolean(values['require-test-mode']),
+    requireLiveMode: Boolean(values['require-live-mode']),
     retirementOnly: Boolean(values['retirement-only']),
     planFile,
     journalFile,
@@ -261,8 +265,8 @@ function ownershipHash(value) {
 export async function readOwnershipCutover(stripe, inventory, mode) {
   if (!inventory || !/^acct_[A-Za-z0-9]+$/.test(inventory.accountId)
     || !['test', 'live'].includes(inventory.mode) || inventory.mode !== mode
-    || !Array.isArray(inventory.organizations) || inventory.organizations.length === 0) {
-    throw new Error('Ownership inventory requires the expected account, mode and canonical organization/customer pairs.')
+    || !Array.isArray(inventory.organizations) || (inventory.organizations.length === 0 && !inventory.webhook)) {
+    throw new Error('Ownership inventory requires the expected account, mode and canonical organization/customer pairs or an explicit webhook.')
   }
   const account = await stripe.accounts.retrieve(null)
   if (account.id !== inventory.accountId) throw new Error('Ownership cutover Stripe account mismatch.')
@@ -395,7 +399,8 @@ export async function main(argv = process.argv.slice(2), dependencies = {}) {
   if (!secretKey) throw new Error('STRIPE_SECRET_KEY not found in environment or .env')
 
   const mode = keyMode(secretKey)
-  if ((cli.apply && !cli.ownershipFile) || cli.requireTestMode) assertTestModeKey(secretKey)
+  const requiredMode = cli.requireLiveMode ? 'live' : 'test'
+  if ((cli.apply && !cli.ownershipFile) || cli.requireTestMode || cli.requireLiveMode) assertCatalogModeKey(secretKey, requiredMode)
 
   const stripeFactory = dependencies.stripeFactory ?? createStripeClient
   const stripe = stripeFactory(secretKey)
@@ -427,6 +432,7 @@ export async function main(argv = process.argv.slice(2), dependencies = {}) {
     mutationAdapter: stripeMutationAdapter(stripe),
     filesAdapter: stripeFilesAdapter(secretKey),
     journalPath: cli.journalFile,
+    requiredMode,
   })
   console.log(`Stripe catalog apply status=${result.status}; applied ${result.appliedOperations} enumerated operations.`)
   console.log(`Plan SHA-256: ${result.planSha256}`)

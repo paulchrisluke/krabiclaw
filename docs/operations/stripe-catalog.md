@@ -99,7 +99,7 @@ STRIPE_SECRET_KEY=rk_test_... yarn stripe:catalog:apply -- \
 
 `--journal-file` is mandatory for every apply. The operator writes the journal
 atomically before the first provider mutation. It is keyed to the exact plan
-SHA, provider snapshot SHA, Stripe account ID, and test account mode; reusing
+SHA, provider snapshot SHA, Stripe account ID, and selected account mode; reusing
 the path for any other plan, snapshot, account, or mode is refused. Each operation is recorded as
 `pending`, `running`, `applied`, or `failed` with only sanitized IDs/URLs and
 error evidence. A failed apply exits non-zero with `status=incomplete`; review
@@ -150,30 +150,44 @@ snapshot includes each price's `lookup_key` and normalized metadata, so these
 selection inputs are covered by the review hash. On the selected product only
 non-canonical base-price candidates are deactivated.
 
-Apply is refused unless the key is test mode (`sk_test_` or `rk_test_`), the
-plan hash is intact, the confirmation matches exactly, the plan is test-mode
-and bound to the current exact Stripe account, local image files still match
+Apply defaults to test mode (`sk_test_` or `rk_test_`). Live apply requires
+`--require-live-mode` on the reviewed plan and apply commands. Apply is refused
+unless the key and plan have the selected mode, the
+plan hash is intact, the confirmation matches exactly, the plan is
+bound to the current exact Stripe account, local image files still match
 their planned hashes, and the provider snapshot is unchanged when a new
 journal starts. During resume, each pending operation revalidates its signed
 target and canonical safety boundary against a fresh snapshot. A failed
 operation performs no mutation from that operation; earlier journaled
 operations remain applied and are reported as such. Use a restricted
-test-mode key with read-account plus the catalog/file permissions required for
+key for the selected mode with read-account plus the catalog/file permissions required for
 this task;
 never place a key in a plan file or commit it.
 
-There is no live-mode apply path. A live key may be used for read-only planning,
-but a plan generated from live state cannot be applied by this command.
+For an authorized production catalog change, use the configured live key in the
+environment and retain the same account, snapshot, SHA and journal safeguards:
+
+```bash
+node scripts/seed-stripe.mjs --dry-run --require-live-mode \
+  --plan-file .tmp/stripe-live-catalog-plan.json
+node scripts/seed-stripe.mjs --apply --require-live-mode \
+  --plan-file .tmp/stripe-live-catalog-plan.json \
+  --confirm-sha256 <planSha256> \
+  --journal-file .tmp/stripe-live-catalog-apply.json
+```
+
+The two mode guards are mutually exclusive and are checked before constructing
+the Stripe client. Omitting the live guard cannot apply a live key or plan.
 
 ## Organization metadata and webhook cutover
 
 The same operator script has an explicit `--ownership-file` mode for the Epoch 5
-handoff. Catalog mutation still requires a test key. Ownership mode accepts the
+handoff. Ownership mode accepts the
 inventory's exact account and mode, including live, and changes only Customer
 metadata, non-canceled Subscription metadata, and the existing webhook URL. Run
 this during the canonical release cutover, before removing the old webhook route
-from production. The current request authorizes staging only; production execution
-belongs to the owner.
+from production. Execute only for the exact environment and account authorized
+by the operator.
 
 Create a private JSON inventory from the verified epoch export's Better Auth
 Organization customer IDs and the read-only Stripe endpoint census:
@@ -193,6 +207,9 @@ Organization customer IDs and the read-only Stripe endpoint census:
 
 Use the configured environment key. Keep inventory, plan and journal outside Git;
 the plan includes provider identifiers and ownership metadata.
+
+For an endpoint-only cutover, set `organizations` to `[]` and provide the exact
+existing `webhook` inventory. This preserves customer and subscription state.
 
 ```sh
 node scripts/seed-stripe.mjs --ownership-file /private/ownership.json --dry-run --plan-file /private/ownership-plan.json
