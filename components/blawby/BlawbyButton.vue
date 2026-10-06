@@ -55,6 +55,6 @@ const buttonClasses = computed(() => [
   'group inline-flex w-full items-center justify-center rounded-lg px-4 py-3 text-sm font-semibold uppercase no-underline disabled:cursor-not-allowed disabled:opacity-60 min-[1920px]:px-4 min-[1920px]:py-4 min-[1920px]:text-base min-[2560px]:px-5 min-[2560px]:py-5 min-[2560px]:text-lg',
   props.variant === 'outline'
     ? 'bg-[var(--blawby-accent-100)] text-[var(--blawby-primary)] hover:bg-[var(--blawby-accent-200)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--blawby-accent)] focus-visible:ring-offset-2'
-    : 'bg-[var(--blawby-accent-button)] text-white hover:bg-[var(--blawby-accent-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--blawby-accent)] focus-visible:ring-offset-2',
+    : 'bg-[var(--site-accent)] text-[var(--site-on-accent)] hover:bg-[var(--blawby-accent-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--blawby-accent)] focus-visible:ring-offset-2',
 ])
 </script>

@@ -246,12 +246,17 @@ async function renderedPalette(browser: Browser, url: string, headers: Record<st
     return await page.evaluate(selector => {
       const layout = document.querySelector(selector)!
       const style = getComputedStyle(layout)
-      const logo = document.querySelector('[data-site-logo] [data-logo-shape]:not(.hidden)')
+      // What the visitor sees in the first logo (the header's): the frames not
+      // hidden by the current mode.
+      const shown = [...document.querySelector('[data-site-logo]')?.querySelectorAll<HTMLElement>('[data-logo-slot]') ?? []]
+        .filter(frame => getComputedStyle(frame).display !== 'none')
+      const logo = shown[0]
       return {
         dark: document.documentElement.classList.contains('dark'),
         primary: style.getPropertyValue('--ui-primary').trim(),
         onPrimary: style.getPropertyValue('--primary-foreground').trim(),
         background: style.backgroundColor,
+        logoSlots: shown.map(frame => frame.dataset.logoSlot),
         logoShape: logo?.getAttribute('data-logo-shape') ?? null,
         logoPosition: logo ? getComputedStyle(logo.querySelector('img')!).objectPosition : null,
       }
@@ -260,7 +265,8 @@ async function renderedPalette(browser: Browser, url: string, headers: Record<st
 }
 
 test('a starter palette saved through Brand colors the Saya site in light and dark', async ({ browser, playwright }) => {
-  const { starterPalette, onActionColor } = await import('../../shared/site-palette')
+  const { starterPalette } = await import('../../shared/site-palette')
+  const { getOptimalForeground } = await import('../../utils/color-utils')
   const forest = starterPalette('forest')
   const organizationId = E2E_KIKUZUKI_ORGANIZATION_ID
   const baseURL = testBaseUrl()
@@ -293,7 +299,7 @@ test('a starter palette saved through Brand colors the Saya site in light and da
       const rendered = await renderedPalette(browser, `${kikuzukiTestBaseUrl()}/`, kikuzukiTestExtraHeaders(), '.tenant-layout', mode)
       expect(rendered.dark).toBe(mode === 'dark')
       expect(rendered.primary).toBe(forest[mode].action)
-      expect(rendered.onPrimary).toBe(onActionColor(forest[mode]))
+      expect(rendered.onPrimary).toBe(getOptimalForeground(forest[mode].action))
       expect(rendered.background).toBe(rgb(forest[mode].ground))
     }
 
@@ -367,14 +373,24 @@ test('a logo presentation set through MCP reads back and crops the header logo a
   const settingsUrl = `/api/organizations/${organizationId}/settings`
   const logoOf = async () => (await (await owner.get(settingsUrl)).json() as { settings: { media: Array<{ asset_id: string; slot: string; presentation: unknown }> } }).settings.media.find(item => item.slot === 'logo')!
   const original = await logoOf()
+  expect((await (await owner.get(settingsUrl)).json() as { settings: { media: Array<{ slot: string }> } }).settings.media.some(item => item.slot === 'logo_dark'), 'Kikuzuki starts without a dark-ground logo').toBe(false)
+  const setDarkLogo = (assetId: string | null) => mcpRequest(owner, baseURL, { method: 'tools/call', toolName: 'set_media', args: { organization_id: organizationId, placement: { owner_type: 'organization', owner_id: organizationId, slot: 'logo_dark' }, asset_id: assetId } })
   const setLogo = (presentation: unknown) => mcpRequest(owner, baseURL, { method: 'tools/call', toolName: 'set_media', args: { organization_id: organizationId, placement: { owner_type: 'organization', owner_id: organizationId, slot: 'logo' }, asset_id: original.asset_id, presentation } })
   try {
     const square = { shape: 'square', focus: { x: 0.2, y: 0.5 } }
     mcpData(await (await setLogo(square)).json())
     expect((await logoOf()).presentation).toEqual(square)
     const rendered = await renderedPalette(browser, `${kikuzukiTestBaseUrl()}/`, kikuzukiTestExtraHeaders(), '.tenant-layout', 'light')
+    expect(rendered.logoSlots).toEqual(['logo'])
     expect(rendered.logoShape).toBe('square')
     expect(rendered.logoPosition).toBe('20% 50%')
+
+    // A dark-ground logo replaces the logo in dark mode only; each mode shows one.
+    mcpData(await (await setDarkLogo(original.asset_id)).json())
+    for (const mode of ['light', 'dark'] as const) {
+      const shown = await renderedPalette(browser, `${kikuzukiTestBaseUrl()}/`, kikuzukiTestExtraHeaders(), '.tenant-layout', mode)
+      expect(shown.logoSlots, mode).toEqual([mode === 'dark' ? 'logo_dark' : 'logo'])
+    }
     // A focus outside the image is refused, and the stored presentation stands.
     const refused = await (await setLogo({ shape: 'circle', focus: { x: 2, y: 0 } })).json()
     expect(() => mcpData(refused)).toThrow()
@@ -382,6 +398,7 @@ test('a logo presentation set through MCP reads back and crops the header logo a
   } finally {
     const assertRestored = await restoreAll([
       ['logo presentation', async () => setLogo(original.presentation)],
+      ['dark-ground logo', async () => setDarkLogo(null)],
     ])
     await owner.dispose()
     assertRestored()

@@ -201,7 +201,7 @@ const descriptionParts = computed(() => (description.value ?? '')
 
 <style>
 .blawby-page-hero-copy p {
-  color: rgb(82 82 91) !important;
+  color: var(--ui-text-muted) !important;
   font-size: 1.125rem !important;
   line-height: 2rem !important;
   margin: 0 0 1rem !important;

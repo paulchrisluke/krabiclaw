@@ -12,18 +12,7 @@
 }
 
 .saya-theme {
-  --ui-success:         #10B981;
-  --ui-info:            #3B82F6;
-  --ui-warning:         #F59E0B;
-  --ui-error:           #EF4444;
   --ui-radius:          0.25rem; /* Platform-specific radius override */
-}
-
-.dark .saya-theme {
-  --ui-success:         #34D399;
-  --ui-info:            #60A5FA;
-  --ui-warning:         #FBBF24;
-  --ui-error:           #F87171;
 }
 
 /* Saya display type — Instrument Serif, sentence case, never bold */

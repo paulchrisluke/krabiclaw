@@ -195,6 +195,7 @@
   --site-action:    var(--site-action-light);
   --site-accent:    var(--site-accent-light);
   --site-on-action: var(--site-on-action-light);
+  --site-on-accent: var(--site-on-accent-light);
 
   --ui-primary:          var(--site-action);
   --color-primary:       var(--site-action);
@@ -215,6 +216,12 @@
   --ui-border-muted:     color-mix(in oklab, var(--site-text) 6%, var(--site-ground));
   --ui-border-accented:  color-mix(in oklab, var(--site-text) 22%, var(--site-ground));
   --ui-border-inverted:  color-mix(in oklab, var(--site-ground) 15%, var(--site-text));
+  /* Status colors are fixed, not owner colors, and dark enough to read as
+     text on a light ground. */
+  --ui-success:          #047857;
+  --ui-info:             #1D4ED8;
+  --ui-warning:          #B45309;
+  --ui-error:            #B91C1C;
   background-color: var(--ui-bg);
   color: var(--ui-text);
 }
@@ -229,6 +236,11 @@
   --site-action:    var(--site-action-dark);
   --site-accent:    var(--site-accent-dark);
   --site-on-action: var(--site-on-action-dark);
+  --site-on-accent: var(--site-on-accent-dark);
+  --ui-success:     #34D399;
+  --ui-info:        #60A5FA;
+  --ui-warning:     #FBBF24;
+  --ui-error:       #F87171;
 }
 
 /* ── Platform theme ───────────────────────────────────────── */

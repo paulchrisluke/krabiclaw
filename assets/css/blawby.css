@@ -19,7 +19,6 @@
   --blawby-accent:        var(--site-accent);
   --blawby-accent-100:    color-mix(in oklab, var(--site-accent) 10%, var(--site-ground));
   --blawby-accent-200:    color-mix(in oklab, var(--site-accent) 18%, var(--site-ground));
-  --blawby-accent-button: color-mix(in oklab, var(--site-accent) 92%, black);
   --blawby-accent-strong: color-mix(in oklab, var(--site-accent) 80%, black);
   --blawby-border:        var(--ui-border);
 
@@ -32,10 +31,6 @@
   --ui-border-accented:   var(--blawby-primary-200);
   --ui-border-inverted:   var(--blawby-primary-dark);
   --ui-text-inverted:     var(--site-surface);
-  --ui-success:           #10B981;
-  --ui-info:              #3B82F6;
-  --ui-warning:           #F59E0B;
-  --ui-error:             #EF4444;
   --ui-radius:            0.5rem;
 
   --text-xs: 0.75rem;
@@ -72,8 +67,14 @@
 .dark .blawby-theme {
   --blawby-primary-dark:  color-mix(in oklab, var(--site-action) 18%, var(--site-ground));
   --blawby-primary-800:   color-mix(in oklab, var(--site-action) 30%, var(--site-ground));
-  --blawby-accent-button: color-mix(in oklab, var(--site-accent) 90%, white);
   --blawby-accent-strong: color-mix(in oklab, var(--site-accent) 80%, white);
+  /* Pale tints become a lift of the ground toward the surface, not a wash of
+     the accent over a dark ground, which reads as grey-brown. The band tint
+     sits just above the surface so a band, and the shield pointing out of it,
+     stands apart from the ground and from the cards it holds. */
+  --blawby-primary-100:   color-mix(in oklab, var(--site-surface) 60%, var(--site-ground));
+  --blawby-accent-100:    color-mix(in oklab, var(--site-surface) 45%, var(--site-ground));
+  --blawby-accent-200:    color-mix(in oklab, var(--site-text) 7%, var(--site-surface));
   --ui-text-inverted:     var(--site-text);
 }
 

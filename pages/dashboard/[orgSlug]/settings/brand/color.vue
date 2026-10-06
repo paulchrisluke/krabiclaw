@@ -105,7 +105,8 @@
 </template>
 
 <script setup lang="ts">
-import { SITE_PALETTE_MODES, SITE_PALETTE_ROLES, STARTER_PALETTES, onActionColor, paletteContrast, type SitePalette, type SitePaletteMode, type SitePaletteRole } from '~/shared/site-palette'
+import { SITE_PALETTE_MODES, SITE_PALETTE_ROLES, STARTER_PALETTES, paletteContrast, type SitePalette, type SitePaletteMode, type SitePaletteRole } from '~/shared/site-palette'
+import { getOptimalForeground } from '~/utils/color-utils'
 import { organizationSettingsEditorKey } from '~/lib/components/workspace/settings/OrganizationSettingsPage.vue'
 
 definePageMeta({ layout: 'dashboard' })
@@ -124,16 +125,18 @@ function previewStyle(mode: SitePaletteMode) {
   return {
     colorScheme: mode,
     ...Object.fromEntries(SITE_PALETTE_ROLES.map(entry => [`--site-${entry.role}`, colors[entry.role]])),
-    '--site-on-action': onActionColor(colors),
+    '--site-on-action': getOptimalForeground(colors.action),
+    '--site-on-accent': getOptimalForeground(colors.accent),
   }
 }
 
 // The pair each role is judged by: text against the ground, the action color
-// as a control boundary, and the label that sits on it.
+// as a control boundary, and the labels that sit on action and accent fills.
 const ROLE_PAIRS: Partial<Record<SitePaletteRole, string[]>> = {
   text: ['text on ground', 'text on surface'],
   muted: ['secondary text on ground', 'secondary text on surface'],
   action: ['action on ground', 'button label on action'],
+  accent: ['button label on accent'],
 }
 const checks = computed(() => complete.value ? paletteContrast(palette.value!) : [])
 function contrastFor(mode: SitePaletteMode, role: SitePaletteRole) {

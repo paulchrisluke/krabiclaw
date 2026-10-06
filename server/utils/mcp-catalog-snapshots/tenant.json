@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:28ef0e08e0c969fdb455f5d3818a2f8df7c37a76453e27ee5c65f84df2537e1d",
+  "fingerprint": "sha256:5127ef907284fa96672bbbeadc8fede180a36e9dcbf71d9d845e54625466142c",
   "tools": [
     {
       "name": "append_content_block",
@@ -7052,7 +7052,7 @@
                     "additionalProperties": false,
                     "properties": {
                       "accent": {
-                        "description": "Emphasis and decoration, used sparingly.",
+                        "description": "Emphasis, decoration and highlighted buttons.",
                         "type": "string"
                       },
                       "action": {
@@ -7082,7 +7082,7 @@
                     "additionalProperties": false,
                     "properties": {
                       "accent": {
-                        "description": "Emphasis and decoration, used sparingly.",
+                        "description": "Emphasis, decoration and highlighted buttons.",
                         "type": "string"
                       },
                       "action": {
@@ -19335,13 +19335,13 @@
           },
           "palette": {
             "additionalProperties": false,
-            "description": "Saya and Blawby website colors, each with a light and a dark value. Roles: ground (The page background.) surface (Cards, the header and footer, dialogs and fields.) text (Body copy and headings.) muted (Captions, details and supporting copy.) action (Buttons, links and selected states.) accent (Emphasis and decoration, used sparingly.) Start from a starter (coastal, forest, terracotta, ink, blossom, saffron, slate, midnight) and/or name only the roles to change; colors are #RRGGBB or a plain description such as \"forest green\". Borders and tints are derived. null returns to the template's colors. The result reports any text or button pair below WCAG AA contrast.",
+            "description": "Saya and Blawby website colors, each with a light and a dark value. Roles: ground (The page background.) surface (Cards, the header and footer, dialogs and fields.) text (Body copy and headings.) muted (Captions, details and supporting copy.) action (Buttons, links and selected states.) accent (Emphasis, decoration and highlighted buttons.) Start from a starter (coastal, forest, terracotta, ink, blossom, saffron, slate, midnight) and/or name only the roles to change; colors are #RRGGBB or a plain description such as \"forest green\". Borders and tints are derived. null returns to the template's colors. The result reports any text or button pair below WCAG AA contrast.",
             "properties": {
               "dark": {
                 "additionalProperties": false,
                 "properties": {
                   "accent": {
-                    "description": "Emphasis and decoration, used sparingly.",
+                    "description": "Emphasis, decoration and highlighted buttons.",
                     "type": "string"
                   },
                   "action": {
@@ -19371,7 +19371,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "accent": {
-                    "description": "Emphasis and decoration, used sparingly.",
+                    "description": "Emphasis, decoration and highlighted buttons.",
                     "type": "string"
                   },
                   "action": {
