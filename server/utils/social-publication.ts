@@ -429,7 +429,19 @@ async function publishVideoToFacebook(context: ChannelContext, target: FacebookP
     await fence.release(['preparing', 'publishing'])
     return outcome(context, 'processing', { code: 'video_processing', message: 'Facebook is still processing the video. Call publish_post again to finish it; it will publish this same video.' })
   }
-  const state = handles.video_id ? await readVideo(target, handles.video_id, deadline) : null
+  let state: Awaited<ReturnType<typeof readVideo>> | null = null
+  if (handles.video_id) {
+    try {
+      state = await readVideo(target, handles.video_id, deadline)
+    } catch (error) {
+      // The saved video no longer exists at Facebook (deleted there, or a
+      // session Facebook discarded): nothing of it can be published, so the
+      // row stops naming it and this call prepares a new one.
+      if (!(error instanceof MetaGraphError && error.objectMissing)) throw error
+      delete handles.video_id
+      await fence.forgetProviderPost(handles)
+    }
+  }
   // A Reel whose finish was never sent is still only prepared; everything else is Facebook's to complete.
   if (state && !(reel && state.processing === 'not_started')) return await settle(state)
   if (reel) {
