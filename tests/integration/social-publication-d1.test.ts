@@ -810,6 +810,19 @@ test('Facebook video: a Reel is published by finishing its upload session, any o
     assert.deepEqual(meta.sent(request => request.host === 'rupload.facebook.com' && request.path.endsWith('reel-3')).length, 2)
     assert.equal((await publishPost(env, 'org-a', retried.post.id, { expectedUpdatedAt: retried.post.updated_at, targets: [targets.facebook()] }, 'owner')).outcomes[0]!.status, 'published')
 
+    // A saved video that no longer exists at Facebook is forgotten, and the
+    // post is prepared again instead of failing forever on a dead id.
+    const gone = await create('key-fb-reel-gone', { body: 'Third reel', media: [{ asset_id: 'reel', slot: 'cover' }] })
+    const goneFirst = await publishPost(env, 'org-a', gone.post.id, { expectedUpdatedAt: gone.post.updated_at, targets: [targets.facebook()] }, 'owner')
+    assert.equal(goneFirst.outcomes[0]!.code, 'video_processing')
+    const goneId = JSON.parse((await publication(gone.post.id))!.provider_handles_json).video_id as string
+    meta.fbVideos.delete(goneId)
+    const recovered = await publishPost(env, 'org-a', gone.post.id, { expectedUpdatedAt: gone.post.updated_at, targets: [targets.facebook()] }, 'owner')
+    assert.equal(recovered.outcomes[0]!.code, 'video_processing', JSON.stringify(recovered.outcomes))
+    const newId = JSON.parse((await publication(gone.post.id))!.provider_handles_json).video_id as string
+    assert.notEqual(newId, goneId)
+    assert.equal((await publishPost(env, 'org-a', gone.post.id, { expectedUpdatedAt: gone.post.updated_at, targets: [targets.facebook()] }, 'owner')).outcomes[0]!.status, 'published')
+
     // Neither path ever asks Facebook to flip a video to published.
     assert.equal(meta.sent(request => request.method === 'POST' && request.host === 'graph.facebook.com' && /\/(reel|video)-\d+$/.test(request.path)).length, 0)
 
