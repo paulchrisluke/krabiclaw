@@ -33,9 +33,9 @@ export function blawbyShieldVariant(path: string): BlawbyShieldVariant {
  */
 export function blawbySurface(variant: BlawbyShieldVariant): string {
   if (variant === 'schedule') return 'var(--blawby-primary-800)'
-  if (variant === 'about' || variant === 'contact') return 'var(--blawby-accent-200)'
   if (variant === 'privacy' || variant === 'terms' || variant === 'third-party-notices') return 'var(--ui-bg-elevated)'
-  return 'var(--blawby-primary-100)'
+  // Every other band is the one warm band tint.
+  return 'var(--blawby-accent-200)'
 }
 
 /**

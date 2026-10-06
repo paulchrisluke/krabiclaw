@@ -1,5 +1,5 @@
 <template>
-  <section v-if="reviews.length" class="bg-muted py-20 sm:py-32" data-parity-section="reviews">
+  <section v-if="reviews.length" class="bg-[var(--blawby-accent-200)] py-20 sm:py-32" data-parity-section="reviews">
     <div class="blawby-container">
       <div class="mx-auto max-w-2xl md:text-center">
         <h2 class="blawby-display text-3xl font-bold text-[var(--blawby-primary)] sm:text-4xl">

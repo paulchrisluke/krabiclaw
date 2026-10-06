@@ -50,19 +50,14 @@ export function getContrastRatio(color1: string, color2: string): number {
 }
 
 /**
- * Determine appropriate foreground color (white or black) based on contrast
- * Returns the color that provides WCAG AA compliant contrast (≥4.5:1)
+ * The label for a filled control: white on any saturated or dark fill, black
+ * only on a light one. A brand red or gold takes white even where black
+ * scores a higher WCAG ratio; paletteContrast reports the ratio either way.
  */
 export function getOptimalForeground(backgroundColor: string): '#ffffff' | '#000000' {
-  const whiteContrast = getContrastRatio(backgroundColor, '#ffffff')
-  const blackContrast = getContrastRatio(backgroundColor, '#000000')
-  
-  // Prefer white if both meet AA, otherwise use whichever meets AA
-  if (whiteContrast >= 4.5) return '#ffffff'
-  if (blackContrast >= 4.5) return '#000000'
-  
-  // If neither meets AA, use the one with higher contrast
-  return whiteContrast >= blackContrast ? '#ffffff' : '#000000'
+  const rgb = hexToRgb(backgroundColor)
+  if (!rgb) throw new Error(`Not a hex color: ${backgroundColor}`)
+  return getLuminance(rgb.r, rgb.g, rgb.b) > 0.4 ? '#000000' : '#ffffff'
 }
 
 /**
