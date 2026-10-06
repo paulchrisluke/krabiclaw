@@ -1,4 +1,4 @@
-import { execute, queryFirst, type DbClient } from '~/server/db'
+import { execute, type DbClient } from '~/server/db'
 import { publishNotificationInvalidation, type GuestInboxPublicationEnv } from '~/server/cloudflare/guest-inbox-events'
 
 export const NOTIFICATION_EVENT_TYPES = {
@@ -73,13 +73,8 @@ export function buildCanonicalNotificationInsert(
 
 export async function createCanonicalNotification(db: DbClient, input: CreateNotificationInput): Promise<string> {
   const statement = buildCanonicalNotificationInsert(input, input.idempotencyKey)
+  // The id is the event's identity: a replay inserts nothing and returns the same alert.
   await execute(db, statement.query, statement.params)
-  const recorded = await queryFirst<{ id: string; scope_kind: string; organization_id: string | null; target_user_id: string | null; parent_id: string | null; event_name: string }>(db,
-    "SELECT id, scope_kind, organization_id, target_user_id, parent_id, event_name FROM activity_entries WHERE id = ? AND kind = 'notification'", [statement.id])
-  if (!recorded || recorded.scope_kind !== input.scope || recorded.organization_id !== (input.organizationId ?? null)
-    || recorded.target_user_id !== (input.targetUserId ?? null) || recorded.parent_id !== (input.sourceEntryId ?? null) || recorded.event_name !== input.template) {
-    throw new Error('Notification identity conflicts with its persisted event')
-  }
   // Publication can fail after the insert commits. A replay must publish the
   // invalidation again; duplicate invalidations only ask readers to refresh.
   if (input.publishEnv && input.organizationId) {

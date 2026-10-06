@@ -605,7 +605,8 @@ test('financial notification replay preserves per-recipient receipts and isolate
     assert.equal(await db.prepare("SELECT count(*) n FROM activity_entries WHERE kind='acknowledgement'").first('n'), 0)
     assert.equal(await acknowledgeNotification(db, own, String(buyer.id)), true)
     assert.deepEqual((await db.prepare("SELECT parent_id,actor_user_id FROM activity_entries WHERE kind='acknowledgement'").all()).results, [{ parent_id: buyer.id, actor_user_id: 'buyer' }])
-    await assert.rejects(() => createCanonicalNotification(db, { scope: 'organization', organizationId: 'other-merchant', template: eventKey, title: 'Changed audience', idempotencyKey: String(merchant.id) }), /identity conflicts/u)
+    // One key names one alert: a replay with a different audience returns the first write and changes nothing.
+    assert.equal(await createCanonicalNotification(db, { scope: 'organization', organizationId: 'other-merchant', template: eventKey, title: 'Changed audience', idempotencyKey: String(merchant.id) }), String(merchant.id))
     assert.equal(await db.prepare('SELECT organization_id FROM activity_entries WHERE id=?').bind(merchant.id).first('organization_id'), 'merchant')
 
     const differentlyCasedEvent = 'financial-proof:Capture'
