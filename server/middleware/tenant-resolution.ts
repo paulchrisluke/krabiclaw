@@ -17,6 +17,7 @@ import {
 import { previewSecretOf, resolvePreviewAuthorization } from "../utils/preview-token";
 import { PLATFORM_TEMPLATE, resolvePublicTemplate } from "~/utils/template-registry";
 import { organizationSocialMediaFromJson } from '~/server/utils/public-social-image'
+import { resolveOrganizationFontPreset } from '~/shared/organization-fonts'
 
 interface TenantRow {
   id: string;
@@ -32,6 +33,8 @@ interface TenantRow {
   instagram_username: string | null;
   privacy_policy: number;
   terms_policy: number;
+  font_preset: unknown;
+  font_preset_type: string | null;
 }
 
 const TENANT_MEDIA_SELECT_SQL = `(SELECT COALESCE(json_group_array(json_object(
@@ -50,7 +53,9 @@ const TENANT_SELECT_SQL = `SELECT o.id, o.theme_id, o.subdomain, o.status, o.onb
              (SELECT i.target_id FROM organization_integrations i WHERE i.organization_id = o.id AND i.provider = 'facebook') AS facebook_page_id,
              (SELECT i.target_name FROM organization_integrations i WHERE i.organization_id = o.id AND i.provider = 'instagram') AS instagram_username,
              EXISTS (SELECT 1 FROM content_documents d WHERE d.organization_id = o.id AND d.kind = 'page' AND d.row_role = 'root' AND d.path = '/policies/privacy') AS privacy_policy,
-             EXISTS (SELECT 1 FROM content_documents d WHERE d.organization_id = o.id AND d.kind = 'page' AND d.row_role = 'root' AND d.path = '/policies/terms') AS terms_policy`
+             EXISTS (SELECT 1 FROM content_documents d WHERE d.organization_id = o.id AND d.kind = 'page' AND d.row_role = 'root' AND d.path = '/policies/terms') AS terms_policy,
+             o.settings_json ->> '$.config.font_preset' AS font_preset,
+             json_type(o.settings_json, '$.config.font_preset') AS font_preset_type`
 
 // Krabiclaw's own tenant is the one active organization running the platform
 // template. Platform hosts differ per environment (localhost, staging, the
@@ -182,6 +187,8 @@ function setResolvedTenantContext(
   setTenantType(event, resolvePublicTemplate({ themeId: metadata.themeId }).slug === 'platform' ? TENANT_TYPES.PLATFORM : TENANT_TYPES.TENANT)
   event.context.tenantHost = hostnameOf(host)
   event.context.canonicalDomain = canonicalDomain
+  // Every public layout renders the site's font from here, the platform's included.
+  event.context.fontPreset = resolveOrganizationFontPreset(tenant.font_preset_type === null ? undefined : tenant.font_preset)
   event.context.organization = {
     name: metadata.name,
     ...socialMedia,

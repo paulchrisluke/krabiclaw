@@ -1,8 +1,6 @@
 /* Saya theme tokens — Krabiclaw Design System */
 
 :root {
-  --font-saya: "Instrument Serif", serif;
-
   /* Fixed dark surface pair — deliberately NOT re-scoped inside .dark
      .saya-theme below, unlike --saya-bg-inverted/--saya-fg-inverted (which
      invert with light/dark mode by design, e.g. for SayaFooter.vue). Used
@@ -17,9 +15,6 @@
   color-scheme: light;
   background-color: var(--saya-bg);
 
-  /* The heading face shared components set their headings in. */
-  --font-heading:        var(--font-saya);
-  --font-heading-weight: 400;
 
   --saya-primary:       var(--brand-color, #8F1D21);
 
@@ -110,7 +105,7 @@
 
 /* Saya display type — Instrument Serif, sentence case, never bold */
 .saya-display-lg {
-  font-family: var(--font-saya);
+  font-family: var(--font-heading);
   font-size: clamp(56px, 7.5vw, 104px);
   font-weight: 400;
   letter-spacing: -0.02em;
@@ -118,7 +113,7 @@
   text-wrap: balance;
 }
 .saya-display-md {
-  font-family: var(--font-saya);
+  font-family: var(--font-heading);
   font-size: clamp(40px, 5vw, 64px);
   font-weight: 400;
   letter-spacing: -0.015em;
@@ -126,7 +121,7 @@
   text-wrap: balance;
 }
 .saya-display-sm {
-  font-family: var(--font-saya);
+  font-family: var(--font-heading);
   font-size: clamp(28px, 3.5vw, 40px);
   font-weight: 400;
   letter-spacing: -0.01em;
@@ -134,7 +129,7 @@
   text-wrap: balance;
 }
 .saya-display {
-  font-family: var(--font-saya);
+  font-family: var(--font-heading);
   font-weight: 400;
   font-style: normal;
   letter-spacing: -0.01em;

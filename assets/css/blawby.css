@@ -4,12 +4,9 @@
   color-scheme: light;
   background-color: var(--blawby-bg);
   color: var(--blawby-ink);
-  font-family: Poppins, sans-serif;
+  font-family: var(--font-sans);
 
-  /* The heading face shared components set their headings in, and how far the
-     fixed header reaches past its spacer (it carries the banner too). */
-  --font-heading:        Marcellus, serif;
-  --font-heading-weight: 400;
+  /* How far the fixed header reaches past its spacer (it carries the banner too). */
   --header-overlap:      3rem;
 
   --blawby-bg:            var(--blawby-token-bg, #fbfaf7);
@@ -127,15 +124,15 @@ html.blawby-document {
 }
 
 .blawby-display {
-  font-family: Marcellus, serif;
+  font-family: var(--font-heading);
 }
 
 .blawby-shell .prose :where(h1, h2, h3, h4) {
-  font-family: Marcellus, serif;
+  font-family: var(--font-heading);
 }
 
 .blawby-shell .prose.blawby-policy-prose :where(h1, h2, h3, h4) {
-  font-family: Poppins, sans-serif;
+  font-family: var(--font-sans);
 }
 
 .blawby-faq-answer p,

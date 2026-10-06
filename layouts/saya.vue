@@ -39,7 +39,6 @@
 <script setup lang="ts">
 import sayaCriticalCss from '~/assets/css/saya-critical.css?raw'
 import '~/assets/css/saya-entry.css'
-import { MALI_FONT_CSS, resolveOrganizationFontPreset, organizationFontStyles } from '~/shared/organization-fonts'
 
 const route = useRoute()
 const hydrated = ref(false)
@@ -73,7 +72,8 @@ if (import.meta.dev) useDebugLCP()
 const shell = useOrganizationShellState()
 // The layout's root attributes are serialized before its children render.
 // Await the existing keyed shell on every SSR route, not only the homepage,
-// so a direct menu/contact visit cannot serialize Default and hydrate as Mali.
+// so a direct menu/contact visit cannot serialize no brand color and hydrate
+// with one.
 if (import.meta.server) await shell.ready
 const { config, locations, error: bootstrapError, organization: shellOrganization } = shell
 const { isPlatform, organization } = useTenantOrganization()
@@ -82,19 +82,10 @@ const brandColor = computed(
   () => config.value?.brand_color || null
 )
 const brandTextColor = computed(() => getContrastColor(brandColor.value))
-const fontPreset = computed(() => resolveOrganizationFontPreset(config.value.font_preset))
-
-// The existing SSR shell supplies the choice. No mounted font loader, extra
-// settings request, global font stylesheet, or font preloads: the faces are
-// `optional`, and the head's preload is the page's hero (useHeroLcpPreload).
-useHead(() => ({
-  style: fontPreset.value === 'mali'
-    ? [{ key: 'saya-font-preset', innerHTML: MALI_FONT_CSS, tagPriority: 'critical' }]
-    : [],
-}))
+const fontPreset = usePublicSiteTypography()
 
 const themeStyles = computed(() => {
-  const styles = organizationFontStyles(fontPreset.value)
+  const styles: Record<string, string> = {}
   if (brandColor.value) {
     styles['--brand-color'] = brandColor.value
     styles['--brand-color-foreground'] = brandTextColor.value

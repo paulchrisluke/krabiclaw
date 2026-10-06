@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:299aa9d1ed3f5496ba47468c9469fbbb0bd5dd21a49a2ab0ea1bdc336f39f485",
+  "fingerprint": "sha256:f89722937baf47cb5a6d9465b0f7b2830e29a077b51a19a0e866e31a70cb67d9",
   "tools": [
     {
       "name": "append_content_block",
@@ -6972,6 +6972,24 @@
                   "string",
                   "null"
                 ]
+              },
+              "font_preset": {
+                "enum": [
+                  "default",
+                  "mali",
+                  "sarabun",
+                  "prompt",
+                  "kanit",
+                  "ibm-plex-sans-thai",
+                  "noto-serif-thai",
+                  "inter",
+                  "dm-sans",
+                  "montserrat",
+                  "lora",
+                  "playfair-display",
+                  "cormorant-garamond"
+                ],
+                "type": "string"
               },
               "google_analytics_measurement_id": {
                 "type": [
@@ -19124,7 +19142,7 @@
     },
     {
       "name": "update_organization_settings",
-      "description": "Change the selected site’s brand, description, contact email, default currency, announcement or Live/Draft status. Only supplied settings change. An announcement replaces all its fields, and null removes it. Logos and announcement images are separate media placements; this tool does not change them.",
+      "description": "Change the selected site’s brand, description, website font, contact email, default currency, announcement or Live/Draft status. Only supplied settings change. An announcement replaces all its fields, and null removes it. Logos and announcement images are separate media placements; this tool does not change them.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -19209,6 +19227,25 @@
               "PHP",
               "VND",
               "INR"
+            ],
+            "type": "string"
+          },
+          "font_preset": {
+            "description": "Website heading and body fonts, on every template: default (Default), mali (Mali), sarabun (Sarabun), prompt (Prompt), kanit (Kanit with Sarabun), ibm-plex-sans-thai (IBM Plex Sans Thai), noto-serif-thai (Noto Serif Thai with Noto Sans Thai), inter (Inter), dm-sans (DM Sans), montserrat (Montserrat), lora (Lora), playfair-display (Playfair Display with Inter), cormorant-garamond (Cormorant Garamond with Inter). Thai and Japanese text renders in every choice.",
+            "enum": [
+              "default",
+              "mali",
+              "sarabun",
+              "prompt",
+              "kanit",
+              "ibm-plex-sans-thai",
+              "noto-serif-thai",
+              "inter",
+              "dm-sans",
+              "montserrat",
+              "lora",
+              "playfair-display",
+              "cormorant-garamond"
             ],
             "type": "string"
           },

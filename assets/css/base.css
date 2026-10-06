@@ -25,7 +25,7 @@
 }
 
 @theme static {
-  --font-sans: "Poppins", sans-serif;
+  --font-sans: "Poppins", var(--font-script-sans), sans-serif;
   --font-poppins: "Poppins", sans-serif;
   --font-jost: "Jost", sans-serif;
   --font-display: "Jost", sans-serif;
@@ -123,6 +123,13 @@
   /* Global type scaling belongs at the root so rem-based sizing stays predictable. */
   font-size: 106%;
 
+  /* Script fallbacks every font stack ends with. A site's chosen family draws
+     the characters it has; Thai falls through to these, and Japanese pages add
+     their own (assets/css/japanese-fonts.css). A face downloads only when a
+     page has text in its script. */
+  --font-script-sans: "Noto Sans Thai";
+  --font-script-serif: "Noto Serif Thai";
+
   /* Form field boundary. WCAG 2.1 SC 1.4.11 wants 3:1 for the edge of a
      control, and the decorative --ui-border this shared input class used to
      borrow lands at 1.27:1 on white — the field read as floating text with no
@@ -173,7 +180,7 @@
 /* ── Platform theme ───────────────────────────────────────── */
 .platform-theme {
   /* Jost is the platform display family. Body copy remains Poppins. */
-  --font-heading:         var(--font-jost);
+  --font-heading:         "Jost", var(--font-script-sans), sans-serif;
   --font-heading-weight:  400;
 
   --ui-primary:           var(--kc-coral);

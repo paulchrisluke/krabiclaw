@@ -1,5 +1,5 @@
 <template>
-  <div class="blawby-shell blawby-theme min-h-screen bg-default text-default" :style="themeStyles" :data-hydrated="hydrated ? 'true' : 'false'" :data-public-critical-shell="isHome ? 'true' : undefined">
+  <div class="blawby-shell blawby-theme min-h-screen bg-default text-default" :style="themeStyles" :data-hydrated="hydrated ? 'true' : 'false'" :data-public-critical-shell="isHome ? 'true' : undefined" :data-font-preset="fontPreset">
     <!-- Teleport target for components (e.g. PlatformCommandSearchModal) that need to
          escape page overflow/stacking contexts but still must render inside this div to
          inherit the Blawby --ui-* and --blawby-* tokens. Teleporting straight to <body>
@@ -30,6 +30,7 @@ import type { PublicBlawbyRouteData } from '~/types/blawby'
 
 const route = useRoute()
 const publicLocale = useState<string>('public-locale', () => 'en')
+const fontPreset = usePublicSiteTypography()
 const isHome = computed(() => route.path === '/'
   || (publicLocale.value !== 'en' && route.path === `/${publicLocale.value}`)
   || /^\/preview\/(?:site|draft)\/[^/]+\/?$/.test(route.path))

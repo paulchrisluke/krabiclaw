@@ -90,7 +90,7 @@ export interface OrganizationSettingsEditor {
   validationMessage: ComputedRef<string | null>
   nameCharactersRemaining: ComputedRef<number>
   descriptionCharactersRemaining: ComputedRef<number>
-  sayaTheme: ComputedRef<boolean>
+  theme: ComputedRef<string | undefined>
   localizationSettings: Ref<LocalizationSettings | null>
   localizationLoading: Ref<boolean>
   localizationBusy: Ref<boolean>
@@ -117,7 +117,7 @@ export const organizationSettingsEditorKey = Symbol('organization-settings-edito
 import DashboardResourceLocalization from '~/components/dashboard/DashboardResourceLocalization.vue'
 import EditorNavigationList, { type EditorNavigationItem } from '~/components/dashboard/EditorNavigationList.vue'
 import { isCurrencyCode } from '~/shared/currencies'
-import { MALI_FONT_CSS, isOrganizationFontPreset, resolveOrganizationFontPreset } from '~/shared/organization-fonts'
+import { ORGANIZATION_FONT_OPTIONS, isOrganizationFontPreset, resolveOrganizationFontPreset } from '~/shared/organization-fonts'
 import { authClient } from '~/lib/auth-client'
 
 const props = withDefaults(defineProps<{ surface?: 'brand' | 'settings' }>(), { surface: 'settings' })
@@ -187,7 +187,7 @@ const localizationProgress = ref<LocalizationProgress[]>([])
 const localizationProgressError = ref<string | null>(null)
 const newLocale = ref('')
 const loadedSettings = ref<OrganizationSettingsResponse | null>(null)
-const sayaTheme = computed(() => loadedSettings.value?.theme === 'saya')
+const theme = computed(() => loadedSettings.value?.theme)
 const originalSignature = ref('')
 const form = reactive<OrganizationSettingsForm>({
   name: '', brand_description: '',
@@ -195,12 +195,6 @@ const form = reactive<OrganizationSettingsForm>({
   logoAssetId: null, faviconAssetId: null, socialShareAssetId: null, contact_email: '', brand_color: '', font_preset: 'default',
   default_currency: null, status: 'inactive',
 })
-// Only the specimen uses Mali. Never change the dashboard's typography.
-useHead(() => ({
-  style: surface.value === 'brand' && detailKey.value === 'font' && sayaTheme.value && form.font_preset === 'mali'
-    ? [{ key: 'organization-font-preview', innerHTML: MALI_FONT_CSS }]
-    : [],
-}))
 const brandLocalizationFields = computed(() => [
   { key: 'name', label: 'Brand name', source: loadedSettings.value?.name },
   { key: 'brand_description', label: 'Description', source: loadedSettings.value?.brand_description, multiline: true, rows: 6 },
@@ -221,9 +215,9 @@ const brandItems = computed<EditorNavigationItem[]>(() => [
   { id: 'sharing-image', label: 'Social sharing image', summary: loadedSettings.value?.media?.some(item => item.slot === 'social_share') ? 'Image selected' : 'Not set', icon: 'i-lucide-panels-top-left', to: `${brandPath.value}/sharing-image` },
   { id: 'description', label: 'Description', summary: explicitSummary(loadedSettings.value?.brand_description), icon: 'i-lucide-align-left', to: `${brandPath.value}/description` },
   { id: 'announcement', label: 'Announcement', summary: loadedSettings.value?.announcement?.enabled ? explicitSummary(loadedSettings.value.announcement.headline) : 'Off', icon: 'i-lucide-megaphone', to: `${brandPath.value}/announcement` },
-  // Brand color and font are Saya's: no other template reads them (layouts/saya.vue).
-  ...(sayaTheme.value ? [{ id: 'color', label: 'Brand color', summary: explicitSummary(loadedSettings.value?.brand_color), icon: 'i-lucide-palette', to: `${brandPath.value}/color` }] : []),
-  ...(sayaTheme.value ? [{ id: 'font', label: 'Website font', summary: loadedSettings.value?.font_preset === 'mali' ? 'Mali (Thai and English)' : 'Default', icon: 'i-lucide-type', to: `${brandPath.value}/font` }] : []),
+  // Brand color is Saya's: no other template reads it (layouts/saya.vue).
+  ...(theme.value === 'saya' ? [{ id: 'color', label: 'Brand color', summary: explicitSummary(loadedSettings.value?.brand_color), icon: 'i-lucide-palette', to: `${brandPath.value}/color` }] : []),
+  { id: 'font', label: 'Website font', summary: ORGANIZATION_FONT_OPTIONS.find(option => option.value === loadedSettings.value?.font_preset)?.label ?? 'Default', icon: 'i-lucide-type', to: `${brandPath.value}/font` },
   { id: 'contact', label: 'Contact details', summary: explicitSummary(loadedSettings.value?.contact_email), icon: 'i-lucide-mail', to: `${brandPath.value}/contact` },
   { id: 'translations', label: 'Translations', summary: 'Translate the brand name and description', icon: 'i-lucide-languages', action: { label: 'Localize' } },
 ])
@@ -291,7 +285,7 @@ const validationMessage = computed(() => {
       return null
     }
     case 'color': return !form.brand_color.trim() || /^#[0-9a-f]{6}$/i.test(form.brand_color) ? null : 'Enter a six-digit hex color.'
-    case 'font': return sayaTheme.value && isOrganizationFontPreset(form.font_preset) ? null : 'Choose a supported website font.'
+    case 'font': return isOrganizationFontPreset(form.font_preset) ? null : 'Choose a supported website font.'
     case 'contact': return !form.contact_email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.contact_email) ? null : 'Enter a valid email address.'
     case 'status': return form.status === 'suspended' ? 'This website is suspended. Contact support to restore it.' : null
     case 'localization': return localizationSettings.value?.effective_plan !== 'growth' ? 'A Growth subscription is required.' : null
@@ -469,7 +463,7 @@ provide(organizationSettingsEditorKey, {
   validationMessage,
   nameCharactersRemaining,
   descriptionCharactersRemaining,
-  sayaTheme,
+  theme,
   localizationSettings,
   localizationLoading,
   localizationBusy,

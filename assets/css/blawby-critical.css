@@ -158,7 +158,7 @@ button {
 [data-blawby-critical-hero] h1 {
   max-width: 56rem;
   margin: 0;
-  font-family: Marcellus, serif;
+  font-family: var(--font-heading);
   font-size: 3rem;
   font-weight: 500;
   line-height: 1;

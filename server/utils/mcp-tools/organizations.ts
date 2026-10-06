@@ -6,6 +6,7 @@ import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import { getOrganizationForMcp } from '~/server/utils/mcp-workflows'
 import { resolveMcpWorkspace } from '~/server/utils/mcp-context'
 import { loadSettingsPayload, updateOrganizationSettingsFields } from '~/server/utils/organization-settings'
+import { ORGANIZATION_FONT_OPTIONS, ORGANIZATION_FONT_PRESETS } from '~/shared/organization-fonts'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { NOT_HANDLED, assertDomainSuccess, mutationContextPayload, requiredString, workspaceContextPayload } from './execution'
 
@@ -106,6 +107,7 @@ export const ORGANIZATIONS_TOOLS: McpToolDefinition[] = [
               custom_domain_status: { type: ['string', 'null'] },
               name: { type: ['string', 'null'] },
               brand_description: { type: ['string', 'null'] },
+              font_preset: { type: 'string', enum: [...ORGANIZATION_FONT_PRESETS] },
               announcement: ANNOUNCEMENT_SCHEMA,
               media: { type: 'array', items: ORGANIZATION_MEDIA_ITEM_SCHEMA },
               contact_email: { type: ['string', 'null'] },
@@ -129,13 +131,14 @@ export const ORGANIZATIONS_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'update_organization_settings',
-      description: "Change the selected site’s brand, description, contact email, default currency, announcement or Live/Draft status. Only supplied settings change. An announcement replaces all its fields, and null removes it. Logos and announcement images are separate media placements; this tool does not change them.",
+      description: "Change the selected site’s brand, description, website font, contact email, default currency, announcement or Live/Draft status. Only supplied settings change. An announcement replaces all its fields, and null removes it. Logos and announcement images are separate media placements; this tool does not change them.",
       domain: 'organizations',
       minimumRole: 'admin',
       confirmRequired: false,
       inputSchema: {
         name: { type: 'string' },
         brand_description: { type: 'string' },
+        font_preset: { type: 'string', enum: [...ORGANIZATION_FONT_PRESETS], description: `Website heading and body fonts, on every template: ${ORGANIZATION_FONT_OPTIONS.map(option => `${option.value} (${option.label})`).join(', ')}. Thai and Japanese text renders in every choice.` },
         announcement: ANNOUNCEMENT_SCHEMA,
         contact_email: { type: ['string', 'null'], description: 'Public contact email shown to guests. Pass null to clear it.' },
         default_currency: { type: 'string', enum: [...SUPPORTED_CURRENCIES], description: 'ISO 4217 code. Existing prices keep their stored currency and amount; nothing is converted.' },

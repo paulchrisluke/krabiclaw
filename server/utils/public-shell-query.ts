@@ -5,7 +5,6 @@ import { calculateMapEmbedUrl } from '~/server/utils/google-places'
 import type { PublicShellPayload } from '~/utils/public-resource-contracts'
 import { resolveOrganizationCmsCapabilities } from '~/server/utils/cms-capabilities'
 import { isCurrencyCode } from '~/shared/currencies'
-import { resolveOrganizationFontPreset } from '~/shared/organization-fonts'
 import { parsePostalAddress } from '~/utils/postal-address'
 import type { PublicMediaPlacement } from '~/server/utils/public-social-image'
 import { publicSocialMediaFromPlacements } from '~/utils/social-metadata'
@@ -50,7 +49,7 @@ export function appendPublicShellQueries(
     config: push(`SELECT setting.key, setting.value
                 FROM organization s, json_each(s.settings_json, '$.config') setting
                WHERE s.id = ?
-                 AND setting.key IN ('brand_color', 'font_preset', 'press_email', 'partnerships_email', 'catering_email', 'careers_email', 'default_timezone')
+                 AND setting.key IN ('brand_color', 'press_email', 'partnerships_email', 'catering_email', 'careers_email', 'default_timezone')
               `, [organizationId]),
     // Where this site has something to show: the Product is published to the
     // site, offered and published at the location, and active itself. All three
@@ -137,7 +136,6 @@ export function buildPublicShellPayload(
   const config: Record<string, string> = Object.fromEntries(
     configRows.filter(({ key }) => !key.startsWith('__')).map(({ key, value }) => [key, value]),
   )
-  config.font_preset = resolveOrganizationFontPreset(config.font_preset)
   if (!isCurrencyCode(organization.default_currency)) throw new Error(`Unsupported organization currency: ${organization.default_currency}`)
   config.default_currency = organization.default_currency
   if (organization.contact_email) config.contact_email = organization.contact_email

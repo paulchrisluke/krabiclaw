@@ -1,12 +1,14 @@
 import type { TenantType } from '~/utils/tenant-routing'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
 import type { SocialImageSource } from '~/utils/social-metadata'
+import type { OrganizationFontPreset } from '~/shared/organization-fonts'
 
 interface TenantOrganizationState {
   tenantType: TenantType
   previewAuthorized: boolean
   organizationId: string | null
   themeId: string | null
+  fontPreset: OrganizationFontPreset
   organization: TenantOrganizationInfo | null
 }
 
@@ -39,6 +41,7 @@ export const useTenantOrganization = () => {
         previewAuthorized: event.context.previewAuthorized === true,
         organizationId: typeof event.context.organizationId === 'string' ? event.context.organizationId : null,
         themeId: typeof event.context.themeId === 'string' ? event.context.themeId : null,
+        fontPreset: (event.context.fontPreset as OrganizationFontPreset | undefined) ?? 'default',
         organization: (event.context.organization as TenantOrganizationInfo | null | undefined) ?? null
       }
     }
@@ -47,6 +50,7 @@ export const useTenantOrganization = () => {
       previewAuthorized: false,
       organizationId: null,
       themeId: null,
+      fontPreset: 'default',
       organization: null
     }
   })
@@ -58,6 +62,7 @@ export const useTenantOrganization = () => {
     previewAuthorized: tenantContext.value.previewAuthorized,
     organizationId: tenantContext.value.organizationId,
     themeId: tenantContext.value.themeId,
+    fontPreset: tenantContext.value.fontPreset,
     organization: tenantContext.value.organization
   }
 }

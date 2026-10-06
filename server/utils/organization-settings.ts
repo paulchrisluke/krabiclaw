@@ -3,7 +3,7 @@ import { deleteConfig, getConfig, setConfig } from '~/server/utils/organization-
 import { createSystemSubdomain, isSystemSubdomainSpent } from '~/server/utils/domains'
 import { reconcileZarazAnalytics } from '~/server/utils/zaraz-analytics'
 import { isCurrencyCode } from '~/shared/currencies'
-import { isOrganizationFontPreset, resolveOrganizationFontPreset } from '~/shared/organization-fonts'
+import { ORGANIZATION_FONT_PRESETS, isOrganizationFontPreset, resolveOrganizationFontPreset } from '~/shared/organization-fonts'
 import { purgeOrganizationCaches, purgePublicResourceCacheNow } from '~/server/utils/public-resource-cache'
 import type { UpdateOrganizationSettingsRequest } from '~/server/types/organization'
 import { integrationSummary, listIntegrations } from '~/server/utils/organization-integrations'
@@ -485,13 +485,8 @@ export async function updateOrganizationSettingsFields(
   }
 
   // Validate before any settings writes. Preset IDs are not CSS or font URLs.
-  if (updates.font_preset !== undefined) {
-    if (!isOrganizationFontPreset(updates.font_preset)) {
-      return { status: 400, data: { error: 'font_preset must be default or mali' } }
-    }
-    if (updates.font_preset === 'mali' && resolvePublicTemplate({ themeId: organization.theme_id }).slug !== 'saya') {
-      return { status: 400, data: { error: 'Mali is available for the Saya template only' } }
-    }
+  if (updates.font_preset !== undefined && !isOrganizationFontPreset(updates.font_preset)) {
+    return { status: 400, data: { error: `font_preset must be one of: ${ORGANIZATION_FONT_PRESETS.join(', ')}` } }
   }
 
   if (updates.announcement !== undefined && updates.announcement !== null) {
