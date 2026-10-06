@@ -132,7 +132,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
       description: 'Delete one block, and any blocks nested under it, from a blog article or site page. Requires the block\'s own updated_at from the last read.',
       domain: 'content',
       minimumRole: 'admin',
-      confirmRequired: false,
+      confirmRequired: true,
       inputSchema: {
         block_id: { type: 'string' },
         expected_updated_at: { type: 'string', description: 'The block\'s updated_at from the last read.' },

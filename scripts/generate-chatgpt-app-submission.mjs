@@ -168,8 +168,8 @@ function justifications(tool) {
       ? openWorldEffects[tool.name]
       : `${effect} Its scope is the authenticated KrabiClaw workspace, not arbitrary external entities or the public web.`,
     destructive_justification: annotations.destructiveHint
-      ? `${effect} Existing state is deleted, replaced or overwritten rather than only appended.`
-      : `${effect} Existing content is not deleted or overwritten.`,
+      ? `${effect} The result is irreversible or hard to reverse, so the tool requires the user's confirmation.`
+      : `${effect} No existing record is deleted, cancelled or refunded by it.`,
   }
 }
 
