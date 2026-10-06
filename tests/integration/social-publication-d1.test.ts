@@ -810,12 +810,16 @@ test('Facebook video: a Reel is published by finishing its upload session, any o
     assert.deepEqual(meta.sent(request => request.host === 'rupload.facebook.com' && request.path.endsWith('reel-3')).length, 2)
     assert.equal((await publishPost(env, 'org-a', retried.post.id, { expectedUpdatedAt: retried.post.updated_at, targets: [targets.facebook()] }, 'owner')).outcomes[0]!.status, 'published')
 
-    // A saved video that no longer exists at Facebook is forgotten, and the
-    // post is prepared again instead of failing forever on a dead id.
+    // A prepared video that no longer exists at Facebook is forgotten, and the
+    // post is prepared again instead of failing forever on a dead id. Here the
+    // finish was never answered, so nothing of the first session is public.
     const gone = await create('key-fb-reel-gone', { body: 'Third reel', media: [{ asset_id: 'reel', slot: 'cover' }] })
+    meta.fault('timeout', request => request.path.endsWith(`${PAGE}/video_reels`) && request.body.upload_phase === 'finish')
     const goneFirst = await publishPost(env, 'org-a', gone.post.id, { expectedUpdatedAt: gone.post.updated_at, targets: [targets.facebook()] }, 'owner')
-    assert.equal(goneFirst.outcomes[0]!.code, 'video_processing')
-    const goneId = JSON.parse((await publication(gone.post.id))!.provider_handles_json).video_id as string
+    assert.equal(goneFirst.outcomes[0]!.code, 'video_processing', JSON.stringify(goneFirst.outcomes))
+    const goneRow = await publication(gone.post.id)
+    const goneId = JSON.parse(goneRow!.provider_handles_json).video_id as string
+    assert.equal(goneRow!.provider_post_id, null, 'an unanswered finish names no provider post')
     meta.fbVideos.delete(goneId)
     const recovered = await publishPost(env, 'org-a', gone.post.id, { expectedUpdatedAt: gone.post.updated_at, targets: [targets.facebook()] }, 'owner')
     assert.equal(recovered.outcomes[0]!.code, 'video_processing', JSON.stringify(recovered.outcomes))
@@ -829,13 +833,20 @@ test('Facebook video: a Reel is published by finishing its upload session, any o
     // the read-back); that is processing, not an unknown outcome, and the next
     // call reads the same video.
     const late = await create('key-fb-reel-late', { body: 'Fourth reel', media: [{ asset_id: 'reel', slot: 'cover' }] })
-    meta.fault('missing', request => request.method === 'GET' && /\/reel-\d+$/.test(request.path), 1)
+    // Two reads answer missing: the read-back after the finish, and the next call's own read.
+    meta.fault('missing', request => request.method === 'GET' && /\/reel-\d+$/.test(request.path), 2)
     const lateFirst = await publishPost(env, 'org-a', late.post.id, { expectedUpdatedAt: late.post.updated_at, targets: [targets.facebook()] }, 'owner')
     assert.deepEqual([lateFirst.outcomes[0]!.status, lateFirst.outcomes[0]!.code], ['processing', 'video_processing'], JSON.stringify(lateFirst.outcomes))
     const lateRow = await publication(late.post.id)
-    assert.equal(lateRow!.state, 'preparing')
     const lateId = JSON.parse(lateRow!.provider_handles_json).video_id as string
+    assert.deepEqual([lateRow!.state, lateRow!.provider_post_id], ['preparing', lateId], 'the finished video is named as the provider post')
     const finishesBefore = meta.sent(request => request.path.endsWith(`${PAGE}/video_reels`) && request.body.upload_phase === 'finish').length
+    const startsBeforeLate = meta.sent(request => request.path.endsWith(`${PAGE}/video_reels`) && request.body.upload_phase === 'start').length
+    // Still missing on the next call: the same video is waited for, never replaced.
+    const lateAgain = await publishPost(env, 'org-a', late.post.id, { expectedUpdatedAt: late.post.updated_at, targets: [targets.facebook()] }, 'owner')
+    assert.deepEqual([lateAgain.outcomes[0]!.status, lateAgain.outcomes[0]!.code], ['processing', 'video_processing'], JSON.stringify(lateAgain.outcomes))
+    assert.equal(meta.sent(request => request.path.endsWith(`${PAGE}/video_reels`) && request.body.upload_phase === 'start').length, startsBeforeLate, 'no second session for a finished video')
+    assert.equal(JSON.parse((await publication(late.post.id))!.provider_handles_json).video_id, lateId)
     let lateStatus = 'processing'
     for (let attempt = 0; attempt < 3 && lateStatus === 'processing'; attempt += 1) {
       lateStatus = (await publishPost(env, 'org-a', late.post.id, { expectedUpdatedAt: late.post.updated_at, targets: [targets.facebook()] }, 'owner')).outcomes[0]!.status

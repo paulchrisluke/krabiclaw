@@ -434,10 +434,17 @@ async function publishVideoToFacebook(context: ChannelContext, target: FacebookP
     try {
       state = await readVideo(target, handles.video_id, deadline)
     } catch (error) {
-      // The saved video no longer exists at Facebook (deleted there, or a
-      // session Facebook discarded): nothing of it can be published, so the
-      // row stops naming it and this call prepares a new one.
       if (!(error instanceof MetaGraphError && error.objectMissing)) throw error
+      if (context.publication.provider_post_id) {
+        // The final call was sent for this video (provider_post_id names it
+        // from that moment), and Facebook does not expose it yet. It is not
+        // gone, and preparing another would publish the Reel twice.
+        await fence.release(['preparing', 'publishing'])
+        return outcome(context, 'processing', { code: 'video_processing', message: 'Facebook has accepted the video but does not expose it yet. Call publish_post again to finish it; it will publish this same video.' })
+      }
+      // A video only prepared no longer exists at Facebook (deleted there, or
+      // a session Facebook discarded): nothing of it can be published, so the
+      // row stops naming it and this call prepares a new one.
       delete handles.video_id
       await fence.forgetProviderPost(handles)
     }
@@ -461,8 +468,10 @@ async function publishVideoToFacebook(context: ChannelContext, target: FacebookP
       await finishReel(target, handles.video_id!, { description: context.caption, title: post.title }, deadline)
     } else {
       handles.video_id = await createVideo(target, { fileUrl: video.public_url, description: context.caption, title: post.title }, deadline)
-      await fence.saveHandles(handles)
     }
+    // From here the video is Facebook's to publish: the row names it as the
+    // provider post, so a later call never prepares another.
+    await fence.saveHandles(handles, handles.video_id)
   } catch (error) {
     if (error instanceof MetaGraphError && error.failure !== 'transport') {
       // Meta refused the call: nothing was published.
