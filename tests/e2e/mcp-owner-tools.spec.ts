@@ -740,11 +740,8 @@ test.describe('stateless MCP server', () => {
         await call('replace_product_weekly_schedule', { product_id: created.id, location_id: 'loc-demo', slots })
         await call('replace_product_weekly_schedule', { product_id: created.id, location_id: null, slots: [{ weekday: 1, start_time: '10:00' }] })
         await loginAs(page.request, baseURL!)
-        const collectionResponse = await page.request.get(`${baseURL}/api/editor/organizations/${organizationId}/collections?location_id=loc-demo`)
-        expect(collectionResponse.status()).toBe(200)
-        const collectionId = (await collectionResponse.json()).collections[0]?.id
-        expect(collectionId).toBeTruthy()
-        await page.goto(`${baseURL}/dashboard/ember-slice-demo/locations/brooklyn/products/experiences/${collectionId}/${created.id}/booking`)
+        // The location's schedule is the one Product editor's Booking, scoped to that location.
+        await page.goto(`${baseURL}/dashboard/ember-slice-demo/products/${created.id}/booking?location_id=loc-demo`)
         await waitForNuxtHydration(page)
         await expect(page.getByRole('link', { name: 'Duration 120 minutes', exact: true })).toBeVisible()
         await expect(page.getByRole('link', { name: 'Guest limit Up to 10 guests per session', exact: true })).toBeVisible()

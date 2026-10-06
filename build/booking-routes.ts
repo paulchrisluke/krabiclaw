@@ -9,7 +9,7 @@
 // the calendar day its parent is its Back, and a level with a parent may not
 // name one. A `meta.back` in the file would ride into both mounts.
 
-interface PageNode {
+export interface PageNode {
   name?: string
   path: string
   file?: string
@@ -28,7 +28,7 @@ const ACCOUNT_BOOKING_PATH = '/dashboard/account/bookings/:kind()/:id()'
 const ACCOUNT_DAY_PATH = '/dashboard/account/calendar/:day()'
 
 /** The node at a full path in Nuxt's nested page tree, whose children carry paths relative to their parent. */
-function nodeAt(nodes: readonly PageNode[], target: string, parent = ''): PageNode | undefined {
+export function nodeAt(nodes: readonly PageNode[], target: string, parent = ''): PageNode | undefined {
   for (const node of nodes) {
     const path = node.path.startsWith('/') ? node.path : `${parent}/${node.path}`
     if (path === target) return node
@@ -39,7 +39,7 @@ function nodeAt(nodes: readonly PageNode[], target: string, parent = ''): PageNo
 }
 
 /** A record with an `index.vue` child carries no name of its own; the names are on the children. */
-function renamed(node: PageNode, from: string, to: string): PageNode {
+export function renamed(node: PageNode, from: string, to: string): PageNode {
   return {
     ...node,
     name: node.name?.replace(from, to),

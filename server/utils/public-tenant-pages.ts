@@ -4,7 +4,7 @@ import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { faqBlockSource, faqItems, listFaqBlockQa } from '~/server/utils/location-qa'
 import type { FaqBlockSource } from '~/shared/faq-block'
 import { listOrganizationReviews } from '~/server/utils/organization-reviews'
-import { getTenantPageForEditor, getPublishedTenantPage, listPublishedTenantPagePaths, type TenantPageDto } from '~/server/utils/content/pages'
+import { getTenantPageForEditor, getPublishedTenantPage, listPublishedTenantPagePaths, publicTenantPageSql, type TenantPageDto } from '~/server/utils/content/pages'
 import { validateContentBlockData, type TenantPageBlock } from '~/utils/tenant-page-blocks'
 import type { MediaPlacementItem } from '~/server/utils/media-placement'
 import { COVER_SELECT, attachCoverMedia, coverJoinSql } from '~/server/utils/content/cover'
@@ -103,6 +103,7 @@ export async function listPublicTenantPageReferenceRows(
       LEFT JOIN content_documents rep ON rep.root_id = root.id AND rep.row_role = 'representation' AND rep.locale = ?
      WHERE root.organization_id = ? AND root.row_role = 'root' AND root.kind = 'page'
        AND root.path IS NOT NULL AND root.title IS NOT NULL
+       AND ${publicTenantPageSql('root')}
        AND root.id IN (SELECT value FROM json_each(?))
      ORDER BY root.sort_order ASC, root.title ASC
   `, [locale, organizationId, d1JsonStringSet(pageIds)])

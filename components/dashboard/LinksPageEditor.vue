@@ -215,18 +215,8 @@ function loadForm(value: { page: ApiLinksPage; items: LinkItem[] }) {
   items.value = value.items
 }
 
-let openedLocalizationTarget = ''
 watch(data, (value) => {
-  if (!value) return
-  loadForm(value)
-  const target = typeof route.query.localize === 'string' ? route.query.localize : ''
-  if (target.startsWith('content_block:') && target !== openedLocalizationTarget) {
-    const item = value.items.find(row => target === `content_block:${row.id}`)
-    if (item) {
-      openedLocalizationTarget = target
-      void navigateTo(`${itemsPath.value}/${item.id}`)
-    }
-  }
+  if (value) loadForm(value)
 }, { immediate: true })
 
 // `pending` is the only signal needed: the fetch is client-only, so it is true

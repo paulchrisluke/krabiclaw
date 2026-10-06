@@ -177,11 +177,18 @@ test('Kikuzuki Localize preserves its translated address', async ({ browser, pla
     const dashboardContext = await browser.newContext({ baseURL, storageState: await owner.storageState() })
     const cms = await dashboardContext.newPage()
     try {
-      // Languages is a row on the location's settings list; its control opens the sheet.
-      await openTenantPage(cms, `${baseURL}/dashboard/${organizationId}/locations/kikuzuki-japanese-robatayaki-izakaya/settings`, {})
-      await cms.getByRole('button', { name: 'Localize' }).click()
+      // Languages is a row on the location's settings list; it opens the
+      // location's translations mode, which its URL holds with the language.
+      const settingsPath = `/dashboard/${organizationId}/locations/kikuzuki-japanese-robatayaki-izakaya/settings`
+      await openTenantPage(cms, `${baseURL}${settingsPath}`, {})
+      await cms.getByRole('link', { name: /^Languages/ }).click()
+      await expect(cms).toHaveURL(`${baseURL}${settingsPath}?editMode=translations`)
       await cms.getByTestId('localize-language').click()
       await cms.getByRole('option', { name: /ไทย \(th\)/ }).click()
+      await expect(cms).toHaveURL(`${baseURL}${settingsPath}?editMode=translations&locale=th`)
+      // A reload reconstructs the same record, mode and language from the URL.
+      await cms.reload()
+      await expect(cms.getByTestId('localize-language')).toContainText('ไทย (th)')
       await expect(cms.getByTestId('localize-field-address.addressLines')).toHaveValue('325')
       await expect(cms.getByTestId('localize-field-address.sublocality')).toHaveValue('ตำบลอ่าวนาง')
       const saveResponse = await Promise.all([
@@ -191,6 +198,9 @@ test('Kikuzuki Localize preserves its translated address', async ({ browser, pla
       expect(saveResponse.status()).toBe(200)
       const payload = saveResponse.request().postDataJSON() as { values: { address: unknown } }
       expect(payload.values.address).toEqual({ addressLines: ['325'], sublocality: 'ตำบลอ่าวนาง', locality: 'กระบี่' })
+      // Saving leaves the mode, so the URL no longer reopens it.
+      await expect(cms).not.toHaveURL(/editMode=/)
+      await expect(cms.getByTestId('localize-language')).toHaveCount(0)
     } finally {
       await cms.close()
       await dashboardContext.close()

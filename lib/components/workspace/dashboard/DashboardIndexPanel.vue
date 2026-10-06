@@ -50,7 +50,9 @@
   arrival: an index of deterministic settings or fields names its first one, the
   way a listing editor lands on its first section; a list of records names none.
   Below the pane width the index is the screen and nothing is chosen for the
-  tenant. `replace`, so Back still leaves the index.
+  tenant. `replace`, so Back still leaves the index. A level in a mode named by
+  its URL's `editMode`, such as its translations, is that mode's screen, and
+  choosing a child would leave the mode; it opens one when the mode closes.
 */
 import type { RouteLocationRaw } from 'vue-router'
 
@@ -69,6 +71,7 @@ const level = useRouteLevel()
 const pair = computed(() => level.mode.value === 'pair')
 
 const pane = useDashboardPane()
+const route = useRoute()
 const router = useRouter()
 const scope = getCurrentScope()
 if (!scope) throw createError({ statusCode: 500, statusMessage: 'Dashboard pane scope is unavailable.', fatal: true })
@@ -78,9 +81,9 @@ if (!scope) throw createError({ statusCode: 500, statusMessage: 'Dashboard pane 
 onNuxtReady(() => {
   if (!scope.active) return
   scope.run(() => {
-    watch((): [RouteLocationRaw | null | undefined, boolean, RouteLevelMode] => [props.autoOpen, pane.value, level.mode.value], ([target, wide, mode]) => {
+    watch((): [RouteLocationRaw | null | undefined, boolean, RouteLevelMode, unknown] => [props.autoOpen, pane.value, level.mode.value, route.query.editMode], ([target, wide, mode, editMode]) => {
       // An index on its way out after a navigation elsewhere yields, so it opens nothing.
-      if (!target || !wide || mode !== 'index') return
+      if (!target || !wide || mode !== 'index' || editMode) return
       // An index whose rows are still loading offers itself as the first row; its own URL opens nothing.
       if (router.resolve(target).path === level.path.value) return
       void navigateTo(target, { replace: true })

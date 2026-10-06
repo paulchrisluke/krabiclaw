@@ -36,7 +36,7 @@
         <p class="mt-1 text-sm text-muted">{{ progress.completed }}/{{ progress.total }} fields translated in {{ progress.locale }}.</p>
         <ul v-if="progress.opportunities.length">
           <li v-for="item in progress.opportunities" :key="item.id" class="border-b border-default last:border-b-0">
-            <NuxtLink :to="`${editor.organizationDashboardPath.value}/${item.path}`" class="flex items-center justify-between gap-4 py-6">
+            <NuxtLink :to="item.path" class="flex items-center justify-between gap-4 py-6">
               <span class="text-base text-highlighted">{{ item.label }}</span>
               <span class="flex items-center gap-2 text-sm text-muted">
                 {{ item.total - item.completed }} left

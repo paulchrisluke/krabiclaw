@@ -21,6 +21,7 @@
 </template>
 
 <script setup lang="ts">
+import { useTenantPageId } from '~/components/dashboard/TenantPageEditorPage.vue'
 import TenantPageBlockItemEditor, { useTenantPageBlockRecords } from '~/components/dashboard/TenantPageBlockItemEditor.vue'
 import { tenantPageBlockEditorKey } from '~/components/dashboard/TenantPageBlockEditorPage.vue'
 import type { TenantPageBlockCollection } from '~/utils/tenant-page-block-sections'
@@ -29,7 +30,7 @@ definePageMeta({ layout: 'dashboard' })
 
 const route = useRoute()
 const editor = inject(tenantPageBlockEditorKey)!
-const pageId = String(route.params.pageId ?? '')
+const pageId = useTenantPageId().value
 const blockId = String(route.params.blockId ?? '')
 const key = String(route.params.section ?? '')
 const field = String(route.params.field ?? '')

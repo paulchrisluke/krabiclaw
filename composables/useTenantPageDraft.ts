@@ -55,6 +55,8 @@ export interface TenantPageListRow {
   recipe: string | null
   sort_order: number
   updated_at: string
+  /** The product the source page belongs to, or null for an ordinary page. */
+  product_id: string | null
   /** False when the site's template renders a document at this path; see deleteTenantPage. */
   removable: boolean
 }
@@ -74,18 +76,6 @@ export function isTenantPageResponse(value: unknown): value is { page: TenantPag
     && isRecord(page.document) && typeof page.document.updated_at === 'string'
 }
 
-/**
- * Pages a manager already owns are edited there, not in the Pages list: a
- * location's page belongs to the location, and a recipe page is the Menu, the
- * Q&A or the Blog seen from the other side. Listing them again would offer two
- * ways to edit one thing, and the second one would not know what the first one
- * means.
- */
-const MANAGED_PAGE_RECIPES = new Set([
-  'locations', 'menu', 'products', 'reservations', 'qa', 'reviews',
-  'posts', 'photos', 'blog', 'services', 'pricing', 'donate', 'schedule',
-])
-
 export interface TenantPageRow {
   id: string
   recipe: string | null
@@ -98,14 +88,15 @@ export interface TenantPageRow {
 }
 
 /**
- * The rows the Pages list shows, in its order, and therefore what the site
- * index's Pages card counts. The links page leads: it is the page a tenant shares
- * most, it opens its own editor, and it is listed before its row exists because
- * that editor creates the row on the first save. Then the front page, then the
- * rest.
+ * The rows the Pages list shows, in its order. Every page document is here
+ * except one that belongs to a product, which is that product's Page content
+ * in Catalog — the relationship the server returns says so, never its path or
+ * recipe. The links page leads: it is the page a tenant shares most, it opens
+ * its own editor, and it is listed before its row exists because that editor
+ * creates the row on the first save. Then the front page, then the rest.
  */
 export function tenantPageRows(pages: readonly TenantPageListRow[]): TenantPageRow[] {
-  const editable = pages.filter(page => (!page.recipe || !MANAGED_PAGE_RECIPES.has(page.recipe)) && !page.path.startsWith('/locations/'))
+  const editable = pages.filter(page => !page.product_id)
   const links = editable.find(page => page.recipe === 'links')
   return [
     { id: links?.id ?? 'links', recipe: 'links', title: 'Links page', summary: '/links', removable: false, updatedAt: links?.updated_at ?? '' },
@@ -127,6 +118,7 @@ export function isTenantPageListResponse(value: unknown): value is { pages: Tena
   return isRecord(value) && Array.isArray(value.pages)
     && value.pages.every(page => isRecord(page) && typeof page.id === 'string'
       && typeof page.page_id === 'string' && typeof page.title === 'string' && typeof page.path === 'string'
+      && (page.product_id === null || typeof page.product_id === 'string')
       && typeof page.removable === 'boolean')
 }
 

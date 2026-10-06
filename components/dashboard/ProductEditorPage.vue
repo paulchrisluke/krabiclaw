@@ -124,6 +124,8 @@ export interface ProductEditor {
   saveLabel: Ref<string>
   saveDisabled: Ref<boolean>
   setPrimaryImage: (assetId: string | null) => Promise<void>
+  /** Make the page this product owns, when it has none; opening Page content never does. */
+  createPage: () => Promise<void>
   addOption: () => void
   removeOption: (index: number) => void
   setOptionValues: (index: number, values: string[]) => void
@@ -307,6 +309,9 @@ const draft = useState<ProductForm>(draftKey, () => ({
   image_asset_id: null as string | null,
 }))
 const form = reactive(draft.value)
+// One key per product being created, kept across the walk's leaves and retries.
+const createKeyName = `product-create-key:${organizationId}`
+const createKey = useState(createKeyName, () => crypto.randomUUID())
 // A walk opened from a filtered Catalog already knows the kind it is creating.
 if (isNew.value && !form.kind && PRODUCT_KINDS.includes(route.query.kind as ProductKind)) form.kind = route.query.kind as ProductKind
 
@@ -526,6 +531,10 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => {
       { id: 'photo', label: 'Photo', summary: image ? '' : 'No photo yet', placeholder: !image, to: sectionPath('photo') },
       { id: 'name', label: 'Name', summary: form.name || 'Not named yet', placeholder: !form.name, to: sectionPath('name') },
       { id: 'description', label: 'Description', summary: form.description || 'Nothing written yet', placeholder: !form.description, to: sectionPath('description') },
+      // A service is shown by a page of its own; any product that already owns one edits it here.
+      ...(product.value.page || form.kind === 'service'
+        ? [{ id: 'page', label: 'Page content', summary: product.value.page ? product.value.page.path : 'No page', placeholder: !product.value.page, to: sectionPath('page') }]
+        : []),
       { id: 'price', label: 'Price', summary: priceSummary(), placeholder: priceSummary() === 'No price set', to: sectionPath('price') },
       { id: 'options', label: 'Variants', summary: product.value.variants.length > 1 ? `${product.value.variants.length} variants` : 'One version', to: sectionPath('options') },
       {
@@ -676,8 +685,20 @@ async function commit(bookingConcern?: BookingConcern) {
   saveError.value = null
   try {
     if (isNew.value) {
+      // A service is created with the page that shows it, in one write: the
+      // name is the page's first title, the server gives it a free
+      // /services/<slug>, and nothing else is invented for it. It starts
+      // sale-inactive, the page and the offer drafted before anything is sold.
+      // The key makes a retry after a lost response return this product
+      // rather than a second.
       const created = await dashboardApi(`/api/editor/organizations/${organizationId}/products`, {
-        method: 'POST', body: payload(), validate: isOne,
+        method: 'POST',
+        body: {
+          ...payload(),
+          ...(form.kind === 'service' ? { active: false, page: { title: form.name.trim(), pageType: 'custom', recipe: null, blocks: [] } } : {}),
+          idempotency_key: createKey.value,
+        },
+        validate: isOne,
       })
       // A product created in a location's catalog is offered there, and one
       // created from a collection joins it — explicit writes, each named by the
@@ -689,7 +710,7 @@ async function commit(bookingConcern?: BookingConcern) {
       if (createCollectionId.value) await setCollectionMembership(created.product.id, createCollectionId.value, true)
       // The record it became, not the `new` form it was, so Back from a saved
       // product goes to Catalog and never to an empty Add screen.
-      clearNuxtState(draftKey)
+      clearNuxtState([draftKey, createKeyName])
       await navigateTo(router.resolve({ path: `${catalogPath.value}/${created.product.id}`, query: { location_id: id ?? undefined } }).fullPath, { replace: true })
       return
     }
@@ -858,6 +879,30 @@ function revert() {
   schedule.value = savedSchedule.value.map(slot => ({ ...slot }))
 }
 
+/**
+ * A service that has no page yet gets one, bound to it in the same write: its
+ * name as the first title and its slug under /services/. The page writer
+ * refuses a path somebody already holds, and that refusal is shown.
+ */
+async function createPage() {
+  const row = product.value
+  if (!row || row.page) return
+  saving.value = true
+  saveError.value = null
+  try {
+    await dashboardApi(`/api/editor/organizations/${organizationId}/pages`, {
+      method: 'POST',
+      body: { productId: row.id, path: `/services/${row.slug}`, title: row.name, pageType: 'custom', recipe: null, blocks: [] },
+      validate: isRecord,
+    })
+    await load({ force: true })
+  } catch (error) {
+    saveError.value = getErrorMessage(error, 'Failed to create the page')
+  } finally {
+    saving.value = false
+  }
+}
+
 async function setPrimaryImage(assetId: string | null) {
   photoError.value = null
   try {
@@ -965,6 +1010,7 @@ provide(productEditorKey, {
   saveLabel,
   saveDisabled,
   setPrimaryImage,
+  createPage,
   addOption,
   removeOption,
   setOptionValues,

@@ -8,12 +8,11 @@
       <USkeleton v-for="index in 6" :key="index" class="h-32 rounded-xl" />
     </div>
     <UAlert v-else-if="editor.error.value" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="editor.error.value" />
-    <EditorNavigationList v-else-if="editor.location.value" :groups="editor.navigationGroups.value" :active-item="level.child.value" @act="onRowAction" />
+    <EditorNavigationList v-else-if="editor.location.value" :groups="editor.navigationGroups.value" :active-item="level.child.value" />
   </DashboardIndexPanel>
 
   <DashboardResourceLocalization
     v-if="editor.location.value"
-    v-model:open="localizeOpen"
     row-trigger
     :organization-id="organizationId"
     resource-type="business_location"
@@ -208,7 +207,7 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
     items: [
       { id: 'status', label: 'Status', summary: statusSummary.value, to: `${settingsBase.value}/status` },
       { id: 'slug', label: 'Link', summary: slugSummary.value, to: `${settingsBase.value}/slug` },
-      { id: 'languages', label: 'Languages', summary: 'Translate the name, description and address', action: { label: 'Localize' } },
+      { id: 'languages', label: 'Languages', summary: 'Translate the name, description and address', to: `${settingsBase.value}?editMode=translations` },
     ],
   }])
 
@@ -439,11 +438,6 @@ const level = useRouteLevel()
 const dashboardLocation = useDashboardLocation()
 const organizationId = await useDashboardOrganizationId()
 const editor = await useLocationEditor(organizationId, dashboardLocation.currentLocationId, null, level.path)
-
-const localizeOpen = ref(false)
-function onRowAction(id: string) {
-  if (id === 'languages') localizeOpen.value = true
-}
 
 useSeoMeta({ title: 'Settings | Krabiclaw', robots: 'noindex, nofollow' })
 </script>

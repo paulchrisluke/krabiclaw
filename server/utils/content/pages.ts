@@ -2,7 +2,6 @@ import { HTTPError } from 'nitro';
 import { executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import {
-  createContentDocumentWithBlocks,
   formatBlockOutline,
   getContentDocumentById,
   getContentEditorSnapshotForDocument,
@@ -471,6 +470,9 @@ export async function listTenantPages(db: DbClient, organizationId: string, opts
     recipe: row.recipe,
     sort_order: row.sort_order,
     updated_at: row.updated_at,
+    // The product this page belongs to, read off its source page. A bound page
+    // is edited from its product; the relationship, not its path, says so.
+    product_id: row.product_id,
     removable: !templateRendersPageDocumentAt(template, normalizeTenantPagePath(row.path)),
   }))
 }
@@ -502,7 +504,7 @@ export async function getPublishedTenantPage(db: DbClient, organizationId: strin
     '       v.title, v.summary, p.product_id,',
     `       json_extract(p.metadata_json, '$.page_type') AS page_type, json_extract(p.metadata_json, '$.recipe') AS recipe, p.sort_order, v.updated_at`,
     `  FROM content_documents v JOIN content_documents p ON p.id = COALESCE(v.root_id, v.id) AND p.row_role = 'root' AND p.kind = 'page'`,
-    " WHERE v.row_role IN ('root','representation') AND v.kind = 'page' AND v.organization_id = ? AND v.locale = ? AND v.path = ? LIMIT 1",
+    ` WHERE v.row_role IN ('root','representation') AND v.kind = 'page' AND v.organization_id = ? AND v.locale = ? AND v.path = ? AND ${publicTenantPageSql('p')} LIMIT 1`,
   ].join('\n'), [organizationId, candidateLocale, normalizedPath])
   const row = await selectPublished(resolvedLocale)
   if (!row) return null
@@ -738,8 +740,32 @@ export async function applyOnboardingTenantPages(
   return { updated, created }
 }
 
-export async function createTenantPage(db: DbClient, input: { organizationId: string; userId: string | null; data: TenantPageEditorInput; trustedSystemPage?: boolean; env: CloudflareEnv }) {
-  if (input.data.productId != null) badRequest('Create the source page before linking a Product')
+type TenantPageCreateInput = {
+  organizationId: string
+  userId: string | null
+  data: TenantPageEditorInput
+  trustedSystemPage?: boolean
+  env: CloudflareEnv
+  /**
+   * The Product named by `data.productId` is inserted earlier in the same
+   * batch, so it cannot be read yet; its ownership is the caller's write and
+   * the binding's foreign key, not a read here.
+   */
+  productInSameBatch?: boolean
+}
+
+/**
+ * Everything creating a page reads and validates, and the statements that
+ * write it, without running them. Creating a page and creating a Product with
+ * its page share this preparation, so there is one page writer whichever
+ * commits it.
+ *
+ * A source page may be created already bound to a Product; the binding is the
+ * root row's `product_id`, so it lands with the page or not at all. One page
+ * per Product is the database's unique index, which a concurrent bind cannot
+ * get past; the read here only turns the common case into a clear message.
+ */
+export async function prepareTenantPageCreate(db: DbClient, input: TenantPageCreateInput): Promise<{ variantId: string; path: string; queries: BatchQuery[] }> {
   const locale = await resolveLocale(db, input.organizationId, input.data.locale)
   const existingPage = input.data.pageId
     ? await queryFirst<{ id: string; organization_id: string; page_type: TenantPageType; recipe: string | null } | null>(db, `
@@ -750,6 +776,16 @@ export async function createTenantPage(db: DbClient, input: { organizationId: st
       `, [input.data.pageId, input.organizationId])
     : null
   if (input.data.pageId && !existingPage) notFound('Tenant page parent not found')
+  const productId = input.data.productId == null ? null : asString(input.data.productId, 'productId')
+  if (productId && existingPage) badRequest('Bind the Product on the source page, not a translation')
+  if (productId && !input.productInSameBatch) {
+    if (!await queryFirst(db, 'SELECT id FROM products WHERE id = ? AND organization_id = ?', [productId, input.organizationId])) {
+      badRequest('Product is not owned by this organization')
+    }
+    if (await queryFirst(db, "SELECT id FROM content_documents WHERE organization_id = ? AND product_id = ? AND row_role = 'root'", [input.organizationId, productId])) {
+      conflict('Product already has a canonical page; unbind it there first')
+    }
+  }
   const localeRow = await queryFirst<{ is_source: number } | null>(db, `
     SELECT is_source FROM organization_locales WHERE organization_id = ? AND locale = ? LIMIT 1
   `, [input.organizationId, locale])
@@ -790,20 +826,45 @@ export async function createTenantPage(db: DbClient, input: { organizationId: st
     // It used to be accepted and dropped: a caller that asked for a position got
     // 0 and no error.
     ...(existingPage ? { rowRole: 'representation', rootId: pageId, locale } : {
-      rowRole: 'root', locale: 'en', metadata: { page_type: metadata.pageType, recipe: metadata.recipe }, source: 'pages',
+      rowRole: 'root', locale: 'en', metadata: { page_type: metadata.pageType, recipe: metadata.recipe }, source: 'pages', productId,
       ...(typeof effectiveData.sortOrder === 'number' ? { sortOrder: effectiveData.sortOrder } : {}),
     }),
     path, title: metadata.title, summary: metadata.summary, createdBy: input.userId, updatedBy: input.userId,
   }
-  await createContentDocumentWithBlocks(db, representation, blocksAsInputs(blocks), {
+  const prepared = prepareContentDocumentWithBlocks(representation, blocksAsInputs(blocks), {
     additionalQueriesAfter: [...placementQueries, publicResourceCacheInvalidationQuery(input.organizationId, 'tenant-page-create')],
   })
+  return { variantId, path, queries: prepared.queries }
+}
+
+/** True when a batch failed on the one-page-per-Product index. */
+export function isProductPageConflict(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return /UNIQUE constraint failed/.test(message) && /content_documents\.product_id/.test(message)
+}
+
+/**
+ * The social card for a page that was just written. It runs after the commit,
+ * so a failure here is reported as itself, never as a page that was not made.
+ */
+export async function refreshTenantPageCard(db: DbClient, env: CloudflareEnv, created: { variantId: string; path: string }, actorId: string | null) {
   // The home page has no card of its own, and the organization's card draws
   // the share image rather than anything on the page.
-  if (path !== '/') {
-    await refreshSocialCard({ db, env: input.env, owner: { owner_type: 'content_document', owner_id: variantId }, actorId: input.userId })
+  if (created.path !== '/') {
+    await refreshSocialCard({ db, env, owner: { owner_type: 'content_document', owner_id: created.variantId }, actorId })
   }
-  return { page: await getTenantPageForEditor(db, variantId) }
+}
+
+export async function createTenantPage(db: DbClient, input: TenantPageCreateInput) {
+  const prepared = await prepareTenantPageCreate(db, input)
+  try {
+    await executeBatch(db, prepared.queries, { operation: 'Create tenant page' })
+  } catch (error) {
+    if (isProductPageConflict(error)) conflict('Product already has a canonical page; unbind it there first')
+    throw error
+  }
+  await refreshTenantPageCard(db, input.env, prepared, input.userId)
+  return { page: await getTenantPageForEditor(db, prepared.variantId) }
 }
 
 /**
@@ -1011,12 +1072,24 @@ export async function updateTenantPage(db: DbClient, variantId: string, input: {
   return { page: await getTenantPageForEditor(db, variantId, input.scope) }
 }
 
+/**
+ * Whether a page is public, as SQL over its root row. A page a Product owns is
+ * shown while that Product is published on the site — the Product's
+ * publication is its visibility, so a new, unpublished service's page stays
+ * private — and any other page always is. Public reads, lists, page grids and
+ * the sitemap all ask this; a preview, which is authorized, does not.
+ */
+export function publicTenantPageSql(root: string): string {
+  return `(${root}.product_id IS NULL OR EXISTS (SELECT 1 FROM product_publications pub WHERE pub.organization_id = ${root}.organization_id AND pub.product_id = ${root}.product_id AND pub.published = 1))`
+}
+
 export async function listPublishedTenantPagePaths(db: DbClient, organizationId: string, locale?: string | null) {
   const resolvedLocale = await resolveLocale(db, organizationId, locale)
   return await queryAll<{ id: string; path: string; title: string; summary: string | null; sort_order: number; updated_at: string }>(db, `
     SELECT v.id, v.path, v.title, v.summary, p.sort_order, v.updated_at
       FROM content_documents v JOIN content_documents p ON p.id = COALESCE(v.root_id, v.id)
      WHERE v.row_role IN ('root','representation') AND v.kind = 'page' AND v.organization_id = ? AND v.locale = ?
+       AND ${publicTenantPageSql('p')}
      ORDER BY v.path ASC
   `, [organizationId, resolvedLocale])
 }

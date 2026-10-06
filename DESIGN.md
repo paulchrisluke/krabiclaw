@@ -23,8 +23,8 @@ Navigation questions are almost always one of these two, and confusing them is
 what produced the CMS's earlier inconsistency.
 
 **Chain** — how deep the content nests. Unbounded, driven by the domain: an
-index may open another index. `site > location > products > collection > dish` is five
-levels and that is fine.
+index may open another index. `Menu > Website > Pages > page > section > field`
+is six levels and that is fine.
 
 **Presentation** — how one node renders. Exactly two renderings, chosen by
 viewport width, never by depth.
@@ -36,7 +36,7 @@ never limits how deep the chain goes.
 
 | Term | Meaning | Example |
 | --- | --- | --- |
-| **Root** | The scope switcher. Not editable content. | Organization, site |
+| **Root** | The scope switcher. Not editable content. | Organization, Personal |
 | **Index** | A screen whose job is to route onward. Its rows are links, and each row previews its current value. | Location, Menu, one dish |
 | **Leaf** | A screen that edits **one concern** and commits. | A dish's price, a post's body |
 
@@ -48,8 +48,118 @@ There are two words here and they are the same two everywhere: **index** and
 **leaf**. Each is a kind of level, each has exactly one shell, and nothing in
 the dashboard is a third thing.
 
-Do not add a level to make a screen feel tidier. Add one when the child is a
-thing the owner names, orders, or deletes independently.
+**A level owns something.** A new destination must own a coherent task,
+entity or set of settings — a thing the owner names, orders, deletes or
+configures as one. A navigation layer that exists only as a decorative
+category is not a level. A navigation list has no inert headings: every row is
+a destination or an explicit action. An ordinary heading inside an article, a
+preview or a form is not navigation and stays text.
+
+**Admitting a new concern.** Before adding one, name its data owner, its
+canonical operation, the editor or control that already edits it, its
+canonical parent, its explicit scope, its permission or entitlement, and how
+its write is read back. Add it beneath that owner, or link to the editor that
+already exists. A new Product kind adds its rows to the one Product editor,
+not another editor tree; a new theme adds no CMS route or writer. A real gap
+is resolved here and in the shared implementation together.
+
+## The organization's workspace
+
+`docs/design/airbnb-navigation-map.md` is the captured Airbnb host map. It is
+evidence; the decisions below are KrabiClaw's. `O` is `/dashboard/:orgSlug`.
+
+**Primary navigation** is the same five destinations, in this order, for every
+theme:
+
+| Tab | URL | Holds |
+| --- | --- | --- |
+| Today | `O` | the day's agenda |
+| Calendar | `O/calendar` | bookings and availability by day |
+| Catalog | `O/products` | every Product the organization carries, of every kind |
+| Messages | `O/messages` | guest conversations |
+| Menu | `O/settings` | everything else, flat |
+
+Catalog is a root: it has no Back to Menu, and its label does not change with
+the theme or with what the catalog holds. Personal scope
+(`/dashboard/account/...`) has its own navigation and never shows Catalog.
+
+**Menu** is flat: the Earnings and Insights cards, then Website, Posts,
+Locations, Team, Integrations, Platform accounts, Account settings, Switch to
+Personal and Log out. The desktop panel and the narrow Menu page render the one
+model in `useOrganizationSettingsNavigation`. Earnings is the way to the
+organization's payment settings, so Menu has no Payments row.
+
+**Website** (`O/settings/website`) is a real index: Pages, Blog, Reviews and
+Q&A, Brand, Status, Domains, Languages, Currency, Search appearance, and Website
+booking where the organization has a booking mode. On desktop it opens Pages,
+and Pages chooses no page.
+
+### Who owns what
+
+| Owner | Holds |
+| --- | --- |
+| Product, its variants and prices | what is sold: kind, pricing, booking, publication, locations, collections, its page |
+| A page, article or post | its own content |
+| Location | its place, hours, photos and reservation policy |
+| Member | availability and public profile |
+| Organization | the shared site: brand, domains, languages, connections |
+| User | personal preferences and security |
+
+Themes own nothing. A theme renders what these hold; it adds no CMS route,
+editor or writer, and it never grants or hides an authorization.
+
+### Airbnb, mapped
+
+| Airbnb | KrabiClaw |
+| --- | --- |
+| Listings holds homes, experiences and services | Catalog holds menu items, experiences, services and products in one list, filtered by `?kind` |
+| Homes and experiences have different editors | One Product editor at `O/products/:productId` for every kind: kind changes wording and rows, not the route or the editor |
+| Listing editor rows preview their values and open one concern | Product, location, page, post and member records do the same |
+| Pricing and availability link to the calendar; Earnings links to payouts | Catalog links to Calendar and member availability; Earnings links to the organization's Payments |
+| — | Blog/Docs (an article canvas), short Posts and Website settings have no equivalent and use the same record → index → concern pattern |
+
+### One record, many entrances
+
+An entrance is a link, not a parent. Several screens may link to one record;
+none of them forks its route, draft, writer or data source.
+
+| From | To |
+| --- | --- |
+| A location | `O/products?location_id=`, `O/posts?location_id=`, `O/qa?location_id=`: the same lists, scoped |
+| A collection | the Product's own `O/products/:productId` |
+| A Product | its Page content at `O/products/:productId/page`, its location relationships, member availability, Calendar |
+| Search, MCP `admin_edit_url`, notifications, the agenda, Languages | the record's editor, built by `server/utils/dashboard-links.ts` and nowhere else |
+
+`location_id` is a scope and `locale` an identity. Both are URL state,
+validated before anything loads or writes, kept across children and reload,
+and never guessed from a previous screen. A scope never becomes a global write.
+
+### Products and their pages
+
+A Product may own one page, bound by the page root's `product_id`; a locale
+representation inherits the binding through its root. Pages lists only the
+pages no Product owns. A Product's page is edited as that Product's Page content
+at `O/products/:productId/page`, with the same levels Pages uses, mounted a
+second time under it (see *Nesting a level without changing its URL*). A
+Product with no page shows No page and Create page; nothing infers a binding
+from a `/services/` path, a matching title or the only candidate.
+
+Creating a service creates the Product, its default variant, its page at a free
+`/services/<slug>` and the binding in one batch, under an idempotency key, so a
+retry returns the same pair. It starts sale-inactive and unpublished, with no
+price and no booking. A bound page is public exactly while its Product is
+published on the site; there is no second publish flag for it.
+
+### Organizations
+
+The tenant is Better Auth's organization, and the dashboard calls it that:
+Organizations, Switch to an organization, New organization, Delete
+organization. Business, site and workspace are not names for it. Choosing,
+creating and deleting one live in Account settings → Organizations; deleting is
+owner-only, asked of Better Auth's `organization.hasPermission` and done by
+`organization.delete`. Words that describe a real business to a guest or a
+provider — Stripe's business information, a guest's conversations with
+businesses — keep their natural wording.
 
 ## Leaf size
 
@@ -77,6 +187,12 @@ opening its own leaf.
 
 So when a form grows, the answer is never a smaller control or a tighter
 column. It is another level.
+
+**A compound control is one concern, and stays one.** A palette, a logo's
+presentation, a media grid and a day's list of times each answer one question
+with several inputs. Splitting them into levels to satisfy a count would
+scatter one decision, so each renders inside one leaf and commits with its Save.
+The article canvas, below, is the only other exception.
 
 ## Controls
 
@@ -201,7 +317,7 @@ two different answers.
 
 Depth is counted in matched records, not URL segments, because a nested level
 may keep a URL its parent does not prefix — Pages is at `/:orgSlug/pages` under
-Menu at `/:orgSlug/settings`. A directory's `index.vue` is a second record at the
+Website at `/:orgSlug/settings/website`. A directory's `index.vue` is a second record at the
 same URL and is one level, not two.
 
 | Mode | When | What the level renders |
@@ -232,10 +348,12 @@ parent. The logical parent is the same parent Back uses. Pane topology is
 independent of whether the level contains records, fields, settings, media, or
 another index.
 
-True workspace roots stand alone and use the frame: Today, Calendar, Locations,
+True workspace roots stand alone and use the frame: Today, Calendar, Catalog,
 Messages, and Menu itself, as Airbnb's `/hosting/listings` grid does. A list of
-records is not a root merely because its rows are records — Pages, Blog,
-Reviews and Q&A, and Team are rows on Menu, so each renders as `Menu | Pages`.
+records is not a root merely because its rows are records — Website, Posts,
+Locations and Team are rows on Menu, so each renders as `Menu | Locations`, and
+Pages, Blog, Reviews and Q&A, and Brand are rows on Website, so each renders as
+`Website | Pages`.
 
 **Auto-selection.** Auto-selection answers whether an index may choose one of
 its own children on arrival. It does not determine whether the index has a
@@ -244,10 +362,10 @@ parent pane.
 | The index's own children | `autoOpen` | Examples |
 | --- | --- | --- |
 | deterministic leaves or settings sections | its first available child | page editor, product, post, Q&A, Brand, Website, Integrations, location settings, Account settings, booking Change |
-| arbitrary records | none | Pages, Blog posts, Locations, a location's Posts, collections, products in a collection, Q&A, Team, Google Maps locations |
+| arbitrary records | none | Catalog, Pages, Blog posts, Posts, Locations, collections, products in a collection, Q&A, Team, Google Maps locations |
 
 Which record a tenant meant to open is not something the screen can guess, and
-a record is a place, not a field. So `Menu | Pages` is correct with no page
+a record is a place, not a field. So `Website | Pages` is correct with no page
 chosen, and `Account settings | Personal information` is correct because
 Account settings has a deterministic first section. Measured on a live Airbnb
 host account at 1332px (2026-09-21): the listing editor opens `photo-tour` on
@@ -261,7 +379,27 @@ opening the child makes the level a `pair`, which is what stops it. There is no
 deeper — opens the first child again. It is ignored when the target is the
 index's own URL, which is what an index still loading offers as its first row.
 Below the pane width the index *is* the screen and nothing is chosen on the
-tenant's behalf.
+tenant's behalf. It waits while the level is in a mode its URL names, such as
+its translations, and opens the child when the mode closes.
+
+### What the URL holds
+
+A URL names a record, a concern, a keyed item, a tab or a mode, and a direct
+entry or a reload reconstructs it. A control's temporary state — a picker, a
+popover, a filter chip, a confirmation — is not in it.
+
+- **Keyed items use their ids.** An option is `options/:optionId`, a price
+  `options/prices/:variantId`, a block `sections/:blockId`; never an index, a
+  name or a combination label, so reordering or renaming never changes which
+  item a saved URL edits.
+- **Views keep their query.** Blog or Docs is `?collection=`, Q&A or Reviews
+  is `?tab=`, a catalog kind is `?kind=`.
+- **A substantive mode is a query on its record's own URL.** Translations are
+  `?editMode=translations&locale=<locale>`. `DashboardResourceLocalization`
+  opens on arrival, and writes the URL as it opens, changes language and closes;
+  without `locale` it is on the source language and picks nothing. The record
+  whose level the URL ends at owns the mode, so a Product and its page never
+  both open, and a row that opens the mode is a link to it.
 
 ### Beside its index, a leaf carries only Save
 
@@ -293,10 +431,12 @@ shallower matched level, and Back goes to that level's URL.
 
 `meta.back` exists only for a workspace root that leaves for another root which
 is not a persistent pane beside it — Account settings returning to the
-organization's Menu, a location editor returning to Locations, a booking
-returning to Today. It is never used to model CMS pane ancestry, and
-`useRouteLevel()` throws when a level that has a matched parent declares one.
-`grep -rn "back: '" pages/` is the complete list of those exits.
+account's Menu, Earnings returning to the organization's Menu, a new location
+returning to Locations, a booking returning to Today. It is never used to model
+CMS pane ancestry, and `useRouteLevel()` throws when a level that has a matched
+parent declares one. The pages declare theirs with `definePageMeta`; the
+booking's is set where `build/booking-routes.ts` mounts it, because the same
+files have a different parent under the calendar day.
 
 A tab root has nothing above it, so it renders no Back at all.
 
@@ -310,17 +450,26 @@ while every way out of it leads there.
 A level whose URL must not change when it moves under its logical parent is
 nested as a file and given an absolute path:
 
-1. put the page file under its logical parent — `settings/pages.vue`,
-   `settings/pages/**`;
+1. put the page file under its logical parent — `settings/website/pages.vue`,
+   `settings/website/pages/**`;
 2. give the moved route an absolute `path` with `definePageMeta`, e.g.
    `definePageMeta({ path: '/dashboard/:orgSlug/pages' })`;
 3. the browser URL stays what it was, and Vue Router keeps the component nesting
    in `route.matched`.
 
 Its children keep relative paths and extend its URL as before. This is how
-Pages, Blog, Brand, and Reviews and Q&A sit under Menu and Links sits under
-Pages. There is no second route graph, layout registry, redirect, or URL-prefix
-rule; the route tree is the whole hierarchy.
+Pages, Blog, Brand, and Reviews and Q&A sit under Website, Posts and Locations
+sit under Menu, and Links sits under Pages. There is no layout registry,
+redirect, or URL-prefix rule; the route tree is the whole hierarchy.
+
+**One subtree, two parents, is mounted twice.** A file sits in one place in the
+tree, so where the same levels must render under a second parent, the
+`pages:extend` hook in `nuxt.config.ts` mounts them again: the same files, a
+second set of records with their own names. `build/booking-routes.ts` mounts a
+booking under its calendar day, and `build/page-editor-routes.ts` mounts the
+page editor's levels under a Product's Page content. Those levels read which
+page they edit from the editor above them, never from a route param. The
+generated router, not the filesystem, is the complete tree.
 
 **A level whose own record has left `route.matched` is `stale`** — it is being
 torn down after a navigation elsewhere — and it answers nothing: no parent, no
@@ -415,9 +564,9 @@ nowhere to put.
 large. When there is no image, show a muted icon in the *same footprint* so a
 list does not reflow between rows that have one and rows that do not.
 
-**Unsupported routes 404, and so does a record that is not there.** Capability
-gating happens in `middleware/dashboard.global.ts` and throws a Nuxt 404. Never
-redirect and never render a fallback.
+**Unsupported routes 404, and so does a record that is not there.** The level
+that cannot render its record or concern for this organization raises Nuxt's
+404 itself. Never redirect and never render a fallback.
 
 The dashboard renders on the client, so a 404 is raised with `showError`, never
 with a bare `throw` in a page's setup. Measured 2026-09-21: a synchronous
@@ -493,13 +642,21 @@ needs a new visual device needs a reason written beside it.
 Airbnb has no equivalent, so these are additions rather than parity, and each
 one says so where it lives:
 
-- **Platform accounts.** Krabiclaw runs on Krabiclaw, so its own business's Menu
-  carries a row no tenant sees: every account on the platform, and
-  impersonation. It is gated on the site's template being `platform`, and it
-  sits beside Team and Billing because it is about accounts rather than about a
-  site. Internal admin tooling is not in Airbnb's host dashboard at all.
-- **A URL at every level.** Airbnb stops one level below a hub; we keep one, so
-  every leaf is shareable and reloadable.
+- **Platform accounts.** A Menu row no tenant sees: every account on the
+  platform, and impersonation. It is shown only to a user whose Better Auth
+  role is admin, on any organization, and Better Auth's admin plugin enforces
+  it on the server; a template never decides it. Internal admin tooling is not
+  in Airbnb's host dashboard at all.
+- **One editor for every kind.** Airbnb edits a home in a two-column editor and
+  an experience or service in a step-based one. Every Product kind here uses
+  the one Product editor.
+- **Writing and short posts.** Blog/Docs articles are written on a canvas, and
+  short Posts go to a website and its connected social accounts. Airbnb has
+  neither.
+
+Deep links are parity, not a difference: Airbnb gives sections, leaves, keyed
+items, tabs and some modes their own URLs (`house-rules?feature=checkInOut`,
+`?editMode=true`), and so do we.
 
 ## Naming
 

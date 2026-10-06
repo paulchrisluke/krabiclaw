@@ -9,16 +9,15 @@
       <USkeleton v-for="i in 4" :key="i" class="h-32 rounded-xl" />
     </div>
     <UAlert v-else-if="loadError" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="loadError" />
-    <EditorNavigationList v-else :groups="navigationGroups" :active-item="detailKey" @act="onRowAction" />
+    <EditorNavigationList v-else :groups="navigationGroups" :active-item="detailKey" />
   </DashboardIndexPanel>
 
   <!-- Translating the brand is a row on the Brand list; this is the sheet it opens. -->
   <DashboardResourceLocalization
     v-if="surface === 'brand'"
-    v-model:open="localizeOpen"
     row-trigger
     :organization-id="organizationId"
-    resource-type="site"
+    resource-type="organization"
     :resource-id="organizationId"
     resource-label="brand"
     :fields="brandLocalizationFields"
@@ -99,7 +98,6 @@ export interface LocalizationProgress { locale: string; completed: number; total
 export interface OrganizationSettingsEditor {
   form: Reactive<OrganizationSettingsForm>
   organizationId: string
-  organizationDashboardPath: ComputedRef<string>
   loading: Ref<boolean>
   saving: Ref<boolean>
   saveDisabled: ComputedRef<boolean>
@@ -226,12 +224,8 @@ const brandItems = computed<EditorNavigationItem[]>(() => [
   ...(loadedSettings.value?.palette ? [{ id: 'color', label: 'Colors', summary: paletteSource.value === 'custom' ? 'Your colors' : 'Template colors', icon: 'i-lucide-palette', to: `${brandPath.value}/color` }] : []),
   { id: 'font', label: 'Website font', summary: ORGANIZATION_FONT_OPTIONS.find(option => option.value === loadedSettings.value?.font_preset)?.label ?? 'Default', icon: 'i-lucide-type', to: `${brandPath.value}/font` },
   { id: 'contact', label: 'Contact details', summary: explicitSummary(loadedSettings.value?.contact_email), icon: 'i-lucide-mail', to: `${brandPath.value}/contact` },
-  { id: 'translations', label: 'Translations', summary: 'Translate the brand name and description', icon: 'i-lucide-languages', action: { label: 'Localize' } },
+  { id: 'translations', label: 'Translations', summary: 'Translate the brand name and description', icon: 'i-lucide-languages', to: `${brandPath.value}?editMode=translations` },
 ])
-const localizeOpen = ref(false)
-function onRowAction(id: string) {
-  if (id === 'translations') localizeOpen.value = true
-}
 // Flat, values on the rows, the way Edit preferences reads. The site's content
 // lists and its Brand lead, because they are what the site is made of; the
 // settings a visitor never sees follow.
@@ -515,7 +509,6 @@ watch(detailKey, key => { if (key === 'localization' && !localizationSettings.va
 provide(organizationSettingsEditorKey, {
   form,
   organizationId,
-  organizationDashboardPath,
   loading,
   saving,
   saveDisabled,

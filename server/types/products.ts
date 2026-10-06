@@ -104,6 +104,12 @@ export interface Product {
    * bookable or about the defaults its sessions are generated from.
    */
   booking: ProductBookingConfig | null
+  /**
+   * The source page this product owns, or null when it has none. The binding
+   * is the page's root `product_id`; translations inherit it. A product's
+   * Page content is this document, edited through the shared page editor.
+   */
+  page: ProductPage | null
   image: ResolvedMediaAsset | null
   gallery: ResolvedMediaAsset[]
   media: ResolvedMediaAsset[]
@@ -113,6 +119,13 @@ export interface Product {
   updated_at: string
   created_by: string
   updated_by: string
+}
+
+/** The page a product owns: its source document's id, public path and title. */
+export interface ProductPage {
+  id: string
+  path: string
+  title: string
 }
 
 export interface ProductVariantInput {

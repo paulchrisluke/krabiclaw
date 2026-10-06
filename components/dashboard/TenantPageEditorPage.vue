@@ -48,7 +48,7 @@
 </template>
 
 <script lang="ts">
-import type { InjectionKey, Ref } from 'vue'
+import type { ComputedRef, InjectionKey, Ref } from 'vue'
 import {
   isTenantPageListResponse,
   isTenantPageResponse,
@@ -61,7 +61,7 @@ export const SECTION_LABELS = {
   sections: 'Sections',
   title: 'Title',
   summary: 'Summary',
-  booking: 'Appointment booking',
+  url: 'URL',
 } as const
 export type SectionKey = keyof typeof SECTION_LABELS
 
@@ -82,6 +82,23 @@ export interface TenantPageEditor {
 }
 
 export const tenantPageEditorKey = Symbol('tenant-page-editor') as InjectionKey<TenantPageEditor>
+
+/**
+ * Which page document this editor and every level beneath it edit. Pages names
+ * it in its URL; a Product's Page content names the page the Product owns. The
+ * levels below read it here rather than from a route parameter, so the same
+ * section, block and field editors serve both.
+ */
+export const tenantPageIdKey = Symbol('tenant-page-id') as InjectionKey<ComputedRef<string>>
+
+export function useTenantPageId(): ComputedRef<string> {
+  const pageId = inject(tenantPageIdKey, null)
+  if (pageId) return pageId
+  // Only a Product with no page renders these levels without an editor above
+  // them, and a section of a page that does not exist is not a page.
+  showError(createError({ statusCode: 404, statusMessage: 'Page not found' }))
+  return computed(() => '')
+}
 </script>
 
 <script setup lang="ts">
@@ -99,12 +116,21 @@ import {
   type TenantPageBlock,
 } from '~/utils/tenant-page-blocks'
 
+const props = defineProps<{
+  /** The page a parent record names, such as the page a Product owns. Without it, the URL's. */
+  pageId?: string
+}>()
+
 // The level runs while setup is still synchronous: it injects the record the
 // `<RouterView>` above rendered, and an `await` before it would bind nothing.
 const level = useRouteLevel()
 const route = useRoute()
-const pageId = computed(() => String(route.params.pageId ?? ''))
+const router = useRouter()
+const pageId = computed(() => props.pageId ?? String(route.params.pageId ?? ''))
+provide(tenantPageIdKey, pageId)
 const recordPath = level.path
+/** A level below this page, keeping whatever scope the URL carries. */
+const sectionUrl = (section: string) => router.resolve({ path: `${recordPath.value}/${section}`, query: route.query }).fullPath
 
 const organizationId = await useDashboardOrganizationId()
 const dashboardApi = useDashboardApi()
@@ -151,20 +177,19 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => {
     label: 'Title',
     summary: preview(draft.value.title, 'Not named yet'),
     placeholder: !draft.value.title.trim(),
-    to: `${recordPath.value}/title`,
+    to: sectionUrl('title'),
   }
   if (isNew.value) return [{ id: 'page', items: [title] }]
   return [
     {
       id: 'content',
       items: [
-        ...(draft.value.path.startsWith('/services/') && draft.value.id === draft.value.page_id ? [{ id: 'booking', label: 'Appointment booking', summary: draft.value.product_id ? 'Product linked' : 'No Product linked', to: `${recordPath.value}/booking` }] : []),
         {
           id: 'sections',
           label: 'Sections',
           summary: sectionsSummary.value,
           placeholder: !draft.value.blocks.length,
-          to: `${recordPath.value}/sections`,
+          to: sectionUrl('sections'),
         },
         title,
         {
@@ -172,8 +197,9 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => {
           label: 'Summary',
           summary: preview(draft.value.summary, 'Nothing written yet'),
           placeholder: !draft.value.summary.trim(),
-          to: `${recordPath.value}/summary`,
+          to: sectionUrl('summary'),
         },
+        { id: 'url', label: 'URL', summary: draft.value.path, to: sectionUrl('url') },
       ],
     },
   ]

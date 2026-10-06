@@ -39,10 +39,14 @@ export async function resolveDashboardSlugs(
   return { orgSlug: organization.slug, locationSlug }
 }
 
-export function dashboardOrigin(env: DashboardNotificationLinkEnv, slugs: DashboardSlugs): string {
+export function platformOrigin(env: DashboardNotificationLinkEnv): string {
   const origin = new URL(env.NUXT_PUBLIC_PLATFORM_DOMAIN ?? '')
   if (!['http:', 'https:'].includes(origin.protocol)) throw new Error('NUXT_PUBLIC_PLATFORM_DOMAIN must be an HTTP or HTTPS URL')
-  return `${origin.origin}/dashboard/${encodeURIComponent(slugs.orgSlug)}`
+  return origin.origin
+}
+
+export function dashboardOrigin(env: DashboardNotificationLinkEnv, slugs: DashboardSlugs): string {
+  return `${platformOrigin(env)}/dashboard/${encodeURIComponent(slugs.orgSlug)}`
 }
 
 export function composeOwnerThreadInboxUrl(
