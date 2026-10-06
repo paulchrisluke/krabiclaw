@@ -28,13 +28,13 @@ export function blawbyShieldVariant(path: string): BlawbyShieldVariant {
  * the same variant, in two components, and the shield's had no case for the
  * legal pages at all.
  *
- * The legal pages open white. They are long documents, and the tint the other
- * pages use behind a short hero ran the whole length of the terms.
+ * The legal pages open on the plain surface. They are long documents, and the
+ * tint the other pages use behind a short hero ran the whole length of the terms.
  */
 export function blawbySurface(variant: BlawbyShieldVariant): string {
   if (variant === 'schedule') return 'var(--blawby-primary-800)'
   if (variant === 'about' || variant === 'contact') return 'var(--blawby-accent-200)'
-  if (variant === 'privacy' || variant === 'terms' || variant === 'third-party-notices') return '#ffffff'
+  if (variant === 'privacy' || variant === 'terms' || variant === 'third-party-notices') return 'var(--ui-bg-elevated)'
   return 'var(--blawby-primary-100)'
 }
 
@@ -214,15 +214,8 @@ export interface PublicBlawbyShellData {
   identity: PublicBlawbyIdentity
   consultation: PublicConsultationSettings
   compliance: PublicCompliance | null
-  themeTokens: ApiRecord
   pageLinks: PublicBlawbyPageLink[]
   /** The Search Console META token, served while Google needs to see it. */
   searchConsoleVerification: string | null
 }
 
-export interface PublicBlawbyData {
-  tenantPages: PublicTenantPage[]
-  compliance: PublicCompliance | null
-  consultation: PublicConsultationSettings
-  themeTokens: ApiRecord
-}

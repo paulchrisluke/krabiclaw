@@ -60,7 +60,7 @@
   -->
   <section
     v-else-if="gallery.length"
-    class="mx-auto mb-8 max-w-7xl border-b border-slate-200 pt-8 sm:px-6 md:flex lg:px-8"
+    class="mx-auto mb-8 max-w-7xl border-b border-default pt-8 sm:px-6 md:flex lg:px-8"
     data-parity-section="service-overview"
   >
     <BlawbyMediaGallery v-model="activeMedia" :media="gallery" :fallback-alt="page.title" />

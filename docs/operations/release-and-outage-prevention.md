@@ -240,6 +240,35 @@ node --experimental-strip-types scripts/pull-production-snapshot.ts --staging --
 node --experimental-strip-types scripts/pull-production-snapshot.ts --production --source krabiclaw-production-v11 --out production-v12-final.sqlite --delta-from production-v12-initial.sqlite
 ```
 
+The v12-to-v13 replacement gives each site one palette and each logo placement
+a presentation (#1274, #1276). `organization` drops
+`organization_config_brand_color_check`, `organization_theme_saya_check`,
+`organization_theme_blawby_check` and `organization_theme_by_template_object_check`
+and gains `organization_config_palette_check` and
+`organization_config_font_preset_check`; `media_placements` gains
+`presentation_json` with `media_placements_presentation_check`. `organization`
+is the parent of nearly every table, so the CHECK changes could not be made in
+place. The v12 chain (`0000_baseline`, `0001_requests_guest_email`) is archived
+in `migrations-history/v12/`; an older chain reaches v12 through its forward
+migration before the copy. The transfer maps each Saya `config.brand_color` to
+`config.palette`: Saya's template palette with that color as the light action
+and its dark-mode variant as the dark action. `theme_by_template` is dropped only
+when its tokens are Blawby's defaults, and any other value fails the transfer.
+Every Saya `logo` placement gets the circle presentation it always rendered in.
+On 2026-10-06 production carried three Saya brand colors and NCLS's default
+Blawby tokens. Both v13 databases were created with `--location wnam` and
+Cloudflare reported WNAM before loading:
+
+- `krabiclaw-production-v13`: `57d494c8-b322-4584-a5f4-e2cc40d3d7b7`
+- `krabiclaw-staging-v13`: `bc7d411b-b836-4b83-9771-3e09561463e3`
+
+```sh
+node --experimental-strip-types scripts/pull-production-snapshot.ts --staging --source krabiclaw-staging-v12 --out staging-v13-initial.sqlite
+node --experimental-strip-types scripts/pull-production-snapshot.ts --production --source krabiclaw-production-v12 --out production-v13-initial.sqlite
+node --experimental-strip-types scripts/pull-production-snapshot.ts --staging --source krabiclaw-staging-v12 --out staging-v13-final.sqlite --delta-from staging-v13-initial.sqlite
+node --experimental-strip-types scripts/pull-production-snapshot.ts --production --source krabiclaw-production-v12 --out production-v13-final.sqlite --delta-from production-v13-initial.sqlite
+```
+
 Before dropping or retiring a legacy table or writer:
 
 - remove every runtime reader and writer;

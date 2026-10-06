@@ -31,7 +31,7 @@ const tenants: Tenant[] = [
     name: 'Pottery House', baseURL: potteryHouseBaseURL, headers: potteryHouseExtraHeaders,
     shell: '.tenant-layout', identity: /Pottery House/i, definingContent: /pottery|wheel|clay/i,
     primaryLabel: /product|class|book/i, detailPath: '/locations/krabi/products/pottery-wheel-class',
-    detailContent: /Pottery Wheel Class/i, themeVar: '--saya-bg',
+    detailContent: /Pottery Wheel Class/i, themeVar: '--ui-bg',
     forbidden: [/Come dine with us/i, /Reserve a table/i, /From the kitchen/i, /Also part of Saya/i],
   },
   {

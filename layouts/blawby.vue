@@ -1,5 +1,5 @@
 <template>
-  <div class="blawby-shell blawby-theme min-h-screen bg-default text-default" :style="themeStyles" :data-hydrated="hydrated ? 'true' : 'false'" :data-public-critical-shell="isHome ? 'true' : undefined">
+  <div class="blawby-shell blawby-theme min-h-screen bg-default text-default" :style="paletteStyle" :data-hydrated="hydrated ? 'true' : 'false'" :data-public-critical-shell="isHome ? 'true' : undefined" :data-font-preset="fontPreset">
     <!-- Teleport target for components (e.g. PlatformCommandSearchModal) that need to
          escape page overflow/stacking contexts but still must render inside this div to
          inherit the Blawby --ui-* and --blawby-* tokens. Teleporting straight to <body>
@@ -13,7 +13,7 @@
     <main>
       <slot />
       <!-- A firm's articles carry its legal disclaimer, under every article and index, wrapped to the full width: the stored text carries line breaks from where it was pasted. -->
-      <p v-if="route.meta.articleCollection && compliance?.disclaimer" class="blawby-container mb-12 whitespace-pre-line text-sm italic text-gray-500">{{ compliance.disclaimer }}</p>
+      <p v-if="route.meta.articleCollection && compliance?.disclaimer" class="blawby-container mb-12 whitespace-pre-line text-sm italic text-muted">{{ compliance.disclaimer }}</p>
     </main>
     <BlawbyFooter
       :organization="identity"
@@ -30,6 +30,7 @@ import type { PublicBlawbyRouteData } from '~/types/blawby'
 
 const route = useRoute()
 const publicLocale = useState<string>('public-locale', () => 'en')
+const { fontPreset, paletteStyle } = usePublicSiteBrand()
 const isHome = computed(() => route.path === '/'
   || (publicLocale.value !== 'en' && route.path === `/${publicLocale.value}`)
   || /^\/preview\/(?:site|draft)\/[^/]+\/?$/.test(route.path))
@@ -63,7 +64,6 @@ provide('blawby-document', document)
 const identity = computed(() => document.value.shell.identity)
 const consultation = computed(() => document.value.shell.consultation)
 const compliance = computed(() => document.value.shell.compliance)
-const themeTokens = computed(() => document.value.shell.themeTokens)
 const pageLinks = computed(() => document.value.shell.pageLinks)
 provide('blawby-schema-context', { identity, compliance, consultation })
 const hydrated = ref(false)
@@ -74,26 +74,6 @@ onMounted(() => { hydrated.value = true })
 // Organization/WebSite nodes) — see composables/useSocialMetadata.ts.
 // The layout no longer emits its own ad hoc JSON-LD so there's exactly one
 // canonical generation path for every route.
-
-const themeStyles = computed(() => {
-  const tokens = themeTokens.value
-  return {
-    '--blawby-token-bg': String(tokens.bg || '#fbfaf7'),
-    '--blawby-token-surface': String(tokens.surface || '#ffffff'),
-    '--blawby-token-primary': String(tokens.primary || '#25356c'),
-    '--blawby-token-primary-dark': String(tokens.primaryDark || '#161f3b'),
-    '--blawby-token-primary-100': String(tokens.primary100 || '#f2f5ff'),
-    '--blawby-token-primary-200': String(tokens.primary200 || '#b4c5e5'),
-    '--blawby-token-primary-800': String(tokens.primary800 || '#1d294f'),
-    '--blawby-token-accent': String(tokens.accent || '#c19855'),
-    '--blawby-token-accent-100': String(tokens.accent100 || '#faf5ea'),
-    '--blawby-token-accent-200': String(tokens.accent200 || '#f8f0e1'),
-    '--blawby-token-accent-button': String(tokens.accentButton || '#b58c4f'),
-    '--blawby-token-accent-strong': String(tokens.accentStrong || '#a37732'),
-    '--blawby-token-border': String(tokens.border || '#e5e7eb'),
-    '--blawby-token-ink': String(tokens.ink || '#162033'),
-  }
-})
 
 useHead(() => ({
   htmlAttrs: { class: 'blawby-document', lang: publicLocale.value },

@@ -16,7 +16,7 @@
         class="w-full"
       />
 
-      <div v-if="tab === 'views'" class="flex justify-end">
+      <div v-if="tab === 'views' || tab === 'instagram'" class="flex justify-end">
         <div class="inline-flex gap-0.5 rounded-lg bg-elevated p-0.5" role="group" aria-label="Date range">
           <button v-for="days in [7, 30]" :key="days" type="button"
             :aria-pressed="activeDays === days" :disabled="loading || !analytics"
@@ -337,6 +337,57 @@
         </div>
       </div>
 
+      <div v-else-if="tab === 'instagram'" class="space-y-8">
+        <UAlert
+          v-if="instagramError"
+          color="error"
+          variant="soft"
+          title="Instagram insights could not be loaded"
+          :description="instagramError.message"
+          :actions="[{ label: 'Try again', onClick: () => refreshInstagram() }]"
+        />
+        <div v-else-if="instagramLoading && !instagram" class="space-y-4" role="status" aria-label="Loading Instagram insights">
+          <USkeleton class="h-28 w-full rounded-2xl" />
+        </div>
+        <UAlert
+          v-else-if="instagram && instagram.status !== 'connected'"
+          color="neutral"
+          variant="soft"
+          :description="instagram.message"
+          :actions="[{ label: 'Instagram settings', to: `/dashboard/${scope?.orgSlug}/settings/integrations/instagram` }]"
+        />
+        <template v-else-if="instagram && instagram.status === 'connected'">
+          <p class="text-sm text-muted">@{{ instagram.username }} · {{ formatDate(instagram.period.startDate) }} – {{ formatDate(instagram.period.endDate) }} · Instagram can take up to 48 hours to report recent activity.</p>
+          <section class="border-b border-default pb-8">
+            <div class="grid grid-cols-2 gap-x-6 gap-y-6 sm:grid-cols-3">
+              <div v-for="metric in instagramMetricCards" :key="metric.label">
+                <p class="text-sm text-muted">{{ metric.label }}</p>
+                <p class="mt-2 text-3xl font-semibold tabular-nums tracking-tight text-highlighted" :title="metric.value === null ? 'Instagram did not report this metric' : undefined">{{ metric.value === null ? '—' : formatCount(metric.value) }}</p>
+              </div>
+            </div>
+          </section>
+          <section>
+            <header class="mb-4"><h2 class="font-semibold text-highlighted">Posts in this range</h2></header>
+            <p v-if="!instagram.media.length" class="text-sm text-muted">No posts were published in this range.</p>
+            <ul v-else class="divide-y divide-default">
+              <li v-for="post in instagram.media" :key="post.id" class="flex gap-4 py-4">
+                <img v-if="post.thumbnailUrl" :src="post.thumbnailUrl" alt="" class="size-16 shrink-0 rounded-lg object-cover">
+                <div class="min-w-0 flex-1">
+                  <a v-if="post.permalink" :href="post.permalink" target="_blank" rel="noopener" class="line-clamp-2 text-sm font-medium text-highlighted hover:underline">{{ post.caption || 'Untitled post' }}</a>
+                  <p v-else class="line-clamp-2 text-sm font-medium text-highlighted">{{ post.caption || 'Untitled post' }}</p>
+                  <p class="mt-1 text-xs text-muted">{{ new Date(post.postedAt).toLocaleDateString() }} · {{ post.productType === 'REELS' ? 'Reel' : post.mediaType === 'CAROUSEL_ALBUM' ? 'Carousel' : 'Post' }}</p>
+                  <p v-if="post.unavailableReason" class="mt-2 text-xs text-muted">{{ post.unavailableReason }}</p>
+                  <dl v-else-if="post.insights" class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                    <div v-for="field in MEDIA_FIELDS" :key="field.key" class="flex gap-1"><dt class="text-muted">{{ field.label }}</dt><dd class="tabular-nums text-highlighted">{{ post.insights[field.key] === null ? '—' : formatCount(post.insights[field.key]!) }}</dd></div>
+                  </dl>
+                </div>
+              </li>
+            </ul>
+            <p v-if="instagram.moreMedia" class="mt-3 text-xs text-muted">Showing the 100 most recent posts in this range.</p>
+          </section>
+        </template>
+      </div>
+
       <ActivityFeed v-else-if="tab === 'activity'" />
     </div>
   </DashboardIndexPanel>
@@ -352,6 +403,7 @@ definePageMeta({ layout: 'dashboard' })
 import DashboardAnalyticsRow from '~/lib/components/workspace/dashboard/AnalyticsRow.vue'
 import { localDateAt, addLocalDays, formatCalendarDate } from '~/utils/timezone'
 import { organizationAnalyticsSchema, type AnalyticsReport, type OrganizationAnalyticsReport } from '~/shared/analytics-report'
+import { instagramInsightsSchema, type InstagramInsights } from '~/shared/instagram-insights'
 import { currencyFractionDigits, isCurrencyCode } from '~/shared/currencies'
 
 const route = useRoute()
@@ -360,7 +412,7 @@ const scope = useDashboardRouteScope()
 // Reviews and Opportunities read what we actually hold. There is no Superhost
 // equivalent, and a review carries one overall rating rather than per-category
 // scores, so neither is invented here.
-const TAB_VALUES = ['views', 'reviews', 'opportunities', 'activity'] as const
+const TAB_VALUES = ['views', 'instagram', 'reviews', 'opportunities', 'activity'] as const
 type InsightsTab = typeof TAB_VALUES[number]
 const isTab = (value: unknown): value is InsightsTab => TAB_VALUES.some(candidate => candidate === value)
 const tab = ref<InsightsTab>(isTab(route.query.tab) ? route.query.tab : 'views')
@@ -375,6 +427,7 @@ watch(tab, (next) => {
 })
 const tabItems = [
   { label: 'Views', value: 'views' as const },
+  { label: 'Instagram', value: 'instagram' as const },
   { label: 'Reviews', value: 'reviews' as const },
   { label: 'Opportunities', value: 'opportunities' as const },
   // Activity is a report like the others, not a screen of its own: it reads
@@ -406,6 +459,33 @@ const { data: insightsResource, pending: loading, error: resourceError, refresh 
   { lazy: true },
 )
 const analytics = computed<AnalyticsReport | null>(() => insightsResource.value?.report ?? null)
+
+// Instagram's own numbers, read live for the same range when its tab is open; never added to website traffic.
+const { data: instagram, pending: instagramLoading, error: instagramError, refresh: refreshInstagram, execute: loadInstagram } = await useAsyncData(
+  () => `dashboard-org-instagram:${scope.value?.orgSlug}:${requestedRange.value.startDate ?? ''}:${requestedRange.value.endDate ?? ''}`,
+  () => dashboardApi<InstagramInsights>('/api/dashboard/instagram-insights', {
+    query: requestedRange.value,
+    validate: (value): value is InstagramInsights => {
+      const result = instagramInsightsSchema.safeParse(value)
+      if (!result.success) throw new ApiClientError('Invalid Instagram insights response', 502, 'INVALID_INSTAGRAM_INSIGHTS_RESPONSE', null)
+      return true
+    },
+  }),
+  { lazy: true, immediate: false },
+)
+watch(() => tab.value === 'instagram' ? `${scope.value?.orgSlug}:${requestedRange.value.startDate ?? ''}:${requestedRange.value.endDate ?? ''}` : null, (key) => { if (key) void loadInstagram() }, { immediate: true })
+const INSTAGRAM_ACCOUNT_FIELDS = [
+  { key: 'views', label: 'Views' }, { key: 'reach', label: 'Accounts reached' }, { key: 'accounts_engaged', label: 'Accounts engaged' },
+  { key: 'total_interactions', label: 'Interactions' }, { key: 'likes', label: 'Likes' }, { key: 'comments', label: 'Comments' },
+  { key: 'shares', label: 'Shares' }, { key: 'saves', label: 'Saves' }, { key: 'replies', label: 'Replies' }, { key: 'profile_links_taps', label: 'Profile link taps' },
+] as const
+const MEDIA_FIELDS = [
+  { key: 'views', label: 'Views' }, { key: 'reach', label: 'Reach' }, { key: 'likes', label: 'Likes' }, { key: 'comments', label: 'Comments' },
+  { key: 'shares', label: 'Shares' }, { key: 'saved', label: 'Saves' },
+] as const
+const instagramMetricCards = computed(() => instagram.value?.status === 'connected'
+  ? INSTAGRAM_ACCOUNT_FIELDS.map(field => ({ label: field.label, value: (instagram.value as Extract<InstagramInsights, { status: 'connected' }>).account[field.key] }))
+  : [])
 const reviews = computed(() => insightsResource.value?.reviews)
 const setup = computed(() => insightsResource.value?.setup)
 const loadError = computed(() => resourceError.value?.message ?? null)

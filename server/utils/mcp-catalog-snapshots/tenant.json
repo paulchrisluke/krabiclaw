@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:299aa9d1ed3f5496ba47468c9469fbbb0bd5dd21a49a2ab0ea1bdc336f39f485",
+  "fingerprint": "sha256:28ef0e08e0c969fdb455f5d3818a2f8df7c37a76453e27ee5c65f84df2537e1d",
   "tools": [
     {
       "name": "append_content_block",
@@ -6973,6 +6973,24 @@
                   "null"
                 ]
               },
+              "font_preset": {
+                "enum": [
+                  "default",
+                  "mali",
+                  "sarabun",
+                  "prompt",
+                  "kanit",
+                  "ibm-plex-sans-thai",
+                  "noto-serif-thai",
+                  "inter",
+                  "dm-sans",
+                  "montserrat",
+                  "lora",
+                  "playfair-display",
+                  "cormorant-garamond"
+                ],
+                "type": "string"
+              },
               "google_analytics_measurement_id": {
                 "type": [
                   "string",
@@ -7026,6 +7044,86 @@
               },
               "organization_id": {
                 "type": "string"
+              },
+              "palette": {
+                "description": "The colors the site renders, light and dark: its own, or its template's. Null on the platform template.",
+                "properties": {
+                  "dark": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "accent": {
+                        "description": "Emphasis and decoration, used sparingly.",
+                        "type": "string"
+                      },
+                      "action": {
+                        "description": "Buttons, links and selected states.",
+                        "type": "string"
+                      },
+                      "ground": {
+                        "description": "The page background.",
+                        "type": "string"
+                      },
+                      "muted": {
+                        "description": "Captions, details and supporting copy.",
+                        "type": "string"
+                      },
+                      "surface": {
+                        "description": "Cards, the header and footer, dialogs and fields.",
+                        "type": "string"
+                      },
+                      "text": {
+                        "description": "Body copy and headings.",
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "light": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "accent": {
+                        "description": "Emphasis and decoration, used sparingly.",
+                        "type": "string"
+                      },
+                      "action": {
+                        "description": "Buttons, links and selected states.",
+                        "type": "string"
+                      },
+                      "ground": {
+                        "description": "The page background.",
+                        "type": "string"
+                      },
+                      "muted": {
+                        "description": "Captions, details and supporting copy.",
+                        "type": "string"
+                      },
+                      "surface": {
+                        "description": "Cards, the header and footer, dialogs and fields.",
+                        "type": "string"
+                      },
+                      "text": {
+                        "description": "Body copy and headings.",
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  }
+                },
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "palette_source": {
+                "enum": [
+                  "custom",
+                  "template",
+                  null
+                ],
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "partnerships_email": {
                 "type": [
@@ -15746,48 +15844,6 @@
       }
     },
     {
-      "name": "set_brand_color",
-      "description": "Set the selected site’s brand accent color from a color description or hex value. Applies to Saya theme accents such as buttons, links and highlights; it does not change layout or other template settings.",
-      "inputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "color": {
-            "description": "Color description in natural language (e.g., \"earthy\", \"warm terracotta\", \"ocean blue\") or hex format (e.g., #8F1D21).",
-            "type": "string"
-          },
-          "organization_id": {
-            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "color"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "brand_color": {
-            "description": "The resolved hex color code that was set.",
-            "type": "string"
-          },
-          "description": {
-            "description": "Human-readable description of what color was set.",
-            "type": "string"
-          },
-          "updated": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "brand_color",
-          "updated",
-          "description"
-        ],
-        "type": "object"
-      }
-    },
-    {
       "name": "set_collection_products",
       "description": "Replace a product collection’s membership and display order when the user wants to change which items it contains. Supply every product ID to retain, in the intended order. Omitted products are removed from this collection but remain in the catalog.",
       "inputSchema": {
@@ -15960,7 +16016,7 @@
     },
     {
       "name": "set_media",
-      "description": "Assign one media asset to a single-valued CMS placement (a placement that holds at most one asset, such as a post cover, a location hero, or a site logo). Construct placement from the target entity: owner_type is its entity type, owner_id is its id, and slot is the media role. For a post cover use {owner_type:\"content_document\", owner_id:<post.id>, slot:\"cover\"}; for a location hero use {owner_type:\"business_location\", owner_id:<location.id>, slot:\"hero\"}. Pass asset_id:null to clear it. For an ordered collection (a gallery or a compliance document list, which can hold many assets) use attach_media, remove_media, and reorder_media instead — this tool rejects those. Video cover/hero assets must already have thumbnail_url/poster metadata.",
+      "description": "Assign one media asset to a single-valued CMS placement (a placement that holds at most one asset, such as a post cover, a location hero, or a site logo). Construct placement from the target entity: owner_type is its entity type, owner_id is its id, and slot is the media role. For a post cover use {owner_type:\"content_document\", owner_id:<post.id>, slot:\"cover\"}; for a location hero use {owner_type:\"business_location\", owner_id:<location.id>, slot:\"hero\"}. Pass asset_id:null to clear it. For an ordered collection (a gallery or a compliance document list, which can hold many assets) use attach_media, remove_media, and reorder_media instead — this tool rejects those. Video cover/hero assets must already have thumbnail_url/poster metadata. For the site logo (slot \"logo\") or the optional logo for dark backgrounds (slot \"logo_dark\"), presentation chooses how it is shown: shape \"original\" (the whole logo, uncropped), \"square\" or \"circle\", cropped around focus {x, y} from 0 to 1.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -16000,6 +16056,45 @@
               "owner_type",
               "owner_id",
               "slot"
+            ],
+            "type": "object"
+          },
+          "presentation": {
+            "additionalProperties": false,
+            "description": "Organization logo and logo_dark only. Omitted means original.",
+            "properties": {
+              "focus": {
+                "additionalProperties": false,
+                "properties": {
+                  "x": {
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "y": {
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "x",
+                  "y"
+                ],
+                "type": "object"
+              },
+              "shape": {
+                "enum": [
+                  "original",
+                  "square",
+                  "circle"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "shape",
+              "focus"
             ],
             "type": "object"
           }
@@ -19124,7 +19219,7 @@
     },
     {
       "name": "update_organization_settings",
-      "description": "Change the selected site’s brand, description, contact email, default currency, announcement or Live/Draft status. Only supplied settings change. An announcement replaces all its fields, and null removes it. Logos and announcement images are separate media placements; this tool does not change them.",
+      "description": "Change the selected site’s brand, description, website font, colors, contact email, default currency, announcement or Live/Draft status. Only supplied settings change. An announcement replaces all its fields, and null removes it. Logos and announcement images are separate media placements; this tool does not change them.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -19212,12 +19307,114 @@
             ],
             "type": "string"
           },
+          "font_preset": {
+            "description": "Website heading and body fonts, on every template: default (Default), mali (Mali), sarabun (Sarabun), prompt (Prompt), kanit (Kanit with Sarabun), ibm-plex-sans-thai (IBM Plex Sans Thai), noto-serif-thai (Noto Serif Thai with Noto Sans Thai), inter (Inter), dm-sans (DM Sans), montserrat (Montserrat), lora (Lora), playfair-display (Playfair Display with Inter), cormorant-garamond (Cormorant Garamond with Inter). Thai and Japanese text renders in every choice.",
+            "enum": [
+              "default",
+              "mali",
+              "sarabun",
+              "prompt",
+              "kanit",
+              "ibm-plex-sans-thai",
+              "noto-serif-thai",
+              "inter",
+              "dm-sans",
+              "montserrat",
+              "lora",
+              "playfair-display",
+              "cormorant-garamond"
+            ],
+            "type": "string"
+          },
           "name": {
             "type": "string"
           },
           "organization_id": {
             "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
+          },
+          "palette": {
+            "additionalProperties": false,
+            "description": "Saya and Blawby website colors, each with a light and a dark value. Roles: ground (The page background.) surface (Cards, the header and footer, dialogs and fields.) text (Body copy and headings.) muted (Captions, details and supporting copy.) action (Buttons, links and selected states.) accent (Emphasis and decoration, used sparingly.) Start from a starter (coastal, forest, terracotta, ink, blossom, saffron, slate, midnight) and/or name only the roles to change; colors are #RRGGBB or a plain description such as \"forest green\". Borders and tints are derived. null returns to the template's colors. The result reports any text or button pair below WCAG AA contrast.",
+            "properties": {
+              "dark": {
+                "additionalProperties": false,
+                "properties": {
+                  "accent": {
+                    "description": "Emphasis and decoration, used sparingly.",
+                    "type": "string"
+                  },
+                  "action": {
+                    "description": "Buttons, links and selected states.",
+                    "type": "string"
+                  },
+                  "ground": {
+                    "description": "The page background.",
+                    "type": "string"
+                  },
+                  "muted": {
+                    "description": "Captions, details and supporting copy.",
+                    "type": "string"
+                  },
+                  "surface": {
+                    "description": "Cards, the header and footer, dialogs and fields.",
+                    "type": "string"
+                  },
+                  "text": {
+                    "description": "Body copy and headings.",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "light": {
+                "additionalProperties": false,
+                "properties": {
+                  "accent": {
+                    "description": "Emphasis and decoration, used sparingly.",
+                    "type": "string"
+                  },
+                  "action": {
+                    "description": "Buttons, links and selected states.",
+                    "type": "string"
+                  },
+                  "ground": {
+                    "description": "The page background.",
+                    "type": "string"
+                  },
+                  "muted": {
+                    "description": "Captions, details and supporting copy.",
+                    "type": "string"
+                  },
+                  "surface": {
+                    "description": "Cards, the header and footer, dialogs and fields.",
+                    "type": "string"
+                  },
+                  "text": {
+                    "description": "Body copy and headings.",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "starter": {
+                "enum": [
+                  "coastal",
+                  "forest",
+                  "terracotta",
+                  "ink",
+                  "blossom",
+                  "saffron",
+                  "slate",
+                  "midnight"
+                ],
+                "type": "string"
+              }
+            },
+            "type": [
+              "object",
+              "null"
+            ]
           },
           "partnerships_email": {
             "type": "string"
@@ -19261,6 +19458,32 @@
           },
           "context": {
             "type": "object"
+          },
+          "contrast_warnings": {
+            "items": {
+              "properties": {
+                "minimum": {
+                  "type": "number"
+                },
+                "mode": {
+                  "type": "string"
+                },
+                "pair": {
+                  "type": "string"
+                },
+                "ratio": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "mode",
+                "pair",
+                "ratio",
+                "minimum"
+              ],
+              "type": "object"
+            },
+            "type": "array"
           },
           "entity": {
             "enum": [

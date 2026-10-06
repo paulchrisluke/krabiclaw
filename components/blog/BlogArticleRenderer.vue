@@ -406,7 +406,7 @@ function aiAssistanceProps(block: BlogEditorBlock) {
 </script>
 
 <style scoped>
-.blog-article[data-template="blawby"] { color: var(--blawby-ink, #263238); font-family: var(--blawby-font-body, inherit); }
+.blog-article[data-template="blawby"] { color: var(--ui-text); }
 .blog-article[data-template="blawby"] .blog-article-header h1 { color: var(--blawby-primary, currentColor); }
 .blog-article[data-template="saya"] { color: var(--ui-text, inherit); }
 </style>

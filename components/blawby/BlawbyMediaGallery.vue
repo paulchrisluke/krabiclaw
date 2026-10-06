@@ -11,14 +11,14 @@
         class="aspect-video max-h-80 w-full rounded-md object-contain"
       >
     </div>
-    <div v-if="media.length > 1" class="flex items-center justify-between border-t border-gray-200 px-4 sm:px-0">
-      <button type="button" class="inline-flex items-center border-t-2 border-transparent pl-1 pt-4 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700" @click="previous">
-        <svg class="mr-3 size-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M17 10a.75.75 0 0 1-.75.75H5.56l3.22 3.22a.75.75 0 1 1-1.06 1.06l-4.5-4.5a.75.75 0 0 1 0-1.06l4.5-4.5a.75.75 0 0 1 1.06 1.06L5.56 9.25h10.69A.75.75 0 0 1 17 10Z" clip-rule="evenodd" /></svg>
+    <div v-if="media.length > 1" class="flex items-center justify-between border-t border-default px-4 sm:px-0">
+      <button type="button" class="inline-flex items-center border-t-2 border-transparent pl-1 pt-4 text-sm font-medium text-muted hover:border-accented hover:text-toned" @click="previous">
+        <svg class="mr-3 size-5 text-dimmed" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M17 10a.75.75 0 0 1-.75.75H5.56l3.22 3.22a.75.75 0 1 1-1.06 1.06l-4.5-4.5a.75.75 0 0 1 0-1.06l4.5-4.5a.75.75 0 0 1 1.06 1.06L5.56 9.25h10.69A.75.75 0 0 1 17 10Z" clip-rule="evenodd" /></svg>
         Prev
       </button>
-      <button type="button" class="inline-flex items-center border-t-2 border-transparent pl-1 pt-4 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700" @click="next">
+      <button type="button" class="inline-flex items-center border-t-2 border-transparent pl-1 pt-4 text-sm font-medium text-muted hover:border-accented hover:text-toned" @click="next">
         Next
-        <svg class="ml-3 size-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M3 10a.75.75 0 0 1 .75-.75h10.69l-3.22-3.22a.75.75 0 0 1 1.06-1.06l4.5 4.5a.75.75 0 0 1 0 1.06l-4.5 4.5a.75.75 0 1 1-1.06-1.06l3.22-3.22H3.75A.75.75 0 0 1 3 10Z" clip-rule="evenodd" /></svg>
+        <svg class="ml-3 size-5 text-dimmed" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M3 10a.75.75 0 0 1 .75-.75h10.69l-3.22-3.22a.75.75 0 0 1 1.06-1.06l4.5 4.5a.75.75 0 0 1 0 1.06l-4.5 4.5a.75.75 0 1 1-1.06-1.06l3.22-3.22H3.75A.75.75 0 0 1 3 10Z" clip-rule="evenodd" /></svg>
       </button>
     </div>
   </div>
@@ -37,7 +37,7 @@
           :key="item.asset_id"
           type="button"
           role="tab"
-          class="relative flex aspect-square cursor-pointer rounded bg-white text-sm font-medium uppercase text-gray-900 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--blawby-primary)]"
+          class="relative flex aspect-square cursor-pointer rounded bg-elevated text-sm font-medium uppercase text-highlighted hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--blawby-primary)]"
           :aria-selected="index === modelValue"
           :tabindex="index === modelValue ? 0 : -1"
           @click="select(index)"

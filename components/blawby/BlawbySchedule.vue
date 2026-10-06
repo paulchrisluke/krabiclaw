@@ -20,7 +20,7 @@
 
     <OnlineConsultationBooking v-if="consultation.mode === 'native'" />
 
-    <section v-if="guidanceBlock" class="relative overflow-hidden bg-white pb-16 pt-16 sm:pb-20 sm:pt-16 lg:pb-24 lg:pt-20" data-parity-section="guidance">
+    <section v-if="guidanceBlock" class="relative overflow-hidden bg-elevated pb-16 pt-16 sm:pb-20 sm:pt-16 lg:pb-24 lg:pt-20" data-parity-section="guidance">
       <div class="blawby-container relative z-20">
         <BlawbyRichText :content="guidanceMarkdown" class="mx-auto max-w-3xl text-lg sm:text-xl" />
       </div>

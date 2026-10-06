@@ -22,6 +22,9 @@ import { createOrganization, provisionOrganization } from '~/server/utils/organi
 import type { CloudflareEnv } from '~/server/utils/auth'
 import type { OrganizationVertical } from '~/utils/vertical-copy'
 import type { CurrencyCode } from '~/shared/currencies'
+import { starterPalette } from '~/shared/site-palette'
+import { resolveOrganizationFontPreset } from '~/shared/organization-fonts'
+import { parseLogoPresentation } from '~/shared/media-placement-contract'
 
 type ProvisioningEnv = Parameters<typeof provisionOrganization>[0]
 
@@ -184,6 +187,21 @@ export async function applyOnboardingDraft(
     `, [timezone, organizationId])
   }
 
+  // The look the owner chose in the brand step: a starter palette and a font,
+  // written to the site so the preview and the launched site both wear them.
+  const draftConfig = payload.preview.config
+  if (typeof draftConfig.palette_starter === 'string') {
+    await execute(db, `UPDATE organization SET settings_json = json_set(settings_json, '$.config.palette', json(?)) WHERE id = ?`,
+      [JSON.stringify(starterPalette(draftConfig.palette_starter)), organizationId])
+  }
+  if (typeof draftConfig.font_preset === 'string') {
+    await execute(db, `UPDATE organization SET settings_json = json_set(settings_json, '$.config.font_preset', ?) WHERE id = ?`,
+      [resolveOrganizationFontPreset(draftConfig.font_preset), organizationId])
+  }
+  const logoPresentation = typeof draftConfig.logo_shape === 'string'
+    ? parseLogoPresentation({ shape: draftConfig.logo_shape, focus: { x: 0.5, y: 0.5 } })
+    : null
+
   const logoDraftImage = getDraftMedia(payload, 'logo')
   const heroDraftImage = getDraftMedia(payload, 'hero')
   const heroAssetId = heroDraftImage?.draftAssetId ?? null
@@ -191,7 +209,7 @@ export async function applyOnboardingDraft(
   if (logoDraftImage) {
     await ensureMediaAsset(db, {
       id: logoDraftImage.draftAssetId, organization_id: organizationId, kind: 'image', provider: 'cloudflare_images', source: 'uploaded', cloudflare_image_id: logoDraftImage.cloudflareImageId, public_url: logoDraftImage.publicUrl, thumbnail_url: logoDraftImage.thumbnailUrl, mime_type: logoDraftImage.mimeType, file_name: logoDraftImage.fileName, file_size: logoDraftImage.fileSize, status: 'active', created_by_user_id: userId, })
-    await executeBatch(db, insertInitialMediaPlacements({ organizationId, placement: { owner_type: 'organization', owner_id: organizationId, slot: 'logo' }, media: [{ asset_id: logoDraftImage.draftAssetId }] }))
+    await executeBatch(db, insertInitialMediaPlacements({ organizationId, placement: { owner_type: 'organization', owner_id: organizationId, slot: 'logo' }, media: [{ asset_id: logoDraftImage.draftAssetId, presentation: logoPresentation }] }))
   }
 
   if (heroDraftImage) {

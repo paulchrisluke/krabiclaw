@@ -1,5 +1,6 @@
 export const MEDIA_PLACEMENT_SLOTS = {
-  organization: ['logo', 'favicon', 'social_share', 'social_card', 'compliance_document', 'announcement'],
+  // `logo_dark` is the optional logo for dark grounds; a site without one shows `logo`.
+  organization: ['logo', 'logo_dark', 'favicon', 'social_share', 'social_card', 'compliance_document', 'announcement'],
   business_location: ['hero', 'gallery', 'social_card'],
   product: ['image', 'gallery', 'social_card'],
   content_document: ['cover', 'gallery', 'social_card'],
@@ -177,3 +178,32 @@ export function resolveOwnerPicture<T extends PlacedMedia>(
     ?? own[0]
     ?? null
 }
+
+/** The organization logo slots, whose placements carry a presentation. */
+export const LOGO_SLOTS = ['logo', 'logo_dark'] as const
+export type LogoSlot = typeof LOGO_SLOTS[number]
+
+export const LOGO_SHAPES = ['original', 'square', 'circle'] as const
+export type LogoShape = typeof LOGO_SHAPES[number]
+
+/**
+ * How a logo placement presents its asset: the whole image (`original`), or a
+ * square or circle crop centred on `focus` (0-1 from the left and top). It is
+ * the placement's own, so the shared asset is never altered.
+ */
+export interface LogoPresentation { shape: LogoShape; focus: { x: number; y: number } }
+
+export const ORIGINAL_LOGO_PRESENTATION: LogoPresentation = { shape: 'original', focus: { x: 0.5, y: 0.5 } }
+
+export function parseLogoPresentation(value: unknown): LogoPresentation {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('presentation must be an object with shape and focus')
+  const { shape, focus } = value as { shape?: unknown; focus?: unknown }
+  if (!LOGO_SHAPES.includes(shape as LogoShape)) throw new Error(`presentation.shape must be one of: ${LOGO_SHAPES.join(', ')}`)
+  const point = focus as { x?: unknown; y?: unknown } | undefined
+  const inRange = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= 1
+  if (!point || !inRange(point.x) || !inRange(point.y)) throw new Error('presentation.focus must have x and y between 0 and 1')
+  return { shape: shape as LogoShape, focus: { x: point.x, y: point.y } }
+}
+
+/** A logo as a public page renders it. */
+export interface SiteLogo { slot: LogoSlot; url: string; presentation: LogoPresentation }

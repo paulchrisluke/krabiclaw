@@ -24,13 +24,11 @@
         <h1 class="text-3xl font-semibold">Thank you</h1>
         <p class="mt-3 text-sm text-muted">Your review is pending moderation.</p>
         <div class="mt-8 flex flex-wrap gap-3">
-          <button v-if="requestData?.location?.googleReviewUrl" type="button" class="inline-flex items-center justify-center gap-2 rounded-full bg-(--brand-color) px-6 py-3 text-sm font-medium text-(--brand-color-foreground) no-underline transition hover:opacity-90" @click="copyAndOpenGoogle">
+          <button v-if="requestData?.location?.googleReviewUrl" type="button" class="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-medium text-on-primary no-underline transition hover:opacity-90" @click="copyAndOpenGoogle">
             {{ copyButtonLabel }}
           </button>
-          <SayaButton v-if="linkable" variant="outline" @click="linkAccount">
-            Sign in to link this review
-          </SayaButton>
         </div>
+        <GuestAccountPrompt class="mt-8" />
       </div>
 
       <form v-else class="mt-12 rounded-lg border border-default p-8" @submit.prevent="submitReview">
@@ -117,9 +115,9 @@
 </template>
 
 <script setup lang="ts">
+import GuestAccountPrompt from '~/components/booking/GuestAccountPrompt.vue'
 import { $fetch } from 'ofetch'
 import { REVIEW_VIDEO_MAX_BYTES, REVIEW_VIDEO_MAX_LABEL } from '~/config/media-limits'
-import { authClient } from '~/lib/auth-client'
 
 const { localePath } = useI18n()
 
@@ -136,7 +134,6 @@ const submitting = ref(false)
 const submitted = ref(false)
 // Whether this browser holds the anonymous identity the review belongs to, so
 // signing in here links it through Better Auth. Another browser cannot.
-const linkable = ref(false)
 const optedOut = ref(false)
 const submitError = ref('')
 const copyButtonLabel = ref('Copy my review & post on Google Maps')
@@ -334,7 +331,7 @@ async function submitReview() {
   }
   submitting.value = true
   try {
-    const result = await publicApiMutation<{ success: true; reviewId: string; status: 'pending'; linkable: boolean }>('/api/public/review-requests/submit', {
+    await publicApiMutation<{ success: true; reviewId: string; status: 'pending' }>('/api/public/review-requests/submit', {
       method: 'POST',
       body: {
         token: token.value,
@@ -342,25 +339,18 @@ async function submitReview() {
         title: title.value,
         content: content.value,
       },
-      validate: (value): value is { success: true; reviewId: string; status: 'pending'; linkable: boolean } =>
+      validate: (value): value is { success: true; reviewId: string; status: 'pending' } =>
         isRecord(value)
         && value.success === true
         && typeof value.reviewId === 'string'
-        && value.status === 'pending'
-        && typeof value.linkable === 'boolean',
+        && value.status === 'pending',
     })
-    linkable.value = result.linkable
     submitted.value = true
   } catch (error) {
     submitError.value = (error as { data?: { error?: string } })?.data?.error || 'Could not submit your review.'
   } finally {
     submitting.value = false
   }
-}
-
-async function linkAccount() {
-  const callbackURL = `/locations/${slug.value}/review-submit?token=${encodeURIComponent(token.value)}`
-  await authClient.signIn.social({ provider: 'google', callbackURL })
 }
 
 async function copyAndOpenGoogle() {

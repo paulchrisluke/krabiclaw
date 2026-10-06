@@ -7,11 +7,12 @@
         </svg>
       </div>
       <h1 class="blawby-display mt-8 text-4xl font-bold text-[var(--blawby-primary)]">Message received</h1>
-      <p class="mx-auto mt-4 max-w-xl leading-8 text-slate-600">Thank you for contacting us. Our team will review your message and reply as soon as possible.</p>
+      <p class="mx-auto mt-4 max-w-xl leading-8 text-muted">Thank you for contacting us. Our team will review your message and reply as soon as possible.</p>
       <div class="mt-10 flex flex-wrap justify-center gap-3">
         <BlawbyButton to="/">Back home</BlawbyButton>
         <BlawbyButton to="/contact" variant="outline">Send another message</BlawbyButton>
       </div>
+      <GuestAccountPrompt class="mx-auto mt-12 max-w-xl" />
     </section>
 
     <div v-else class="min-h-screen bg-default text-default">
@@ -31,12 +32,14 @@
             <SayaButton to="/contact" variant="ghost" size="md">{{ t('saya.contact_page.send_another') }}</SayaButton>
           </div>
         </div>
+        <GuestAccountPrompt class="mt-8" />
       </div>
     </div>
   </NuxtLayout>
 </template>
 
 <script setup lang="ts">
+import GuestAccountPrompt from '~/components/booking/GuestAccountPrompt.vue'
 definePageMeta({ layout: false })
 
 const { t } = useI18n()

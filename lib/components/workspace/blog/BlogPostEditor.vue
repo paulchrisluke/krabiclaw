@@ -157,32 +157,15 @@ const templateName = computed(() => post.value?.editor_template || 'saya')
 const collectionOptions = ARTICLE_COLLECTION_SLUGS.map(slug => ({ label: ARTICLE_COLLECTIONS[slug].label, value: slug }))
 if (!props.organizationId) throw new Error('The blog editor needs the organization it edits')
 const { data: categories, error: categoriesError } = useArticleCategories(props.organizationId, () => form.collection)
+// The canvas wears the site's light palette. Dashboard controls read Nuxt UI
+// tokens, so they are bridged to it while the canvas is active.
 const editorCanvasStyle = computed(() => {
-  const tokens = post.value?.editor_theme_tokens ?? {}
-  if (templateName.value === 'saya') {
-    const primary = String(tokens.primary || post.value?.editor_brand_color || '#8F1D21')
-    const background = String(tokens.bg || '#FFFFFF')
-    const foreground = String(tokens.ink || '#18181B')
-    const muted = String(tokens.muted || '#52525B')
-    return {
-      '--editor-canvas': background, '--editor-ink': foreground, '--brand-color': primary,
-      '--saya-primary': primary, '--saya-bg': background, '--saya-bg-alt': String(tokens.surface || '#FAFAFA'),
-      '--saya-fg': foreground, '--saya-fg-muted': muted, '--saya-border': String(tokens.border || '#E4E4E7'),
-      // Dashboard controls use Nuxt UI tokens, so bridge them to the site's
-      // theme while the editor canvas is active.
-      '--ui-primary': primary, '--ui-bg': background, '--ui-bg-elevated': String(tokens.surface || '#FAFAFA'), '--ui-text': foreground,
-      '--ui-text-highlighted': foreground, '--ui-text-muted': muted, '--ui-text-dimmed': muted,
-    }
-  }
-  if (templateName.value !== 'blawby') return { '--editor-canvas': 'var(--ui-bg-elevated)', '--editor-ink': 'var(--ui-text)' }
-  const ink = String(tokens.ink || '#162033')
+  const colors = post.value?.editor_colors
+  if (!colors) return { '--editor-canvas': 'var(--ui-bg-elevated)', '--editor-ink': 'var(--ui-text)' }
   return {
-    '--editor-canvas': String(tokens.bg || '#fbfaf7'), '--editor-ink': ink,
-    '--blawby-bg': String(tokens.bg || '#fbfaf7'), '--blawby-surface': String(tokens.surface || '#fff'),
-    '--blawby-primary': String(tokens.primary || '#25356c'), '--blawby-primary-dark': String(tokens.primaryDark || '#161f3b'),
-    '--blawby-accent': String(tokens.accent || '#c19855'), '--blawby-border': String(tokens.border || '#e5e7eb'), '--blawby-ink': ink,
-    // See the saya branch above for why these three are needed alongside --editor-ink.
-    '--ui-text-highlighted': ink, '--ui-text-muted': `color-mix(in srgb, ${ink} 70%, transparent)`, '--ui-text-dimmed': `color-mix(in srgb, ${ink} 55%, transparent)`,
+    '--editor-canvas': colors.ground, '--editor-ink': colors.text,
+    '--ui-primary': colors.action, '--ui-bg': colors.ground, '--ui-bg-elevated': colors.surface,
+    '--ui-text': colors.text, '--ui-text-highlighted': colors.text, '--ui-text-muted': colors.muted, '--ui-text-dimmed': colors.muted,
   }
 })
 const statusLabel = computed(() => {

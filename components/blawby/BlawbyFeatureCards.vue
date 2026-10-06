@@ -1,5 +1,5 @@
 <template>
-  <section v-if="isPricing" class="bg-white py-16" data-parity-section="pricing">
+  <section v-if="isPricing" class="bg-elevated py-16" data-parity-section="pricing">
     <div class="blawby-container">
       <template v-if="individualPlans.length">
         <div class="mx-4 mb-12 text-center"><h2 class="mb-2 text-3xl font-semibold text-[var(--blawby-primary)]">Pricing for Individuals &amp; Families</h2><p class="text-base text-[var(--blawby-primary)]/80">Income-based sliding scale rates</p></div>
@@ -13,11 +13,11 @@
       <BlawbyPricingCalculator v-if="calculator.enabled !== false && tableRows.length" :rows="tableRows" :note="String(calculator.note || '')" />
 
       <div v-if="tableRows.length" class="mt-12 grid gap-6 lg:grid-cols-[1fr_2fr]">
-        <div><h3 class="text-lg font-semibold text-[var(--blawby-primary)]">Federal Poverty Level Guidelines</h3><p class="mt-2 text-sm leading-6 text-gray-600">{{ table.notice }}</p></div>
-        <div class="overflow-x-auto rounded-lg shadow ring-1 ring-black/5">
+        <div><h3 class="text-lg font-semibold text-[var(--blawby-primary)]">Federal Poverty Level Guidelines</h3><p class="mt-2 text-sm leading-6 text-muted">{{ table.notice }}</p></div>
+        <div class="overflow-x-auto rounded-lg shadow ring-1 ring-default">
           <table class="min-w-full divide-y divide-[var(--blawby-primary-100)]">
             <thead class="bg-[var(--blawby-primary-100)]"><tr><th v-for="column in tableColumns" :key="column" scope="col" class="whitespace-nowrap px-4 py-3 text-left text-sm font-semibold text-[var(--blawby-primary)]">{{ column }}</th></tr></thead>
-            <tbody class="divide-y divide-[var(--blawby-primary-100)] bg-white"><tr v-for="(row, index) in tableRows" :key="index"><td v-for="cell in row" :key="String(cell)" class="whitespace-nowrap px-4 py-4 text-sm text-[var(--blawby-primary)]">{{ cell }}</td></tr></tbody>
+            <tbody class="divide-y divide-[var(--blawby-primary-100)] bg-elevated"><tr v-for="(row, index) in tableRows" :key="index"><td v-for="cell in row" :key="String(cell)" class="whitespace-nowrap px-4 py-4 text-sm text-[var(--blawby-primary)]">{{ cell }}</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -53,7 +53,7 @@
   <section v-else-if="features.length" class="relative bg-[var(--blawby-accent-200)] pb-16 pt-4 sm:pb-16 sm:pt-4 lg:pb-16" data-parity-section="features">
     <div class="blawby-container">
       <div class="relative z-20 mt-4 grid gap-10 sm:grid-cols-2 lg:grid-cols-3">
-        <article v-for="(feature, index) in features" :key="index" class="relative h-full rounded-2xl bg-white p-6 shadow-xl shadow-slate-900/10">
+        <article v-for="(feature, index) in features" :key="index" class="relative h-full rounded-2xl bg-elevated p-6 shadow-xl shadow-slate-900/10">
           <div v-if="feature.media[0]?.public_url" class="size-16 rounded-lg">
             <img :src="feature.media[0].public_url!" :alt="feature.title" width="64" height="64" loading="lazy" class="size-16 rounded object-cover">
           </div>

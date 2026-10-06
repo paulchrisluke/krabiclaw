@@ -107,7 +107,6 @@ const effects = {
   reorder_media: 'Overwrites media placement ordering for the selected public content collection.',
   replace_content_block: 'Replaces one block\'s data and media in the selected blog article or tenant page after a version check, keeping its position.',
   replace_resource_localizations: 'Replaces the submitted translations for one resource type and locale; omitted resources remain untouched.',
-  set_brand_color: 'Overwrites the selected organization public brand color.',
   set_collection_products: 'Overwrites the complete membership and order of the selected collection; products left out lose their place in it.',
   set_media: 'Replaces or clears the asset assigned to a single public media placement.',
   set_product_location: 'Creates or overwrites the selected product’s location availability and publication settings.',

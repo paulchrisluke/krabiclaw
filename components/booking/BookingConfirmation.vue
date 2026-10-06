@@ -1,7 +1,7 @@
 <template>
   <div>
     <header class="mx-auto max-w-xl px-4 pt-16 pb-4 text-center sm:px-6 lg:px-8">
-      <div class="mx-auto mb-5 flex size-13 items-center justify-center rounded-full bg-primary text-(--brand-color-foreground)">
+      <div class="mx-auto mb-5 flex size-13 items-center justify-center rounded-full bg-primary text-on-primary">
         <svg class="size-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
       </div>
       <p class="saya-kicker mb-3">{{ kicker }}</p>
@@ -50,11 +50,15 @@
         </div>
         <SayaButton v-if="ctaLabel && ctaTo" :to="ctaTo" block class="mt-7">{{ ctaLabel }}</SayaButton>
       </aside>
+
+      <GuestAccountPrompt :email="guestEmail" />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import GuestAccountPrompt from '~/components/booking/GuestAccountPrompt.vue'
+
 withDefaults(defineProps<{
   kicker: string
   receiptKicker: string
@@ -65,11 +69,14 @@ withDefaults(defineProps<{
   nextStepsNotesHtml?: string
   ctaLabel?: string
   ctaTo?: string
+  /** The email the guest booked with; the account prompt offers it. */
+  guestEmail?: string | null
 }>(), {
   nextStepsStyle: 'numbered',
   nextStepsNotesHtml: '',
   ctaLabel: '',
   ctaTo: '',
+  guestEmail: null,
 })
 
 defineSlots<{

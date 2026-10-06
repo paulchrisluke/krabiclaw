@@ -21,7 +21,6 @@ import { listPublishedTenantPagePaths } from '~/server/utils/content/pages'
 import { isBlawbyShellOnlyRouteRecipe } from '~/types/blawby'
 import { publicTenantVisibilitySql } from '~/server/utils/public-base'
 import type {
-  PublicBlawbyData,
   PublicBlawbyIdentity,
   PublicBlawbyRouteData,
   PublicBlawbyShellData,
@@ -202,17 +201,6 @@ export async function getPublicCompliance(db: DbClient, organizationId: string):
 }
 
 
-
-export async function getPublicThemeTokens(db: DbClient, organizationId: string, templateSlug = 'blawby'): Promise<ApiRecord> {
-  const row = await queryFirst<{ tokens_json: string | null }>(db, `
-    SELECT json_extract(settings_json, ? || '.tokens') AS tokens_json
-      FROM organization
-     WHERE id = ? AND json_extract(settings_json, ? || '.status') = 'active'
-     LIMIT 1
-  `, ['$.theme_by_template.' + templateSlug, organizationId, '$.theme_by_template.' + templateSlug])
-  return row?.tokens_json ? JSON.parse(row.tokens_json) as ApiRecord : {}
-}
-
 export async function getPublicBlawbyIdentity(db: DbClient, organizationId: string): Promise<PublicBlawbyIdentity> {
   const row = await queryFirst<ApiRecord>(db, `
     SELECT s.name, s.brand_description, s.contact_phone
@@ -241,11 +229,10 @@ export async function getPublicBlawbyShellData(
   const organizationLocalization = localizations.find(item => item.resourceType === 'organization' && item.resourceId === organizationId) ?? null
   // Navigation is the site's published pages. A practice area is one of them,
   // so there is no separate link list to keep in step with the page list.
-  const [sourceIdentity, sourceConsultation, sourceCompliance, themeTokens, pageLinks, verification] = await Promise.all([
+  const [sourceIdentity, sourceConsultation, sourceCompliance, pageLinks, verification] = await Promise.all([
     getPublicBlawbyIdentity(db, organizationId),
     getPublicConsultationSettings(db, organizationId),
     getPublicCompliance(db, organizationId),
-    getPublicThemeTokens(db, organizationId),
     listPublishedTenantPagePaths(db, organizationId, locale),
     queryFirst<{ token: string | null }>(db, `
       SELECT (SELECT i.verification_token FROM organization_integrations i WHERE i.organization_id = organization.id AND i.provider = 'google_search_console') AS token
@@ -286,7 +273,6 @@ export async function getPublicBlawbyShellData(
     identity,
     consultation,
     compliance,
-    themeTokens,
     pageLinks: pageLinks.map(page => ({ id: page.id, path: page.path, title: page.title })),
     searchConsoleVerification: verification.token,
   }
@@ -416,14 +402,4 @@ export async function getPublicBlawbyRouteData(
 export function hasPublicBlawbyRouteContent(route: PublicBlawbyRouteData): boolean {
   if (route.recipe === 'confirmation' || isBlawbyShellOnlyRouteRecipe(route.recipe)) return true
   return Boolean(route.page)
-}
-
-export async function getPublicBlawbyData(env: CloudflareEnv, db: DbClient, organizationId: string): Promise<PublicBlawbyData> {
-  const [tenantPages, compliance, consultation, themeTokens] = await Promise.all([
-    listPublicTenantPages(env, db, organizationId),
-    getPublicCompliance(db, organizationId),
-    getPublicConsultationSettings(db, organizationId),
-    getPublicThemeTokens(db, organizationId),
-  ])
-  return { tenantPages, compliance, consultation, themeTokens }
 }

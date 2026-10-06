@@ -4,7 +4,7 @@
       v-for="tier in tiers"
       :key="`${tier.title}-${tier.amount}`"
       class="relative rounded-2xl p-8 shadow-lg"
-      :class="tier.featured ? 'bg-[var(--blawby-primary-dark)] text-white' : 'bg-white text-[var(--blawby-primary-dark)]'"
+      :class="tier.featured ? 'bg-[var(--blawby-primary-dark)] text-white' : 'bg-elevated text-[var(--blawby-primary-dark)]'"
     >
       <div v-if="tier.featured" class="absolute -top-4 left-1/2 -translate-x-1/2">
         <span class="inline-flex items-center rounded-full bg-[var(--blawby-accent-strong)] px-4 py-1 text-sm font-medium text-white">
@@ -31,13 +31,13 @@
       </div>
     </article>
 
-    <article class="relative rounded-2xl bg-white p-8 text-[var(--blawby-primary-dark)] shadow-lg">
+    <article class="relative rounded-2xl bg-elevated p-8 text-[var(--blawby-primary-dark)] shadow-lg">
       <div class="text-center">
         <div class="mx-auto flex size-16 items-center justify-center rounded-xl bg-[var(--blawby-primary-100)]">
           <BlawbyFeatureIcon name="HeartIcon" class="size-8 text-[var(--blawby-primary)]" />
         </div>
         <h2 class="mt-6 text-xl font-semibold">Custom Amount</h2>
-        <p class="mt-2 text-sm text-gray-500">Choose your own donation amount</p>
+        <p class="mt-2 text-sm text-muted">Choose your own donation amount</p>
         <BlawbyButton :to="destination" class="mt-6 w-full" @click="$emit('click', { label: 'Custom Amount', amount: null })">
           Donate custom amount
         </BlawbyButton>

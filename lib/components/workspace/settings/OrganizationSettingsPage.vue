@@ -29,6 +29,8 @@
 import type { ComputedRef, InjectionKey, Reactive, Ref } from 'vue'
 import type { CurrencyCode } from '~/shared/currencies'
 import type { OrganizationFontPreset } from '~/shared/organization-fonts'
+import type { SitePalette } from '~/shared/site-palette'
+import type { LogoPresentation } from '~/shared/media-placement-contract'
 
 export interface OrganizationSettingsForm {
   name: string
@@ -41,10 +43,14 @@ export interface OrganizationSettingsForm {
   announcementCtaUrl: string
   announcementDismissible: boolean
   logoAssetId: string | null
+  logoPresentation: LogoPresentation
+  logoDarkAssetId: string | null
+  logoDarkPresentation: LogoPresentation
   faviconAssetId: string | null
   socialShareAssetId: string | null
   contact_email: string
-  brand_color: string
+  /** Null on the platform template, whose palette is fixed. */
+  palette: SitePalette | null
   font_preset: OrganizationFontPreset
   default_currency: CurrencyCode | null
   status: OrganizationStatus
@@ -59,9 +65,10 @@ export interface OrganizationSettingsResponse {
   name?: string | null
   brand_description?: string | null
   announcement: { headline: string; description: string | null; cta_label: string | null; cta_url: string | null; dismissible: boolean; enabled: boolean } | null
-  media?: Array<{ asset_id: string; slot: string; public_url?: string | null }>
+  media?: Array<{ asset_id: string; slot: string; public_url?: string | null; presentation?: LogoPresentation | null }>
   contact_email?: string | null
-  brand_color?: string | null
+  palette: SitePalette | null
+  palette_source: 'custom' | 'template' | null
   font_preset?: OrganizationFontPreset
   default_currency?: string | null
 }
@@ -90,7 +97,13 @@ export interface OrganizationSettingsEditor {
   validationMessage: ComputedRef<string | null>
   nameCharactersRemaining: ComputedRef<number>
   descriptionCharactersRemaining: ComputedRef<number>
-  sayaTheme: ComputedRef<boolean>
+  theme: ComputedRef<string | undefined>
+  /** Whether the site wears its own palette or its template's. */
+  paletteSource: ComputedRef<'custom' | 'template' | null>
+  /** Returns the site to its template's colors. */
+  resetPalette: () => Promise<void>
+  /** The saved logo assets' URLs, for previews before a new pick is saved. */
+  logoUrl: (assetId: string | null) => string | null
   localizationSettings: Ref<LocalizationSettings | null>
   localizationLoading: Ref<boolean>
   localizationBusy: Ref<boolean>
@@ -117,7 +130,9 @@ export const organizationSettingsEditorKey = Symbol('organization-settings-edito
 import DashboardResourceLocalization from '~/components/dashboard/DashboardResourceLocalization.vue'
 import EditorNavigationList, { type EditorNavigationItem } from '~/components/dashboard/EditorNavigationList.vue'
 import { isCurrencyCode } from '~/shared/currencies'
-import { MALI_FONT_CSS, isOrganizationFontPreset, resolveOrganizationFontPreset } from '~/shared/organization-fonts'
+import { ORGANIZATION_FONT_OPTIONS, isOrganizationFontPreset, resolveOrganizationFontPreset } from '~/shared/organization-fonts'
+import { parseSitePalette } from '~/shared/site-palette'
+import { ORIGINAL_LOGO_PRESENTATION } from '~/shared/media-placement-contract'
 import { authClient } from '~/lib/auth-client'
 
 const props = withDefaults(defineProps<{ surface?: 'brand' | 'settings' }>(), { surface: 'settings' })
@@ -167,6 +182,7 @@ const isSettingsResponse = (value: unknown): value is { success: boolean; settin
   && (value.settings.name === undefined || value.settings.name === null || typeof value.settings.name === 'string')
   && (value.settings.announcement === null || (isRecord(value.settings.announcement) && typeof value.settings.announcement.headline === 'string'))
   && (value.settings.font_preset === undefined || isOrganizationFontPreset(value.settings.font_preset))
+  && (value.settings.palette === null || isRecord(value.settings.palette))
   && (value.settings.default_currency === undefined || value.settings.default_currency === null || typeof value.settings.default_currency === 'string')
   && isOrganizationStatus(value.settings.status)
 function isOrganizationStatus(value: unknown): value is OrganizationStatus {
@@ -187,20 +203,16 @@ const localizationProgress = ref<LocalizationProgress[]>([])
 const localizationProgressError = ref<string | null>(null)
 const newLocale = ref('')
 const loadedSettings = ref<OrganizationSettingsResponse | null>(null)
-const sayaTheme = computed(() => loadedSettings.value?.theme === 'saya')
+const theme = computed(() => loadedSettings.value?.theme)
+const paletteSource = computed(() => loadedSettings.value?.palette_source ?? null)
 const originalSignature = ref('')
 const form = reactive<OrganizationSettingsForm>({
   name: '', brand_description: '',
   announcementEnabled: true, announcementAssetId: null, announcementHeadline: '', announcementDescription: '', announcementCtaLabel: '', announcementCtaUrl: '', announcementDismissible: true,
-  logoAssetId: null, faviconAssetId: null, socialShareAssetId: null, contact_email: '', brand_color: '', font_preset: 'default',
+  logoAssetId: null, logoPresentation: ORIGINAL_LOGO_PRESENTATION, logoDarkAssetId: null, logoDarkPresentation: ORIGINAL_LOGO_PRESENTATION,
+  faviconAssetId: null, socialShareAssetId: null, contact_email: '', palette: null, font_preset: 'default',
   default_currency: null, status: 'inactive',
 })
-// Only the specimen uses Mali. Never change the dashboard's typography.
-useHead(() => ({
-  style: surface.value === 'brand' && detailKey.value === 'font' && sayaTheme.value && form.font_preset === 'mali'
-    ? [{ key: 'organization-font-preview', innerHTML: MALI_FONT_CSS }]
-    : [],
-}))
 const brandLocalizationFields = computed(() => [
   { key: 'name', label: 'Brand name', source: loadedSettings.value?.name },
   { key: 'brand_description', label: 'Description', source: loadedSettings.value?.brand_description, multiline: true, rows: 6 },
@@ -221,9 +233,9 @@ const brandItems = computed<EditorNavigationItem[]>(() => [
   { id: 'sharing-image', label: 'Social sharing image', summary: loadedSettings.value?.media?.some(item => item.slot === 'social_share') ? 'Image selected' : 'Not set', icon: 'i-lucide-panels-top-left', to: `${brandPath.value}/sharing-image` },
   { id: 'description', label: 'Description', summary: explicitSummary(loadedSettings.value?.brand_description), icon: 'i-lucide-align-left', to: `${brandPath.value}/description` },
   { id: 'announcement', label: 'Announcement', summary: loadedSettings.value?.announcement?.enabled ? explicitSummary(loadedSettings.value.announcement.headline) : 'Off', icon: 'i-lucide-megaphone', to: `${brandPath.value}/announcement` },
-  // Brand color and font are Saya's: no other template reads them (layouts/saya.vue).
-  ...(sayaTheme.value ? [{ id: 'color', label: 'Brand color', summary: explicitSummary(loadedSettings.value?.brand_color), icon: 'i-lucide-palette', to: `${brandPath.value}/color` }] : []),
-  ...(sayaTheme.value ? [{ id: 'font', label: 'Website font', summary: loadedSettings.value?.font_preset === 'mali' ? 'Mali (Thai and English)' : 'Default', icon: 'i-lucide-type', to: `${brandPath.value}/font` }] : []),
+  // Colors are Saya's and Blawby's; Krabiclaw's platform template keeps its own.
+  ...(loadedSettings.value?.palette ? [{ id: 'color', label: 'Colors', summary: paletteSource.value === 'custom' ? 'Your colors' : 'Template colors', icon: 'i-lucide-palette', to: `${brandPath.value}/color` }] : []),
+  { id: 'font', label: 'Website font', summary: ORGANIZATION_FONT_OPTIONS.find(option => option.value === loadedSettings.value?.font_preset)?.label ?? 'Default', icon: 'i-lucide-type', to: `${brandPath.value}/font` },
   { id: 'contact', label: 'Contact details', summary: explicitSummary(loadedSettings.value?.contact_email), icon: 'i-lucide-mail', to: `${brandPath.value}/contact` },
   { id: 'translations', label: 'Translations', summary: 'Translate the brand name and description', icon: 'i-lucide-languages', action: { label: 'Localize' } },
 ])
@@ -259,12 +271,12 @@ watch(() => route.path, (next, previous) => {
 function editorSignature(key: string | null) {
   switch (key) {
     case 'name': return JSON.stringify(form.name)
-    case 'logo': return JSON.stringify(form.logoAssetId)
+    case 'logo': return JSON.stringify([form.logoAssetId, form.logoPresentation, form.logoDarkAssetId, form.logoDarkPresentation])
     case 'favicon': return JSON.stringify(form.faviconAssetId)
     case 'sharing-image': return JSON.stringify(form.socialShareAssetId)
     case 'description': return JSON.stringify(form.brand_description)
     case 'announcement': return JSON.stringify([form.announcementEnabled, form.announcementAssetId, form.announcementHeadline, form.announcementDescription, form.announcementCtaLabel, form.announcementCtaUrl, form.announcementDismissible])
-    case 'color': return JSON.stringify(form.brand_color)
+    case 'color': return JSON.stringify(form.palette)
     case 'font': return JSON.stringify(form.font_preset)
     case 'contact': return JSON.stringify(form.contact_email)
     case 'currency': return JSON.stringify(form.default_currency)
@@ -290,8 +302,15 @@ const validationMessage = computed(() => {
       if (form.announcementCtaUrl.trim() && !isValidUrl(form.announcementCtaUrl)) return 'Enter a complete http or https button URL.'
       return null
     }
-    case 'color': return !form.brand_color.trim() || /^#[0-9a-f]{6}$/i.test(form.brand_color) ? null : 'Enter a six-digit hex color.'
-    case 'font': return sayaTheme.value && isOrganizationFontPreset(form.font_preset) ? null : 'Choose a supported website font.'
+    case 'color': {
+      try {
+        parseSitePalette(form.palette)
+        return null
+      } catch (error) {
+        return (error as Error).message.replace(/^palette\.(light|dark)\.(\w+) must be a #RRGGBB color$/, 'Enter a six-digit hex color for $2 ($1).')
+      }
+    }
+    case 'font': return isOrganizationFontPreset(form.font_preset) ? null : 'Choose a supported website font.'
     case 'contact': return !form.contact_email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.contact_email) ? null : 'Enter a valid email address.'
     case 'status': return form.status === 'suspended' ? 'This website is suspended. Contact support to restore it.' : null
     case 'localization': return localizationSettings.value?.effective_plan !== 'growth' ? 'A Growth subscription is required.' : null
@@ -313,11 +332,16 @@ function fillForm(settings: OrganizationSettingsResponse) {
   form.announcementCtaLabel = settings.announcement?.cta_label ?? ''
   form.announcementCtaUrl = settings.announcement?.cta_url ?? ''
   form.announcementDismissible = settings.announcement?.dismissible ?? true
-  form.logoAssetId = settings.media?.find(item => item.slot === 'logo')?.asset_id ?? null
+  const logo = settings.media?.find(item => item.slot === 'logo')
+  const logoDark = settings.media?.find(item => item.slot === 'logo_dark')
+  form.logoAssetId = logo?.asset_id ?? null
+  form.logoPresentation = logo?.presentation ?? ORIGINAL_LOGO_PRESENTATION
+  form.logoDarkAssetId = logoDark?.asset_id ?? null
+  form.logoDarkPresentation = logoDark?.presentation ?? ORIGINAL_LOGO_PRESENTATION
   form.faviconAssetId = settings.media?.find(item => item.slot === 'favicon')?.asset_id ?? null
   form.socialShareAssetId = settings.media?.find(item => item.slot === 'social_share')?.asset_id ?? null
   form.contact_email = settings.contact_email ?? ''
-  form.brand_color = settings.brand_color ?? ''
+  form.palette = settings.palette && structuredClone(settings.palette)
   form.font_preset = resolveOrganizationFontPreset(settings.font_preset)
   // A stored value that is not a supported code is not this form's to reinterpret:
   // showing it as USD invited the owner to save that over whatever is really there.
@@ -358,6 +382,14 @@ async function patchSettings(body: Record<string, unknown>) {
   originalSignature.value = editorSignature(detailKey.value)
   await dashboard.refresh()
 }
+async function resetPalette() {
+  saving.value = true
+  editorError.value = null
+  try { await patchSettings({ palette: null }) } catch (error) { editorError.value = errorMessage(error, 'Failed to reset the colors') } finally { saving.value = false }
+}
+function logoUrl(assetId: string | null) {
+  return assetId ? loadedSettings.value?.media?.find(item => item.asset_id === assetId)?.public_url ?? null : null
+}
 async function saveCurrentEditor() {
   if (saveDisabled.value || !detailKey.value) return
   saving.value = true
@@ -365,7 +397,10 @@ async function saveCurrentEditor() {
   try {
     switch (detailKey.value) {
       case 'name': await patchSettings({ name: form.name.trim() }); break
-      case 'logo': await patchSettings({ media: [{ asset_id: form.logoAssetId, slot: 'logo' }] }); break
+      case 'logo': await patchSettings({ media: [
+        { asset_id: form.logoAssetId, slot: 'logo', presentation: form.logoAssetId ? form.logoPresentation : null },
+        { asset_id: form.logoDarkAssetId, slot: 'logo_dark', presentation: form.logoDarkAssetId ? form.logoDarkPresentation : null },
+      ] }); break
       case 'favicon': await patchSettings({ media: [{ asset_id: form.faviconAssetId, slot: 'favicon' }] }); break
       case 'sharing-image': await patchSettings({ media: [{ asset_id: form.socialShareAssetId, slot: 'social_share' }] }); break
       case 'description': await patchSettings({ brand_description: form.brand_description }); break
@@ -383,7 +418,7 @@ async function saveCurrentEditor() {
         })
         break
       }
-      case 'color': await patchSettings({ brand_color: form.brand_color }); break
+      case 'color': await patchSettings({ palette: form.palette }); break
       case 'font': await patchSettings({ font_preset: form.font_preset }); break
       case 'contact': await patchSettings({ contact_email: form.contact_email.trim() }); break
       case 'currency': {
@@ -469,7 +504,10 @@ provide(organizationSettingsEditorKey, {
   validationMessage,
   nameCharactersRemaining,
   descriptionCharactersRemaining,
-  sayaTheme,
+  theme,
+  paletteSource,
+  resetPalette,
+  logoUrl,
   localizationSettings,
   localizationLoading,
   localizationBusy,

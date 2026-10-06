@@ -6,11 +6,19 @@ import type { CurrencyCode } from '~/shared/currencies'
 import type { PriceInput } from '~/shared/prices'
 import type { TenantPageBlock, TenantPageType } from '~/utils/tenant-page-blocks'
 import { postalAddressFromAnswers, type PostalAddress } from '~/utils/postal-address'
+import { HTTPError } from 'nitro'
+import { STARTER_PALETTES } from '~/shared/site-palette'
+import { isOrganizationFontPreset } from '~/shared/organization-fonts'
+import { LOGO_SHAPES } from '~/shared/media-placement-contract'
 
 type DraftSourceType = 'google_places' | 'manual'
 
 export interface DraftBrandInput {
-  brandColor: string | null
+  /** A starter palette id; the site wears its template's colors until one is chosen. */
+  paletteStarter: string | null
+  fontPreset: string | null
+  /** How the uploaded logo is shown: original, square or circle. */
+  logoShape: string | null
   logoNote: string | null
   logoPreviewUrl: string | null
   heroPhotoNote: string | null
@@ -330,7 +338,12 @@ export function buildOnboardingDraftPayload(input: {
 
   const qa: DraftQaRecord[] = []
 
-  const brandColor = input.brandDraft?.brandColor?.trim() || null
+  const paletteStarter = input.brandDraft?.paletteStarter ?? null
+  if (paletteStarter !== null && !STARTER_PALETTES.some(starter => starter.id === paletteStarter)) throw new HTTPError({ statusCode: 400, statusMessage: 'Unknown starter palette' })
+  const fontPreset = input.brandDraft?.fontPreset ?? null
+  if (fontPreset !== null && !isOrganizationFontPreset(fontPreset)) throw new HTTPError({ statusCode: 400, statusMessage: 'Unsupported website font' })
+  const logoShape = input.brandDraft?.logoShape ?? null
+  if (logoShape !== null && !(LOGO_SHAPES as readonly string[]).includes(logoShape)) throw new HTTPError({ statusCode: 400, statusMessage: 'Unsupported logo shape' })
   const heroHeadline = input.brandDraft?.heroHeadline?.trim() || null
   const heroSubtitle = input.brandDraft?.heroSubtitle?.trim() || null
   const content = buildDraftContent(brandName, input.vertical, heroHeadline, heroSubtitle)
@@ -348,7 +361,9 @@ export function buildOnboardingDraftPayload(input: {
       vertical: input.vertical,
       subdomainCandidate,
       config: {
-        brand_color: brandColor,
+        palette_starter: paletteStarter,
+        font_preset: fontPreset,
+        logo_shape: logoShape,
         draft_logo_note: input.brandDraft?.logoNote?.trim() || null,
         draft_hero_photo_note: input.brandDraft?.heroPhotoNote?.trim() || null,
         draft_hero_headline: heroHeadline,
