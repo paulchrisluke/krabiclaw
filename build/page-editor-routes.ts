@@ -17,4 +17,8 @@ export function mountProductPageRoutes(pages: PageNode[]): void {
     ...(productPage.children ?? []),
     ...editor.children.map(child => renamed(child, 'dashboard-orgSlug-settings-website-pages-pageId', 'dashboard-orgSlug-products-productId-page')),
   ]
+  // The editor's index level now shares Page content's URL and carries its
+  // name, as a directory's index.vue does; a record and its child cannot both
+  // hold one name, and the router refuses to start if they do.
+  delete productPage.name
 }
