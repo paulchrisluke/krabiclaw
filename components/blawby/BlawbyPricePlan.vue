@@ -1,6 +1,6 @@
 <template>
   <article class="relative mb-10 rounded-3xl border-2 bg-elevated p-6 shadow-md sm:p-8 lg:p-10" :class="isBusiness ? 'border-[var(--blawby-primary)]' : 'border-[var(--blawby-accent)]'">
-    <div v-if="plan.discount" class="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded bg-[var(--blawby-accent)] px-4 py-1 text-xs font-semibold uppercase text-white">{{ discountLabel }}</div>
+    <div v-if="plan.discount" class="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded bg-[var(--site-accent)] px-4 py-1 text-xs font-semibold uppercase text-[var(--site-on-accent)]">{{ discountLabel }}</div>
     <p class="mb-6 text-center text-6xl font-bold text-[var(--blawby-primary)]">{{ price }}</p>
     <hr class="border-default">
     <p class="mb-6 mt-4 text-base leading-7 text-[var(--blawby-primary)]">{{ plan.description }}</p>

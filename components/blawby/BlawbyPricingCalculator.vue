@@ -12,7 +12,7 @@
           <div class="grid grid-cols-4 gap-2 sm:grid-cols-8">
             <label v-for="size in 8" :key="size" class="cursor-pointer">
               <input v-model.number="householdSize" type="radio" name="household-size" :value="size" class="peer sr-only">
-              <span class="flex aspect-square items-center justify-center rounded-lg text-lg font-semibold ring-1 ring-default transition peer-checked:bg-[var(--blawby-accent)] peer-checked:text-white peer-checked:ring-[var(--blawby-accent)] peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--blawby-primary)]">{{ size }}</span>
+              <span class="flex aspect-square items-center justify-center rounded-lg text-lg font-semibold ring-1 ring-default transition peer-checked:bg-[var(--site-accent)] peer-checked:text-[var(--site-on-accent)] peer-checked:ring-[var(--blawby-accent)] peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--blawby-primary)]">{{ size }}</span>
             </label>
           </div>
         </fieldset>

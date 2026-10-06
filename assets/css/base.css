@@ -195,6 +195,7 @@
   --site-action:    var(--site-action-light);
   --site-accent:    var(--site-accent-light);
   --site-on-action: var(--site-on-action-light);
+  --site-on-accent: var(--site-on-accent-light);
 
   --ui-primary:          var(--site-action);
   --color-primary:       var(--site-action);
@@ -229,6 +230,7 @@
   --site-action:    var(--site-action-dark);
   --site-accent:    var(--site-accent-dark);
   --site-on-action: var(--site-on-action-dark);
+  --site-on-accent: var(--site-on-accent-dark);
 }
 
 /* ── Platform theme ───────────────────────────────────────── */

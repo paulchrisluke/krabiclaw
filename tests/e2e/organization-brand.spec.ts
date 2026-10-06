@@ -260,7 +260,8 @@ async function renderedPalette(browser: Browser, url: string, headers: Record<st
 }
 
 test('a starter palette saved through Brand colors the Saya site in light and dark', async ({ browser, playwright }) => {
-  const { starterPalette, onActionColor } = await import('../../shared/site-palette')
+  const { starterPalette } = await import('../../shared/site-palette')
+  const { getOptimalForeground } = await import('../../utils/color-utils')
   const forest = starterPalette('forest')
   const organizationId = E2E_KIKUZUKI_ORGANIZATION_ID
   const baseURL = testBaseUrl()
@@ -293,7 +294,7 @@ test('a starter palette saved through Brand colors the Saya site in light and da
       const rendered = await renderedPalette(browser, `${kikuzukiTestBaseUrl()}/`, kikuzukiTestExtraHeaders(), '.tenant-layout', mode)
       expect(rendered.dark).toBe(mode === 'dark')
       expect(rendered.primary).toBe(forest[mode].action)
-      expect(rendered.onPrimary).toBe(onActionColor(forest[mode]))
+      expect(rendered.onPrimary).toBe(getOptimalForeground(forest[mode].action))
       expect(rendered.background).toBe(rgb(forest[mode].ground))
     }
 

@@ -172,8 +172,8 @@ button {
   justify-content: center;
   border: 0;
   border-radius: 0.5rem;
-  background: var(--blawby-accent-button);
-  color: #fff;
+  background: var(--site-accent);
+  color: var(--site-on-accent);
   padding: 0.75rem 1rem;
   font-size: 0.875rem;
   font-weight: 600;

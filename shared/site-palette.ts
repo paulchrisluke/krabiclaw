@@ -9,7 +9,7 @@ export const SITE_PALETTE_ROLES = [
   { role: 'text', label: 'Text', rule: 'Body copy and headings.' },
   { role: 'muted', label: 'Secondary text', rule: 'Captions, details and supporting copy.' },
   { role: 'action', label: 'Action', rule: 'Buttons, links and selected states.' },
-  { role: 'accent', label: 'Accent', rule: 'Emphasis and decoration, used sparingly.' },
+  { role: 'accent', label: 'Accent', rule: 'Emphasis, decoration and highlighted buttons.' },
 ] as const
 
 export type SitePaletteRole = typeof SITE_PALETTE_ROLES[number]['role']
@@ -104,11 +104,6 @@ export function resolveSitePalette(template: PaletteTemplate, stored: SitePalett
   return stored ?? TEMPLATE_PALETTES[template]
 }
 
-/** Text on an action-colored button: whichever of black or white reads. */
-export function onActionColor(colorsForMode: SitePaletteColors): string {
-  return getOptimalForeground(colorsForMode.action)
-}
-
 export interface PaletteContrastCheck { mode: SitePaletteMode; pair: string; ratio: number; minimum: number }
 
 // The pairs a reader depends on, with WCAG AA minimums: 4.5 for normal text,
@@ -124,7 +119,8 @@ export function paletteContrast(value: SitePalette): PaletteContrastCheck[] {
       check('secondary text on ground', c.muted, c.ground, 4.5),
       check('secondary text on surface', c.muted, c.surface, 4.5),
       check('action on ground', c.action, c.ground, 3),
-      check('button label on action', onActionColor(c), c.action, 4.5),
+      check('button label on action', getOptimalForeground(c.action), c.action, 4.5),
+      check('button label on accent', getOptimalForeground(c.accent), c.accent, 4.5),
     ]
   })
 }
@@ -134,7 +130,9 @@ export function sitePaletteStyle(value: SitePalette): Record<string, string> {
   const style: Record<string, string> = {}
   for (const mode of SITE_PALETTE_MODES) {
     for (const role of ROLE_NAMES) style[`--site-${role}-${mode}`] = value[mode][role]
-    style[`--site-on-action-${mode}`] = onActionColor(value[mode])
+    // Text on an action- or accent-filled control: whichever of black or white reads.
+    style[`--site-on-action-${mode}`] = getOptimalForeground(value[mode].action)
+    style[`--site-on-accent-${mode}`] = getOptimalForeground(value[mode].accent)
   }
   return style
 }

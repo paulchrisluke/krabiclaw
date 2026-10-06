@@ -19,7 +19,6 @@
   --blawby-accent:        var(--site-accent);
   --blawby-accent-100:    color-mix(in oklab, var(--site-accent) 10%, var(--site-ground));
   --blawby-accent-200:    color-mix(in oklab, var(--site-accent) 18%, var(--site-ground));
-  --blawby-accent-button: color-mix(in oklab, var(--site-accent) 92%, black);
   --blawby-accent-strong: color-mix(in oklab, var(--site-accent) 80%, black);
   --blawby-border:        var(--ui-border);
 
@@ -72,7 +71,6 @@
 .dark .blawby-theme {
   --blawby-primary-dark:  color-mix(in oklab, var(--site-action) 18%, var(--site-ground));
   --blawby-primary-800:   color-mix(in oklab, var(--site-action) 30%, var(--site-ground));
-  --blawby-accent-button: color-mix(in oklab, var(--site-accent) 90%, white);
   --blawby-accent-strong: color-mix(in oklab, var(--site-accent) 80%, white);
   /* Pale tints become a lift of the ground toward the surface, not a wash of
      the accent over a dark ground, which reads as grey-brown. The band tint
