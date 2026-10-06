@@ -408,6 +408,7 @@ async function handleReservation() {
       organizationId,
       organizationName: brandName.value,
       guestName: reservationForm.value.name,
+      guestEmail: reservationForm.value.email,
       // The guest picked a wall-clock slot at this location; the instant it
       // means was resolved once, above, in that location's zone.
       startsAt,

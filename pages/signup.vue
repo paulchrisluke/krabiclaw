@@ -35,7 +35,7 @@
     <div class="mt-6 space-y-3">
       <AuthGoogleButton label="Sign up with Google" :loading="loading" @activate="googleSignup" />
       <USeparator label="or use email" />
-      <AuthEmailSignUpForm :callback-url="verificationCallback" @success="emailSignupComplete" />
+      <AuthEmailSignUpForm :callback-url="verificationCallback" :initial-email="queryEmail" @success="emailSignupComplete" />
     </div>
     <p class="mt-6 text-center text-sm text-muted">Already have an account? <NuxtLink :to="loginUrl" class="font-semibold text-primary">Sign in</NuxtLink></p>
     </div>
@@ -61,6 +61,7 @@ useSocialMetadata({
 
 const route = useRoute()
 const redirect = computed(() => validatedInternalPath(route.query.redirect))
+const queryEmail = typeof route.query.email === 'string' ? route.query.email : ''
 const postLoginUrl = computed(() => buildPostLoginUrl({ redirect: redirect.value }))
 const loginUrl = computed(() => redirect.value ? { path: '/login', query: { redirect: redirect.value } } : '/login')
 const requestUrl = useRequestURL()

@@ -183,9 +183,15 @@ Paid rejection commits cancellation, allocation release and full refund intent i
 one guarded D1 batch; provider retry is durable. Ordinary cancellation is distinct.
 
 Buyer ownership uses Better Auth identity. Signing in on any device reads the same
-owned purchases. Better Auth links guest-owned records when that guest signs in;
-typed email never proves ownership and no tenant membership is granted. There is
-no manual transfer-code flow. Hidden hosted return tokens are one-time possession
+owned purchases. A guest acts on a business's own site as an anonymous Better Auth
+user. Better Auth links that guest's records when they sign in in the same browser,
+and a verified inbox links them anywhere: when a verified account gets a session, the
+anonymous identities whose requests were all made with that email join it
+(`server/utils/guest-accounts.ts`), because whoever controls the inbox already
+received every confirmation and manage link sent to it. An email typed into a form
+is never proof by itself, and no tenant membership is granted. There is no manual
+transfer-code flow. Thank-you pages and guest confirmation emails invite the guest to
+create the account at krabiclaw.com with the email they used. Hidden hosted return tokens are one-time possession
 proofs; the server retrieves native Checkout and PaymentIntent before conversion.
 Financial parent FKs retain evidence; tenant deletion stores minimal servicing
 relationships without retaining merchant credentials or recreating the tenant.
