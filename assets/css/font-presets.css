@@ -1,0 +1,83 @@
+/*
+  Site font presets. shared/organization-fonts.ts owns the IDs; each rule maps one
+  to the theme's heading and body roles. @nuxt/fonts reads the families named
+  here and adds their @font-face rules to the sheet that imports this file. A
+  browser downloads a face only when rendered text uses it, so only the
+  selected preset's files are fetched. Without a preset rule, the theme's own
+  --font-heading and --font-sans apply. Every stack ends with the script
+  fallbacks from base.css, so a family without Thai or Japanese glyphs leaves
+  those characters to a font that has them.
+*/
+/* Each template's own heading face: what Default renders. The CMS preview names
+   the template with data-font-template. Platform pages and the dashboard take
+   theirs from .platform-theme in base.css. */
+.saya-theme,
+[data-font-template="saya"] {
+  --font-heading: "Instrument Serif", var(--font-script-serif), serif;
+  --font-heading-weight: 400;
+}
+.blawby-theme,
+[data-font-template="blawby"] {
+  --font-heading: "Marcellus", var(--font-script-serif), serif;
+  --font-heading-weight: 400;
+}
+
+[data-font-preset="mali"] {
+  --font-heading: "Mali", var(--font-script-sans), sans-serif;
+  --font-sans: "Mali", var(--font-script-sans), sans-serif;
+}
+[data-font-preset="sarabun"] {
+  --font-heading: "Sarabun", var(--font-script-sans), sans-serif;
+  --font-heading-weight: 600;
+  --font-sans: "Sarabun", var(--font-script-sans), sans-serif;
+}
+[data-font-preset="prompt"] {
+  --font-heading: "Prompt", var(--font-script-sans), sans-serif;
+  --font-heading-weight: 500;
+  --font-sans: "Prompt", var(--font-script-sans), sans-serif;
+}
+[data-font-preset="kanit"] {
+  --font-heading: "Kanit", var(--font-script-sans), sans-serif;
+  --font-heading-weight: 500;
+  --font-sans: "Sarabun", var(--font-script-sans), sans-serif;
+}
+[data-font-preset="ibm-plex-sans-thai"] {
+  --font-heading: "IBM Plex Sans Thai", var(--font-script-sans), sans-serif;
+  --font-heading-weight: 600;
+  --font-sans: "IBM Plex Sans Thai", var(--font-script-sans), sans-serif;
+}
+[data-font-preset="noto-serif-thai"] {
+  --font-heading: "Noto Serif Thai", var(--font-script-serif), serif;
+  --font-heading-weight: 600;
+  --font-sans: "Noto Sans Thai", var(--font-script-sans), sans-serif;
+}
+[data-font-preset="inter"] {
+  --font-heading: "Inter", var(--font-script-sans), sans-serif;
+  --font-heading-weight: 600;
+  --font-sans: "Inter", var(--font-script-sans), sans-serif;
+}
+[data-font-preset="dm-sans"] {
+  --font-heading: "DM Sans", var(--font-script-sans), sans-serif;
+  --font-heading-weight: 600;
+  --font-sans: "DM Sans", var(--font-script-sans), sans-serif;
+}
+[data-font-preset="montserrat"] {
+  --font-heading: "Montserrat", var(--font-script-sans), sans-serif;
+  --font-heading-weight: 600;
+  --font-sans: "Montserrat", var(--font-script-sans), sans-serif;
+}
+[data-font-preset="lora"] {
+  --font-heading: "Lora", var(--font-script-serif), serif;
+  --font-heading-weight: 600;
+  --font-sans: "Lora", var(--font-script-serif), serif;
+}
+[data-font-preset="playfair-display"] {
+  --font-heading: "Playfair Display", var(--font-script-serif), serif;
+  --font-heading-weight: 600;
+  --font-sans: "Inter", var(--font-script-sans), sans-serif;
+}
+[data-font-preset="cormorant-garamond"] {
+  --font-heading: "Cormorant Garamond", var(--font-script-serif), serif;
+  --font-heading-weight: 500;
+  --font-sans: "Inter", var(--font-script-sans), sans-serif;
+}

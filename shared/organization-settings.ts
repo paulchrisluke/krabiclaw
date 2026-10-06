@@ -64,7 +64,7 @@ export interface GoogleCalendarIntegration {
 
 export interface OrganizationSettings {
   config?: {
-    brand_color?: string
+    palette?: import('./site-palette').SitePalette
     font_preset?: import('./organization-fonts').OrganizationFontPreset
     press_email?: string
     partnerships_email?: string
@@ -73,13 +73,6 @@ export interface OrganizationSettings {
     default_timezone?: string
     whatsapp_phone?: string
   }
-  theme_by_template?: Partial<Record<import('../utils/template-registry').PublicTemplateSlug, {
-    tokens: Record<string, string>
-    status: 'active' | 'disabled'
-    created_at: string
-    updated_at: string
-    updated_by: string | null
-  }>>
   consultation?: Omit<import('../types/blawby').PublicConsultationSettings, 'contact_form_enabled' | 'metadata'> & {
     metadata_json: Record<string, unknown> | null
     created_at: string

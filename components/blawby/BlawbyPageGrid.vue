@@ -4,9 +4,9 @@
       v-for="item in items"
       :key="item.id"
       :to="item.url"
-      class="relative h-full rounded-2xl bg-gray-100 p-6 no-underline shadow-xl shadow-slate-900/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--blawby-primary)] focus-visible:ring-offset-4"
+      class="relative h-full rounded-2xl bg-muted p-6 no-underline shadow-xl shadow-slate-900/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--blawby-primary)] focus-visible:ring-offset-4"
     >
-      <div :data-page-id="item.id" class="aspect-[704/478] w-full overflow-hidden rounded-lg bg-gray-100">
+      <div :data-page-id="item.id" class="aspect-[704/478] w-full overflow-hidden rounded-lg bg-muted">
         <img
           v-if="coverImage(item)"
           :src="coverImage(item) || undefined"

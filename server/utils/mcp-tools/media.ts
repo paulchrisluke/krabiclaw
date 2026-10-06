@@ -7,6 +7,7 @@ import { EDITABLE_MEDIA_PLACEMENT_OWNERS, WRITABLE_MEDIA_CATEGORIES,
   removeMediaPlacement,
   reorderMediaPlacements,
   setSingleMediaPlacement } from '~/server/utils/media-placement'
+import { LOGO_SHAPES, parseLogoPresentation } from '~/shared/media-placement-contract'
 import { memberAccessPrincipal } from '~/server/utils/member-access'
 import type { McpExecutorContext } from './execution'
 import { deleteMediaAsset, listMediaAssets, updateMediaAssetMetadata } from '~/server/utils/media-asset-manager'
@@ -55,13 +56,23 @@ const mediaMutationOutputSchema = {
 export const MEDIA_TOOLS: McpToolDefinition[] = [
   organizationTool({
       name: 'set_media',
-      description: 'Assign one media asset to a single-valued CMS placement (a placement that holds at most one asset, such as a post cover, a location hero, or a site logo). Construct placement from the target entity: owner_type is its entity type, owner_id is its id, and slot is the media role. For a post cover use {owner_type:"content_document", owner_id:<post.id>, slot:"cover"}; for a location hero use {owner_type:"business_location", owner_id:<location.id>, slot:"hero"}. Pass asset_id:null to clear it. For an ordered collection (a gallery or a compliance document list, which can hold many assets) use attach_media, remove_media, and reorder_media instead — this tool rejects those. Video cover/hero assets must already have thumbnail_url/poster metadata.',
+      description: 'Assign one media asset to a single-valued CMS placement (a placement that holds at most one asset, such as a post cover, a location hero, or a site logo). Construct placement from the target entity: owner_type is its entity type, owner_id is its id, and slot is the media role. For a post cover use {owner_type:"content_document", owner_id:<post.id>, slot:"cover"}; for a location hero use {owner_type:"business_location", owner_id:<location.id>, slot:"hero"}. Pass asset_id:null to clear it. For an ordered collection (a gallery or a compliance document list, which can hold many assets) use attach_media, remove_media, and reorder_media instead — this tool rejects those. Video cover/hero assets must already have thumbnail_url/poster metadata. For the site logo (slot "logo") or the optional logo for dark backgrounds (slot "logo_dark"), presentation chooses how it is shown: shape "original" (the whole logo, uncropped), "square" or "circle", cropped around focus {x, y} from 0 to 1.',
       domain: 'media',
       minimumRole: 'admin',
       confirmRequired: false,
       inputSchema: {
         placement: mediaPlacementObject,
         asset_id: { type: ['string', 'null'], description: 'One asset id, or null to clear this single-valued placement.' },
+        presentation: {
+          type: 'object',
+          description: 'Organization logo and logo_dark only. Omitted means original.',
+          properties: {
+            shape: { type: 'string', enum: [...LOGO_SHAPES] },
+            focus: { type: 'object', properties: { x: { type: 'number', minimum: 0, maximum: 1 }, y: { type: 'number', minimum: 0, maximum: 1 } }, required: ['x', 'y'], additionalProperties: false },
+          },
+          required: ['shape', 'focus'],
+          additionalProperties: false,
+        },
       },
       required: ['placement', 'asset_id'],
       outputSchema: mediaMutationOutputSchema,
@@ -193,6 +204,14 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
     }),
 ]
 
+function parsePresentationArg(value: unknown) {
+  try {
+    return parseLogoPresentation(value)
+  } catch (error) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, (error as Error).message)
+  }
+}
+
 export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown> {
   const { toolName, args, organization } = ctx
   switch (toolName) {
@@ -211,6 +230,7 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         principal: memberAccessPrincipal(organization.membership, { env: organization.env }),
         placement,
         assetId: typeof args.asset_id === 'string' ? args.asset_id.trim() : null,
+        presentation: args.presentation === undefined ? undefined : parsePresentationArg(args.presentation),
       });
       return renderStructuredResponse(
         {

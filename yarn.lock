@@ -2647,7 +2647,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@nuxt/fonts@npm:^0.14.0":
+"@nuxt/fonts@npm:0.14.0":
   version: 0.14.0
   resolution: "@nuxt/fonts@npm:0.14.0"
   dependencies:
@@ -2667,6 +2667,29 @@ __metadata:
     unplugin: "npm:^3.0.0"
     unstorage: "npm:^1.17.4"
   checksum: 10c0/eb92360f07df25ab622a397172520119a8f1448c3ed418ac022626dc782d566886758d863185e55da02eff76e4b9431e82e6870af77000d723bfb74943a3f64c
+  languageName: node
+  linkType: hard
+
+"@nuxt/fonts@patch:@nuxt/fonts@npm%3A0.14.0#~/patches/nuxt-fonts-npm-0.14.0.patch":
+  version: 0.14.0
+  resolution: "@nuxt/fonts@patch:@nuxt/fonts@npm%3A0.14.0#~/patches/nuxt-fonts-npm-0.14.0.patch::version=0.14.0&hash=49754a"
+  dependencies:
+    "@nuxt/devtools-kit": "npm:^3.2.1"
+    "@nuxt/kit": "npm:^4.2.2"
+    consola: "npm:^3.4.2"
+    defu: "npm:^6.1.4"
+    fontless: "npm:^0.2.1"
+    h3: "npm:^1.15.5"
+    magic-regexp: "npm:^0.10.0"
+    ofetch: "npm:^1.5.1"
+    pathe: "npm:^2.0.3"
+    sirv: "npm:^3.0.2"
+    tinyglobby: "npm:^0.2.15"
+    ufo: "npm:^1.6.3"
+    unifont: "npm:^0.7.4"
+    unplugin: "npm:^3.0.0"
+    unstorage: "npm:^1.17.4"
+  checksum: 10c0/f41f80325e687341a2de8035271e2935e9a9246b7119a4b0250f6e9e6351c7949b445a42a94b25444f7c21ad81897b6f3b3924db23e1f693a54e95fd1b6c4e6a
   languageName: node
   linkType: hard
 

@@ -84,8 +84,8 @@ const ledger = computed(() => {
       : []),
     {
       label: 'Colour, photo and headline',
-      value: state.value.brand.brandColor || state.value.brand.heroHeadline ? 'Set' : 'Not set',
-      done: Boolean(state.value.brand.brandColor || state.value.brand.heroHeadline),
+      value: state.value.brand.paletteStarter || state.value.brand.heroHeadline ? 'Set' : 'Not set',
+      done: Boolean(state.value.brand.paletteStarter || state.value.brand.heroHeadline),
     },
   ]
 })

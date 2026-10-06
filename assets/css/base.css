@@ -1,5 +1,8 @@
 @import "tailwindcss" source(none);
 @import "@nuxt/ui/runtime/keyframes.css";
+/* `dark:` follows the html.dark class the theme control sets, as Nuxt UI does on
+   the dashboard, not the operating system setting. */
+@custom-variant dark (&:where(.dark, .dark *));
 @source "../../utils/form-constants.ts";
 @source "../../.nuxt/ui/carousel.ts";
 @source "../../.nuxt/ui/button.ts";
@@ -25,7 +28,7 @@
 }
 
 @theme static {
-  --font-sans: "Poppins", sans-serif;
+  --font-sans: "Poppins", var(--font-script-sans), sans-serif;
   --font-poppins: "Poppins", sans-serif;
   --font-jost: "Jost", sans-serif;
   --font-display: "Jost", sans-serif;
@@ -123,6 +126,13 @@
   /* Global type scaling belongs at the root so rem-based sizing stays predictable. */
   font-size: 106%;
 
+  /* Script fallbacks every font stack ends with. A site's chosen family draws
+     the characters it has; Thai falls through to these, and Japanese pages add
+     their own (assets/css/japanese-fonts.css). A face downloads only when a
+     page has text in its script. */
+  --font-script-sans: "Noto Sans Thai";
+  --font-script-serif: "Noto Serif Thai";
+
   /* Form field boundary. WCAG 2.1 SC 1.4.11 wants 3:1 for the edge of a
      control, and the decorative --ui-border this shared input class used to
      borrow lands at 1.27:1 on white — the field read as floating text with no
@@ -170,10 +180,61 @@
   );
 }
 
+/* ── Site palette (Saya and Blawby) ──────────────────────── */
+/* A public layout root carries the site's six colors per mode as
+   --site-<role>-light/-dark (composables/usePublicSiteBrand.ts). This picks the
+   mode, then derives every Nuxt UI token from those colors, so tints, borders
+   and inverted bands follow whatever the owner chose. */
+.saya-theme,
+.blawby-theme {
+  color-scheme: light;
+  --site-ground:    var(--site-ground-light);
+  --site-surface:   var(--site-surface-light);
+  --site-text:      var(--site-text-light);
+  --site-muted:     var(--site-muted-light);
+  --site-action:    var(--site-action-light);
+  --site-accent:    var(--site-accent-light);
+  --site-on-action: var(--site-on-action-light);
+
+  --ui-primary:          var(--site-action);
+  --color-primary:       var(--site-action);
+  --primary-foreground:  var(--site-on-action);
+  --ui-secondary:        var(--site-accent);
+  --ui-bg:               var(--site-ground);
+  --ui-bg-elevated:      var(--site-surface);
+  --ui-bg-muted:         color-mix(in oklab, var(--site-text) 4%, var(--site-ground));
+  --ui-bg-accented:      color-mix(in oklab, var(--site-text) 8%, var(--site-ground));
+  --ui-bg-inverted:      var(--site-text);
+  --ui-text:             var(--site-text);
+  --ui-text-highlighted: var(--site-text);
+  --ui-text-toned:       color-mix(in oklab, var(--site-text) 50%, var(--site-muted));
+  --ui-text-muted:       var(--site-muted);
+  --ui-text-dimmed:      color-mix(in oklab, var(--site-muted) 70%, var(--site-ground));
+  --ui-text-inverted:    var(--site-ground);
+  --ui-border:           color-mix(in oklab, var(--site-text) 12%, var(--site-ground));
+  --ui-border-muted:     color-mix(in oklab, var(--site-text) 6%, var(--site-ground));
+  --ui-border-accented:  color-mix(in oklab, var(--site-text) 22%, var(--site-ground));
+  --ui-border-inverted:  color-mix(in oklab, var(--site-ground) 15%, var(--site-text));
+  background-color: var(--ui-bg);
+  color: var(--ui-text);
+}
+
+.dark .saya-theme,
+.dark .blawby-theme {
+  color-scheme: dark;
+  --site-ground:    var(--site-ground-dark);
+  --site-surface:   var(--site-surface-dark);
+  --site-text:      var(--site-text-dark);
+  --site-muted:     var(--site-muted-dark);
+  --site-action:    var(--site-action-dark);
+  --site-accent:    var(--site-accent-dark);
+  --site-on-action: var(--site-on-action-dark);
+}
+
 /* ── Platform theme ───────────────────────────────────────── */
 .platform-theme {
   /* Jost is the platform display family. Body copy remains Poppins. */
-  --font-heading:         var(--font-jost);
+  --font-heading:         "Jost", var(--font-script-sans), sans-serif;
   --font-heading-weight:  400;
 
   --ui-primary:           var(--kc-coral);

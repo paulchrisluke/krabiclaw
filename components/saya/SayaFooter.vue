@@ -1,20 +1,19 @@
 <template>
-  <footer class="bg-inverted text-inverted">
+  <footer class="border-t border-default bg-elevated text-default">
     <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-20 pb-8">
 
       <!-- Top section: brand + locations grid -->
-      <div class="grid gap-16 border-b border-inverted/10 pb-14 lg:grid-cols-[1fr_1.4fr]">
+      <div class="grid gap-16 border-b border-default pb-14 lg:grid-cols-[1fr_1.4fr]">
         <!-- Brand column -->
         <div>
           <NuxtLink :to="localePath('/')" class="block no-underline leading-none">
-            <div v-if="logoUrl" class="size-14 rounded-full overflow-hidden">
-              <img :src="logoUrl" :alt="restaurantName" loading="lazy" decoding="async" class="h-full w-full object-cover" />
-            </div>
-            <div v-else class="flex size-14 items-center justify-center rounded-full bg-inverted/10 text-inverted font-bold text-2xl">
-              {{ restaurantName.charAt(0).toUpperCase() }}
-            </div>
+            <SiteLogo :alt="restaurantName" size="md" loading="lazy">
+              <div class="flex size-14 items-center justify-center rounded-full bg-accented text-highlighted font-bold text-2xl">
+                {{ restaurantName.charAt(0).toUpperCase() }}
+              </div>
+            </SiteLogo>
           </NuxtLink>
-          <p class="mt-4 max-w-xs text-sm leading-relaxed text-inverted/60">
+          <p class="mt-4 max-w-xs text-sm leading-relaxed text-muted">
             {{ tagline }}
           </p>
 
@@ -23,7 +22,7 @@
         <!-- Locations grid -->
         <div
           v-if="locationsError"
-          class="rounded-xl border border-inverted/10 bg-inverted/5 p-6 text-sm text-inverted/60"
+          class="rounded-xl border border-default bg-default p-6 text-sm text-muted"
           role="status"
           aria-live="polite"
         >
@@ -37,13 +36,13 @@
           ]"
         >
           <div v-for="loc in locations" :key="loc.id">
-            <div class="saya-display text-xl text-inverted leading-none">{{ loc.title }}</div>
-            <div class="mt-2 text-sm leading-relaxed text-inverted/60">{{ formatLocAddress(loc) }}</div>
-            <div v-if="loc.phone" class="mt-1 text-sm text-inverted/60">{{ loc.phone }}</div>
-            <div v-if="loc.hoursToday" class="mt-2 text-xs text-inverted/40">{{ loc.hoursToday }}</div>
+            <div class="saya-display text-xl text-highlighted leading-none">{{ loc.title }}</div>
+            <div class="mt-2 text-sm leading-relaxed text-muted">{{ formatLocAddress(loc) }}</div>
+            <div v-if="loc.phone" class="mt-1 text-sm text-muted">{{ loc.phone }}</div>
+            <div v-if="loc.hoursToday" class="mt-2 text-xs text-highlighted/40">{{ loc.hoursToday }}</div>
             <NuxtLink
               :to="localePath(`/locations/${loc.slug}`)"
-              class="mt-3 inline-block border-b border-inverted pb-0.5 text-xs uppercase tracking-widest text-inverted transition hover:opacity-70"
+              class="mt-3 inline-block border-b border-current pb-0.5 text-xs uppercase tracking-widest text-highlighted transition hover:opacity-70"
             >
               {{ t('saya.footer.visit_page') }}
             </NuxtLink>
@@ -52,36 +51,36 @@
       </div>
 
       <!-- Navigation links -->
-      <div class="grid gap-8 border-b border-inverted/10 py-12 sm:grid-cols-3">
+      <div class="grid gap-8 border-b border-default py-12 sm:grid-cols-3">
         <div>
-          <h4 class="saya-eyebrow mb-5 text-inverted/50">{{ t('saya.footer.heading_experience') }}</h4>
+          <h4 class="saya-eyebrow mb-5 text-dimmed">{{ t('saya.footer.heading_experience') }}</h4>
           <ul class="space-y-3 text-sm">
-            <li v-if="showProducts"><NuxtLink :to="localePath(productPresentation!.collectionPath)" class="text-inverted/60 no-underline transition hover:text-inverted">{{ productCollectionLabel }}</NuxtLink></li>
-            <li v-if="showExperiences"><NuxtLink :to="localePath(EXPERIENCE_PRESENTATION.collectionPath)" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.experiences') }}</NuxtLink></li>
-            <li v-if="!isExperienceOrganization"><NuxtLink :to="localePath('/reservations')" class="text-inverted/60 no-underline transition hover:text-inverted">{{ copy.reservationPageKicker }}</NuxtLink></li>
-            <li v-if="!isExperienceOrganization"><NuxtLink :to="localePath('/photos')" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.gallery') }}</NuxtLink></li>
-            <li><NuxtLink :to="localePath('/about')" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.our_story') }}</NuxtLink></li>
+            <li v-if="showProducts"><NuxtLink :to="localePath(productPresentation!.collectionPath)" class="text-muted no-underline transition hover:text-highlighted">{{ productCollectionLabel }}</NuxtLink></li>
+            <li v-if="showExperiences"><NuxtLink :to="localePath(EXPERIENCE_PRESENTATION.collectionPath)" class="text-muted no-underline transition hover:text-highlighted">{{ t('saya.footer.experiences') }}</NuxtLink></li>
+            <li v-if="!isExperienceOrganization"><NuxtLink :to="localePath('/reservations')" class="text-muted no-underline transition hover:text-highlighted">{{ copy.reservationPageKicker }}</NuxtLink></li>
+            <li v-if="!isExperienceOrganization"><NuxtLink :to="localePath('/photos')" class="text-muted no-underline transition hover:text-highlighted">{{ t('saya.footer.gallery') }}</NuxtLink></li>
+            <li><NuxtLink :to="localePath('/about')" class="text-muted no-underline transition hover:text-highlighted">{{ t('saya.footer.our_story') }}</NuxtLink></li>
           </ul>
         </div>
         <div>
-          <h4 class="saya-eyebrow mb-5 text-inverted/50">{{ t('saya.footer.heading_discover') }}</h4>
+          <h4 class="saya-eyebrow mb-5 text-dimmed">{{ t('saya.footer.heading_discover') }}</h4>
           <ul class="space-y-3 text-sm">
-            <li><NuxtLink :to="localePath('/blog')" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.blog') }}</NuxtLink></li>
-            <li><NuxtLink :to="localePath('/reviews')" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.reviews') }}</NuxtLink></li>
-            <li><NuxtLink :to="localePath('/posts')" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.latest_updates') }}</NuxtLink></li>
-            <li><NuxtLink :to="localePath('/qa')" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.qa') }}</NuxtLink></li>
+            <li><NuxtLink :to="localePath('/blog')" class="text-muted no-underline transition hover:text-highlighted">{{ t('saya.footer.blog') }}</NuxtLink></li>
+            <li><NuxtLink :to="localePath('/reviews')" class="text-muted no-underline transition hover:text-highlighted">{{ t('saya.footer.reviews') }}</NuxtLink></li>
+            <li><NuxtLink :to="localePath('/posts')" class="text-muted no-underline transition hover:text-highlighted">{{ t('saya.footer.latest_updates') }}</NuxtLink></li>
+            <li><NuxtLink :to="localePath('/qa')" class="text-muted no-underline transition hover:text-highlighted">{{ t('saya.footer.qa') }}</NuxtLink></li>
           </ul>
         </div>
         <div>
-          <h4 class="saya-eyebrow mb-5 text-inverted/50">{{ t('saya.footer.heading_connect') }}</h4>
+          <h4 class="saya-eyebrow mb-5 text-dimmed">{{ t('saya.footer.heading_connect') }}</h4>
           <ul class="space-y-3 text-sm">
-            <li><NuxtLink :to="localePath('/locations')" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.all_locations') }}</NuxtLink></li>
-            <li><NuxtLink :to="localePath('/contact')" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.contact_us') }}</NuxtLink></li>
+            <li><NuxtLink :to="localePath('/locations')" class="text-muted no-underline transition hover:text-highlighted">{{ t('saya.footer.all_locations') }}</NuxtLink></li>
+            <li><NuxtLink :to="localePath('/contact')" class="text-muted no-underline transition hover:text-highlighted">{{ t('saya.footer.contact_us') }}</NuxtLink></li>
           </ul>
         </div>
       </div>
 
-      <SiteFooterBar :name="restaurantName" color-mode class="pt-6 text-inverted/70">
+      <SiteFooterBar :name="restaurantName" color-mode class="pt-6 text-muted">
         <a
           v-if="showBrandingCredit"
           href="https://krabiclaw.com"
@@ -148,9 +147,6 @@ const showExperiences = computed(() => props.hasBookableProducts)
 const productCollectionLabel = computed(() => productPresentation.value?.locationCollectionSegment === 'menu'
   ? t('saya.footer.menu')
   : t('saya.footer.products'))
-const logoUrl = computed(() => Array.isArray(props.organization?.media)
-  ? (props.organization.media as ApiRecord[]).find(item => item.slot === 'logo')?.public_url || null
-  : null)
 const restaurantName = computed(() => props.organization?.name?.trim() || '')
 const tagline = computed(() => props.organization?.brand_description?.trim() || '')
 const organizationPlan = computed(() => props.organization?.plan)

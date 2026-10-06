@@ -16,7 +16,7 @@ html {
 
 body {
   margin: 0;
-  font-family: Poppins, sans-serif;
+  font-family: var(--font-sans);
 }
 
 a {
@@ -39,22 +39,16 @@ video {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background-color: var(--saya-bg, #fff);
-  color: var(--saya-fg, #18181b);
-}
-
-.dark .saya-theme {
-  --saya-bg: #09090b;
-  --saya-fg: #f4f4f5;
-  --saya-border: #27272a;
+  background-color: var(--ui-bg);
+  color: var(--ui-text);
 }
 
 [data-saya-critical-header] {
   position: sticky;
   top: 0;
   z-index: 50;
-  border-bottom: 1px solid var(--saya-border, #e4e4e7);
-  background-color: color-mix(in srgb, var(--saya-bg, #fff) 80%, transparent);
+  border-bottom: 1px solid var(--ui-border);
+  background-color: color-mix(in srgb, var(--ui-bg) 80%, transparent);
   backdrop-filter: blur(12px);
 }
 
@@ -73,13 +67,12 @@ video {
   flex-shrink: 0;
 }
 
-[data-saya-critical-logo-link] img,
+/* The monogram a site without a logo shows; a logo sizes itself (SiteLogo). */
 [data-saya-critical-logo-link] > div {
   width: 2.5rem;
   height: 2.5rem;
   overflow: hidden;
   border-radius: 9999px;
-  object-fit: cover;
 }
 
 [data-saya-critical-nav] {
@@ -92,7 +85,7 @@ video {
   display: block;
   border-radius: 9999px;
   padding: 0.5rem 0.75rem;
-  color: var(--saya-fg-muted, #52525b);
+  color: var(--ui-text-muted);
   font-size: 0.875rem;
   text-decoration: none;
 }
@@ -102,8 +95,8 @@ video {
   align-items: center;
   justify-content: center;
   border-radius: 9999px;
-  background: var(--brand-color, #8f1d21);
-  color: var(--brand-color-foreground, #fff);
+  background: var(--ui-primary);
+  color: var(--primary-foreground);
   padding: 0.375rem 0.75rem;
   font-size: 0.75rem;
   font-weight: 500;
@@ -117,7 +110,7 @@ video {
   align-items: center;
   justify-content: center;
   border-radius: 9999px;
-  color: var(--saya-fg-muted, #52525b);
+  color: var(--ui-text-muted);
 }
 
 [data-saya-critical-hero] {
@@ -167,7 +160,7 @@ video {
 [data-saya-critical-title] {
   max-width: 56rem;
   color: #fff;
-  font-family: var(--font-saya);
+  font-family: var(--font-heading);
   font-size: clamp(56px, 7.5vw, 104px);
   font-weight: 400;
   letter-spacing: -0.02em;

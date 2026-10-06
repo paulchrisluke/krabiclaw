@@ -209,7 +209,7 @@ function emptyState(flow: OnboardingFlowId): OnboardingFlowState {
     },
     hours: { timezone: '', hours: null, specialHours: null },
     brand: {
-      brandColor: '', logoNote: '', logoPreviewUrl: '', logoImage: null,
+      paletteStarter: null, fontPreset: null, logoShape: null, logoNote: '', logoPreviewUrl: '', logoImage: null,
       heroPhotoNote: '', heroPreviewUrl: '', heroImage: null,
       heroHeadline: '', heroSubtitle: '',
     },

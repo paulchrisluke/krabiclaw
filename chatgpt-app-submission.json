@@ -1148,18 +1148,6 @@
         "destructive_justification": "Stores a conversation file in Cloudflare media storage and returns a public URL, even before assignment to a page. Existing content is not deleted or overwritten."
       }
     },
-    "set_brand_color": {
-      "annotations": {
-        "readOnlyHint": false,
-        "openWorldHint": false,
-        "destructiveHint": true
-      },
-      "justifications": {
-        "read_only_justification": "Overwrites the selected organization public brand color.",
-        "open_world_justification": "Overwrites the selected organization public brand color. Its scope is the authenticated KrabiClaw workspace, not arbitrary external entities or the public web.",
-        "destructive_justification": "Overwrites the selected organization public brand color. Existing state is deleted, replaced or overwritten rather than only appended."
-      }
-    },
     "set_collection_products": {
       "annotations": {
         "readOnlyHint": false,

@@ -7,22 +7,16 @@
     mounted once for every theme in app.vue.
   -->
   <BlawbyPhoneBar data-blawby-critical-banner :phone="organization.phone" />
-  <header data-blawby-critical-header class="sticky top-0 z-50 border-b border-gray-200 bg-white">
+  <header data-blawby-critical-header class="sticky top-0 z-50 border-b border-default bg-elevated">
     <div class="blawby-container">
       <nav class="relative z-50 flex items-center justify-between gap-4 py-2" :aria-label="t('blawby.navigation.main')">
         <div class="flex shrink-0 items-center">
           <NuxtLink :to="localePath('/')" class="no-underline" :aria-label="`${brandName} home`">
-            <img
-              v-if="logoUrl"
-              :src="logoUrl"
-              :alt="brandName"
-              loading="eager"
-              decoding="async"
-              class="max-h-16 w-min max-w-[120px] object-contain sm:max-w-[160px]"
-            >
-            <span v-else class="blawby-display truncate text-lg text-[var(--blawby-primary)] sm:text-xl">
-              {{ brandName }}
-            </span>
+            <SiteLogo :alt="brandName" size="lg" loading="eager">
+              <span class="blawby-display truncate text-lg text-[var(--blawby-primary)] sm:text-xl">
+                {{ brandName }}
+              </span>
+            </SiteLogo>
           </NuxtLink>
         </div>
 
@@ -59,7 +53,7 @@
                 <path :class="mobileOpen ? '' : 'scale-90 opacity-0'" class="origin-center transition" d="M2 2L12 12M12 2L2 12" />
               </svg>
             </summary>
-            <div class="absolute right-0 top-full mt-4 max-h-[calc(100vh-6rem)] w-[min(20rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl bg-white p-4 text-lg normal-case text-[var(--blawby-primary)] shadow-xl ring-1 ring-slate-900/5">
+            <div class="absolute right-0 top-full mt-4 max-h-[calc(100vh-6rem)] w-[min(20rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl bg-elevated p-4 text-lg normal-case text-[var(--blawby-primary)] shadow-xl ring-1 ring-default">
               <!-- On an article page, its articles come first: this menu is the page's one navigation. -->
               <PlatformCommandSearchTrigger
                 v-if="articleNav?.search"
@@ -70,7 +64,7 @@
                 class="mb-3 text-base"
                 @click="closeMobileNav"
               />
-              <ArticleSidebar v-if="articleNav" :nav="articleNav" class="mb-3 border-b border-gray-200 pb-3" @navigate="closeMobileNav" />
+              <ArticleSidebar v-if="articleNav" :nav="articleNav" class="mb-3 border-b border-default pb-3" @navigate="closeMobileNav" />
               <NuxtLink
                 v-for="item in headerItems"
                 :key="item.id"
@@ -106,7 +100,6 @@ const { localePath, t } = useI18n()
 const { trackConsultationClick } = useOrganizationConversionTracking(() => props.consultation)
 const route = useRoute()
 const brandName = computed(() => props.organization.name || '')
-const logoUrl = computed(() => props.organization.media.find(item => item.slot === 'logo')?.public_url || null)
 const headerCtaLabel = computed(() => props.consultation.cta_label)
 const headerOrder = ['/services', '/pricing', '/about', '/contact', '/blog', '/donate']
 const headerItems = computed(() => {

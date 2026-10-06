@@ -9,7 +9,7 @@
         <NuxtLink
           v-if="url && label"
           :to="route(url)"
-          class="inline-flex items-center justify-center rounded-full bg-(--brand-color) px-6 py-3 text-base font-medium text-(--brand-color-foreground) no-underline transition hover:opacity-90"
+          class="inline-flex items-center justify-center rounded-full bg-primary px-6 py-3 text-base font-medium text-on-primary no-underline transition hover:opacity-90"
         >
           {{ label }}
         </NuxtLink>

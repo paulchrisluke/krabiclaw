@@ -25,10 +25,10 @@ export interface BlogPost {
     blocks: BlogEditorBlock[]
   } | null
   editor_template?: 'saya' | 'blawby' | 'platform'
-  editor_theme_tokens?: Record<string, unknown>
+  /** The site's light palette; null on the platform template. */
+  editor_colors?: import('~/shared/site-palette').SitePaletteColors | null
   created_at?: string | null
   editor_organization_name?: string | null
-  editor_brand_color?: string | null
   public_path?: string | null
 }
 

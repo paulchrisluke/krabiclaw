@@ -24,7 +24,7 @@
         <h1 class="text-3xl font-semibold">Thank you</h1>
         <p class="mt-3 text-sm text-muted">Your review is pending moderation.</p>
         <div class="mt-8 flex flex-wrap gap-3">
-          <button v-if="requestData?.location?.googleReviewUrl" type="button" class="inline-flex items-center justify-center gap-2 rounded-full bg-(--brand-color) px-6 py-3 text-sm font-medium text-(--brand-color-foreground) no-underline transition hover:opacity-90" @click="copyAndOpenGoogle">
+          <button v-if="requestData?.location?.googleReviewUrl" type="button" class="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-medium text-on-primary no-underline transition hover:opacity-90" @click="copyAndOpenGoogle">
             {{ copyButtonLabel }}
           </button>
         </div>

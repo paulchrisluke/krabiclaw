@@ -15,7 +15,7 @@ import { blockText, blockMedia } from '~/utils/tenant-page-block-data'
 // vertical's copy table, so no owner could change the words on them.
 const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
 const { organization } = useTenantOrganization()
-const { locations, config } = useOrganizationShellState()
+const { locations } = useOrganizationShellState()
 
 const asset = computed(() => blockMedia(props.block, 'media')[0] ?? null)
 const heroData = computed(() => {
@@ -37,7 +37,6 @@ const heroData = computed(() => {
     reserveCta: blockText(props.block.data.cta_label),
     viewMenuRoute: blockText(props.block.data.secondary_url),
     viewMenuCta: blockText(props.block.data.secondary_label),
-    brandColor: config.value.brand_color,
     vertical: organization?.vertical ?? undefined,
   }
 })

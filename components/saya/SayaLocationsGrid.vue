@@ -37,7 +37,7 @@
         </div>
         <div class="p-8 pb-9">
           <div v-if="item.city" class="saya-eyebrow mb-5 flex items-center gap-2 text-muted">
-            <span class="size-1.5 rounded-full bg-zinc-300" />
+            <span class="size-1.5 rounded-full bg-accented" />
             {{ item.city }}
           </div>
           <div class="saya-display saya-italic text-4xl text-default leading-none">{{ item.title }}</div>

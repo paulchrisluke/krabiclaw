@@ -322,13 +322,14 @@ export async function refreshStripeConnectedAccount(
 /**
  * Stripe's Checkout, receipts and payout emails for a connected account use
  * that account's branding. The business already has a brand colour and a logo
- * here; this gives Stripe the same, uploading the logo once.
+ * here (its palette's action color); this gives Stripe the same, uploading the logo once.
  */
 export async function syncStripeConnectedBranding(db: DbClient, stripe: Stripe, organizationId: string, account: Stripe.V2.Core.Account): Promise<void> {
   const [config, logoUrl] = await Promise.all([getConfig(db, organizationId), organizationLogo(db, organizationId)])
   const current = account.configuration?.merchant?.branding
   const branding: { primary_color?: string; logo?: string; icon?: string } = {}
-  const color = typeof config.brand_color === 'string' && /^#[0-9a-fA-F]{6}$/.test(config.brand_color) ? config.brand_color : null
+  // The owner's own action color, when they have chosen one; Stripe keeps its default otherwise.
+  const color = config.palette?.light.action ?? null
   if (color && current?.primary_color?.toLowerCase() !== color.toLowerCase()) branding.primary_color = color
   if (logoUrl && !current?.logo) {
     const response = await fetch(logoUrl)
