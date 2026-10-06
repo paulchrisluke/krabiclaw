@@ -1,6 +1,6 @@
 import { setTokenUtil } from 'better-auth/oauth2'
 import { createAuth, linkedAccountAccessToken, type CloudflareEnv } from './auth'
-import { formBody, metaGraphRequest } from './meta-graph'
+import { formBody, MetaGraphError, metaGraphRequest } from './meta-graph'
 import type { MetaDeadline } from './meta-graph'
 
 /**
@@ -48,7 +48,7 @@ export async function instagramAccessToken(env: CloudflareEnv, accountId: string
 
 function longLivedToken(token: { access_token?: string; expires_in?: number }): { accessToken: string; expiresAt: Date } {
   if (!token.access_token || typeof token.expires_in !== 'number') {
-    throw new Error('Instagram did not return a long-lived access token and its lifetime')
+    throw new MetaGraphError('invalid-response', 'Instagram did not return a long-lived access token and its lifetime')
   }
   return {
     accessToken: token.access_token,
@@ -138,8 +138,8 @@ export async function listMedia(target: InstagramTarget, input: { after: string 
   const params = new URLSearchParams({ fields: MEDIA_FIELDS, limit: String(input.limit), ...(input.after ? { after: input.after } : {}) })
   const page = await metaGraphRequest<{ data?: InstagramMediaRecord[]; paging?: { cursors?: { after?: string }; next?: string } }>(
     `${INSTAGRAM_GRAPH}/${target.userId}/media?${params}`, withToken(target, { deadline }))
-  if (!Array.isArray(page.data)) throw new Error('Meta returned no post inventory')
-  if (page.paging?.next && !page.paging.cursors?.after) throw new Error('Meta returned another page without its cursor')
+  if (!Array.isArray(page.data)) throw new MetaGraphError('invalid-response', 'Meta returned no post inventory')
+  if (page.paging?.next && !page.paging.cursors?.after) throw new MetaGraphError('invalid-response', 'Meta returned another page without its cursor')
   return { items: page.data, after: page.paging?.next ? page.paging.cursors!.after! : null }
 }
 
@@ -157,7 +157,7 @@ type InsightValues = { data?: Array<{ name?: string; total_value?: { value?: unk
 
 /** Each named metric Instagram returned, by name; one it did not return is absent, never zero. */
 function insightValues<M extends string>(response: InsightValues, metrics: readonly M[], read: (entry: NonNullable<InsightValues['data']>[number]) => unknown): Partial<Record<M, number>> {
-  if (!Array.isArray(response.data)) throw new Error('Instagram returned no insights data')
+  if (!Array.isArray(response.data)) throw new MetaGraphError('invalid-response', 'Instagram returned no insights data')
   const values: Partial<Record<M, number>> = {}
   for (const entry of response.data) {
     const value = read(entry)

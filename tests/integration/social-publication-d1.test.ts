@@ -8,13 +8,14 @@ import { HTTPError } from 'nitro'
 import { handlePostsTools } from '../../server/utils/mcp-tools/posts.ts'
 import type { McpExecutorContext } from '../../server/utils/mcp-tools/execution.ts'
 import { MCP_ERROR } from '../../server/utils/mcp-protocol.ts'
-import type { CloudflareEnv } from '../../server/utils/auth.ts'
+import { linkedAccountAccessToken, type CloudflareEnv } from '../../server/utils/auth.ts'
 import { createPost, deletePost, getPost, listPublicSocialPosts, postPayloadFingerprint, updatePost } from '../../server/utils/post-management.ts'
 import { publishPost, reconcilePostPublication, type PublishTarget } from '../../server/utils/social-publication.ts'
 import { listChannelPosts, getChannelPost, deleteChannelPost } from '../../server/utils/social-channel-posts.ts'
 import { remainingMetaSubjectData } from '../../server/utils/integration-release.ts'
 import { deleteIntegration, listIntegrations, readIntegration, storeIntegration } from '../../server/utils/organization-integrations.ts'
-import { MetaGraphError, verifyMetaSignedRequest, configuredMetaApps } from '../../server/utils/meta-graph.ts'
+import { MetaDeadline, MetaGraphError, verifyMetaSignedRequest, configuredMetaApps } from '../../server/utils/meta-graph.ts'
+import { instagramAccessToken, listMedia, readAccountInsights, readMediaInsights } from '../../server/utils/instagram.ts'
 import { attachMediaPlacement } from '../../server/utils/media-placement.ts'
 import { listLinkedFacebookPages, facebookPageToken } from '../../server/utils/facebook-pages.ts'
 import deauthorizeCallback from '../../server/api/integrations/meta/deauthorize.post.ts'
@@ -48,6 +49,7 @@ class FakeMeta {
   igMedia = new Map<string, { container: string }>()
   pagePosts: Array<Record<string, unknown>> = []
   igFeed: Array<Record<string, unknown>> = []
+  igResponses = new Map<string, unknown>()
   assignedPageResponses = new Map<string, unknown>([['', { data: [{ id: PAGE, name: 'Krabi Claw', access_token: 'page-token' }] }]])
 
   fault(kind: Fault['kind'], match: Fault['match'], times = 1) { this.faults.push({ kind, match, times }) }
@@ -116,6 +118,7 @@ class FakeMeta {
   }
 
   instagram(method: string, path: string, query: URLSearchParams, body: Record<string, string>): Response {
+    if (method === 'GET' && this.igResponses.has(path)) return json(this.igResponses.get(path))
     if (method === 'POST' && path === `${IG}/media`) {
       const id = this.id('container-')
       const kind = body.media_type ?? 'IMAGE'
@@ -677,6 +680,55 @@ test('Instagram insights read the connected account and its posts for the organi
     assert.equal((await loadInstagramInsights(env, 'org-b', range)).status, 'growth_plan_required')
     await run("UPDATE organization_integrations SET account_id = 'gone' WHERE organization_id = 'org-a' AND provider = 'instagram'")
     assert.equal((await loadInstagramInsights(env, 'org-a', range)).status, 'account_unlinked')
+  } finally {
+    restore()
+    await runtime.dispose()
+  }
+})
+
+test('Instagram insights classify malformed provider responses and preserve local token errors', async () => {
+  const { runtime, db, env, meta, run, restore } = await setUp()
+  try {
+    await run("UPDATE account SET scope = 'instagram_business_manage_insights' WHERE id = 'ig-account'")
+    const range = { startDate: '2026-09-28', endDate: '2026-09-30' }
+    const target = { userId: IG, accessToken: 'ig-token' }
+    const deadline = new MetaDeadline(25_000)
+    const accountRange = { since: new Date('2026-09-28'), until: new Date('2026-10-01') }
+    meta.igFeed = [{ id: 'reel', media_type: 'VIDEO', timestamp: '2026-09-29T03:00:00+0000' }]
+    meta.igMediaInsights.set('reel', { views: 40 })
+    const malformed: Array<[string, unknown, () => Promise<unknown>, string]> = [
+      [`${IG}/media`, {}, () => listMedia(target, { after: null, limit: 25 }, deadline), 'Meta returned no post inventory'],
+      [`${IG}/media`, { data: [], paging: { next: 'https://graph.instagram.com/next' } }, () => listMedia(target, { after: null, limit: 25 }, deadline), 'Meta returned another page without its cursor'],
+      [`${IG}/insights`, { data: {} }, () => readAccountInsights(target, accountRange, deadline), 'Instagram returned no insights data'],
+      ['reel/insights', {}, () => readMediaInsights(target, 'reel', deadline), 'Instagram returned no insights data'],
+    ]
+    for (const [path, response, read, message] of malformed) {
+      meta.igResponses.set(path, response)
+      await assert.rejects(read, (error: unknown) => error instanceof MetaGraphError && error.failure === 'invalid-response' && error.message === message)
+      await assert.rejects(() => loadInstagramInsights(env, 'org-a', range), (error: unknown) => error instanceof HTTPError && error.status === 502 && error.message === `Instagram: ${message}`)
+      meta.igResponses.delete(path)
+    }
+
+    await run("UPDATE account SET accessTokenExpiresAt = NULL WHERE id = 'ig-account'")
+    const requestsBefore = meta.requests.length
+    await assert.rejects(() => loadInstagramInsights(env, 'org-a', range), (error: unknown) => error instanceof Error && !(error instanceof MetaGraphError) && !(error instanceof HTTPError) && /no token expiry/u.test(error.message))
+    assert.equal(meta.requests.length, requestsBefore)
+
+    await run(`UPDATE account SET accessTokenExpiresAt = ${Math.floor(Date.now() / 1000) + 60} WHERE id = 'ig-account'`)
+    for (const response of [{ expires_in: 5184000 }, { access_token: 'renewed-token' }, { access_token: 'renewed-token', expires_in: '5184000' }]) {
+      meta.igResponses.set('/refresh_access_token', response)
+      await assert.rejects(() => instagramAccessToken(env, 'ig-account'), (error: unknown) => error instanceof MetaGraphError && error.failure === 'invalid-response')
+      await assert.rejects(() => loadInstagramInsights(env, 'org-a', range), (error: unknown) => error instanceof HTTPError && error.status === 502 && error.message === 'Instagram: Instagram did not return a long-lived access token and its lifetime')
+    }
+    assert.equal(await db.prepare("SELECT accessToken FROM account WHERE id = 'ig-account'").first('accessToken'), 'ig-token')
+
+    meta.igResponses.set('/refresh_access_token', { access_token: 'renewed-token', expires_in: 5184000 })
+    await run("CREATE TRIGGER ignore_token_save BEFORE UPDATE OF accessToken ON account WHEN OLD.id = 'ig-account' BEGIN SELECT RAISE(IGNORE); END")
+    await assert.rejects(() => loadInstagramInsights(env, 'org-a', range), (error: unknown) => error instanceof Error && !(error instanceof MetaGraphError) && !(error instanceof HTTPError) && /could not be saved/u.test(error.message))
+    assert.equal(await db.prepare("SELECT accessToken FROM account WHERE id = 'ig-account'").first('accessToken'), 'ig-token')
+    await run('DROP TRIGGER ignore_token_save')
+    assert.equal((await loadInstagramInsights(env, 'org-a', range)).status, 'connected')
+    assert.equal((await linkedAccountAccessToken(env, 'ig-account')).accessToken, 'renewed-token')
   } finally {
     restore()
     await runtime.dispose()
