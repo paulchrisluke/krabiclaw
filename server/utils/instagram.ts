@@ -142,3 +142,42 @@ export async function listMedia(target: InstagramTarget, input: { after: string 
   if (page.paging?.next && !page.paging.cursors?.after) throw new Error('Meta returned another page without its cursor')
   return { items: page.data, after: page.paging?.next ? page.paging.cursors!.after! : null }
 }
+
+// ── Insights (instagram_business_manage_insights) ─────────────────────────
+
+/** Account metrics Instagram totals over a range (period=day, metric_type=total_value). */
+export const ACCOUNT_INSIGHT_METRICS = ['views', 'reach', 'accounts_engaged', 'total_interactions', 'likes', 'comments', 'shares', 'saves', 'replies', 'profile_links_taps'] as const
+export type AccountInsightMetric = typeof ACCOUNT_INSIGHT_METRICS[number]
+
+/** Lifetime metrics Instagram reports for both feed posts and reels. */
+export const MEDIA_INSIGHT_METRICS = ['views', 'reach', 'likes', 'comments', 'shares', 'saved', 'total_interactions'] as const
+export type MediaInsightMetric = typeof MEDIA_INSIGHT_METRICS[number]
+
+type InsightValues = { data?: Array<{ name?: string; total_value?: { value?: unknown }; values?: Array<{ value?: unknown }> }> }
+
+/** Each named metric Instagram returned, by name; one it did not return is absent, never zero. */
+function insightValues<M extends string>(response: InsightValues, metrics: readonly M[], read: (entry: NonNullable<InsightValues['data']>[number]) => unknown): Partial<Record<M, number>> {
+  if (!Array.isArray(response.data)) throw new Error('Instagram returned no insights data')
+  const values: Partial<Record<M, number>> = {}
+  for (const entry of response.data) {
+    const value = read(entry)
+    if (metrics.includes(entry.name as M) && typeof value === 'number') values[entry.name as M] = value
+  }
+  return values
+}
+
+/** The account's totals for [since, until), as Instagram reports them. */
+export async function readAccountInsights(target: InstagramTarget, range: { since: Date; until: Date }, deadline: MetaDeadline): Promise<Partial<Record<AccountInsightMetric, number>>> {
+  const params = new URLSearchParams({
+    metric: ACCOUNT_INSIGHT_METRICS.join(','), period: 'day', metric_type: 'total_value',
+    since: String(Math.floor(range.since.getTime() / 1000)), until: String(Math.floor(range.until.getTime() / 1000)),
+  })
+  const response = await metaGraphRequest<InsightValues>(`${INSTAGRAM_GRAPH}/${target.userId}/insights?${params}`, withToken(target, { deadline }))
+  return insightValues(response, ACCOUNT_INSIGHT_METRICS, entry => entry.total_value?.value)
+}
+
+/** A feed post's or reel's lifetime metrics, as Instagram reports them. */
+export async function readMediaInsights(target: InstagramTarget, mediaId: string, deadline: MetaDeadline): Promise<Partial<Record<MediaInsightMetric, number>>> {
+  const response = await metaGraphRequest<InsightValues>(`${INSTAGRAM_GRAPH}/${mediaId}/insights?metric=${MEDIA_INSIGHT_METRICS.join(',')}`, withToken(target, { deadline }))
+  return insightValues(response, MEDIA_INSIGHT_METRICS, entry => entry.total_value?.value ?? entry.values?.[0]?.value)
+}

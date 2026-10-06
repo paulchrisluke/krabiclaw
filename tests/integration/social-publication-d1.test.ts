@@ -18,6 +18,7 @@ import { MetaGraphError, verifyMetaSignedRequest, configuredMetaApps } from '../
 import { attachMediaPlacement } from '../../server/utils/media-placement.ts'
 import { listLinkedFacebookPages, facebookPageToken } from '../../server/utils/facebook-pages.ts'
 import deauthorizeCallback from '../../server/api/integrations/meta/deauthorize.post.ts'
+import { loadInstagramInsights } from '../../server/utils/instagram-insights.ts'
 import deleteCallback from '../../server/api/integrations/meta/data-deletion.post.ts'
 import deletionStatus from '../../server/api/integrations/meta/data-deletion.get.ts'
 
@@ -141,10 +142,16 @@ class FakeMeta {
       return json({ status_code: container.status })
     }
     if (this.igMedia.has(path)) return json({ id: path, permalink: `https://www.instagram.com/p/${path}/`, timestamp: '2026-09-28T10:00:00+0000', username: 'krabiclaw' })
+    if (method === 'GET' && path === `${IG}/insights`) return json({ data: Object.entries(this.igInsights).map(([name, value]) => ({ name, period: 'day', total_value: { value } })) })
+    if (method === 'GET' && path.endsWith('/insights') && this.igMediaInsights.has(path.slice(0, -'/insights'.length))) {
+      return json({ data: Object.entries(this.igMediaInsights.get(path.slice(0, -'/insights'.length))!).map(([name, value]) => ({ name, period: 'lifetime', values: [{ value }] })) })
+    }
     const record = this.igFeed.find(item => item.id === path)
     if (record) return json(record)
     return json({ error: { message: 'Object does not exist', code: 100, error_subcode: 33 } }, 400)
   }
+  igInsights: Record<string, number> = {}
+  igMediaInsights = new Map<string, Record<string, number>>()
   reelProcessingReads = 0
   expireNewContainers = false
 }
@@ -623,3 +630,55 @@ for (const method of ['GET', 'DELETE']) {
     }
   })
 }
+
+test('Instagram insights read the connected account and its posts for the organization range, and name every state without a report', async () => {
+  const { runtime, env, meta, run, restore } = await setUp()
+  try {
+    await run(`UPDATE organization SET settings_json = '{"config":{"default_timezone":"Asia/Bangkok"}}' WHERE id IN ('org-a', 'org-b')`)
+    const range = { startDate: '2026-09-28', endDate: '2026-09-30' }
+    assert.equal((await loadInstagramInsights(env, 'org-a', range)).status, 'permission_missing')
+    assert.equal(meta.requests.length, 0)
+
+    await run("UPDATE account SET scope = 'instagram_business_basic,instagram_business_content_publish,instagram_business_manage_insights' WHERE id = 'ig-account'")
+    meta.igInsights = { views: 1200, reach: 0, accounts_engaged: 14, total_interactions: 31, likes: 20, comments: 3, shares: 4, saves: 4, profile_links_taps: 2 }
+    meta.igFeed = [
+      { id: 'later', media_type: 'IMAGE', timestamp: '2026-10-01T00:00:00+0000' },
+      { id: 'reel', media_type: 'VIDEO', media_product_type: 'REELS', permalink: 'https://www.instagram.com/reel/reel/', caption: 'Sunset', thumbnail_url: 'https://cdn.example/reel.jpg', timestamp: '2026-09-29T03:00:00+0000' },
+      { id: 'carousel', media_type: 'CAROUSEL_ALBUM', media_product_type: 'FEED', timestamp: '2026-09-28T01:00:00+0000' },
+      { id: 'earlier', media_type: 'IMAGE', timestamp: '2026-09-27T16:59:59+0000' },
+    ]
+    meta.igMediaInsights.set('reel', { views: 40, reach: 30, likes: 5, comments: 0, shares: 1, saved: 2 })
+    const report = await loadInstagramInsights(env, 'org-a', range)
+    assert.equal(report.status, 'connected')
+    if (report.status !== 'connected') return
+    assert.equal(report.username, 'krabiclaw')
+    assert.deepEqual(report.period, range)
+    // Zero is Instagram's zero; a metric it did not return is null.
+    assert.deepEqual(report.account, { views: 1200, reach: 0, accounts_engaged: 14, total_interactions: 31, likes: 20, comments: 3, shares: 4, saves: 4, replies: null, profile_links_taps: 2 })
+    const [accountRequest] = meta.sent(request => request.path.endsWith(`${IG}/insights`))
+    // Bangkok's 28 September through 30 September, in the organization's own calendar.
+    assert.equal(accountRequest!.query.get('since'), String(Date.parse('2026-09-27T17:00:00Z') / 1000))
+    assert.equal(accountRequest!.query.get('until'), String(Date.parse('2026-09-30T17:00:00Z') / 1000))
+    assert.equal(accountRequest!.query.get('metric_type'), 'total_value')
+    assert.deepEqual(report.media.map(post => post.id), ['reel', 'carousel'])
+    assert.deepEqual(report.media[0]!.insights, { views: 40, reach: 30, likes: 5, comments: 0, shares: 1, saved: 2, total_interactions: null })
+    assert.equal(report.media[0]!.permalink, 'https://www.instagram.com/reel/reel/')
+    assert.equal(report.media[1]!.insights, null)
+    assert.match(report.media[1]!.unavailableReason!, /carousel/u)
+    assert.equal(meta.sent(request => request.path === 'carousel/insights').length, 0)
+    assert.equal(report.moreMedia, false)
+
+    meta.fault('reject', request => request.path.endsWith(`${IG}/insights`))
+    await assert.rejects(() => loadInstagramInsights(env, 'org-a', range), (error: unknown) => error instanceof HTTPError && error.status === 502 && /^Instagram: /u.test(error.message) && !/access_token|ig-token/u.test(error.message))
+
+    await run("DELETE FROM organization_integrations WHERE organization_id = 'org-b' AND provider = 'instagram'")
+    assert.equal((await loadInstagramInsights(env, 'org-b', range)).status, 'not_connected')
+    await run("DELETE FROM subscription WHERE referenceId = 'org-b'")
+    assert.equal((await loadInstagramInsights(env, 'org-b', range)).status, 'growth_plan_required')
+    await run("UPDATE organization_integrations SET account_id = 'gone' WHERE organization_id = 'org-a' AND provider = 'instagram'")
+    assert.equal((await loadInstagramInsights(env, 'org-a', range)).status, 'account_unlinked')
+  } finally {
+    restore()
+    await runtime.dispose()
+  }
+})
