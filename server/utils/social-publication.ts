@@ -429,16 +429,17 @@ async function publishVideoToFacebook(context: ChannelContext, target: FacebookP
     await fence.release(['preparing', 'publishing'])
     return outcome(context, 'processing', { code: 'video_processing', message: 'Facebook is still processing the video. Call publish_post again to finish it; it will publish this same video.' })
   }
-  if (handles.video_id) {
-    const state = await readVideo(target, handles.video_id, deadline)
-    // A Reel whose finish was never sent is still only prepared; everything else is Facebook's to complete.
-    if (!(reel && state.processing === 'not_started')) return await settle(state)
-  }
-  if (reel && !handles.video_id) {
-    const videoId = await startReel(target, deadline)
-    await uploadReelFromUrl(target, videoId, video.public_url, deadline)
-    handles.video_id = videoId
-    await fence.saveHandles(handles)
+  const state = handles.video_id ? await readVideo(target, handles.video_id, deadline) : null
+  // A Reel whose finish was never sent is still only prepared; everything else is Facebook's to complete.
+  if (state && !(reel && state.processing === 'not_started')) return await settle(state)
+  if (reel) {
+    // The session is saved before the file goes up, so a retry resumes it, and
+    // whether Facebook already holds the file is read from Facebook.
+    if (!handles.video_id) {
+      handles.video_id = await startReel(target, deadline)
+      await fence.saveHandles(handles)
+    }
+    if (!state?.uploaded) await uploadReelFromUrl(target, handles.video_id, video.public_url, deadline)
   }
   const deferred = await deferFinalWithoutTime(context, fence)
   if (deferred) return deferred

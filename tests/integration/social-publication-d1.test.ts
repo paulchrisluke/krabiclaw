@@ -796,6 +796,20 @@ test('Facebook video: a Reel is published by finishing its upload session, any o
     assert.equal(meta.sent(request => request.path.endsWith(`${PAGE}/videos`)).length, 1)
     assert.equal((await publication(wide.post.id))!.provider_post_id, `${PAGE}_video-2`)
 
+    // A Reel upload that is not answered: the session is already saved, so the
+    // retry resumes it — no second start — uploads again, and finishes it.
+    const retried = await create('key-fb-reel-retry', { body: 'Second reel', media: [{ asset_id: 'reel', slot: 'cover' }] })
+    meta.fault('timeout', request => request.host === 'rupload.facebook.com')
+    const unanswered = await publishPost(env, 'org-a', retried.post.id, { expectedUpdatedAt: retried.post.updated_at, targets: [targets.facebook()] }, 'owner')
+    assert.deepEqual([unanswered.outcomes[0]!.status, unanswered.outcomes[0]!.code], ['failed', 'provider_unreachable'])
+    assert.deepEqual(await publication(retried.post.id).then(row => [row!.state, row!.provider_handles_json]), ['failed', JSON.stringify({ video_id: 'reel-3' })])
+    const startsBefore = meta.sent(request => request.path.endsWith(`${PAGE}/video_reels`) && request.body.upload_phase === 'start').length
+    const resumed = await publishPost(env, 'org-a', retried.post.id, { expectedUpdatedAt: retried.post.updated_at, targets: [targets.facebook()] }, 'owner')
+    assert.deepEqual([resumed.outcomes[0]!.status, resumed.outcomes[0]!.code], ['processing', 'video_processing'], JSON.stringify(resumed.outcomes))
+    assert.equal(meta.sent(request => request.path.endsWith(`${PAGE}/video_reels`) && request.body.upload_phase === 'start').length, startsBefore)
+    assert.deepEqual(meta.sent(request => request.host === 'rupload.facebook.com' && request.path.endsWith('reel-3')).length, 2)
+    assert.equal((await publishPost(env, 'org-a', retried.post.id, { expectedUpdatedAt: retried.post.updated_at, targets: [targets.facebook()] }, 'owner')).outcomes[0]!.status, 'published')
+
     // Neither path ever asks Facebook to flip a video to published.
     assert.equal(meta.sent(request => request.method === 'POST' && request.host === 'graph.facebook.com' && /\/(reel|video)-\d+$/.test(request.path)).length, 0)
 

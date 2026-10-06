@@ -871,7 +871,7 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   open_payments_onboarding: W,
   set_product_booking_config: W,
   delete_product_booking_config: D,
-  replace_product_weekly_schedule: W,
+  replace_product_weekly_schedule: D,
   create_product_booking: { ...W, openWorldHint: true, idempotentHint: true },
   get_product_booking: R,
   list_product_bookings: R,

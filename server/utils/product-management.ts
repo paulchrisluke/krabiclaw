@@ -1105,9 +1105,10 @@ const priceInput = (price: Price): PriceInput => ({
 
 /**
  * An edit names what changes. A variant restated with its id keeps every field
- * and every price it does not restate, and a price restated with its id keeps
- * its row — payments and checkout holds reference price ids — and its unstated
- * fields. A variant or price without an id is new, and must say what it is.
+ * it does not restate; its prices merge by id, so a price restated with its id
+ * keeps its row — payments and checkout holds reference price ids — and its
+ * unstated fields, and a price left out is kept. A variant or price without an
+ * id is new, and must say what it is.
  */
 function mergeVariantPatch(supplied: ProductVariantInput, current: ProductVariant | undefined, field: string): ProductVariantInput {
   if (!current) {
@@ -1120,14 +1121,17 @@ function mergeVariantPatch(supplied: ProductVariantInput, current: ProductVarian
     return supplied
   }
   const base = variantInput(current)
-  const prices = supplied.prices === undefined
-    ? current.prices.map(priceInput)
-    : supplied.prices.map((price, index) => {
-      const existing = price.id ? current.prices.find(candidate => candidate.id === price.id) : undefined
-      if (price.id && !existing) invalid(`${field}.prices[${index}].id ${price.id} does not belong to variant ${current.id}`)
-      if (!existing && typeof price.unit_amount !== 'number') invalid(`${field}.prices[${index}].unit_amount is required for a new price`)
-      return existing ? { ...priceInput(existing), ...definedFields(price) } : price
-    })
+  // Prices merge by id: a restated price is updated in place, a new one is
+  // added, and a price left unstated is kept. An offer stops with `active`
+  // or `valid_until_at`, never by being left out of a list.
+  const prices = current.prices.map(priceInput)
+  for (const [index, price] of (supplied.prices ?? []).entries()) {
+    const at = price.id ? prices.findIndex(candidate => candidate.id === price.id) : -1
+    if (price.id && at < 0) invalid(`${field}.prices[${index}].id ${price.id} does not belong to variant ${current.id}`)
+    if (at < 0 && typeof price.unit_amount !== 'number') invalid(`${field}.prices[${index}].unit_amount is required for a new price`)
+    if (at < 0) prices.push(price)
+    else prices[at] = { ...prices[at]!, ...definedFields(price) }
+  }
   return { ...base, ...definedFields(supplied), prices }
 }
 

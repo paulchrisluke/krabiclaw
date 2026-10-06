@@ -163,8 +163,10 @@ export async function finishReel(target: FacebookPageTarget, videoId: string, in
 
 export interface FacebookVideoState {
   id: string
-  /** `not_started`: a Reel session uploaded but not finished; Facebook processes only after the finish (production, 2026-10-06). */
+  /** `not_started`: a Reel session not yet finished; Facebook processes only after the finish (production, 2026-10-06). */
   processing: 'not_started' | 'ready' | 'processing' | 'error'
+  /** Whether Facebook holds the file: a Reel session's upload phase is complete. */
+  uploaded: boolean
   published: boolean
   postId: string | null
   permalink: string | null
@@ -173,14 +175,15 @@ export interface FacebookVideoState {
 
 export async function readVideo(target: FacebookPageTarget, videoId: string, deadline: MetaDeadline): Promise<FacebookVideoState> {
   type Phase = { status?: string; errors?: Array<{ message?: string }> }
-  const result = await metaGraphRequest<{ id?: string; published?: boolean; post_id?: string; permalink_url?: string; status?: { video_status?: string; processing_phase?: Phase; publishing_phase?: Phase } }>(
+  const result = await metaGraphRequest<{ id?: string; published?: boolean; post_id?: string; permalink_url?: string; status?: { video_status?: string; uploading_phase?: Phase; processing_phase?: Phase; publishing_phase?: Phase } }>(
     `${GRAPH_BASE}/${videoId}?fields=id,published,post_id,permalink_url,status`, authorized(target, { deadline }))
   if (!result.id || typeof result.published !== 'boolean') throw new Error('Facebook did not say whether the video is published')
   const status = result.status?.video_status
   const processing = status === 'ready' ? 'ready' : status === 'error' ? 'error' : result.status?.processing_phase?.status === 'not_started' ? 'not_started' : 'processing'
   const permalink = result.permalink_url ? new URL(result.permalink_url, 'https://www.facebook.com').toString() : null
   const errors = [...(result.status?.processing_phase?.errors ?? []), ...(result.status?.publishing_phase?.errors ?? [])].map(error => error.message).filter(Boolean)
-  return { id: result.id, processing, published: result.published, postId: result.post_id ?? null, permalink,
+  const uploaded = result.status?.uploading_phase?.status === 'complete' || processing !== 'not_started'
+  return { id: result.id, processing, uploaded, published: result.published, postId: result.post_id ?? null, permalink,
     error: processing === 'error' ? errors.join('; ') || 'Facebook could not process the video' : null }
 }
 

@@ -382,11 +382,11 @@ test('a patch that says nothing about variants leaves every price row as it was'
     // other field of the restated price — is kept, and so is the price's row.
     const priceA = repriced.find(price => price.location_id === 'loc-a')!
     await updateProduct(db, { organizationId: ORG, productId: product.id, actor: ACTOR, patch: {
-      variants: [{ id: kept.id, prices: [{ id: priceA.id, unit_amount: 21000 }, { id: repriced.find(price => price.location_id === 'loc-b')!.id }] }],
+      variants: [{ id: kept.id, prices: [{ id: priceA.id, unit_amount: 21000 }] }],
     } as UpdateProductInput })
     const minimal = (await getProduct(db, ORG, product.id)).variants[0]!
     assert.equal(minimal.name, kept.name, 'an unstated variant name is kept')
-    assert.deepEqual(minimal.prices.map(price => price.id).sort(), kept.prices.map(price => price.id).sort(), 'a price-only edit kept both price rows')
+    assert.deepEqual(minimal.prices.map(price => price.id).sort(), kept.prices.map(price => price.id).sort(), 'a price-only edit kept the price it did not mention')
     const edited = minimal.prices.find(price => price.id === priceA.id)!
     assert.deepEqual([edited.unit_amount, edited.currency, edited.location_id, edited.created_at], [21000, priceA.currency, 'loc-a', priceA.created_at])
     assert.equal(minimal.prices.find(price => price.location_id === 'loc-b')!.unit_amount, 14000)

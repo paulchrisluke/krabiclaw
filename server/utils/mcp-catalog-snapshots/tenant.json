@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:3544894ac62c49edf3ec099e5b86f92b6d3f327905b0775a7f3e5efc54330898",
+  "fingerprint": "sha256:bda3befcbb42243f74129e4110c026bcf4bbe85ab08a1e5d713fdd4501530eb7",
   "tools": [
     {
       "name": "append_content_block",
@@ -19934,7 +19934,7 @@
     },
     {
       "name": "update_product",
-      "description": "Edit an existing product. Only supplied fields change. A variant restated with its id keeps every field and price it does not restate, and a price restated with its id keeps its identity, so a price change is the variant id, the price id and the new unit_amount. Variants left out of a supplied list are removed, which is refused once anything was booked on them. Options and details replace their existing values when supplied. Publication and location offerings use separate tools.",
+      "description": "Edit an existing product. Only supplied fields change. A variant restated with its id keeps every field it does not restate, and its prices are merged by id: a price restated with its id keeps its identity and unstated fields, a price without an id is added, and a price left out is kept, so a price change is the variant id, the price id and the new unit_amount. Stop an offer with active false or valid_until_at. Variants left out of a supplied list are removed, which is refused once anything was booked on them. Options and details replace their existing values when supplied. Publication and location offerings use separate tools.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
