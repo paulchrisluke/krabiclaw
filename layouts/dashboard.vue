@@ -66,7 +66,7 @@
         v-model:open="dashboardSearchOpen"
         v-model:search-term="dashboardSearchTerm"
         title="Search"
-        description="Search this business"
+        description="Search this organization"
         placeholder="Search…"
         size="lg"
         :fullscreen="isPhoneWidth"
@@ -244,7 +244,7 @@ const activeOrganizationId = computed(() => {
 // "back to which org?".
 //
 // Only that one. Falling back to the first organization the account belongs to
-// sent Back from Account into a business the person had never opened — it read
+// sent Back from Account into an organization the person had never opened — it read
 // as an answer while being a guess. With no active organization there is no
 // parent, and the level renders no Back rather than a wrong one.
 //
@@ -269,9 +269,9 @@ const routeLocationSlug = computed(() => typeof route.params.locationSlug === 's
 const routeName = computed(() => typeof route.name === 'string' ? route.name : '')
 const isAccountRoute = computed(() => routeName.value.startsWith('dashboard-account'))
 const organizationLabel = computed(() => organization.value?.name ?? 'Organization')
-// The organization is the business, and the business's mark is its `logo`
-// media placement. There is no second source: an organization with no logo
-// renders no avatar rather than another business's image or a generic icon
+// The organization's mark is its `logo` media placement. There is no second
+// source: an organization with no logo renders no avatar rather than another
+// organization's image or a generic icon
 // standing in for one.
 const organizationAvatar = computed(() =>
   mediaStillUrl(organization.value?.media.find(item => item.slot === 'logo')) ?? undefined)
@@ -281,7 +281,7 @@ const organizationAvatar = computed(() =>
 // there is no separate sidebar shell per scope, only scope-driven content inside
 // the one stable header/nav slots (see issue #316's "one stable sidebar" rule).
 //
-// A business is its organization, so the drill-in is organization → location.
+// The drill-in is organization → location.
 const scope = computed<'organization' | 'location'>(() => routeLocationSlug.value ? 'location' : 'organization')
 
 // One reusable scope-header model feeds both the desktop sidebar and the mobile
@@ -310,7 +310,7 @@ const scopeHeaderModel = computed<DashboardScopeHeaderModel>(() => {
         ? { to: `/dashboard/${encodeURIComponent(org.slug)}` }
         : { onSelect: () => void selectOrganization(org) }),
     }))],
-    createAction: { label: 'Start a business', to: '/dashboard/onboarding' }
+    createAction: { label: 'New organization', to: '/dashboard/onboarding' }
   }
 })
 
@@ -366,7 +366,7 @@ interface DashboardMobileNavItem {
 /**
  * Which tab the current route belongs to: the root of its nested route tree,
  * or where that root's declared `meta.back` leads when the root is a workspace
- * reached from a tab — a location editor from Locations, a booking from Today.
+ * reached from a tab — adding a location from Menu, a booking from Today.
  *
  * Prefix matching cannot answer this. Pages lives at `/pages` but is nested
  * under Menu, so the URL says nothing about Menu while every way out of it
@@ -398,8 +398,8 @@ function tabRootPath(stops: readonly string[]): string | null {
 
 /**
  * A tab is active when the walk above ends at it. Two tabs could otherwise
- * claim one route, because their paths nest: a location's Messages lives under
- * the Locations path.
+ * claim one route, because a level can keep a URL its tab does not prefix:
+ * Locations lives at `/locations` under Menu.
  */
 function withActiveItem<T extends { to?: string }>(items: T[], root: string | null): Array<T & { active: boolean }> {
   return items.map(item => ({ ...item, active: Boolean(item.to) && item.to === root }))
@@ -418,7 +418,8 @@ const navTargets = computed<DashboardMobileNavItem[]>(() => {
   const items: DashboardMobileNavItem[] = [
     { key: 'today', label: 'Today', icon: 'i-lucide-bookmark', to: routeOrgBase },
     { key: 'calendar', label: 'Calendar', icon: 'i-lucide-calendar-days', to: `${routeOrgBase}/calendar` },
-    { key: 'locations', label: 'Locations', icon: 'i-lucide-map-pin', to: `${routeOrgBase}/locations` },
+    // Everything the organization offers, whatever its kind; Airbnb's Listings tab.
+    { key: 'catalog', label: 'Catalog', icon: 'i-lucide-layout-grid', to: `${routeOrgBase}/products` },
     { key: 'messages', label: 'Messages', icon: 'i-lucide-message-square', to: `${routeOrgBase}/messages` },
   ]
   return items
@@ -440,7 +441,7 @@ const activeTabPath = computed(() => tabRootPath(tabStops.value))
 const primaryNavItems = computed(() => withActiveItem(navTargets.value, activeTabPath.value))
 // A signed-in owner always gets the header: the wordmark and the account menu
 // are user-scoped and need no organization. Only the nav links and the bottom
-// bar wait for an organization, because Today, Calendar, Locations and Messages do not
+// bar wait for an organization, because Today, Calendar, Catalog and Messages do not
 // exist until there is one. Gating both together is what left an owner who
 // abandoned onboarding with no way to reach account settings or log out.
 const showNavChrome = computed(() => primaryNavItems.value.length > 0)
@@ -465,7 +466,7 @@ onMounted(async () => {
   if (organizationId) {
     trackDashboardVisited(scope.value, organizationId)
   }
-  // Which page and tab of a business's dashboard was opened (Earnings, Transactions, a payout, the Payments tabs), on the same event.
+  // Which page and tab of an organization's dashboard was opened (Earnings, Transactions, a payout, the Payments tabs), on the same event.
   let lastSection = ''
   watch(() => [route.name, route.query.tab] as const, ([name, tab]) => {
     const id = organization.value?.id

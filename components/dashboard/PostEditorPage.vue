@@ -1,6 +1,6 @@
 <template>
   <!-- A post: its rows are the things it holds, each a leaf below this level. -->
-  <DashboardIndexPanel id="location-post" :title="isNew ? 'New post' : editor.form.title || 'Post'" :auto-open="navigationGroups[0]?.items.find(item => item.to)?.to ?? null">
+  <DashboardIndexPanel id="post" :title="isNew ? 'New post' : editor.form.title || 'Post'" :auto-open="navigationGroups[0]?.items.find(item => item.to)?.to ?? null">
     <template v-if="post" #right>
       <DashboardResourceLocalization
         :organization-id="organizationId"
@@ -32,13 +32,15 @@
 
 <script lang="ts">
 import type { ComputedRef, InjectionKey, Ref } from 'vue'
+import type { DashboardLocation } from '~/composables/useDashboardOrganization'
 
-export const SECTION_KEYS = ['photo', 'headline', 'body', 'action', 'publishing'] as const
+export const SECTION_KEYS = ['photo', 'headline', 'body', 'action', 'location', 'publishing'] as const
 export type SectionKey = typeof SECTION_KEYS[number]
 
 /** The post's draft and what its leaves show or do beside their one field. */
 export interface PostEditor {
-  editor: ReturnType<typeof useLocationPostEditor>
+  editor: ReturnType<typeof usePostEditor>
+  organizationLocations: ComputedRef<DashboardLocation[]>
   organizationId: string
   postId: ComputedRef<string>
   isNew: ComputedRef<boolean>
@@ -56,20 +58,22 @@ export const postEditorKey = Symbol('post-editor') as InjectionKey<PostEditor>
 <script setup lang="ts">
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import DashboardResourceLocalization from '~/components/dashboard/DashboardResourceLocalization.vue'
-import { useLocationPostEditor } from '~/composables/useLocationPostEditor'
+import { usePostEditor } from '~/composables/usePostEditor'
 import { getErrorMessage, isNotFoundError } from '~/utils/errors'
 
 const route = useRoute()
+const router = useRouter()
 const dashboardApi = useDashboardApi()
 const postId = computed(() => String(route.params.postId ?? ''))
 const level = useRouteLevel()
 const postPath = level.path
 
 const organizationId = await useDashboardOrganizationId()
-const dashboardLocation = useDashboardLocation()
 const isNew = computed(() => postId.value === 'new')
-const currentLocationId = computed(() => dashboardLocation.currentLocationId.value)
-const editor = useLocationPostEditor(organizationId, currentLocationId)
+// Where a new post is written: the location the list was scoped to, or the whole website.
+const scopeLocationId = useLocationScope()
+const editor = usePostEditor(organizationId, scopeLocationId)
+const { locations: organizationLocations } = await useOrganizationLocations()
 
 const sectionLabels = computed<Record<SectionKey, string>>(() => ({
   photo: 'Photos and video',
@@ -77,13 +81,14 @@ const sectionLabels = computed<Record<SectionKey, string>>(() => ({
   body: 'Caption',
   action: 'Link button',
   publishing: 'Where it is published',
+  location: 'Location',
 }))
 const detailKey = computed(() => level.child.value)
 const editorKey = computed<SectionKey>(() => (detailKey.value ?? (isNew.value ? 'body' : 'photo')) as SectionKey)
 
 const isSinglePostResponse = (value: unknown): value is { post: ApiRecord } => isRecord(value) && isRecord(value.post) && typeof value.post.id === 'string'
 const { data, error } = await useAsyncData(
-  computed(() => `dashboard-location-post:${organizationId}:${postId.value}`),
+  computed(() => `dashboard-post:${organizationId}:${postId.value}`),
   async () => isNew.value ? null : await dashboardApi<{ post: ApiRecord }>(`/api/editor/organizations/${organizationId}/posts/${postId.value}`, { validate: isSinglePostResponse }),
   { watch: [postId] },
 )
@@ -101,10 +106,10 @@ const post = computed(() => editor.record.value)
  * remount this component, and carries the idempotency key its creation is sent
  * under, so a double press or a retried request makes one post.
  */
-const blankDraft = () => ({ location_id: currentLocationId.value, title: '', body: '', idempotency_key: crypto.randomUUID() })
-const draft = useState(`location-post-draft-${organizationId}-${postId.value}`, blankDraft)
+const blankDraft = () => ({ location_id: scopeLocationId.value, title: '', body: '', idempotency_key: crypto.randomUUID() })
+const draft = useState(`post-draft-${organizationId}-${postId.value}`, blankDraft)
 if (isNew.value) {
-  if (draft.value.location_id !== currentLocationId.value) draft.value = blankDraft()
+  if (draft.value.location_id !== scopeLocationId.value) draft.value = blankDraft()
   editor.form.title = draft.value.title
   editor.form.body = draft.value.body
   watch(() => editor.form.body, value => { draft.value.body = value }, { flush: 'sync' })
@@ -128,21 +133,28 @@ function publishingSummary(): string {
   return parts.join(' · ')
 }
 
+/** A URL beneath this post that keeps the list's scope, so Back returns to the same list. */
+function sectionPath(section: string) {
+  return router.resolve({ path: `${postPath.value}/${section}`, query: route.query }).fullPath
+}
+function locationSummary(): string {
+  const id = editor.form.location_id
+  return id ? organizationLocations.value.find(location => location.id === id)?.title ?? 'Location' : 'Whole website'
+}
+
+// One flat list: what the post says, where it belongs, and where it is published.
 const navigationGroups = computed<EditorNavigationGroup[]>(() => {
-  const body = { id: 'body', label: 'Caption', summary: editor.form.body || 'No caption', placeholder: !editor.form.body, to: `${postPath.value}/body` }
-  if (isNew.value) return [{ id: 'new-post', label: 'New post', items: [body] }]
+  const body = { id: 'body', label: 'Caption', summary: editor.form.body || 'No caption', placeholder: !editor.form.body, to: sectionPath('body') }
+  if (isNew.value) return [{ id: 'new-post', items: [body] }]
   const action = editor.form.callToAction
-  return [
-    { id: 'content', label: 'Content', items: [
-      { id: 'photo', label: 'Photos and video', summary: mediaSummary(), placeholder: !editor.form.media.length, to: `${postPath.value}/photo` },
-      { id: 'headline', label: 'Headline', summary: editor.form.title || 'No headline', placeholder: !editor.form.title, to: `${postPath.value}/headline` },
-      body,
-      { id: 'action', label: 'Link button', summary: action ? `${action.label} → ${action.url}` : 'No button', placeholder: !action, to: `${postPath.value}/action` },
-    ] },
-    { id: 'publishing', label: 'Publishing', items: [
-      { id: 'publishing', label: 'Where it is published', summary: publishingSummary(), to: `${postPath.value}/publishing` },
-    ] },
-  ]
+  return [{ id: 'post', items: [
+    { id: 'photo', label: 'Photos and video', summary: mediaSummary(), placeholder: !editor.form.media.length, to: sectionPath('photo') },
+    { id: 'headline', label: 'Headline', summary: editor.form.title || 'No headline', placeholder: !editor.form.title, to: sectionPath('headline') },
+    body,
+    { id: 'action', label: 'Link button', summary: action ? `${action.label} → ${action.url}` : 'No button', placeholder: !action, to: sectionPath('action') },
+    { id: 'location', label: 'Location', summary: locationSummary(), to: sectionPath('location') },
+    { id: 'publishing', label: 'Where it is published', summary: publishingSummary(), to: sectionPath('publishing') },
+  ] }]
 })
 const openSections = computed(() => navigationGroups.value.flatMap(group => group.items.map(item => item.id)))
 watchEffect(() => {
@@ -174,7 +186,7 @@ async function commit() {
   if (isNew.value) {
     const created = await editor.save(null, draft.value.idempotency_key)
     if (!created?.id) return
-    await navigateTo(`${level.to.value}/${String(created.id)}`, { replace: true })
+    await navigateTo(router.resolve({ path: postPath.value.replace(/\/new$/, `/${String(created.id)}`), query: route.query }).fullPath, { replace: true })
     draft.value = blankDraft()
     return
   }
@@ -205,5 +217,5 @@ function localizedPostPath(locale: string): string {
 }
 
 useSeoMeta({ title: () => `${isNew.value ? 'New post' : editor.form.title || 'Post'} | Krabiclaw Dashboard`, robots: 'noindex, nofollow' })
-provide(postEditorKey, { editor, organizationId, postId, isNew, post, sectionLabels, saveLabel, saveDisabled, revert, save: saveCurrentEditor })
+provide(postEditorKey, { editor, organizationLocations, organizationId, postId, isNew, post, sectionLabels, saveLabel, saveDisabled, revert, save: saveCurrentEditor })
 </script>

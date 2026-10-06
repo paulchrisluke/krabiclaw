@@ -3,7 +3,7 @@
     <DashboardListEditor
       v-model:editing="editing"
       title="Posts"
-      description="Short posts from this location: news, photos, events and offers, in your own words."
+      description="Short posts: news, photos, events and offers, in your own words."
       :items="listItems"
       :pending="pending"
       :error="loadError"
@@ -50,20 +50,20 @@
 <script setup lang="ts">
 import { formatTimestamp } from '~/utils/timezone'
 import DashboardListEditor from '~/components/dashboard/DashboardListEditor.vue'
-import { normalizePostMediaForForm, useLocationPostEditor } from '~/composables/useLocationPostEditor'
+import { normalizePostMediaForForm, usePostEditor } from '~/composables/usePostEditor'
 import { getErrorMessage } from '~/utils/errors'
 
-// The posts index. Rendered by `posts.vue`, which owns the frame.
+// The posts index: every post the organization has, or one location's when the
+// URL names it with `?location_id=`. Rendered by `posts.vue`, which owns the frame.
+// The path comes from the route this screen is mounted on; it runs while setup
+// is still synchronous, before any `await`.
+const level = useRouteLevel()
+const route = useRoute()
+const router = useRouter()
 const dashboardApi = useDashboardApi()
 const organizationId = await useDashboardOrganizationId()
-const dashboardLocation = useDashboardLocation()
-
-const currentLocationId = computed(() => dashboardLocation.currentLocationId.value)
-const editor = useLocationPostEditor(organizationId, currentLocationId)
-// The path comes from the route this screen is mounted on, not from the
-// location selector: an unresolved selector left it empty, and an empty path is
-// a link to nowhere.
-const level = useRouteLevel()
+const locationId = useLocationScope()
+const editor = usePostEditor(organizationId, locationId)
 
 const postTabs = [
   { value: 'all', label: 'All' },
@@ -84,15 +84,16 @@ const isPostsResponse = (value: unknown): value is { posts: ApiRecord[]; page_in
 
 // The tab is a filter the database applies, a page at a time.
 const statusFilter = computed(() => (activeTab.value === 'all' ? undefined : String(activeTab.value)))
-const postsKey = computed(() => `dashboard-location-posts:${organizationId}:${currentLocationId.value ?? 'missing'}:${statusFilter.value ?? 'all'}`)
-const fetchPage = (cursor?: string) => {
-  if (!currentLocationId.value) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
-  return dashboardApi<{ posts: ApiRecord[]; page_info: { has_more: boolean; next_cursor: string | null } }>(`/api/editor/organizations/${organizationId}/posts`, {
-    query: { location_id: currentLocationId.value, ...(statusFilter.value ? { status: statusFilter.value } : {}), ...(cursor ? { cursor } : {}) },
-    validate: isPostsResponse,
-  })
-}
-const { data, pending, error, refresh } = await useAsyncData(postsKey, () => fetchPage(), { lazy: true, watch: [statusFilter] })
+// No location reads every post; a location reads only that location's. Neither
+// is a guess about where a new post goes.
+const postsKey = computed(() => `dashboard-posts:${organizationId}:${locationId.value ?? 'organization'}:${statusFilter.value ?? 'all'}`)
+const fetchPage = (cursor?: string) => dashboardApi<{ posts: ApiRecord[]; page_info: { has_more: boolean; next_cursor: string | null } }>(`/api/editor/organizations/${organizationId}/posts`, {
+  query: { ...(locationId.value ? { location_id: locationId.value } : {}), ...(statusFilter.value ? { status: statusFilter.value } : {}), ...(cursor ? { cursor } : {}) },
+  validate: isPostsResponse,
+})
+const { data, pending, error, refresh } = await useAsyncData(postsKey, () => fetchPage(), { lazy: true, watch: [statusFilter, locationId] })
+/** A path in this list's scope: the explicit location rides along. */
+const scoped = (path: string) => router.resolve({ path, query: { location_id: route.query.location_id } }).fullPath
 
 const loadError = computed(() => (error.value ? getErrorMessage(error.value, 'Failed to load posts') : null))
 const more = ref<ApiRecord[]>([])
@@ -120,7 +121,7 @@ const listItems = computed(() => visiblePosts.value.map(row => ({
   title: postTitle(row),
   summary: postSummary(row),
   channels: (Array.isArray(row.publications) ? row.publications as ApiRecord[] : []).filter(item => item.state === 'published').map(item => String(item.channel)),
-  to: `${level.path.value}/${String(row.id)}`,
+  to: scoped(`${level.path.value}/${String(row.id)}`),
   row,
 })))
 
@@ -151,7 +152,7 @@ function formatDate(iso: string) {
 // ── Creating ────────────────────────────────────────────
 /** A post is created on its own level, as a draft, rather than in a dialog stacked over the list. */
 function openNew() {
-  return navigateTo(`${level.path.value}/new`)
+  return navigateTo(scoped(`${level.path.value}/new`))
 }
 
 

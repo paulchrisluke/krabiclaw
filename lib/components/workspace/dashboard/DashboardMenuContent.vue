@@ -17,7 +17,7 @@
         <p class="text-[15px] font-semibold text-highlighted">{{ card.label }}</p>
         <p class="mt-1 text-sm text-muted">{{ card.subline }}</p>
         <p v-if="card.figure" class="mt-auto text-4xl font-semibold tracking-tight text-highlighted">{{ card.figure }}</p>
-        <!-- Airbnb stacks the listings' photos in the card's corner; the business's places, or the account's past visits. -->
+        <!-- Airbnb stacks the listings' photos in the card's corner; the organization's places, or the account's past visits. -->
         <span v-else-if="card.photos.length" class="mt-auto flex items-center">
           <img v-for="(photo, index) in card.photos.slice(0, 3)" :key="photo" :src="photo" alt="" class="size-12 rounded-xl border-2 border-elevated object-cover" :class="index ? '-ml-3' : ''">
           <span v-if="card.photos.length > 3" class="-ml-3 flex size-12 items-center justify-center rounded-xl border-2 border-elevated bg-default text-sm font-semibold text-highlighted">+{{ card.photos.length - 3 }}</span>
@@ -42,27 +42,27 @@ const { groups, activeItem, scopeModel, logOut, personal } = useDashboardMenu()
 const { orgPaths } = useDashboardOrganizationLinks()
 const dashboardApi = useDashboardApi()
 
-const business = computed(() => orgPaths.value.org !== '/dashboard' && !personal.value)
+const inOrganization = computed(() => orgPaths.value.org !== '/dashboard' && !personal.value)
 const monthLabel = formatCalendarDate(new Date().toISOString().slice(0, 10), 'en', { month: 'long', year: 'numeric' })
 // The Earnings figure is this month's money, read the way the Earnings level reads it.
 const { data: earnings } = await useAsyncData(
   () => `menu-earnings:${orgPaths.value.org}`,
   async () => {
-    if (!business.value) return null
+    if (!inOrganization.value) return null
     const now = new Date()
     const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString()
     const to = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toISOString()
     return await dashboardApi<EarningsSummary>('/api/dashboard/payments', { query: { view: 'overview', from, to }, validate: isEarningsSummary })
   },
-  { lazy: true, server: false, watch: [business] },
+  { lazy: true, server: false, watch: [inOrganization] },
 )
-// The pictures in the cards' corners: the business's places, or the visits the account has made.
+// The pictures in the cards' corners: the organization's places, or the visits the account has made.
 type LocationPhotos = { success: true; locations: Array<{ id: string; imageUrl: string | null }> }
 const isLocationPhotos = (value: unknown): value is LocationPhotos => isRecord(value) && value.success === true && Array.isArray(value.locations) && value.locations.every(row => isRecord(row) && typeof row.id === 'string' && (row.imageUrl === null || typeof row.imageUrl === 'string'))
 const { data: places } = await useAsyncData(
   () => `menu-places:${orgPaths.value.org}`,
-  async () => business.value ? await dashboardApi<LocationPhotos>('/api/dashboard/locations', { validate: isLocationPhotos }) : null,
-  { lazy: true, server: false, watch: [business] },
+  async () => inOrganization.value ? await dashboardApi<LocationPhotos>('/api/dashboard/locations', { validate: isLocationPhotos }) : null,
+  { lazy: true, server: false, watch: [inOrganization] },
 )
 const { data: activity } = await useAsyncData(
   () => `menu-activity:${personal.value}`,
@@ -76,7 +76,7 @@ const cards = computed(() => personal.value
       { to: '/dashboard/account/activity', label: 'Past activity', subline: 'Visits and purchases', icon: 'i-lucide-history', figure: '', photos: visitPhotos.value, testId: 'dashboard-menu-past-activity' },
       { to: '/dashboard/account/profile/payments', label: 'Payments', subline: 'Saved payment methods', icon: 'i-lucide-credit-card', figure: '', photos: [] as string[], testId: 'dashboard-menu-payments' },
     ]
-  : business.value
+  : inOrganization.value
     ? [
         { to: `${orgPaths.value.org}/earnings`, label: 'Earnings', subline: monthLabel, icon: 'i-lucide-banknote', figure: earningsFigure(earnings.value), photos: [] as string[], testId: 'dashboard-menu-earnings' },
         { to: `${orgPaths.value.settings}/insights`, label: 'Insights', subline: 'Views and reviews', icon: 'i-lucide-chart-no-axes-column', figure: '', photos: placePhotos.value, testId: 'dashboard-menu-insights' },
@@ -87,7 +87,7 @@ const cards = computed(() => personal.value
 function onAct(id: string) {
   if (id === 'log-out') void logOut()
   if (id === 'switch-personal') scopeModel.value?.peers.find(peer => peer.label === 'Personal')?.onSelect?.()
-  if (id === 'switch-business') scopeModel.value?.peers.find(peer => peer.label !== 'Personal')?.onSelect?.()
+  if (id === 'switch-organization') scopeModel.value?.peers.find(peer => peer.label !== 'Personal')?.onSelect?.()
 }
 
 

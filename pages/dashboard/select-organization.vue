@@ -1,12 +1,12 @@
 <template>
   <!--
-    Which business this session is in. A person who belongs to more than one is
+    Which organization this session is in. A person who belongs to more than one is
     asked rather than sent somewhere by list order (#905), so nothing here is
     preselected and nothing is entered until Better Auth says the session moved.
   -->
   <div class="mx-auto flex min-h-dvh w-full max-w-lg flex-col justify-center gap-6 px-4 py-12">
     <div>
-      <h1 class="text-2xl font-semibold text-highlighted">Choose a business</h1>
+      <h1 class="text-2xl font-semibold text-highlighted">Choose an organization</h1>
       <p class="mt-2 text-sm text-muted">You work on more than one. Pick the one to open.</p>
     </div>
 
@@ -42,7 +42,7 @@
       </button>
     </div>
 
-    <p v-else class="text-sm text-muted">This account belongs to no business yet.</p>
+    <p v-else class="text-sm text-muted">This account belongs to no organization yet.</p>
   </div>
 </template>
 
@@ -53,7 +53,7 @@ import { isNewSalePlan } from '~/shared/billing-model'
 
 // No organization scope yet, so no dashboard chrome and no scoped context.
 definePageMeta({ layout: 'standalone' })
-useSeoMeta({ title: 'Choose a business | Krabiclaw', robots: 'noindex, nofollow' })
+useSeoMeta({ title: 'Choose an organization | Krabiclaw', robots: 'noindex, nofollow' })
 
 const route = useRoute()
 if (route.query.plan !== undefined && !isNewSalePlan(route.query.plan)) {
@@ -73,10 +73,10 @@ const plan = computed(() => isNewSalePlan(route.query.plan) ? route.query.plan :
 
 async function enter(organization: { id: string }) {
   if (entering.value) return
-  // Only a business Better Auth still lists may be chosen: the membership can
+  // Only an organization Better Auth still lists may be chosen: the membership can
   // change while this page is open.
   if (!organizations.value.some(candidate => candidate.id === organization.id)) {
-    failure.value = 'That business is no longer available to this account.'
+    failure.value = 'That organization is no longer available to this account.'
     return
   }
   entering.value = organization.id
@@ -84,7 +84,7 @@ async function enter(organization: { id: string }) {
   const { error } = await authClient.organization.setActive({ organizationId: organization.id })
   if (error) {
     // Never navigate as though it became active.
-    failure.value = error.message || 'Could not open that business.'
+    failure.value = error.message || 'Could not open that organization.'
     entering.value = null
     return
   }

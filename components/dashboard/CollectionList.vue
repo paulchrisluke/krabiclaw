@@ -2,7 +2,7 @@
   <div class="space-y-6">
   <DashboardListEditor
     v-model:editing="editing"
-    :title="presentation.collectionLabel"
+    :title="presentation.collectionGroupLabelPlural"
     :description="`Group ${presentation.itemLabelPlural.toLowerCase()} into ${presentation.collectionGroupLabelPlural.toLowerCase()}. Customers see them in this order.`"
     :items="listItems"
     :pending="pending"
@@ -37,29 +37,28 @@
 </template>
 
 <script setup lang="ts">
-// One surface's collections. Rendered by `[surface].vue`, which decides whether
-// it is the whole screen, the index column of a pair, or off screen entirely.
+// The catalog's collections, in the scope Catalog names: the site-wide ones, or
+// one location's own. Rendered by `products/collections.vue`, which decides
+// whether it is the whole screen, the index column of a pair, or off screen.
 import DashboardListEditor from '~/components/dashboard/DashboardListEditor.vue'
 import DashboardMediaThumb from '~/components/dashboard/DashboardMediaThumb.vue'
-import type { Collection, Product, ProductSurface } from '~/server/types/products'
+import type { Collection, Product } from '~/server/types/products'
 import type { ResolvedMediaAsset } from '~/server/utils/media-asset-manager'
 import { getErrorMessage } from '~/utils/errors'
-import { collectionsOnSurface, presentationForSurface } from '~/utils/product-presentation'
-
-const props = defineProps<{ surface: ProductSurface }>()
+import { requireProductPresentation } from '~/utils/product-presentation'
 
 const dashboardApi = useDashboardApi()
+const route = useRoute()
+const router = useRouter()
 const organizationId = await useDashboardOrganizationId()
 const dashboard = useDashboardOrganization()
-const dashboardLocation = useDashboardLocation()
 
 const vertical = dashboard.organization.value?.vertical
 if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Organization vertical is not configured' })
-// The words are the surface's own: a collection of classes is read as
-// experiences, a section of a menu as dishes.
-const presentation = computed(() => presentationForSurface(vertical, props.surface))
+// The organization's own words for a grouping: a restaurant's Sections, everyone else's Collections.
+const presentation = computed(() => requireProductPresentation(vertical, dashboard.organization.value?.theme_id))
 
-const locationId = computed(() => dashboardLocation.currentLocation.value?.id ?? null)
+const locationId = useLocationScope()
 // The path comes from the route this screen is mounted on, not from the
 // location selector: an unresolved selector left it empty, and an empty path is
 // a link to nowhere and, where it roots the editor frame, a frame rooted at ''.
@@ -70,11 +69,11 @@ const level = useRouteLevel()
 interface CollectionRow extends Collection {
   product_count: number
   cover: ResolvedMediaAsset | null
-  /** The members, which are what put this collection on a surface. */
+  /** The products that belong to it. */
   products: Product[]
 }
 
-const catalog = useLocationProductCatalog(organizationId, locationId)
+const catalog = useProductCatalog(organizationId, locationId)
 const pending = catalog.pending
 
 // The count and cover are what make a collection legible at a glance, and they
@@ -100,25 +99,16 @@ const catalogRows = computed<CollectionRow[]>(() => {
 // Reorder is a mode: the local order stands while the edit state is open and
 // commits once when it closes, so it is held apart from the shared catalog.
 const localOrder = ref<CollectionRow[] | null>(null)
-/** Every collection this location has, in the one order it stores. */
+/** Every collection in this scope, in the one order it stores. */
 const collections = computed<CollectionRow[]>(() => localOrder.value ?? catalogRows.value)
-/**
- * The ones this surface manages, in that same order, each holding only its
- * members on this surface — so the count and the cover describe what the owner
- * opens, not what the collection holds altogether.
- */
-const onSurface = computed<CollectionRow[]>(() =>
-  collectionsOnSurface(vertical, collections.value, props.surface).map(row => ({
-    ...row,
-    product_count: row.products.length,
-    cover: row.products.find(product => product.image)?.image ?? null,
-  })))
 const editing = ref(false)
 const removingId = ref<string | null>(null)
 const deleteError = ref<string | null>(null)
 const orderError = ref<string | null>(null)
 
-const listItems = computed(() => onSurface.value.map(row => ({ id: row.id, title: row.name, to: `${level.path.value}/${row.id}`, row })))
+/** A path in this scope: the explicit location rides along. */
+const scoped = (path: string) => router.resolve({ path, query: { location_id: route.query.location_id } }).fullPath
+const listItems = computed(() => collections.value.map(row => ({ id: row.id, title: row.name, to: scoped(`${level.path.value}/${row.id}`), row })))
 const loadError = computed(() => (catalog.error.value ? getErrorMessage(catalog.error.value, `Failed to load ${presentation.value.collectionGroupLabelPlural.toLowerCase()}`) : null))
 useSeoMeta({ title: () => `${presentation.value.collectionLabel} | Krabiclaw Dashboard`, robots: 'noindex, nofollow' })
 
@@ -128,14 +118,12 @@ const load = catalog.refresh
 // A collection is a record with its own level: adding opens `new`, and the row
 // opens the record, whose Name leaf is one of its rows.
 function openNew() {
-  void navigateTo(`${level.path.value}/new`)
+  void navigateTo(scoped(`${level.path.value}/new`))
 }
 
 
 
 async function removeCollection(item: { row: CollectionRow }) {
-  const id = locationId.value
-  if (!id) return
   const count = item.row.product_count
   const words = presentation.value
   const warning = count
@@ -159,18 +147,13 @@ async function removeCollection(item: { row: CollectionRow }) {
  * closes. Every press used to be a request plus a full reload, which is what
  * made a six-place move feel broken.
  *
- * A move is within this surface: the row swaps places with its neighbour here,
- * and every collection the other surface manages keeps the position it holds in
- * the one order the location stores. There is no second order to keep in step.
+ * The row swaps places with its neighbour in the one order this scope stores.
  */
 function moveCollection(item: { row: CollectionRow }, direction: -1 | 1) {
-  const here = onSurface.value.findIndex(row => row.id === item.row.id)
-  const neighbour = onSurface.value[here + direction]
-  if (here < 0 || !neighbour) return
+  const from = collections.value.findIndex(row => row.id === item.row.id)
+  const to = from + direction
+  if (from < 0 || to < 0 || to >= collections.value.length) return
   const order = [...collections.value]
-  const from = order.findIndex(row => row.id === item.row.id)
-  const to = order.findIndex(row => row.id === neighbour.id)
-  if (from < 0 || to < 0) return
   order[from] = collections.value[to]!
   order[to] = collections.value[from]!
   localOrder.value = order
@@ -180,18 +163,18 @@ function moveCollection(item: { row: CollectionRow }, direction: -1 | 1) {
 const orderDirty = ref(false)
 
 async function commitOrder() {
-  const id = locationId.value
-  if (!id || !orderDirty.value) return
+  if (!orderDirty.value) return
   orderDirty.value = false
-  // The whole intended order for the location, which is the only order there
-  // is: the endpoint takes it complete and rejects a partial one.
+  // The whole intended order for this scope — the site's own collections, or
+  // one location's — which is the only order there is: the endpoint takes it
+  // complete and rejects a partial one.
   const order = collections.value.map(row => row.id)
   localOrder.value = null
   orderError.value = null
   try {
     await dashboardApi(`/api/editor/organizations/${organizationId}/collections/order`, {
       method: 'PUT',
-      body: { collection_ids: order, location_id: id },
+      body: { collection_ids: order, location_id: locationId.value },
       validate: isRecord,
     })
   } catch (error) {
@@ -209,7 +192,7 @@ watch(editing, (value, previous) => {
 // the location, so it reloads itself. Calling `refresh` here as well turned
 // `pending` true for every level sharing that key, and the server rendered the
 // catalog column as skeletons while the payload beside it already held the rows.
-watch([locationId, () => props.surface], () => {
+watch(locationId, () => {
   orderDirty.value = false
   localOrder.value = null
   editing.value = false

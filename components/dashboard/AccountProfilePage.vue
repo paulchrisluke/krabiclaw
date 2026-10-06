@@ -115,11 +115,11 @@ import { authClient } from '~/lib/auth-client'
 // The level runs while setup is still synchronous: it injects the record the
 // `<RouterView>` above rendered, and an `await` before it would bind nothing.
 const level = useRouteLevel()
-// The businesses this account belongs to, read off the layout's one list of them.
+// The organizations this account belongs to, read off the layout's one list of them.
 const scopeHeaderModel = inject(dashboardScopeHeaderModelKey, null)
-const businessesSummary = computed(() => {
+const organizationsSummary = computed(() => {
   const count = (scopeHeaderModel?.value.peers ?? []).filter(peer => peer.label !== 'Personal').length
-  return count === 0 ? 'Start a business' : count === 1 ? '1 business' : `${count} businesses`
+  return count === 0 ? 'New organization' : count === 1 ? '1 organization' : `${count} organizations`
 })
 const profilePath = level.path
 const session = authClient.useSession()
@@ -278,7 +278,7 @@ const groups = computed<EditorNavigationGroup[]>(() => [
       { id: 'calendar', label: 'Your availability', summary: 'Hours, time off and Google Calendar', to: `${profilePath.value}/calendar` },
       { id: 'appearance', label: 'Appearance', summary: `${themePreference.value.charAt(0).toUpperCase()}${themePreference.value.slice(1)} theme`, to: `${profilePath.value}/appearance` },
       { id: 'payments', label: 'Payments', summary: 'Your payments and refunds', to: `${profilePath.value}/payments` },
-      { id: 'businesses', label: 'Businesses', summary: businessesSummary.value, to: `${profilePath.value}/businesses` },
+      { id: 'organizations', label: 'Organizations', summary: organizationsSummary.value, to: `${profilePath.value}/organizations` },
       { id: 'log-out', label: 'Log out', action: {} },
     ],
   },

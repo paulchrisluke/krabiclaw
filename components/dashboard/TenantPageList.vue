@@ -34,7 +34,7 @@ const level = useRouteLevel()
  * assembling the organization's path a second time.
  */
 const linksPath = computed(() => router.resolve({
-  name: 'dashboard-orgSlug-settings-pages-links',
+  name: 'dashboard-orgSlug-settings-website-pages-links',
   params: { orgSlug: route.params.orgSlug },
 }).path)
 

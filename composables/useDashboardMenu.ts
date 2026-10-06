@@ -49,13 +49,13 @@ export function useDashboardMenu() {
     await navigateTo({ path: '/login', query: { redirect } })
   }
 
-  // Airbnb's "Switch to hosting": one row above Log out. One business switches straight to it;
+  // Airbnb's "Switch to hosting": one row above Log out. One organization switches straight to it;
   // several open the list under Account settings; none offers to start one.
   const switchRow = computed(() => {
-    const businesses = (scopeHeaderModel?.value.peers ?? []).filter(peer => peer.label !== 'Personal')
-    if (businesses.length === 1) return businesses[0]!.to ? { id: 'switch-business', label: `Switch to ${businesses[0]!.label}`, to: businesses[0]!.to } : { id: 'switch-business', label: `Switch to ${businesses[0]!.label}`, action: {} }
-    if (businesses.length > 1) return { id: 'switch-business', label: 'Switch to a business', to: '/dashboard/account/profile/businesses' }
-    return { id: 'switch-business', label: 'Start a business', to: '/dashboard/onboarding' }
+    const organizations = (scopeHeaderModel?.value.peers ?? []).filter(peer => peer.label !== 'Personal')
+    if (organizations.length === 1) return organizations[0]!.to ? { id: 'switch-organization', label: `Switch to ${organizations[0]!.label}`, to: organizations[0]!.to } : { id: 'switch-organization', label: `Switch to ${organizations[0]!.label}`, action: {} }
+    if (organizations.length > 1) return { id: 'switch-organization', label: 'Switch to an organization', to: '/dashboard/account/profile/organizations' }
+    return { id: 'switch-organization', label: 'New organization', to: '/dashboard/onboarding' }
   })
   const groups = computed<EditorNavigationGroup[]>(() => personal.value ? [{
     id: 'account', items: [

@@ -1,5 +1,5 @@
 <template>
-  <!-- One collection: its products, in the order customers see them. Each is a level below. -->
+  <!-- One collection: its products, in the order customers see them. Each opens its one editor in Catalog. -->
   <DashboardIndexPanel id="location-collection" :title="collection?.name ?? presentation.collectionLabel">
     <DashboardListEditor
       v-model:editing="editing"
@@ -68,7 +68,7 @@
 </template>
 
 <script setup lang="ts">
-// One category's items. Rendered by `[categoryId].vue`, which owns the frame.
+// One collection's products. Rendered by `products/collections/[collectionId].vue`, which owns the frame.
 import DashboardListEditor from '~/components/dashboard/DashboardListEditor.vue'
 import DashboardMediaThumb from '~/components/dashboard/DashboardMediaThumb.vue'
 import DashboardListItemDialog from '~/components/dashboard/DashboardListItemDialog.vue'
@@ -77,33 +77,26 @@ import { getErrorMessage } from '~/utils/errors'
 import { formatProductMoney } from '~/utils/product-money'
 import { selectPrice } from '~/shared/prices'
 import { isCurrencyCode } from '~/shared/currencies'
-import { collectionsOnSurface, isCatalogSurface, presentationForSurface, productSurfaceOf } from '~/utils/product-presentation'
+import { requireProductPresentation } from '~/utils/product-presentation'
 
 
 const route = useRoute()
+const router = useRouter()
 const dashboardApi = useDashboardApi()
 const organizationId = await useDashboardOrganizationId()
 const dashboard = useDashboardOrganization()
-const dashboardLocation = useDashboardLocation()
 
 const vertical = dashboard.organization.value?.vertical
 if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Organization vertical is not configured' })
-// The surface this collection is managed on owns the words: a collection of
-// bookable products reads as experiences, a section of a menu as dishes.
-const segment = String(route.params.surface ?? '')
-if (!isCatalogSurface(vertical, segment)) throw createError({ statusCode: 404, statusMessage: 'Page not found' })
-const presentation = presentationForSurface(vertical, segment)
+// The organization's own words: a restaurant's Section of dishes, everyone else's Collection.
+const presentation = requireProductPresentation(vertical, dashboard.organization.value?.theme_id)
 const collectionId = computed(() => String(route.params.collectionId ?? route.params.categoryId ?? ''))
 const rawCurrency = dashboard.organization.value?.default_currency
 if (!isCurrencyCode(rawCurrency)) throw createError({ statusCode: 500, statusMessage: 'Unsupported organization currency' })
 const currency = rawCurrency
-const locationId = computed(() => dashboardLocation.currentLocation.value?.id ?? null)
-// The path comes from the route this screen is mounted on, not from the
-// location selector: an unresolved selector left it empty, and an empty path is
-// a link to nowhere and, where it roots the editor frame, a frame rooted at ''.
-const level = useRouteLevel()
+const locationId = useLocationScope()
 
-const catalog = useLocationProductCatalog(organizationId, locationId)
+const catalog = useProductCatalog(organizationId, locationId)
 const collections = catalog.collections
 const pending = catalog.pending
 
@@ -111,12 +104,10 @@ const pending = catalog.pending
 // commits once when it closes, so it is held apart from the shared catalog.
 const localOrder = ref<Product[] | null>(null)
 /**
- * This surface's products in this collection, in the order the merchant set.
+ * This collection's products, in the order the merchant set.
  *
  * Position is on the membership row, so the same product can sit third here
- * and first in another collection without being copied. A collection holding
- * both dishes and a bookable omakase is one collection on two surfaces, and
- * each shows its own members — the same projection the public pages make.
+ * and first in another collection without being copied.
  */
 const products = computed(() => {
   if (localOrder.value) return localOrder.value
@@ -126,18 +117,8 @@ const products = computed(() => {
     if (membership) positions.set(product.id, membership.sort_order)
   }
   return catalog.products.value
-    .filter(product => positions.has(product.id) && productSurfaceOf(vertical, product) === segment)
+    .filter(product => positions.has(product.id))
     .sort((left, right) => (positions.get(left.id)! - positions.get(right.id)!) || left.name.localeCompare(right.name))
-})
-/** Each collection with the products that are in it, which is what a surface is read from. */
-const collectionsWithProducts = computed(() => {
-  const members = new Map<string, Product[]>()
-  for (const product of catalog.products.value) {
-    for (const membership of product.collections) {
-      members.set(membership.collection_id, [...(members.get(membership.collection_id) ?? []), product])
-    }
-  }
-  return collections.value.map(row => ({ ...row, products: members.get(row.id) ?? [] }))
 })
 
 const editing = ref(false)
@@ -146,19 +127,15 @@ const orderDirty = ref(false)
 const orderError = ref<string | null>(null)
 const moveError = ref<string | null>(null)
 
-// Reached through this surface, so it has to have a member on it. A collection
-// with only bookable products opened under /menu would read as a menu section
-// and offer menu targets to move them into. An empty collection is on every
-// surface until it holds something.
-const collection = computed(() =>
-  collectionsOnSurface(vertical, collectionsWithProducts.value, segment).find(row => row.id === collectionId.value) ?? null)
+const collection = computed(() => collections.value.find(row => row.id === collectionId.value) ?? null)
 const loadError = computed(() => (catalog.error.value ? getErrorMessage(catalog.error.value, `Failed to load ${presentation.itemLabelPlural.toLowerCase()}`) : null))
-const listItems = computed(() => products.value.map(row => ({ id: row.id, title: row.name, to: `${level.path.value}/${row.id}`, row })))
-// Somewhere else on this surface: moving a dish into a collection of bookable
-// experiences would file it where customers never read dishes.
-const moveTargets = computed(() =>
-  collectionsOnSurface(vertical, collectionsWithProducts.value, segment)
-    .filter(row => row.id !== collectionId.value))
+// A product's one editor is in Catalog: a collection is a way into it, never
+// its parent, so the row opens the same record Catalog does, in this scope.
+const catalogPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/products`)
+const scoped = (path: string, query: Record<string, string | undefined> = {}) => router.resolve({ path, query: { location_id: locationId.value ?? undefined, ...query } }).fullPath
+const listItems = computed(() => products.value.map(row => ({ id: row.id, title: row.name, to: scoped(`${catalogPath.value}/${row.id}`), row })))
+// Another collection in the same scope.
+const moveTargets = computed(() => collections.value.filter(row => row.id !== collectionId.value))
 
 useSeoMeta({ title: () => `${collection.value?.name ?? presentation.collectionLabel} | Krabiclaw Dashboard`, robots: 'noindex, nofollow' })
 
@@ -202,9 +179,8 @@ function moveProduct(item: { row: Product }, direction: -1 | 1) {
  * failed and the list was reloaded.
  */
 async function commitOrder(): Promise<string[] | null> {
-  const id = locationId.value
   const order = products.value.map(row => row.id)
-  if (!id || !orderDirty.value) return order
+  if (!orderDirty.value) return order
   orderDirty.value = false
   localOrder.value = null
   orderError.value = null
@@ -239,8 +215,7 @@ watch(moveDialogOpen, (open) => {
 })
 
 async function moveSelected() {
-  const id = locationId.value
-  if (!id || !moveTargetId.value || !selected.value.length) return
+  if (!moveTargetId.value || !selected.value.length) return
   moving.value = true
   moveError.value = null
   try {
@@ -278,9 +253,12 @@ async function moveSelected() {
 }
 
 
-/** Adding opens the item's own level, the same screen editing uses. */
+/**
+ * Adding opens Catalog's own create walk, the same screen every product is
+ * created on, naming this collection so the new product joins it.
+ */
 function openNew() {
-  void navigateTo(`${level.path.value}/new`)
+  void navigateTo(scoped(`${catalogPath.value}/new/kind`, { collection_id: collectionId.value }))
 }
 
 

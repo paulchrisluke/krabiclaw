@@ -33,10 +33,15 @@
 
 <script lang="ts">
 import type { ComputedRef, InjectionKey, Ref } from 'vue'
+import type { Collection, Product } from '~/server/types/products'
+import type { DashboardLocation } from '~/composables/useDashboardOrganization'
 
-export const SECTION_KEYS = ['photo', 'kind', 'name', 'price', 'description', 'options', 'order-url', 'attributes', 'publication', 'booking'] as const
+export const SECTION_KEYS = ['photo', 'kind', 'name', 'price', 'description', 'page', 'options', 'order-url', 'attributes', 'publication', 'booking', 'locations', 'collections'] as const
 export type SectionKey = typeof SECTION_KEYS[number]
-export type BookingConcern = 'enabled' | 'duration' | 'capacity' | 'confirmation' | 'payment' | 'location' | 'calendar' | 'assignment' | 'website' | number
+export type BookingConcern = 'enabled' | 'duration' | 'capacity' | 'confirmation' | 'payment' | 'location' | 'calendar' | 'assignment' | number
+
+/** Where the product is offered and shown, per location, as its Locations leaf edits it. */
+export interface ProductLocationDraft { active: boolean; published: boolean }
 
 export interface ScheduleSlotDraft { weekday: number; start_time: string }
 
@@ -75,8 +80,9 @@ export interface ProductForm {
   details: Record<string, ProductDetailValue>
   active: boolean
   published: boolean
-  location_active: boolean
-  location_published: boolean
+  /** Keyed by location id; a location the product is not offered at has no entry. */
+  locations: Record<string, ProductLocationDraft>
+  collection_ids: string[]
   bookable: boolean
   booking_duration: string
   booking_capacity: string
@@ -87,8 +93,6 @@ export interface ProductForm {
   online_timezone: string
   calendar_group: string
   online_schedule: boolean
-  native_consultations: boolean
-  consultation_mode: 'native' | 'external_url' | 'native_disabled'
   image_asset_id: string | null
 }
 
@@ -99,8 +103,16 @@ export interface ProductEditor {
   presentation: ComputedRef<{ itemLabel: string }>
   currency: string
   organizationId: string
+  /** The location this editor is scoped to by its URL, or null for the whole organization. */
   locationId: ComputedRef<string | null>
-  websiteBooking: ComputedRef<boolean>
+  /** The location the scope names, once the organization's locations have loaded. */
+  location: ComputedRef<DashboardLocation | null>
+  organizationLocations: ComputedRef<DashboardLocation[]>
+  organizationLocationsError: ComputedRef<string | null>
+  /** Every collection the organization has, site-wide and per location. */
+  collections: Ref<Collection[]>
+  /** A URL beneath this record that keeps its scope. */
+  sectionPath: (section: string) => string
   definitions: Ref<ProductDetailField[]>
   isNew: ComputedRef<boolean>
   /** The product this route names has loaded, or it is being created. Until then a leaf has nothing to show or save. */
@@ -140,43 +152,43 @@ export const productEditorKey = Symbol('product-editor') as InjectionKey<Product
 <script setup lang="ts">
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import DashboardResourceLocalization from '~/components/dashboard/DashboardResourceLocalization.vue'
-import type { Collection, Product } from '~/server/types/products'
 import type { ProductDetailField, ProductDetailValue, ProductKind } from '~/shared/product-details'
 import { productDetailFields, PRODUCT_KINDS, PRODUCT_KIND_LABELS, assertProductKind, productDetailKey, PRICING_NOTE_HANDLE } from '~/shared/product-details'
 import { isCurrencyCode } from '~/shared/currencies'
 import { majorAmountToMinor, minorAmountToMajor, selectPrice, type Price } from '~/shared/prices'
 import { formatProductMoney } from '~/utils/product-money'
-import { presentationForProduct, productSurfaceOf, requireProductPresentation } from '~/utils/product-presentation'
+import { presentationForProduct, requireProductPresentation } from '~/utils/product-presentation'
 import { MINUTE_TIME_PATTERN } from '~/utils/timezone'
 import { getErrorMessage, isNotFoundError } from '~/utils/errors'
 
 const route = useRoute()
+const router = useRouter()
 const dashboardApi = useDashboardApi()
-const collectionId = computed(() => String(route.params.collectionId ?? route.params.categoryId ?? ''))
 const productId = computed(() => String(route.params.productId ?? ''))
-const organizationOnly = computed(() => !route.params.locationSlug)
-const locationPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/locations/${String(route.params.locationSlug)}`)
-// The surface is the product's own, not the URL's: a dish saved as bookable is
-// an experience from that moment, and the rows it returns to have moved with
-// it. Until the row has loaded the URL is all there is to go on.
-// Declared above the computeds that read it. `surfacePath` resolves the
-// surface from the product's own row, so evaluating it before this line was
-// reached threw "Cannot access 'product' before initialization" and the
-// whole editor 500d.
+// Catalog's explicit scope. No location is the whole organization: its own
+// prices and settings, not whichever location was visited last.
+const locationId = useLocationScope()
+// A product created from a collection joins it; the URL that opened the walk names it.
+const createCollectionId = computed(() => typeof route.query.collection_id === 'string' && route.query.collection_id ? route.query.collection_id : null)
 const product = ref<Product | null>(null)
-
-const surfacePath = computed(() => {
-  if (organizationOnly.value) return `/dashboard/${String(route.params.orgSlug)}/products`
-  const surface = product.value ? productSurfaceOf(vertical, product.value) : String(route.params.surface ?? '')
-  return `${locationPath.value}/products/${surface}`
-})
-const collectionPath = computed(() => organizationOnly.value ? surfacePath.value : `${surfacePath.value}/${collectionId.value}`)
-const itemPath = computed(() => `${collectionPath.value}/${productId.value}`)
 const level = useRouteLevel()
+/** The record's own URL. It is the route level's, never rebuilt from params. */
+const itemPath = level.path
+const catalogPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/products`)
+/**
+ * A URL beneath this record. An existing product's sections keep its location
+ * scope and nothing else; a product being created keeps the whole walk's query,
+ * which names its kind and the collection it will join.
+ */
+function sectionPath(section: string) {
+  const query = isNew.value ? route.query : { location_id: locationId.value ?? undefined }
+  return router.resolve({ path: `${itemPath.value}/${section}`, query }).fullPath
+}
 
 const organizationId = await useDashboardOrganizationId()
 const dashboard = useDashboardOrganization()
-const dashboardLocation = useDashboardLocation()
+const { locations: organizationLocations, error: locationsError } = await useOrganizationLocations()
+const location = computed(() => organizationLocations.value.find(entry => entry.id === locationId.value) ?? null)
 
 const vertical = dashboard.organization.value?.vertical
 if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Organization vertical is not configured' })
@@ -189,8 +201,6 @@ const rawCurrency = dashboard.organization.value?.default_currency
 if (!isCurrencyCode(rawCurrency)) throw createError({ statusCode: 500, statusMessage: 'Unsupported organization currency' })
 const currency = rawCurrency
 
-const locationId = computed(() => dashboardLocation.currentLocation.value?.id ?? null)
-
 // ── Which leaf is open ──────────────────────────────────
 
 const sectionLabels: Record<SectionKey, string> = {
@@ -199,11 +209,14 @@ const sectionLabels: Record<SectionKey, string> = {
   'name': 'Name',
   'price': 'Price',
   'description': 'Description',
+  'page': 'Page content',
   'options': 'Variants',
   'order-url': 'External link',
   'attributes': 'Details',
   'publication': 'Website',
   'booking': 'Scheduling',
+  'locations': 'Locations',
+  'collections': 'Collections',
 }
 
 const detailKey = computed(() => level.child.value)
@@ -244,29 +257,22 @@ const isOne = (value: unknown): value is { success: true, product: Product } =>
 let loadedKey = ''
 
 async function load(options: { force?: boolean } = {}) {
+  if (isNew.value) return
   const id = locationId.value
-  if ((!id && !organizationOnly.value) || isNew.value) {
-    if (!isNew.value) return
-    return
-  }
-  const key = `${id}:${productId.value}`
+  const key = `${id ?? 'organization'}:${productId.value}`
   if (key === loadedKey && !options.force) return
   loadedKey = key
   loadError.value = null
   try {
-    const [collectionResponse, productResponse, consultationSettings] = await Promise.all([
-      dashboardApi(`/api/editor/organizations/${organizationId}/collections${id ? `?location_id=${encodeURIComponent(id)}` : ''}`, { validate: isCollectionList }),
+    const [collectionResponse, productResponse] = await Promise.all([
+      // Every collection, site-wide and per location: membership is the
+      // product's, wherever the grouping lives.
+      dashboardApi(`/api/editor/organizations/${organizationId}/collections`, { validate: isCollectionList }),
       dashboardApi(id ? `/api/editor/organizations/${organizationId}/locations/${encodeURIComponent(id)}/products/${encodeURIComponent(productId.value)}` : `/api/editor/organizations/${organizationId}/products/${encodeURIComponent(productId.value)}`, { validate: isOne }),
-      organizationOnly.value && vertical === 'service' ? dashboardApi(`/api/editor/organizations/${organizationId}/consultation`, { validate: isRecord }) : Promise.resolve(null),
     ])
     collections.value = collectionResponse.collections
     product.value = productResponse.product
     loadForm(productResponse.product)
-    if (consultationSettings) {
-      const settings = consultationSettings
-      form.native_consultations = settings.mode === 'native'
-      if (settings.mode === 'native' || settings.mode === 'external_url' || settings.mode === 'native_disabled') form.consultation_mode = settings.mode
-    }
   } catch (error) {
     loadedKey = ''
     if (isNotFoundError(error)) return showError(createError({ statusCode: 404, statusMessage: `${presentation.value.itemLabel} not found` }))
@@ -293,14 +299,16 @@ const draft = useState<ProductForm>(draftKey, () => ({
   details: {} as Record<string, ProductDetailValue>,
   active: true,
   published: false,
-  location_active: true,
-  location_published: false,
+  locations: {} as Record<string, ProductLocationDraft>,
+  collection_ids: [] as string[],
   bookable: false,
   booking_duration: '',
-  booking_capacity: '', scheduling_mode: 'legacy', assigned_member_id: '', confirmation_mode: 'instant', online_payment_required: false, online_timezone: '', calendar_group: '', online_schedule: false, native_consultations: false, consultation_mode: 'native_disabled',
+  booking_capacity: '', scheduling_mode: 'legacy', assigned_member_id: '', confirmation_mode: 'instant', online_payment_required: false, online_timezone: '', calendar_group: '', online_schedule: false,
   image_asset_id: null as string | null,
 }))
 const form = reactive(draft.value)
+// A walk opened from a filtered Catalog already knows the kind it is creating.
+if (isNew.value && !form.kind && PRODUCT_KINDS.includes(route.query.kind as ProductKind)) form.kind = route.query.kind as ProductKind
 
 /** What this location and currency pays for one variant, as a major-unit string. */
 function variantPriceMajor(variant: Product['variants'][number]): string {
@@ -335,9 +343,8 @@ function loadForm(row: Product) {
   form.details = { ...row.details }
   form.active = row.active
   form.published = row.publications.find(entry => entry.organization_id === organizationId)?.published ?? false
-  const here = row.locations.find(entry => entry.location_id === locationId.value)
-  form.location_active = here?.active ?? true
-  form.location_published = here?.published ?? false
+  form.locations = Object.fromEntries(row.locations.map(entry => [entry.location_id, { active: entry.active, published: entry.published }]))
+  form.collection_ids = row.collections.map(entry => entry.collection_id)
   form.image_asset_id = row.image?.asset_id ?? null
   // The configuration row is the capability, so the checkbox is its existence
   // and the fields are its values. The form used to open every product as "Not
@@ -481,16 +488,28 @@ function bookingSummary(): string {
 
 function publicationSummary(): string {
   const parts = [form.published ? 'Visible on website' : 'Hidden from website']
-  if (locationId.value && !form.location_published) parts.push('Hidden at this location')
-  if (!form.active || (locationId.value && !form.location_active)) parts.push(form.bookable || form.kind === 'service' ? 'Bookings paused' : 'Orders paused')
+  if (!form.active) parts.push(form.bookable || form.kind === 'service' ? 'Bookings paused' : 'Orders paused')
   return parts.join(' · ')
+}
+
+function locationsSummary(): string {
+  const offered = organizationLocations.value.filter(entry => form.locations[entry.id])
+  return offered.length ? offered.map(entry => entry.title).join(', ') : 'Not offered at a location'
+}
+
+function collectionsSummary(): string {
+  const names = collections.value.filter(row => form.collection_ids.includes(row.id)).map(row => row.name)
+  return names.length ? names.join(', ') : 'Not in a collection'
 }
 
 const navigationGroups = computed<EditorNavigationGroup[]>(() => {
   const image = product.value?.image
   if (isNew.value) return [{
     id: 'item',
-    items: [{ id: 'name', label: 'Name', summary: form.name || 'Not named yet', placeholder: !form.name, to: `${itemPath.value}/name` }, { id: 'kind', label: 'Type', summary: form.kind ? PRODUCT_KIND_LABELS[form.kind] : 'Choose a type', to: `${itemPath.value}/kind` }],
+    items: [
+      { id: 'kind', label: 'Type', summary: form.kind ? PRODUCT_KIND_LABELS[form.kind] : 'Choose a type', to: sectionPath('kind') },
+      { id: 'name', label: 'Name', summary: form.name || 'Not named yet', placeholder: !form.name, to: sectionPath('name') },
+    ],
   }]
   // Until the row is here there is nothing to summarize. "Not named yet" and
   // "Not bookable" are statements about a product; shown while loading they
@@ -499,52 +518,31 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => {
     id: 'item',
     items: [{ id: 'loading', label: 'Loading', summary: `Loading this ${presentation.value.itemLabel.toLowerCase()}…`, placeholder: true }],
   }]
-  return [
-    {
-      id: 'item',
-      items: [
-        {
-          id: 'photo',
-          label: 'Photo',
-          summary: image ? '' : 'No photo yet',
-          placeholder: !image,
-          to: `${itemPath.value}/photo`,
-        },
-        { id: 'kind', label: 'Type', summary: form.kind ? PRODUCT_KIND_LABELS[form.kind] : 'Choose a type', to: `${itemPath.value}/kind` },
-        { id: 'name', label: 'Name', summary: form.name || 'Not named yet', placeholder: !form.name, to: `${itemPath.value}/name` },
-        { id: 'price', label: 'Price', summary: priceSummary(), placeholder: priceSummary() === 'No price set', to: `${itemPath.value}/price` },
-        {
-          id: 'description',
-          label: 'Description',
-          summary: form.description || 'Nothing written yet',
-          placeholder: !form.description,
-          to: `${itemPath.value}/description`,
-        },
-      ],
-    },
-    {
-      id: 'more',
-      label: 'More',
-      items: [
-        {
-          id: 'options',
-          label: 'Variants',
-          summary: product.value.variants.length > 1 ? `${product.value.variants.length} variants` : 'One version',
-          to: `${itemPath.value}/options`,
-        },
-        { id: 'order-url', label: 'External link', summary: form.order_url || 'No external link', placeholder: !form.order_url, to: `${itemPath.value}/order-url` },
-        {
-          id: 'attributes',
-          label: 'Details',
-          summary: listSummary(definitions.value.filter(definition => form.details[productDetailKey(definition)] !== undefined).map(definition => definition.name), 'None set'),
-          placeholder: !Object.keys(form.details).length,
-          to: `${itemPath.value}/attributes`,
-        },
-        { id: 'publication', label: 'Website', summary: publicationSummary(), to: `${itemPath.value}/publication` },
-        { id: 'booking', label: 'Scheduling', summary: form.bookable ? bookingSummary() : 'Not bookable', placeholder: !form.bookable, to: `${itemPath.value}/booking` },
-      ],
-    },
-  ]
+  // One flat list, the same for every kind: what the product is, what it costs,
+  // how it is booked, and where it is offered and shown.
+  return [{
+    id: 'item',
+    items: [
+      { id: 'photo', label: 'Photo', summary: image ? '' : 'No photo yet', placeholder: !image, to: sectionPath('photo') },
+      { id: 'name', label: 'Name', summary: form.name || 'Not named yet', placeholder: !form.name, to: sectionPath('name') },
+      { id: 'description', label: 'Description', summary: form.description || 'Nothing written yet', placeholder: !form.description, to: sectionPath('description') },
+      { id: 'price', label: 'Price', summary: priceSummary(), placeholder: priceSummary() === 'No price set', to: sectionPath('price') },
+      { id: 'options', label: 'Variants', summary: product.value.variants.length > 1 ? `${product.value.variants.length} variants` : 'One version', to: sectionPath('options') },
+      {
+        id: 'attributes',
+        label: 'Details',
+        summary: listSummary(definitions.value.filter(definition => form.details[productDetailKey(definition)] !== undefined).map(definition => definition.name), 'None set'),
+        placeholder: !Object.keys(form.details).length,
+        to: sectionPath('attributes'),
+      },
+      { id: 'kind', label: 'Type', summary: form.kind ? PRODUCT_KIND_LABELS[form.kind] : 'Choose a type', to: sectionPath('kind') },
+      { id: 'booking', label: 'Scheduling', summary: form.bookable ? bookingSummary() : 'Not bookable', placeholder: !form.bookable, to: sectionPath('booking') },
+      { id: 'order-url', label: 'External link', summary: form.order_url || 'No external link', placeholder: !form.order_url, to: sectionPath('order-url') },
+      { id: 'locations', label: 'Locations', summary: locationsSummary(), placeholder: !Object.keys(form.locations).length, to: sectionPath('locations') },
+      { id: 'collections', label: 'Collections', summary: collectionsSummary(), placeholder: !form.collection_ids.length, to: sectionPath('collections') },
+      { id: 'publication', label: 'Website', summary: publicationSummary(), to: sectionPath('publication') },
+    ],
+  }]
 })
 
 /**
@@ -655,7 +653,7 @@ const { createActionLabel, saveLabel: createSaveLabel, saveDisabled, save: saveC
   isNew,
   openKey: editorKey,
   labels: sectionLabels,
-  order: ['name', 'kind'],
+  order: ['kind', 'name'],
   missing: key => key === 'name' ? !form.name.trim() : !form.kind,
   noun: () => form.kind ? presentationForProduct(vertical, { kind: assertProductKind(form.kind) }, dashboard.organization.value?.theme_id).itemLabel.toLowerCase() : 'product',
   saving,
@@ -674,7 +672,6 @@ async function save(target?: string, bookingConcern?: BookingConcern) {
 
 async function commit(bookingConcern?: BookingConcern) {
   const id = locationId.value
-  if (!id && !organizationOnly.value) return
   saving.value = true
   saveError.value = null
   try {
@@ -682,19 +679,18 @@ async function commit(bookingConcern?: BookingConcern) {
       const created = await dashboardApi(`/api/editor/organizations/${organizationId}/products`, {
         method: 'POST', body: payload(), validate: isOne,
       })
-      // A newly created product is offered here and added to the collection the
-      // editor was opened from — both explicit writes, neither implied. The
-      // location relationship is not collection membership: without the second
-      // write the product was absent from the very collection it was created
-      // in.
+      // A product created in a location's catalog is offered there, and one
+      // created from a collection joins it — explicit writes, each named by the
+      // URL that opened the walk, neither implied. The location relationship is
+      // not collection membership.
       if (id) await dashboardApi(`/api/editor/organizations/${organizationId}/products/${created.product.id}/locations/${id}`, {
         method: 'PUT', body: { active: true, published: false }, validate: isRecord,
       })
-      if (id) await addToCollection(created.product.id, id)
+      if (createCollectionId.value) await setCollectionMembership(created.product.id, createCollectionId.value, true)
       // The record it became, not the `new` form it was, so Back from a saved
-      // product goes to the collection and never to an empty Add screen.
+      // product goes to Catalog and never to an empty Add screen.
       clearNuxtState(draftKey)
-      await navigateTo(`${collectionPath.value}/${created.product.id}`, { replace: true })
+      await navigateTo(router.resolve({ path: `${catalogPath.value}/${created.product.id}`, query: { location_id: id ?? undefined } }).fullPath, { replace: true })
       return
     }
     if (bookingConcern !== undefined) {
@@ -703,7 +699,9 @@ async function commit(bookingConcern?: BookingConcern) {
       await dashboardApi(`/api/editor/organizations/${organizationId}/products/${productId.value}`, {
         method: 'PATCH', body: payload(), validate: isOne,
       })
-      if (editorKey.value === 'publication') await savePublication(id)
+      if (editorKey.value === 'publication') await savePublication()
+      if (editorKey.value === 'locations') await saveLocation()
+      if (editorKey.value === 'collections') await saveCollections()
     }
     await load({ force: true })
     await (closeTo.value ? navigateTo(closeTo.value) : level.close())
@@ -715,47 +713,58 @@ async function commit(bookingConcern?: BookingConcern) {
 }
 
 /**
- * Put the new product at the end of the collection it was created in.
+ * Put a product into a collection, at the end, or take it out.
  *
  * Membership is stated whole — the writer replaces the collection with exactly
- * the ids it is sent — so the current members are read first and the new one
- * appended in their existing order.
+ * the ids it is sent — so the current members are read first, across the whole
+ * organization, and their existing order is kept.
  */
-async function addToCollection(newProductId: string, locationId: string) {
-  if (!collectionId.value) return
-  const { products } = await dashboardApi(`/api/editor/organizations/${organizationId}/locations/${locationId}/products`, { validate: isProductList })
+async function setCollectionMembership(memberId: string, collectionId: string, member: boolean) {
+  const { products } = await dashboardApi(`/api/editor/organizations/${organizationId}/products`, { validate: isProductList })
   const members = products
     .flatMap(row => row.collections
-      .filter(entry => entry.collection_id === collectionId.value)
+      .filter(entry => entry.collection_id === collectionId)
       .map(entry => ({ id: row.id, sort_order: entry.sort_order })))
     .sort((left, right) => left.sort_order - right.sort_order)
     .map(entry => entry.id)
-  await dashboardApi(`/api/editor/organizations/${organizationId}/collections/${collectionId.value}/products`, {
+    .filter(existing => existing !== memberId)
+  await dashboardApi(`/api/editor/organizations/${organizationId}/collections/${collectionId}/products`, {
     method: 'PUT',
-    body: { product_ids: [...members.filter(memberId => memberId !== newProductId), newProductId] },
+    body: { product_ids: member ? [...members, memberId] : members },
     validate: isRecord,
   })
 }
 
-/** Three switches, three writes. None of them implies another. */
-async function savePublication(id: string | null) {
+/** Whether the website shows it. The sale and every location are their own writes. */
+async function savePublication() {
   await dashboardApi(`/api/editor/organizations/${organizationId}/products/${productId.value}/publication`, {
     method: 'PUT', body: { published: form.published }, validate: isRecord,
   })
-  if (id) await dashboardApi(`/api/editor/organizations/${organizationId}/products/${productId.value}/locations/${id}`, {
-    method: 'PUT', body: { active: form.location_active, published: form.location_published }, validate: isRecord,
+}
+
+/** The one location the Locations leaf has open: offered there, and shown there. */
+async function saveLocation() {
+  const target = typeof route.params.locationId === 'string' ? route.params.locationId : null
+  if (!target) throw new Error('Choose a location.')
+  const entry = form.locations[target]
+  if (!entry) throw new Error('This location has no settings to save.')
+  await dashboardApi(`/api/editor/organizations/${organizationId}/products/${productId.value}/locations/${encodeURIComponent(target)}`, {
+    method: 'PUT', body: { active: entry.active, published: entry.published }, validate: isRecord,
   })
+}
+
+/** Join the collections that were switched on and leave the ones switched off, each stated whole. */
+async function saveCollections() {
+  const before = new Set(product.value?.collections.map(entry => entry.collection_id) ?? [])
+  const after = new Set(form.collection_ids)
+  for (const collection of collections.value) {
+    if (before.has(collection.id) !== after.has(collection.id)) await setCollectionMembership(productId.value, collection.id, after.has(collection.id))
+  }
 }
 
 /** Each focused editor writes only the setting its caller named. */
 async function saveBooking(concern: BookingConcern) {
   if (typeof concern === 'number') return saveSchedule(concern)
-  if (concern === 'website') {
-    await dashboardApi(`/api/editor/organizations/${organizationId}/consultation`, {
-      method: 'PUT', body: { mode: form.native_consultations ? 'native' : form.consultation_mode === 'native' ? 'native_disabled' : form.consultation_mode }, validate: isRecord,
-    })
-    return
-  }
   const url = `/api/editor/organizations/${organizationId}/products/${productId.value}/booking`
   if (concern === 'enabled' && !form.bookable) {
     await dashboardApi(url, { method: 'DELETE', validate: isRecord })
@@ -846,7 +855,6 @@ function revert() {
   saveError.value = null
   photoError.value = null
   if (product.value) loadForm(product.value)
-  form.native_consultations = form.consultation_mode === 'native'
   schedule.value = savedSchedule.value.map(slot => ({ ...slot }))
 }
 
@@ -942,7 +950,11 @@ provide(productEditorKey, {
   currency,
   organizationId,
   locationId,
-  websiteBooking: computed(() => organizationOnly.value && vertical === 'service'),
+  location,
+  organizationLocations,
+  organizationLocationsError: computed(() => locationsError.value ? getErrorMessage(locationsError.value, 'Locations could not be loaded') : null),
+  collections,
+  sectionPath,
   definitions,
   isNew,
   ready,

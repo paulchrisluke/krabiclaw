@@ -58,6 +58,7 @@ interface FullOrganizationRow extends OrganizationSettingsRow {
   seo_title: string | null
   seo_description: string | null
   canonical_url: string | null
+  consultation_mode: 'native' | 'external_url' | 'native_disabled' | null
   created_at: string
   updated_at: string
 }
@@ -93,6 +94,7 @@ export async function loadSettingsPayload(
            sma.thumbnail_url AS social_share_thumbnail_url, sma.kind AS social_share_kind,
            contact_email,
            seo_title, seo_description, canonical_url,
+           CASE WHEN json_type(organization.consultation_settings_json) = 'object' THEN json_extract(organization.consultation_settings_json, '$.mode') END AS consultation_mode,
            strftime('%Y-%m-%dT%H:%M:%fZ', organization."createdAt", 'unixepoch') AS created_at, organization.updated_at,
            vertical, theme_id,
            (SELECT json_group_array(json_object('id', id, 'slug', slug, 'title', title, 'address', address,
@@ -174,6 +176,8 @@ export async function loadSettingsPayload(
     seo_title: updatedOrganization.seo_title,
     seo_description: updatedOrganization.seo_description,
     canonical_url: updatedOrganization.canonical_url,
+    // The website's booking switch exists only where consultation settings do.
+    consultation_mode: updatedOrganization.consultation_mode,
     palette: isPaletteTemplate(template) ? resolveSitePalette(template, siteConfig.palette) : null,
     palette_source: isPaletteTemplate(template) ? (siteConfig.palette ? 'custom' : 'template') : null,
     font_preset: resolveOrganizationFontPreset(siteConfig.font_preset),

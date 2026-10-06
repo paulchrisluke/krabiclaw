@@ -1,7 +1,8 @@
 <template>
   <!--
-    Brand is what a guest sees; Website is what a guest never sees. Each is a
-    flat list of settings, and each setting is a leaf below this level.
+    Website is the site: its content lists, its Brand, and the settings a guest
+    never sees, one flat list. Brand is what a guest sees, a list of settings
+    one level below it. Each setting is a leaf below its list.
   -->
   <DashboardIndexPanel :id="surface === 'brand' ? 'organization-brand' : 'organization-website'" :title="navbarTitle" :auto-open="navigationGroups[0]?.items.find(item => item.to)?.to ?? null">
     <div v-if="loading" class="space-y-4">
@@ -54,6 +55,10 @@ export interface OrganizationSettingsForm {
   font_preset: OrganizationFontPreset
   default_currency: CurrencyCode | null
   status: OrganizationStatus
+  seo_title: string
+  seo_description: string
+  canonical_url: string
+  native_consultations: boolean
 }
 
 /** Live and Draft are the tenant's; Suspended is Krabiclaw's hold. */
@@ -71,6 +76,11 @@ export interface OrganizationSettingsResponse {
   palette_source: 'custom' | 'template' | null
   font_preset?: OrganizationFontPreset
   default_currency?: string | null
+  seo_title: string | null
+  seo_description: string | null
+  canonical_url: string | null
+  /** Null when the organization has no consultation settings, so no website booking to switch. */
+  consultation_mode: 'native' | 'external_url' | 'native_disabled' | null
 }
 
 export interface LocalizationLanguageRow { locale: string; label: string | null; is_source: number | boolean; status: string }
@@ -102,6 +112,8 @@ export interface OrganizationSettingsEditor {
   paletteSource: ComputedRef<'custom' | 'template' | null>
   /** Returns the site to its template's colors. */
   resetPalette: () => Promise<void>
+  /** The saved website booking mode, or null where the organization has no consultation settings. */
+  consultationMode: ComputedRef<OrganizationSettingsResponse['consultation_mode']>
   /** The saved logo assets' URLs, for previews before a new pick is saved. */
   logoUrl: (assetId: string | null) => string | null
   localizationSettings: Ref<LocalizationSettings | null>
@@ -115,10 +127,6 @@ export interface OrganizationSettingsEditor {
   publishLanguage: (locale: string) => Promise<void>
   disableLanguage: (locale: string) => Promise<void>
   deleteLanguage: (locale: string) => Promise<void>
-  deletionConfirmText: Ref<string>
-  deletionSaving: Ref<boolean>
-  deletionError: Ref<string>
-  deleteWorkspace: () => Promise<void>
   revert: () => void
   save: () => Promise<void>
 }
@@ -133,7 +141,6 @@ import { isCurrencyCode } from '~/shared/currencies'
 import { ORGANIZATION_FONT_OPTIONS, isOrganizationFontPreset, resolveOrganizationFontPreset } from '~/shared/organization-fonts'
 import { parseSitePalette } from '~/shared/site-palette'
 import { ORIGINAL_LOGO_PRESENTATION } from '~/shared/media-placement-contract'
-import { authClient } from '~/lib/auth-client'
 
 const props = withDefaults(defineProps<{ surface?: 'brand' | 'settings' }>(), { surface: 'settings' })
 const surface = computed(() => props.surface)
@@ -150,29 +157,6 @@ const level = useRouteLevel()
 
 const organizationId = await useDashboardOrganizationId()
 
-// Better Auth owns organization authorization, Stripe delete gating and the
-// organization deletion itself. Krabiclaw contributes only its registered
-// external-resource cleanup hook.
-const isOwner = computed(() => dashboard.organization.value?.role === 'owner')
-const deletionConfirmText = ref('')
-const deletionSaving = ref(false)
-const deletionError = ref('')
-
-async function deleteWorkspace() {
-  if (deletionConfirmText.value !== 'DELETE') return
-  deletionSaving.value = true
-  deletionError.value = ''
-  try {
-    const { error } = await authClient.organization.delete({ organizationId })
-    if (error) throw new Error(error.message || 'Deletion failed. Please try again.')
-    await navigateTo('/dashboard', { replace: true })
-  } catch (error) {
-    deletionError.value = error instanceof Error ? error.message : 'Deletion failed. Please try again.'
-  } finally {
-    deletionSaving.value = false
-  }
-}
-
 interface SettingsPageResource {
   settings: { success: boolean; settings: OrganizationSettingsResponse }
 }
@@ -184,6 +168,8 @@ const isSettingsResponse = (value: unknown): value is { success: boolean; settin
   && (value.settings.font_preset === undefined || isOrganizationFontPreset(value.settings.font_preset))
   && (value.settings.palette === null || isRecord(value.settings.palette))
   && (value.settings.default_currency === undefined || value.settings.default_currency === null || typeof value.settings.default_currency === 'string')
+  && [value.settings.seo_title, value.settings.seo_description, value.settings.canonical_url].every(field => field === null || typeof field === 'string')
+  && (value.settings.consultation_mode === null || value.settings.consultation_mode === 'native' || value.settings.consultation_mode === 'external_url' || value.settings.consultation_mode === 'native_disabled')
   && isOrganizationStatus(value.settings.status)
 function isOrganizationStatus(value: unknown): value is OrganizationStatus {
   return value === 'active' || value === 'inactive' || value === 'suspended'
@@ -212,6 +198,7 @@ const form = reactive<OrganizationSettingsForm>({
   logoAssetId: null, logoPresentation: ORIGINAL_LOGO_PRESENTATION, logoDarkAssetId: null, logoDarkPresentation: ORIGINAL_LOGO_PRESENTATION,
   faviconAssetId: null, socialShareAssetId: null, contact_email: '', palette: null, font_preset: 'default',
   default_currency: null, status: 'inactive',
+  seo_title: '', seo_description: '', canonical_url: '', native_consultations: false,
 })
 const brandLocalizationFields = computed(() => [
   { key: 'name', label: 'Brand name', source: loadedSettings.value?.name },
@@ -226,6 +213,8 @@ const descriptionCharactersRemaining = computed(() => 500 - form.brand_descripti
 function explicitSummary(value: string | null | undefined, empty = 'Not set') { return value?.trim() || empty }
 const STATUS_LABELS: Record<OrganizationStatus, string> = { active: 'Live', inactive: 'Draft', suspended: 'Suspended' }
 const domainSummary = computed(() => dashboard.organization.value?.custom_domain || dashboard.organization.value?.public_url || 'Not connected')
+const organizationLinks = useDashboardOrganizationLinks()
+const CONSULTATION_MODE_SUMMARIES = { native: 'Guests book on your website', external_url: 'External booking link', native_disabled: 'Off' } as const
 const brandItems = computed<EditorNavigationItem[]>(() => [
   { id: 'name', label: 'Brand name', summary: explicitSummary(loadedSettings.value?.name), icon: 'i-lucide-type', to: `${brandPath.value}/name` },
   { id: 'logo', label: 'Logo', summary: loadedSettings.value?.media?.some(item => item.slot === 'logo') ? 'Logo selected' : 'Not set', icon: 'i-lucide-image', to: `${brandPath.value}/logo` },
@@ -243,17 +232,25 @@ const localizeOpen = ref(false)
 function onRowAction(id: string) {
   if (id === 'translations') localizeOpen.value = true
 }
-// Flat, values on the rows, the way Edit preferences reads: nothing a visitor
-// sees is here, and nothing here opens a second list.
+// Flat, values on the rows, the way Edit preferences reads. The site's content
+// lists and its Brand lead, because they are what the site is made of; the
+// settings a visitor never sees follow.
 const settingsItems = computed<EditorNavigationItem[]>(() => [
+  ...(organizationLinks.organizationPaths.value ? [
+    { id: 'pages', label: 'Pages', icon: 'i-lucide-file-text', to: organizationLinks.organizationPaths.value.pages },
+    { id: 'blog', label: 'Blog', icon: 'i-lucide-newspaper', to: organizationLinks.organizationPaths.value.blog },
+    { id: 'qa', label: 'Reviews and Q&A', icon: 'i-lucide-message-circle-question', to: organizationLinks.organizationPaths.value.qa },
+    { id: 'brand', label: 'Brand', summary: explicitSummary(loadedSettings.value?.name), icon: 'i-lucide-palette', to: brandPath.value },
+  ] : []),
   { id: 'status', label: 'Status', summary: loadedSettings.value ? STATUS_LABELS[loadedSettings.value.status] : 'Not set', icon: 'i-lucide-radio', to: `${settingsPath.value}/status` },
   { id: 'domains', label: 'Domains', summary: domainSummary.value, icon: 'i-lucide-globe-2', to: `${settingsPath.value}/domains` },
   { id: 'localization', label: 'Languages', summary: 'Languages the site is published in', icon: 'i-lucide-languages', to: `${settingsPath.value}/localization` },
   { id: 'currency', label: 'Currency', summary: explicitSummary(loadedSettings.value?.default_currency), icon: 'i-lucide-coins', to: `${settingsPath.value}/currency` },
-  // Deleting the site deletes the organization, so only an owner is
-  // offered it — the same permission Better Auth enforces on the delete itself.
-  ...(isOwner.value
-    ? [{ id: 'delete', label: 'Delete site', summary: 'Permanently removes this organization, its locations and its content', icon: 'i-lucide-trash-2', to: `${settingsPath.value}/delete` }]
+  { id: 'search', label: 'Search appearance', summary: explicitSummary(loadedSettings.value?.seo_title), icon: 'i-lucide-search', to: `${settingsPath.value}/search` },
+  // Present only when the organization carries consultation settings: the
+  // domain says whether there is a website booking to switch, not the template.
+  ...(loadedSettings.value?.consultation_mode
+    ? [{ id: 'booking', label: 'Website booking', summary: CONSULTATION_MODE_SUMMARIES[loadedSettings.value.consultation_mode], icon: 'i-lucide-calendar-check', to: `${settingsPath.value}/booking` }]
     : []),
 ])
 
@@ -281,6 +278,8 @@ function editorSignature(key: string | null) {
     case 'contact': return JSON.stringify(form.contact_email)
     case 'currency': return JSON.stringify(form.default_currency)
     case 'status': return JSON.stringify(form.status)
+    case 'search': return JSON.stringify([form.seo_title, form.seo_description, form.canonical_url])
+    case 'booking': return JSON.stringify(form.native_consultations)
     case 'localization': return JSON.stringify(newLocale.value)
     default: return ''
   }
@@ -313,6 +312,7 @@ const validationMessage = computed(() => {
     case 'font': return isOrganizationFontPreset(form.font_preset) ? null : 'Choose a supported website font.'
     case 'contact': return !form.contact_email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.contact_email) ? null : 'Enter a valid email address.'
     case 'status': return form.status === 'suspended' ? 'This website is suspended. Contact support to restore it.' : null
+    case 'search': return isValidUrl(form.canonical_url) ? null : 'Enter a complete http or https URL.'
     case 'localization': return localizationSettings.value?.effective_plan !== 'growth' ? 'A Growth subscription is required.' : null
     default: return null
   }
@@ -347,6 +347,10 @@ function fillForm(settings: OrganizationSettingsResponse) {
   // showing it as USD invited the owner to save that over whatever is really there.
   form.default_currency = isCurrencyCode(settings.default_currency) ? settings.default_currency : null
   form.status = settings.status
+  form.seo_title = settings.seo_title ?? ''
+  form.seo_description = settings.seo_description ?? ''
+  form.canonical_url = settings.canonical_url ?? ''
+  form.native_consultations = settings.consultation_mode === 'native'
 }
 function resetDraft() {
   editorError.value = null
@@ -378,9 +382,13 @@ watch(detailKey, () => resetDraft())
 
 async function patchSettings(body: Record<string, unknown>) {
   const response = await dashboardApi<{ success: boolean; settings: OrganizationSettingsResponse }>('/api/dashboard/settings', { method: 'PATCH', body, validate: isSettingsResponse })
-  fillForm(response.settings)
-  originalSignature.value = editorSignature(detailKey.value)
+  // Website and Brand read the same settings resource; writing the response
+  // through it keeps the other list's rows on the saved values.
+  settingsResource.value = { settings: response }
   await dashboard.refresh()
+}
+async function refreshSettings() {
+  settingsResource.value = { settings: await dashboardApi<{ success: boolean; settings: OrganizationSettingsResponse }>('/api/dashboard/settings', { validate: isSettingsResponse }) }
 }
 async function resetPalette() {
   saving.value = true
@@ -427,6 +435,17 @@ async function saveCurrentEditor() {
         break
       }
       case 'status': await patchSettings({ status: form.status }); break
+      case 'search': await patchSettings({ seo_title: form.seo_title.trim() || null, seo_description: form.seo_description.trim() || null, canonical_url: form.canonical_url.trim() || null }); break
+      case 'booking': {
+        const current = loadedSettings.value?.consultation_mode
+        if (!current) throw new Error('This website has no booking to switch.')
+        // The one writer of the consultation mode, shared with MCP's set_consultation_mode.
+        await dashboardApi(`/api/editor/organizations/${organizationId}/consultation`, {
+          method: 'PUT', body: { mode: form.native_consultations ? 'native' : current === 'native' ? 'native_disabled' : current }, validate: isRecord,
+        })
+        await refreshSettings()
+        break
+      }
       case 'localization': {
         const success = await enableLanguage()
         if (success) originalSignature.value = editorSignature(detailKey.value)
@@ -507,6 +526,7 @@ provide(organizationSettingsEditorKey, {
   theme,
   paletteSource,
   resetPalette,
+  consultationMode: computed(() => loadedSettings.value?.consultation_mode ?? null),
   logoUrl,
   localizationSettings,
   localizationLoading,
@@ -519,10 +539,6 @@ provide(organizationSettingsEditorKey, {
   publishLanguage,
   disableLanguage,
   deleteLanguage,
-  deletionConfirmText,
-  deletionSaving,
-  deletionError,
-  deleteWorkspace,
   // A cancelled leaf puts the loaded settings back before it closes.
   revert: resetDraft,
   save: saveCurrentEditor,

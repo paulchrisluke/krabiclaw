@@ -46,32 +46,31 @@ export const reviewEditorKey = Symbol('review-editor') as InjectionKey<ReviewEdi
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import { getErrorMessage } from '~/utils/errors'
 
-/** Set when this is a location's review rather than the site's. */
-const props = defineProps<{ locationId?: string }>()
+// The location the URL scopes this to with `?location_id=`, or none for the whole site.
+const locationScope = useLocationScope()
 
 const route = useRoute()
+const router = useRouter()
 const dashboardApi = useDashboardApi()
 const level = useRouteLevel()
 const organizationId = await useDashboardOrganizationId()
 
 const reviewId = computed(() => String(route.params.reviewId ?? ''))
-const recordPath = computed(() => props.locationId
-  ? `/dashboard/${String(route.params.orgSlug)}/locations/${String(route.params.locationSlug)}/qa/reviews/${reviewId.value}`
-  : `/dashboard/${String(route.params.orgSlug)}/qa/reviews/${reviewId.value}`)
+const recordPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/qa/reviews/${reviewId.value}`)
 // The list this review is a row of, so a moderated review reads the same in both.
-const listKey = computed(() => props.locationId
-  ? `dashboard-location-reviews-${organizationId}-${props.locationId}`
+const listKey = computed(() => locationScope.value
+  ? `dashboard-location-reviews-${organizationId}-${locationScope.value}`
   : `dashboard-organization-reviews-${organizationId}`)
 
-const form = useState(`review-draft-${organizationId}-${props.locationId ?? 'organization'}-${reviewId.value}`, () => ({ status: 'pending' as TestimonialStatus })).value
+const form = useState(`review-draft-${organizationId}-${locationScope.value ?? 'organization'}-${reviewId.value}`, () => ({ status: 'pending' as TestimonialStatus })).value
 const saving = ref(false)
 const errorMessage = ref('')
 
 // Reviews are listed per scope, so the record is found in its list.
 const { data, refresh } = await useAsyncData(
-  () => `dashboard-review-record-${organizationId}-${props.locationId ?? 'organization'}-${reviewId.value}`,
+  () => `dashboard-review-record-${organizationId}-${locationScope.value ?? 'organization'}-${reviewId.value}`,
   () => dashboardApi<{ reviews: OrganizationTestimonial[] }>(`/api/editor/organizations/${organizationId}/reviews`, {
-    query: props.locationId ? { location_id: props.locationId } : undefined,
+    query: locationScope.value ? { location_id: locationScope.value } : undefined,
     validate: isTestimonialsResponse,
   }),
   { server: false },
@@ -88,7 +87,7 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => [
   {
     id: 'review',
     items: [
-      { id: 'visibility', label: 'Visibility', summary: record.value ? REVIEW_STATUS_LABELS[form.status] : 'Loading', icon: 'i-lucide-eye', to: `${recordPath.value}/visibility` },
+      { id: 'visibility', label: 'Visibility', summary: record.value ? REVIEW_STATUS_LABELS[form.status] : 'Loading', icon: 'i-lucide-eye', to: router.resolve({ path: `${recordPath.value}/visibility`, query: route.query }).fullPath },
     ],
   },
 ])

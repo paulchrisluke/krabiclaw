@@ -1,6 +1,6 @@
 <template>
- <DashboardIndexPanel id="availability-businesses" title="Your availability">
-  <UAlert v-if="state.error" color="error" :description="getErrorMessage(state.error,'Your businesses could not be loaded.')" />
+ <DashboardIndexPanel id="availability-organizations" title="Your availability">
+  <UAlert v-if="state.error" color="error" :description="getErrorMessage(state.error,'Your organizations could not be loaded.')" />
   <EditorNavigationList :groups="groups" :active-item="level.child.value" />
  </DashboardIndexPanel>
 </template>
@@ -11,5 +11,5 @@ definePageMeta({layout:'dashboard'})
 const level=useRouteLevel()
 const organizations=authClient.useListOrganizations()
 const state=computed(()=>unref(organizations))
-const groups=computed(()=>[{id:'businesses',items:(state.value.data??[]).map(org=>({id:org.id,label:org.name,to:`${level.path.value}/${encodeURIComponent(org.id)}`}))}])
+const groups=computed(()=>[{id:'organizations',items:(state.value.data??[]).map(org=>({id:org.id,label:org.name,to:`${level.path.value}/${encodeURIComponent(org.id)}`}))}])
 </script>

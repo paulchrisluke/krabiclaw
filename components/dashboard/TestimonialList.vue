@@ -33,7 +33,10 @@ import {
 } from '~/utils/testimonials'
 
 /** Set when this list is a location's reviews rather than the site's. */
-const props = defineProps<{ locationId?: string }>()
+// The location the URL scopes this to with `?location_id=`, or none for the whole site.
+const locationScope = useLocationScope()
+const route = useRoute()
+const router = useRouter()
 
 const STATUS_COLORS: Record<TestimonialStatus, 'warning' | 'success' | 'neutral'> = { pending: 'warning', approved: 'success', rejected: 'neutral' }
 
@@ -42,10 +45,10 @@ const level = useRouteLevel()
 const organizationId = await useDashboardOrganizationId()
 
 const { data, pending, error } = await useAsyncData(
-  () => props.locationId ? `dashboard-location-reviews-${organizationId}-${props.locationId}` : `dashboard-organization-reviews-${organizationId}`,
+  () => locationScope.value ? `dashboard-location-reviews-${organizationId}-${locationScope.value}` : `dashboard-organization-reviews-${organizationId}`,
   () => dashboardApi<{ reviews: OrganizationTestimonial[] }>(
     `/api/editor/organizations/${organizationId}/reviews`,
-    { query: props.locationId ? { location_id: props.locationId } : undefined, validate: isTestimonialsResponse },
+    { query: locationScope.value ? { location_id: locationScope.value } : undefined, validate: isTestimonialsResponse },
   ),
   // Nuxt blocks navigation on useAsyncData by default; the client does not
   // need to wait for this to paint the route, and `pending` already drives a
@@ -55,5 +58,5 @@ const { data, pending, error } = await useAsyncData(
 
 const testimonials = computed(() => data.value?.reviews ?? [])
 // A review is a record, so its row links to its own level, as a question's does.
-const listItems = computed(() => testimonials.value.map(row => ({ id: row.id, title: row.author_name, to: `${level.path.value}/reviews/${row.id}`, row })))
+const listItems = computed(() => testimonials.value.map(row => ({ id: row.id, title: row.author_name, to: router.resolve({ path: `${level.path.value}/reviews/${row.id}`, query: route.query }).fullPath, row })))
 </script>
