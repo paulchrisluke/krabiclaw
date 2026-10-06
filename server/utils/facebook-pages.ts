@@ -15,8 +15,11 @@ import type { MetaDeadline } from './meta-graph'
  *
  * The API version is pinned. The primitives are Meta's own: an unpublished
  * photo, an unpublished Page post that attaches them, `is_published` on that
- * same post; an unpublished video, its processing status, `published` on that
- * same video.
+ * same post; a published video upload and its processing status; a Reel
+ * upload session finished with `video_state=PUBLISHED`. Meta offers no later
+ * publish of an unpublished video — `published=true` on one answers
+ * `(#200) Permissions error` (production, 2026-10-06) — so a video's upload or
+ * a Reel's finish is the irreversible call.
  */
 
 export const FACEBOOK_GRAPH_VERSION = 'v25.0'
@@ -116,31 +119,69 @@ export async function readPagePost(target: FacebookPageTarget, postId: string, d
   return { id: result.id, isPublished: result.is_published, permalink: result.permalink_url ?? null, createdTime: result.created_time ?? null }
 }
 
-/** A native video, uploaded unpublished from a URL Facebook fetches. */
-export async function createUnpublishedVideo(target: FacebookPageTarget, input: { fileUrl: string; description: string; title: string | null }, deadline: MetaDeadline): Promise<string> {
+/**
+ * A published native video from a URL Facebook fetches. Publication is the
+ * upload: Facebook posts it to the Page when processing completes, and
+ * `readVideo` says when that has happened.
+ */
+export async function createVideo(target: FacebookPageTarget, input: { fileUrl: string; description: string; title: string | null }, deadline: MetaDeadline): Promise<string> {
   const result = await metaGraphRequest<{ id?: string }>(`${GRAPH_BASE}/${target.pageId}/videos`, authorized(target, {
-    ...formBody({ file_url: input.fileUrl, published: false, ...(input.description ? { description: input.description } : {}), ...(input.title ? { title: input.title } : {}) }), deadline,
+    ...formBody({ file_url: input.fileUrl, ...(input.description ? { description: input.description } : {}), ...(input.title ? { title: input.title } : {}) }), deadline,
   }))
   if (!result.id) throw new Error('Facebook created no video')
   return result.id
 }
 
-export interface FacebookVideoState { id: string; processing: 'ready' | 'processing' | 'error'; published: boolean; postId: string | null; permalink: string | null; error: string | null }
+/** Meta's Reels requirements: 9:16, at least 540×960, 3 to 90 seconds. */
+export function isFacebookReel(video: { width: number | null; height: number | null; duration: number | null }): boolean {
+  if (!video.width || !video.height || video.duration === null) return false
+  return Math.abs(video.width / video.height - 9 / 16) <= 0.01 && video.width >= 540 && video.height >= 960 && video.duration >= 3 && video.duration <= 90
+}
+
+/** A Reel upload session: the video id Facebook will publish under, and nothing public yet. */
+export async function startReel(target: FacebookPageTarget, deadline: MetaDeadline): Promise<string> {
+  const result = await metaGraphRequest<{ video_id?: string; upload_url?: string }>(`${GRAPH_BASE}/${target.pageId}/video_reels`, authorized(target, { ...formBody({ upload_phase: 'start' }), deadline }))
+  if (!result.video_id) throw new Error('Facebook started no Reel upload')
+  return result.video_id
+}
+
+/** Facebook fetches the hosted file into the Reel upload session itself. */
+export async function uploadReelFromUrl(target: FacebookPageTarget, videoId: string, fileUrl: string, deadline: MetaDeadline): Promise<void> {
+  const result = await metaGraphRequest<{ success?: boolean }>(`https://rupload.facebook.com/video-upload/${FACEBOOK_GRAPH_VERSION}/${videoId}`, {
+    method: 'POST', headers: { authorization: `OAuth ${target.pageToken}`, file_url: fileUrl }, deadline,
+  })
+  if (result.success !== true) throw new Error('Facebook did not accept the Reel upload')
+}
+
+/** The irreversible Reel call: finish the session as a published Reel with its caption. */
+export async function finishReel(target: FacebookPageTarget, videoId: string, input: { description: string; title: string | null }, deadline: MetaDeadline): Promise<void> {
+  const result = await metaGraphRequest<{ success?: boolean }>(`${GRAPH_BASE}/${target.pageId}/video_reels`, authorized(target, {
+    ...formBody({ upload_phase: 'finish', video_id: videoId, video_state: 'PUBLISHED', ...(input.description ? { description: input.description } : {}), ...(input.title ? { title: input.title } : {}) }), deadline,
+  }))
+  if (result.success !== true) throw new Error('Facebook did not confirm the Reel was published')
+}
+
+export interface FacebookVideoState {
+  id: string
+  /** `not_started`: a Reel session uploaded but not finished; Facebook processes only after the finish (production, 2026-10-06). */
+  processing: 'not_started' | 'ready' | 'processing' | 'error'
+  published: boolean
+  postId: string | null
+  permalink: string | null
+  error: string | null
+}
 
 export async function readVideo(target: FacebookPageTarget, videoId: string, deadline: MetaDeadline): Promise<FacebookVideoState> {
-  const result = await metaGraphRequest<{ id?: string; published?: boolean; post_id?: string; permalink_url?: string; status?: { video_status?: string; processing_phase?: { status?: string; errors?: Array<{ message?: string }> } } }>(
+  type Phase = { status?: string; errors?: Array<{ message?: string }> }
+  const result = await metaGraphRequest<{ id?: string; published?: boolean; post_id?: string; permalink_url?: string; status?: { video_status?: string; processing_phase?: Phase; publishing_phase?: Phase } }>(
     `${GRAPH_BASE}/${videoId}?fields=id,published,post_id,permalink_url,status`, authorized(target, { deadline }))
   if (!result.id || typeof result.published !== 'boolean') throw new Error('Facebook did not say whether the video is published')
   const status = result.status?.video_status
-  const processing = status === 'ready' ? 'ready' : status === 'error' ? 'error' : 'processing'
+  const processing = status === 'ready' ? 'ready' : status === 'error' ? 'error' : result.status?.processing_phase?.status === 'not_started' ? 'not_started' : 'processing'
   const permalink = result.permalink_url ? new URL(result.permalink_url, 'https://www.facebook.com').toString() : null
+  const errors = [...(result.status?.processing_phase?.errors ?? []), ...(result.status?.publishing_phase?.errors ?? [])].map(error => error.message).filter(Boolean)
   return { id: result.id, processing, published: result.published, postId: result.post_id ?? null, permalink,
-    error: processing === 'error' ? result.status?.processing_phase?.errors?.map(error => error.message).filter(Boolean).join('; ') || 'Facebook could not process the video' : null }
-}
-
-export async function publishVideo(target: FacebookPageTarget, videoId: string, deadline: MetaDeadline): Promise<void> {
-  const result = await metaGraphRequest<{ success?: boolean }>(`${GRAPH_BASE}/${videoId}`, authorized(target, { ...formBody({ published: true }), deadline }))
-  if (result.success !== true) throw new Error('Facebook did not confirm the video was published')
+    error: processing === 'error' ? errors.join('; ') || 'Facebook could not process the video' : null }
 }
 
 /** Deletes the explicitly addressed Page object and requires Meta's confirmation. */

@@ -36,7 +36,7 @@ const OTHER_PAGE = '1205835975938851'
 const OTHER_IG = '17841401765050247'
 
 type Fault = { match: (request: SeenRequest) => boolean; kind: 'timeout' | 'reject' | 'missing'; times: number }
-interface SeenRequest { method: string; host: string; path: string; query: URLSearchParams; body: Record<string, string> }
+interface SeenRequest { method: string; host: string; path: string; query: URLSearchParams; body: Record<string, string>; headers: Record<string, string> }
 
 class FakeMeta {
   requests: SeenRequest[] = []
@@ -44,7 +44,8 @@ class FakeMeta {
   counter = 0
   fbPosts = new Map<string, { published: boolean; message?: string; link?: string; attached: string[] }>()
   fbPhotos = new Map<string, string>()
-  fbVideos = new Map<string, { ready: number; published: boolean; postId: string | null }>()
+  /** `publish` is Facebook's intent: a published upload, or a Reel session that was finished. */
+  fbVideos = new Map<string, { ready: number; publish: boolean; published: boolean; postId: string | null; reel?: boolean; uploaded?: boolean }>()
   igContainers = new Map<string, { status: string; inProgressReads: number; children?: string[]; kind: string; url?: string; caption?: string }>()
   igMedia = new Map<string, { container: string }>()
   pagePosts: Array<Record<string, unknown>> = []
@@ -61,7 +62,8 @@ class FakeMeta {
     const method = (init.method ?? 'GET').toUpperCase()
     const body: Record<string, string> = {}
     if (typeof init.body === 'string') for (const [key, value] of new URLSearchParams(init.body)) body[key] = value
-    const request: SeenRequest = { method, host: url.hostname, path: url.pathname, query: url.searchParams, body }
+    const headers = Object.fromEntries(Object.entries((init.headers ?? {}) as Record<string, string>).map(([key, value]) => [key.toLowerCase(), value]))
+    const request: SeenRequest = { method, host: url.hostname, path: url.pathname, query: url.searchParams, body, headers }
     this.requests.push(request)
     const fault = this.faults.find(candidate => candidate.times > 0 && candidate.match(request))
     if (fault) {
@@ -72,6 +74,12 @@ class FakeMeta {
     }
     if (url.hostname === 'api.cloudflare.com') return json({ success: true, result: { id: this.id('img-') } })
     if (url.hostname === 'graph.facebook.com') return this.facebook(method, url.pathname.replace('/v25.0/', ''), url.searchParams, body)
+    if (url.hostname === 'rupload.facebook.com') {
+      const video = this.fbVideos.get(url.pathname.split('/').pop()!)
+      if (!video?.reel || !headers.file_url || !headers.authorization?.startsWith('OAuth ')) return json({ error: { message: 'Invalid upload', code: 100, fbtrace_id: 'trace-upload' } }, 400)
+      video.uploaded = true
+      return json({ success: true })
+    }
     if (url.hostname === 'graph.instagram.com') return this.instagram(method, url.pathname.replace('/v23.0/', ''), url.searchParams, body)
     throw new Error(`Unexpected request ${method} ${url}`)
   }
@@ -92,7 +100,14 @@ class FakeMeta {
       this.fbPosts.set(id, { published: body.published !== 'false', message: body.message, link: body.link, attached })
       return json({ id })
     }
-    if (method === 'POST' && path === `${PAGE}/videos`) { const id = this.id('video-'); this.fbVideos.set(id, { ready: 1, published: false, postId: null }); return json({ id }) }
+    if (method === 'POST' && path === `${PAGE}/videos`) { const id = this.id('video-'); this.fbVideos.set(id, { ready: 1, publish: body.published !== 'false', published: false, postId: null }); return json({ id }) }
+    if (method === 'POST' && path === `${PAGE}/video_reels`) {
+      if (body.upload_phase === 'start') { const id = this.id('reel-'); this.fbVideos.set(id, { ready: 1, publish: false, published: false, postId: null, reel: true }); return json({ video_id: id, upload_url: `https://rupload.facebook.com/video-upload/v25.0/${id}` }) }
+      const video = this.fbVideos.get(body.video_id ?? '')
+      if (body.upload_phase !== 'finish' || !video?.reel || !video.uploaded || body.video_state !== 'PUBLISHED') return json({ error: { message: 'Invalid parameter', code: 100, fbtrace_id: 'trace-reel' } }, 400)
+      video.publish = true
+      return json({ success: true })
+    }
     if (method === 'GET' && path === `${PAGE}/posts`) {
       const offset = Number(query.get('after') ?? 0)
       const limit = Number(query.get('limit'))
@@ -107,10 +122,17 @@ class FakeMeta {
     const video = this.fbVideos.get(path)
     if (video && method === 'GET') {
       if (query.get('fields')?.includes('source')) return json({ source: 'https://video.xx.fbcdn.net/v.mp4', picture: 'https://scontent.xx.fbcdn.net/poster.jpg', length: 12 })
+      // A Reel session is not processed until it is finished (production, 2026-10-06: upload_complete / processing not_started for a minute).
+      if (video.reel && !video.publish) return json({ id: path, published: false, post_id: null, permalink_url: `/reel/${path}/`, status: { video_status: 'upload_complete', uploading_phase: { status: video.uploaded ? 'complete' : 'in_progress' }, processing_phase: { status: 'not_started' }, publishing_phase: { status: 'not_started' } } })
       video.ready -= 1
-      return json({ id: path, published: video.published, post_id: video.postId, permalink_url: `/Krabi/videos/${path}/`, status: { video_status: video.ready < 0 ? 'ready' : 'processing' } })
+      const ready = video.ready < 0
+      // Facebook publishes a published upload or a finished Reel once processing completes.
+      if (ready && video.publish && !video.published) { video.published = true; video.postId = `${PAGE}_${path}`; this.fbPosts.set(video.postId, { published: true, attached: [] }) }
+      return json({ id: path, published: video.published, post_id: video.postId, permalink_url: video.reel ? `/reel/${path}/` : `/Krabi/videos/${path}/`,
+        status: { video_status: ready ? 'ready' : 'processing', processing_phase: { status: ready ? 'complete' : 'in_progress' }, publishing_phase: { status: !video.publish ? 'not_started' : ready ? 'complete' : 'in_progress' } } })
     }
-    if (video && method === 'POST') { video.published = true; video.postId = `${PAGE}_${path}`; return json({ success: true }) }
+    // Meta offers no later publish of a video (production answered this on 2026-10-06 for a 9:16 upload it had stored as a Reel).
+    if (video && method === 'POST') return json({ error: { message: '(#200) Permissions error', code: 200, fbtrace_id: 'trace-200' } }, 400)
     if (method === 'DELETE') { for (const photo of this.fbPosts.get(path)?.attached ?? []) this.fbPhotos.delete(photo); this.fbPosts.delete(path); this.fbPhotos.delete(path); return json({ success: true }) }
     const record = this.pagePosts.find(item => item.id === path)
     if (record) return json(record)
@@ -200,8 +222,8 @@ async function setUp() {
   const meta = new FakeMeta()
   const realFetch = globalThis.fetch
   globalThis.fetch = meta.fetch as typeof fetch
-  const asset = async (id: string, mime: string, kind: 'image' | 'video' = 'image') => run(`INSERT INTO media_assets (id, organization_id, kind, provider, source, public_url, thumbnail_url, mime_type, file_size, duration)
-    VALUES ('${id}', 'org-a', '${kind}', 'cloudflare_images', 'uploaded', 'https://imagedelivery.example.test/hash/${id}/public', ${kind === 'video' ? `'https://imagedelivery.example.test/hash/${id}-poster/public'` : 'NULL'}, '${mime}', 1000, ${kind === 'video' ? 20 : 'NULL'})`)
+  const asset = async (id: string, mime: string, kind: 'image' | 'video' = 'image', dimensions: { width: number; height: number; duration: number } | null = null) => run(`INSERT INTO media_assets (id, organization_id, kind, provider, source, public_url, thumbnail_url, mime_type, file_size, width, height, duration)
+    VALUES ('${id}', 'org-a', '${kind}', 'cloudflare_images', 'uploaded', 'https://imagedelivery.example.test/hash/${id}/public', ${kind === 'video' ? `'https://imagedelivery.example.test/hash/${id}-poster/public'` : 'NULL'}, '${mime}', 1000, ${dimensions?.width ?? 'NULL'}, ${dimensions?.height ?? 'NULL'}, ${dimensions ? dimensions.duration : kind === 'video' ? 20 : 'NULL'})`)
   // Social cards are rendered by the Worker's Images binding, which this Node
   // runtime does not have; writes that refresh a card run where Cloudflare
   // Images is not configured, and so skip it, exactly as local development does.
@@ -729,6 +751,57 @@ test('Instagram insights classify malformed provider responses and preserve loca
     await run('DROP TRIGGER ignore_token_save')
     assert.equal((await loadInstagramInsights(env, 'org-a', range)).status, 'connected')
     assert.equal((await linkedAccountAccessToken(env, 'ig-account')).accessToken, 'renewed-token')
+  } finally {
+    restore()
+    await runtime.dispose()
+  }
+})
+
+test('Facebook video: a Reel is published by finishing its upload session, any other video by its upload; nothing is uploaded twice and no video is flipped to published', async () => {
+  const { runtime, db, env, cardless, meta, asset, restore } = await setUp()
+  try {
+    await asset('reel', 'video/mp4', 'video', { width: 720, height: 1280, duration: 12 })
+    await asset('wide', 'video/mp4', 'video', { width: 1920, height: 1080, duration: 20 })
+    const create = (key: string, post: Record<string, unknown>) => createPost(db, cardless, 'org-a', { post, idempotencyKey: key }, 'owner')
+    const publication = (postId: string) => db.prepare('SELECT state, provider_post_id, provider_permalink, provider_handles_json FROM post_publications WHERE post_id = ? AND channel = ?').bind(postId, 'facebook')
+      .first<{ state: string; provider_post_id: string | null; provider_permalink: string | null; provider_handles_json: string }>()
+
+    // A 9:16 video is a Reel: start, Facebook fetches the file, finish as PUBLISHED with the caption.
+    const reel = await create('key-fb-reel', { body: 'Robatayaki tonight', media: [{ asset_id: 'reel', slot: 'cover' }] })
+    const first = await publishPost(env, 'org-a', reel.post.id, { expectedUpdatedAt: reel.post.updated_at, targets: [targets.facebook()] }, 'owner')
+    assert.deepEqual([first.outcomes[0]!.status, first.outcomes[0]!.code], ['processing', 'video_processing'])
+    const starts = meta.sent(request => request.path.endsWith(`${PAGE}/video_reels`) && request.body.upload_phase === 'start')
+    const uploads = meta.sent(request => request.host === 'rupload.facebook.com')
+    const finishes = meta.sent(request => request.path.endsWith(`${PAGE}/video_reels`) && request.body.upload_phase === 'finish')
+    assert.equal(starts.length, 1)
+    assert.deepEqual(uploads.map(request => [request.path, request.headers.file_url, request.headers.authorization]), [['/video-upload/v25.0/reel-1', 'https://imagedelivery.example.test/hash/reel/public', 'OAuth page-token']])
+    assert.deepEqual(finishes.map(request => [request.body.video_id, request.body.video_state, request.body.description]), [['reel-1', 'PUBLISHED', 'Robatayaki tonight']])
+    assert.equal((await publication(reel.post.id))!.state, 'preparing')
+    // Facebook is still processing; the next call reads that same Reel and does not start, upload or finish again.
+    const second = await publishPost(env, 'org-a', reel.post.id, { expectedUpdatedAt: reel.post.updated_at, targets: [targets.facebook()] }, 'owner')
+    assert.equal(second.outcomes[0]!.status, 'published', JSON.stringify(second.outcomes))
+    assert.equal(second.outcomes[0]!.public_url, 'https://www.facebook.com/reel/reel-1/')
+    assert.equal(meta.sent(request => request.path.endsWith(`${PAGE}/video_reels`) || request.host === 'rupload.facebook.com').length, 3)
+    assert.deepEqual(await publication(reel.post.id), { state: 'published', provider_post_id: `${PAGE}_reel-1`, provider_permalink: 'https://www.facebook.com/reel/reel-1/', provider_handles_json: JSON.stringify({ video_id: 'reel-1' }) })
+
+    // Any other video is published by its upload; Facebook posts it when processing completes.
+    const wide = await create('key-fb-wide', { body: 'Kitchen tour', media: [{ asset_id: 'wide', slot: 'cover' }] })
+    const uploaded = await publishPost(env, 'org-a', wide.post.id, { expectedUpdatedAt: wide.post.updated_at, targets: [targets.facebook()] }, 'owner')
+    assert.deepEqual([uploaded.outcomes[0]!.status, uploaded.outcomes[0]!.code], ['processing', 'video_processing'])
+    const videoUploads = meta.sent(request => request.path.endsWith(`${PAGE}/videos`))
+    assert.deepEqual(videoUploads.map(request => [request.body.file_url, request.body.published, request.body.description]), [['https://imagedelivery.example.test/hash/wide/public', undefined, 'Kitchen tour']])
+    assert.deepEqual(await publication(wide.post.id).then(row => [row!.state, row!.provider_handles_json]), ['preparing', JSON.stringify({ video_id: 'video-2' })])
+    const done = await publishPost(env, 'org-a', wide.post.id, { expectedUpdatedAt: wide.post.updated_at, targets: [targets.facebook()] }, 'owner')
+    assert.equal(done.outcomes[0]!.status, 'published', JSON.stringify(done.outcomes))
+    assert.equal(meta.sent(request => request.path.endsWith(`${PAGE}/videos`)).length, 1)
+    assert.equal((await publication(wide.post.id))!.provider_post_id, `${PAGE}_video-2`)
+
+    // Neither path ever asks Facebook to flip a video to published.
+    assert.equal(meta.sent(request => request.method === 'POST' && request.host === 'graph.facebook.com' && /\/(reel|video)-\d+$/.test(request.path)).length, 0)
+
+    // Reconciliation reads the same video ids.
+    const reconciled = await reconcilePostPublication(env, 'org-a', (await db.prepare('SELECT id FROM post_publications WHERE post_id = ?').bind(reel.post.id).first<{ id: string }>())!.id, null)
+    assert.equal(reconciled.state, 'published')
   } finally {
     restore()
     await runtime.dispose()
