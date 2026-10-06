@@ -10,7 +10,7 @@ export default defineHandler(async (event) => {
   const body = await readRequiredBody<{ organizationId?: string; action?: string; payment_method_id?: string }>(event)
   const organizationId = typeof body.organizationId === 'string' && body.organizationId ? body.organizationId : null
   if (body.action === 'setup') {
-    const { stripe, customerId } = await resolveBillingCustomer(event, organizationId, { create: true })
+    const { stripe, customerId } = await resolveBillingCustomer(event, organizationId)
     if (!customerId) throw new HTTPError({ statusCode: 409, statusMessage: 'Choose a plan before adding a payment method' })
     // Cards only: they are what this page lists and what businesses' Checkout is offered. The Payments method configuration is a parent for connected accounts and does not exist on the platform.
     const intent = await stripe.setupIntents.create({ customer: customerId, usage: 'off_session', payment_method_types: ['card'] })

@@ -14,7 +14,7 @@ import { createStripeClient } from '~/server/utils/stripe-client'
  * page reads and writes cards on exactly that customer, and never a second one.
  * A business is managed by its owners and admins; an account by itself.
  */
-export async function resolveBillingCustomer(event: H3Event, organizationId: string | null, options: { create?: boolean } = {}) {
+export async function resolveBillingCustomer(event: H3Event, organizationId: string | null) {
   const env = cloudflareEnv(event)
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) throw new HTTPError({ statusCode: 401, statusMessage: 'Authentication required' })
@@ -27,16 +27,11 @@ export async function resolveBillingCustomer(event: H3Event, organizationId: str
     const billing = await getOrganizationBillingStatus(env, env.DB, organization.id)
     return { stripe, customerId: billing.stripeCustomerId ?? null, label: organization.name, userId: session.user.id }
   }
+  // Better Auth's Stripe plugin creates every account's customer at sign-up (createCustomerOnSignUp).
   const row = await queryFirst<{ stripeCustomerId: string | null; email: string; name: string | null }>(env.DB, 'SELECT "stripeCustomerId", email, name FROM user WHERE id = ?', [session.user.id])
   if (!row) throw new HTTPError({ statusCode: 404, statusMessage: 'Account not found' })
-  if (row.stripeCustomerId || !options.create) return { stripe, customerId: row.stripeCustomerId, label: row.name ?? row.email, userId: session.user.id }
-  // The plugin creates a user's customer on sign-up or first subscription; an account that has neither gets the same customer here, in the plugin's column.
-  const customer = await stripe.customers.create({ email: row.email, name: row.name ?? undefined, metadata: { userId: session.user.id } })
-  await execute(env.DB, 'UPDATE user SET "stripeCustomerId" = ? WHERE id = ? AND "stripeCustomerId" IS NULL', [customer.id, session.user.id])
-  const settled = await queryFirst<{ stripeCustomerId: string }>(env.DB, 'SELECT "stripeCustomerId" FROM user WHERE id = ?', [session.user.id])
-  if (!settled?.stripeCustomerId) throw new Error('The account customer was not recorded')
-  if (settled.stripeCustomerId !== customer.id) await stripe.customers.del(customer.id)
-  return { stripe, customerId: settled.stripeCustomerId, label: row.name ?? row.email, userId: session.user.id }
+  if (!row.stripeCustomerId) throw new HTTPError({ statusCode: 409, statusMessage: 'This account has no Stripe customer' })
+  return { stripe, customerId: row.stripeCustomerId, label: row.name ?? row.email, userId: session.user.id }
 }
 
 export interface PaymentMethodRow { id: string; brand: string; last4: string; exp_month: number; exp_year: number; default: boolean }

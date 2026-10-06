@@ -1,10 +1,13 @@
 import { request, type FullConfig } from '@playwright/test'
-import { E2E_AUTH_FIXTURES } from '../config/development-auth-fixtures'
+import { E2E_AUTH_FIXTURES } from '../config/development-auth-fixtures.ts'
 
-/** Distinct actors are needed only for role, tenant and onboarding journeys. */
+/** Distinct actors are needed only for buyer, role, tenant and onboarding journeys. */
 export default async function provisionTestActors(config: FullConfig) {
   if (process.env.PLAYWRIGHT_PREVIEW_URL) return
-  const baseURL = config.projects[0]?.use.baseURL
+  await provisionDevelopmentActors(config.projects[0]?.use.baseURL)
+}
+
+async function provisionDevelopmentActors(baseURL: string | undefined) {
   if (!baseURL || !['localhost', '127.0.0.1'].includes(new URL(baseURL).hostname)) throw new Error('Test actors may be provisioned only in the local Worker.')
   const email = process.env.CANARY_LOGIN_EMAIL
   const password = process.env.CANARY_LOGIN_PASSWORD
@@ -65,3 +68,6 @@ export default async function provisionTestActors(config: FullConfig) {
     }
   } finally { await admin.dispose() }
 }
+
+// `corepack yarn local:actors [base URL]` provisions the same actors against a running local Worker.
+if (import.meta.main) await provisionDevelopmentActors(process.argv[2] ?? 'http://localhost:3000')

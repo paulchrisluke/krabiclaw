@@ -619,6 +619,7 @@ export function createAuth(env: CloudflareEnv) {
       betterAuthStripe({
         stripeClient,
         stripeWebhookSecret: env.STRIPE_WEBHOOK_SECRET ?? '',
+        createCustomerOnSignUp: true,
         organization: { enabled: true },
         subscription: {
           enabled: true,

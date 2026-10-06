@@ -146,6 +146,14 @@ password. Sign in through the normal `/login` page; there is no developer-login
 shortcut. Test identities used for explicit authorization scenarios remain local
 fixtures for role and access tests. Playwright creates these through Better Auth using the same configured password. Their provisioning through Better Auth does not alter the review account.
 
+For buyer journeys sign in as `buyer@playwright.example` with `CANARY_LOGIN_PASSWORD`:
+a verified account with no organization. Playwright provisions it before every
+suite; after `local:setup`, create it for manual use with the Worker running:
+
+```sh
+corepack yarn local:actors
+```
+
 `schema:local` applies new forward migrations when the schema changes. A rare
 replacement baseline, such as the v6 WNAM cutover, starts a new migration
 history; a local D1 created under the prior baseline then fails the schema
