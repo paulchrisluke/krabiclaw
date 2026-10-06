@@ -175,7 +175,11 @@ export async function applyResendEmailEvent(
   return 'advanced'
 }
 
-/** Writes a send's outcome onto its receipt. */
+/**
+ * Writes a send's outcome onto its receipt. A receipt that already reached the
+ * provider keeps its state: a duplicate send Resend refused is not this email's
+ * outcome, and a webhook may already have moved it on.
+ */
 export async function recordDeliveryOutcome(
   db: DbClient,
   input: {
@@ -188,7 +192,7 @@ export async function recordDeliveryOutcome(
   await execute(db, `
     UPDATE guest_thread_deliveries
     SET status = ?, provider_message_id = COALESCE(?, provider_message_id), error = ?, updated_at = ?
-    WHERE id = ?
+    WHERE id = ? AND status NOT IN ('accepted', 'sent', 'delivered', 'read')
   `, [input.status, input.providerMessageId ?? null, input.error ?? null, new Date().toISOString(), input.deliveryId])
   const updated = await getDeliveryById(db, input.deliveryId)
   if (!updated) throw new Error('Guest thread delivery not found')

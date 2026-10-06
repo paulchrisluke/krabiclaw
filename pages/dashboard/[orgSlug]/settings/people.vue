@@ -164,11 +164,15 @@ const targetUser = ref<PlatformUser | null>(null)
 const targetError = ref<string | null>(null)
 
 async function loadTarget() {
-  if (!target.value) return
+  targetUser.value = null
   targetError.value = null
+  const requested = target.value
+  if (!requested) return
   const result = await authClient.admin.listUsers({
-    query: { filterField: 'id', filterValue: target.value.userId, filterOperator: 'eq', limit: 1 },
+    query: { filterField: 'id', filterValue: requested.userId, filterOperator: 'eq', limit: 1 },
   })
+  // Another link was opened while this one loaded.
+  if (target.value?.userId !== requested.userId || target.value.organizationId !== requested.organizationId) return
   if (result.error) {
     targetError.value = result.error.message ?? 'Failed to load this account.'
     return
@@ -180,6 +184,8 @@ async function loadTarget() {
   }
   targetUser.value = { id: user.id, name: user.name ?? null, email: user.email, role: user.role ?? null, banned: user.banned ?? null }
 }
+
+watch(target, () => void loadTarget())
 
 onMounted(() => {
   void loadUsers()
