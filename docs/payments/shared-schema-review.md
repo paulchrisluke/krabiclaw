@@ -25,6 +25,7 @@ The Payments migration adds fourteen structures:
 | `payment_usage_events` | Durable delivery/idempotency and unsettled credit outbox; Metronome owns rating/invoices. |
 | `payment_billing_accounts` | Operating customer/Metronome relationship and contract servicing state; review immutable customer snapshot alongside `organization.stripeCustomerId`. |
 | `payment_authorizations` | Actor-bound expiring financial browser approval; assess alignment with shared write-confirmation conventions. |
+| `stripe_connected_customers` | A signed-in buyer's Customer on each business's connected account, where Checkout saves the cards they choose to keep with that business. Account deletion deletes those Customers before it is lost. |
 | `payment_claims` | Hashed guest purchase possession proofs linked to existing user identity; no separate buyer User model. |
 | `payment_fee_reports`, `payment_cost_snapshots` | Provider report progress and attributable revision deltas; Stripe remains financial authority. |
 | `payment_servicing_tenants` | Minimal account/mode tombstone to service retained financial links after canonical tenant deletion. Review alongside shared deletion/retention policy. |

@@ -190,6 +190,27 @@ proofs; the server retrieves native Checkout and PaymentIntent before conversion
 Financial parent FKs retain evidence; tenant deletion stores minimal servicing
 relationships without retaining merchant credentials or recreating the tenant.
 
+### Saved cards
+
+A buyer's cards are saved with each business, never on KrabiClaw. At a business's
+Checkout a signed-in buyer pays as their Customer on that business's connected
+account (`stripe_connected_customers`); Stripe's own checkbox saves a new card
+there, Checkout offers those saved cards again at that business only, and lets the
+buyer remove them. A Customer on the connected account is also what lets that
+business charge a saved card later, as Stripe's recurring-payment guidance
+requires. A guest pays without a Customer; Link remains Stripe's way to reuse cards
+across businesses. KrabiClaw creates no platform Customer for buyers: the Better
+Auth Stripe plugin's customers are the businesses' operating customers for their
+subscriptions.
+
+Deleting the account deletes the buyer's Customer at every business it paid, in
+Better Auth's user delete database hook, which every deletion path runs
+(self-service, admin removal, anonymous-account merge) while the mappings still
+exist. Stripe removes the cards saved there and cancels any subscription the buyer
+holds with that business. Each business keeps its charges, receipts, refunds and
+disputes, and no connected account or business billing is touched. Deleting a
+business does not touch buyers' Customers.
+
 ## Metronome operating billing
 
 KrabiClaw Payments: **1.4% of payment volume, plus Stripe fees.** Billed after

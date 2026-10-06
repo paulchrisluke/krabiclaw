@@ -31,6 +31,12 @@ export const E2E_AUTH_FIXTURES: readonly E2eAuthFixture[] = [
     platformRole: 'admin',
   },
   {
+    // A buyer with no organization: bookings, purchases, saved cards and account deletion.
+    id: 'user-e2e-buyer',
+    name: 'E2E Buyer',
+    email: 'buyer@playwright.example',
+  },
+  {
     id: 'user-e2e-demo-owner',
     name: 'E2E Demo Owner',
     email: 'demo-owner@playwright.example',

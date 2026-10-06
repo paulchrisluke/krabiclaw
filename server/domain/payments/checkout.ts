@@ -10,7 +10,7 @@ import { getStripeConnectedAccount, stripeLivemodeFromKey } from '~/server/utils
 import { hasOrganizationEntitlement } from '~/server/utils/billing'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { tokenHash } from './buyer'
-import { connectedCustomerWithSavedCards } from '~/server/utils/billing-customer'
+import { connectedBuyerCustomer } from '~/server/utils/billing-customer'
 import { assertMinorAmount, requirePayment } from './index'
 import { recordCheckoutStarted } from '~/server/domain/booking-analytics'
 
@@ -134,11 +134,11 @@ export async function createPaymentCheckout(db: DbClient, stripe: Stripe, env: C
       throw new HTTPError({statusCode:409,statusMessage:'Session capacity is unavailable'})
     }
   }
-  // Airbnb offers the cards you keep: a signed-in buyer's saved cards are cloned onto this business's Stripe account so Checkout shows them.
-  const customer=input.buyerUserId?await connectedCustomerWithSavedCards(db,stripe,env,input.buyerUserId,connected.stripeAccountId,connected.livemode):null
+  // A signed-in buyer's Customer at this business: Stripe's Checkout offers, saves and removes their cards here only.
+  const customer=input.buyerUserId?await connectedBuyerCustomer(db,stripe,input.buyerUserId,connected.stripeAccountId,connected.livemode):null
   let opened:string
   try {
-  const checkout = await stripe.checkout.sessions.create({mode:'payment',integration_identifier:'krabiclaw_payments_aqpfkmvz',...(customer?{customer:customer.customerId,saved_payment_method_options:{payment_method_save:'enabled' as const,allow_redisplay_filters:['always' as const]}}:{}),automatic_tax:{enabled:automaticTax},line_items:[{price_data:{currency:price.currency.toLowerCase(),unit_amount:price.unit_amount,tax_behavior:price.tax_behavior,product_data:{name:projectionTitle,...(projectionTaxCode?{tax_code:projectionTaxCode}:{}),metadata:{krabiclaw_variant_id:input.variantId}}},quantity:input.quantity}],payment_method_configuration:methodConfigurationId,
+  const checkout = await stripe.checkout.sessions.create({mode:'payment',integration_identifier:'krabiclaw_payments_aqpfkmvz',...(customer?{customer:customer.customerId,saved_payment_method_options:{payment_method_save:'enabled' as const,payment_method_remove:'enabled' as const,allow_redisplay_filters:['always' as const]}}:{}),automatic_tax:{enabled:automaticTax},line_items:[{price_data:{currency:price.currency.toLowerCase(),unit_amount:price.unit_amount,tax_behavior:price.tax_behavior,product_data:{name:projectionTitle,...(projectionTaxCode?{tax_code:projectionTaxCode}:{}),metadata:{krabiclaw_variant_id:input.variantId}}},quantity:input.quantity}],payment_method_configuration:methodConfigurationId,
     payment_intent_data:{application_fee_amount:0,metadata:{krabiclaw_payment_id:id}},metadata:{krabiclaw_payment_id:id},client_reference_id:id,
     expires_at:Math.floor(Date.parse(expiresAt)/1000),success_url:new URL(`/account?payment_id=${encodeURIComponent(id)}&purchase_claim=${encodeURIComponent(returnToken)}`,origin).toString(),cancel_url:new URL('/account?payment=cancelled',origin).toString(),
   },{stripeAccount:connected.stripeAccountId,idempotencyKey:key})

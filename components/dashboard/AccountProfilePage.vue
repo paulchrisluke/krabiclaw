@@ -277,7 +277,7 @@ const groups = computed<EditorNavigationGroup[]>(() => [
       { id: 'notifications', label: 'Notifications', summary: notificationSummary.value, to: `${profilePath.value}/notifications` },
       { id: 'calendar', label: 'Your availability', summary: 'Hours, time off and Google Calendar', to: `${profilePath.value}/calendar` },
       { id: 'appearance', label: 'Appearance', summary: `${themePreference.value.charAt(0).toUpperCase()}${themePreference.value.slice(1)} theme`, to: `${profilePath.value}/appearance` },
-      { id: 'payments', label: 'Payments', summary: 'Your saved payment methods', to: `${profilePath.value}/payments` },
+      { id: 'payments', label: 'Payments', summary: 'Your payments and refunds', to: `${profilePath.value}/payments` },
       { id: 'businesses', label: 'Businesses', summary: businessesSummary.value, to: `${profilePath.value}/businesses` },
       { id: 'log-out', label: 'Log out', action: {} },
     ],

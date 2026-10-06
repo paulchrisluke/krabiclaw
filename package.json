@@ -38,6 +38,7 @@
     "cloudflare:resources": "node scripts/check-cloudflare-resources.mjs",
     "dev": "nuxt dev",
     "local:setup": "yarn schema:local && yarn db:pull:local && yarn fixtures:verify:local --local-dev",
+    "local:actors": "node --env-file-if-exists=.env --experimental-strip-types scripts/provision-development-auth.ts",
     "local:cards": "node scripts/generate-local-social-cards.mjs",
     "dev:worker": "yarn build && yarn dev:worker:start",
     "dev:worker:start": "wrangler dev .output/server/index.mjs --env e2e --assets .output/public --port 3000 --live-reload",
