@@ -282,7 +282,7 @@ function claimed(db: DbClient, publicationId: string, attemptId: string) {
   }
   return {
     saveHandles: (handles: Handles, providerPostId?: string) =>
-      write('provider_handles_json = ?, provider_post_id = COALESCE(?, provider_post_id)', [JSON.stringify(handles), providerPostId ?? null], ['preparing', 'publishing']),
+      write('provider_handles_json = ?, provider_post_id = COALESCE(?, provider_post_id)', [JSON.stringify(handles), providerPostId ?? null]),
     /** The prepared object named as the provider post is gone; the row stops naming it. */
     forgetProviderPost: (handles: Handles) => write('provider_handles_json = ?, provider_post_id = NULL', [JSON.stringify(handles)]),
     /** The boundary: after this commits, an interruption is `unknown`, never a retryable failure. */
@@ -408,94 +408,28 @@ async function publishToFacebook(context: ChannelContext, target: FacebookPageTa
 }
 
 /**
- * One Facebook video. A Reel goes through Meta's upload session, whose finish
- * publishes it; any other video is published by its upload. Either way the
- * saved video id is read back until Facebook reports it published, and a call
- * that arrives while Facebook is still processing hands that same video to the
- * next call. Nothing is ever uploaded twice.
+ * One Facebook video, published by Meta's own final call: a Reel's finish,
+ * which answers with the Page post, or a published upload, which Facebook
+ * posts once it has processed it. Meta's answer is the publication. A session
+ * an earlier call left unfinished is never public; each call runs its own.
  */
 async function publishVideoToFacebook(context: ChannelContext, target: FacebookPageTarget, fence: ReturnType<typeof claimed>, video: PostMedia): Promise<ChannelResult> {
   const { post, handles, deadline } = context
-  const reel = isFacebookReel(video)
-  const settle = async (state: Awaited<ReturnType<typeof readVideo>>): Promise<ChannelResult> => {
-    if (state.published) {
-      await fence.published({ providerPostId: state.postId ?? state.id, permalink: state.permalink, publishedAt: nowIso(), handles })
-      return outcome(context, 'published', { public_url: validPermalink(state.permalink) })
-    }
-    if (state.processing === 'error') {
-      await fence.failed('provider_processing_failed', state.error ?? 'Facebook could not process the video', handles)
-      return outcome(context, 'failed', { code: 'provider_processing_failed', message: state.error ?? 'Facebook could not process the video' })
-    }
-    await fence.release(['preparing', 'publishing'])
-    return outcome(context, 'processing', { code: 'video_processing', message: 'Facebook is still processing the video. Call publish_post again to finish it; it will publish this same video.' })
-  }
-  let state: Awaited<ReturnType<typeof readVideo>> | null = null
-  if (handles.video_id) {
-    try {
-      state = await readVideo(target, handles.video_id, deadline)
-    } catch (error) {
-      if (!(error instanceof MetaGraphError && error.objectMissing)) throw error
-      if (context.publication.provider_post_id) {
-        // The final call was sent for this video (provider_post_id names it
-        // from that moment), and Facebook does not expose it yet. It is not
-        // gone, and preparing another would publish the Reel twice.
-        await fence.release(['preparing', 'publishing'])
-        return outcome(context, 'processing', { code: 'video_processing', message: 'Facebook has accepted the video but does not expose it yet. Call publish_post again to finish it; it will publish this same video.' })
-      }
-      // A video only prepared no longer exists at Facebook (deleted there, or
-      // a session Facebook discarded): nothing of it can be published, so the
-      // row stops naming it and this call prepares a new one.
-      delete handles.video_id
-      await fence.forgetProviderPost(handles)
-    }
-  }
-  // A Reel whose finish was never sent is still only prepared; everything else is Facebook's to complete.
-  if (state && !(reel && state.processing === 'not_started')) return await settle(state)
-  if (reel) {
-    // The session is saved before the file goes up, so a retry resumes it, and
-    // whether Facebook already holds the file is read from Facebook.
-    if (!handles.video_id) {
-      handles.video_id = await startReel(target, deadline)
-      await fence.saveHandles(handles)
-    }
-    if (!state?.uploaded) await uploadReelFromUrl(target, handles.video_id, video.public_url, deadline)
-  }
   const deferred = await deferFinalWithoutTime(context, fence)
   if (deferred) return deferred
+  if (isFacebookReel(video)) {
+    handles.video_id = await startReel(target, deadline)
+    await uploadReelFromUrl(target, handles.video_id, video.public_url, deadline)
+    await fence.saveHandles(handles)
+    await fence.beginFinal()
+    const { postId } = await finishReel(target, handles.video_id, { description: context.caption, title: post.title }, deadline)
+    await fence.published({ providerPostId: postId ?? handles.video_id, permalink: null, publishedAt: nowIso(), handles })
+    return outcome(context, 'published', { public_url: null })
+  }
   await fence.beginFinal()
-  try {
-    if (reel) {
-      await finishReel(target, handles.video_id!, { description: context.caption, title: post.title }, deadline)
-    } else {
-      handles.video_id = await createVideo(target, { fileUrl: video.public_url, description: context.caption, title: post.title }, deadline)
-    }
-    // From here the video is Facebook's to publish: the row names it as the
-    // provider post, so a later call never prepares another.
-    await fence.saveHandles(handles, handles.video_id)
-  } catch (error) {
-    if (error instanceof MetaGraphError && error.failure !== 'transport') {
-      // Meta refused the call: nothing was published.
-      const failure = failureOf(error)
-      await fence.failed(failure.code, failure.message, handles)
-      return outcome(context, 'failed', failure)
-    }
-    if (!handles.video_id) {
-      // The upload was not answered and there is no id to read: Facebook may hold a published video this row cannot name.
-      const message = `The Facebook video upload was not confirmed (${messageOf(error)}). Reconcile it with the Page's post; it is not uploaded again.`
-      await fence.unknown('final_unconfirmed', message)
-      return outcome(context, 'unknown', { code: 'final_unconfirmed', message })
-    }
-  }
-  try {
-    return await settle(await readVideo(target, handles.video_id!, deadline))
-  } catch (error) {
-    // Right after a Reel's finish, Facebook can answer 100/33 for the video it
-    // has just accepted (production, 2026-10-06: the same id read as published
-    // seconds later). Nothing was lost: the next call reads it.
-    if (!(error instanceof MetaGraphError && error.objectMissing)) throw error
-    await fence.release(['publishing'])
-    return outcome(context, 'processing', { code: 'video_processing', message: 'Facebook has accepted the video but does not expose it yet. Call publish_post again to finish it; it will publish this same video.' })
-  }
+  handles.video_id = await createVideo(target, { fileUrl: video.public_url, description: context.caption, title: post.title }, deadline)
+  await fence.published({ providerPostId: handles.video_id, permalink: null, publishedAt: nowIso(), handles })
+  return outcome(context, 'published', { public_url: null })
 }
 
 const pause = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
@@ -709,7 +643,9 @@ async function publishExternal(
     // non-publication; the objects already prepared stay saved for the retry.
     const failure = failureOf(error)
     const current = await readPublication(db, organizationId, { id: claim.publication.id })
-    if (current?.state === 'publishing' && current.attempt_id === claim.attemptId) {
+    // Meta answering the final call with an error is Meta saying nothing was
+    // published; only a final call Meta never answered is unknown.
+    if (current?.state === 'publishing' && current.attempt_id === claim.attemptId && !(error instanceof MetaGraphError && error.failure !== 'transport')) {
       await fence.unknown('final_unconfirmed', `The publication stopped after its final call began: ${failure.message}`)
       return outcome(context, 'unknown', { code: 'final_unconfirmed', message: failure.message })
     }
@@ -869,8 +805,8 @@ export async function reconcilePostPublication(env: CloudflareEnv, organizationI
   if (publication.channel === 'facebook') {
     const target = await facebookTargetFor(env, connection)
     const postId = providerPostId ?? publication.provider_post_id ?? handles.post_id ?? null
-    if (postId) {
-      if (!postId.startsWith(`${target.pageId}_`) && postId !== handles.video_id) throw new HTTPError({ statusCode: 409, statusMessage: `${postId} is not a post of the Page ${target.pageId}` })
+    if (postId && postId !== handles.video_id) {
+      if (!postId.startsWith(`${target.pageId}_`)) throw new HTTPError({ statusCode: 409, statusMessage: `${postId} is not a post of the Page ${target.pageId}` })
       const read = await readPagePost(target, postId, deadline)
       if (read.isPublished) await record('published', { providerPostId: read.id, permalink: read.permalink, publishedAt: read.createdTime })
       else if (publication.state === 'failed') await record('failed', { providerPostId: read.id, code: publication.error_code ?? undefined, message: publication.error_message ?? undefined })
