@@ -3,7 +3,7 @@
     <div class="blawby-container">
       <div class="mx-auto max-w-2xl md:text-center">
         <h2 class="blawby-display text-3xl font-bold text-[var(--blawby-primary)] sm:text-4xl">
-          What Clients <span class="text-[var(--blawby-accent)]">Say</span>
+          What Clients <span class="text-[var(--blawby-accent-strong)]">Say</span>
         </h2>
         <p v-if="description" class="mt-4 text-lg text-toned">{{ description }}</p>
       </div>
