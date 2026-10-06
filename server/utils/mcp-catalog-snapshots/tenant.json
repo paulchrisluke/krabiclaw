@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:5127ef907284fa96672bbbeadc8fede180a36e9dcbf71d9d845e54625466142c",
+  "fingerprint": "sha256:3544894ac62c49edf3ec099e5b86f92b6d3f327905b0775a7f3e5efc54330898",
   "tools": [
     {
       "name": "append_content_block",
@@ -636,6 +636,10 @@
                                 "VND",
                                 "INR"
                               ],
+                              "type": "string"
+                            },
+                            "id": {
+                              "description": "The id of a price this variant already has. Restating it keeps the price row, which payments and checkout holds reference; a price without an id is a new offer.",
                               "type": "string"
                             },
                             "location_id": {
@@ -3018,6 +3022,10 @@
                           "VND",
                           "INR"
                         ],
+                        "type": "string"
+                      },
+                      "id": {
+                        "description": "The id of a price this variant already has. Restating it keeps the price row, which payments and checkout holds reference; a price without an id is a new offer.",
                         "type": "string"
                       },
                       "location_id": {
@@ -12896,6 +12904,10 @@
                               ],
                               "type": "string"
                             },
+                            "id": {
+                              "description": "The id of a price this variant already has. Restating it keeps the price row, which payments and checkout holds reference; a price without an id is a new offer.",
+                              "type": "string"
+                            },
                             "location_id": {
                               "description": "Scope this offer to one location, or null for every location the product is offered at.",
                               "type": [
@@ -19922,7 +19934,7 @@
     },
     {
       "name": "update_product",
-      "description": "Edit an existing product’s named details, options, variants or prices. Only supplied fields change; supplied options, variants, prices and details replace their existing values. Preserve IDs for variants to retain. Removing a variant with any booking history is refused. Publication and location offerings use separate tools.",
+      "description": "Edit an existing product. Only supplied fields change. A variant restated with its id keeps every field and price it does not restate, and a price restated with its id keeps its identity, so a price change is the variant id, the price id and the new unit_amount. Variants left out of a supplied list are removed, which is refused once anything was booked on them. Options and details replace their existing values when supplied. Publication and location offerings use separate tools.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -20141,7 +20153,7 @@
             ]
           },
           "variants": {
-            "description": "Omit to create a single default variant. Required once the product has options.",
+            "description": "The variants to keep, each by id. A variant left out is removed (refused once anything was booked on it; turn it off with active instead). A restated variant keeps the fields and prices it does not restate.",
             "items": {
               "additionalProperties": false,
               "description": "One buyable configuration. A product with no options still has exactly one. Keep the id when editing: a variant that keeps its id keeps its bookings.",
@@ -20194,6 +20206,10 @@
                           "VND",
                           "INR"
                         ],
+                        "type": "string"
+                      },
+                      "id": {
+                        "description": "The id of a price this variant already has. Restating it keeps the price row, which payments and checkout holds reference; a price without an id is a new offer.",
                         "type": "string"
                       },
                       "location_id": {
@@ -20258,9 +20274,7 @@
                         ]
                       }
                     },
-                    "required": [
-                      "unit_amount"
-                    ],
+                    "required": [],
                     "type": "object"
                   },
                   "maxItems": 20,
@@ -20276,9 +20290,7 @@
                   "type": "integer"
                 }
               },
-              "required": [
-                "name"
-              ],
+              "required": [],
               "type": "object"
             },
             "maxItems": 250,

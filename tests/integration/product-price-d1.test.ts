@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import type { UpdateProductInput } from '../../server/types/products.ts'
 import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api'
 import { Miniflare } from 'miniflare'
 import * as schema from '../../server/db/schema.ts'
@@ -375,6 +376,31 @@ test('a patch that says nothing about variants leaves every price row as it was'
     assert.deepEqual(repriced.map(price => price.id).sort(), kept.prices.map(price => price.id).sort(), 'restated prices kept their identity')
     assert.equal(repriced.find(price => price.location_id === 'loc-a')!.unit_amount, 19000)
     assert.equal(repriced.find(price => price.location_id === 'loc-b')!.unit_amount, 14000, 'the other location was not touched')
+
+    // An edit names what changes: the variant id, the price id and the new
+    // amount. Everything unstated — the variant's name, the other price, every
+    // other field of the restated price — is kept, and so is the price's row.
+    const priceA = repriced.find(price => price.location_id === 'loc-a')!
+    await updateProduct(db, { organizationId: ORG, productId: product.id, actor: ACTOR, patch: {
+      variants: [{ id: kept.id, prices: [{ id: priceA.id, unit_amount: 21000 }, { id: repriced.find(price => price.location_id === 'loc-b')!.id }] }],
+    } as UpdateProductInput })
+    const minimal = (await getProduct(db, ORG, product.id)).variants[0]!
+    assert.equal(minimal.name, kept.name, 'an unstated variant name is kept')
+    assert.deepEqual(minimal.prices.map(price => price.id).sort(), kept.prices.map(price => price.id).sort(), 'a price-only edit kept both price rows')
+    const edited = minimal.prices.find(price => price.id === priceA.id)!
+    assert.deepEqual([edited.unit_amount, edited.currency, edited.location_id, edited.created_at], [21000, priceA.currency, 'loc-a', priceA.created_at])
+    assert.equal(minimal.prices.find(price => price.location_id === 'loc-b')!.unit_amount, 14000)
+
+    // A price or variant this product does not have cannot be restated into it, and a new one must say what it is.
+    await assert.rejects(updateProduct(db, { organizationId: ORG, productId: product.id, actor: ACTOR, patch: {
+      variants: [{ id: kept.id, prices: [{ id: 'price-elsewhere', unit_amount: 1 }] }],
+    } as UpdateProductInput }), /does not belong to variant/)
+    await assert.rejects(updateProduct(db, { organizationId: ORG, productId: product.id, actor: ACTOR, patch: {
+      variants: [{ id: kept.id, prices: [{ currency: 'THB' }] }],
+    } as UpdateProductInput }), /unit_amount is required for a new price/)
+    await assert.rejects(updateProduct(db, { organizationId: ORG, productId: product.id, actor: ACTOR, patch: {
+      variants: [{ prices: [{ unit_amount: 100, currency: 'THB' }] }],
+    } as UpdateProductInput }), /name is required for a new variant/)
   } finally { await runtime.dispose() }
 })
 
