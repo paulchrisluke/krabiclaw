@@ -126,7 +126,7 @@ function sitePaletteChanges(stage) {
       delete settings.config.brand_color
     }
     for (const [template, theme] of Object.entries(settings.theme_by_template ?? {})) {
-      assert(template === 'blawby' && JSON.stringify(theme.tokens) === JSON.stringify(BLAWBY_V12_TOKENS),
+      assert(template === 'blawby' && theme !== null && typeof theme === 'object' && JSON.stringify(theme.tokens) === JSON.stringify(BLAWBY_V12_TOKENS),
         `organization ${organization.id} theme_by_template.${template} holds tokens other than Blawby's defaults; nothing maps them; no rows were copied`)
     }
     delete settings.theme_by_template

@@ -21,7 +21,7 @@
           accept="image"
           :title="logo.pickerTitle"
           @update:model-value="value => editor.form[logo.assetKey] = value"
-          @change="asset => pickedUrls[logo.slot] = asset ? mediaStillUrl(asset) : null"
+          @change="asset => { if (asset) pickedUrls[asset.asset_id] = mediaStillUrl(asset) }"
         />
         <template v-if="urlFor(logo)">
           <UFormField label="Shape">
@@ -102,12 +102,13 @@ const SHAPES: Array<{ value: LogoShape; label: string; icon: string }> = [
 const MODES = ['light', 'dark'] as const
 const WIDTHS = [{ label: 'Phone', max: '10rem' }, { label: 'Desktop', max: '16rem' }]
 
-// A logo just picked has no saved URL yet; the picker hands over its own.
+// A logo just picked has no saved URL yet; the picker hands over its own, kept
+// by asset so reverting to the saved logo shows the saved one.
 const pickedUrls = reactive<Record<string, string | null>>({})
 function urlFor(logo: LogoEntry) {
   const assetId = editor.form[logo.assetKey]
   if (!assetId) return null
-  return pickedUrls[logo.slot] ?? editor.logoUrl(assetId)
+  return pickedUrls[assetId] ?? editor.logoUrl(assetId)
 }
 function setShape(logo: LogoEntry, shape: LogoShape) {
   editor.form[logo.presentationKey] = { ...editor.form[logo.presentationKey], shape }
