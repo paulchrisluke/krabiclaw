@@ -55,7 +55,7 @@ const PLATFORM_GONE_PATHS = new Set(['/changelog'])
  * `/experiences` and `/locations/<location>/experiences` are routes again, so
  * nothing redirects them. Two things still point at pages that moved: the
  * cancellation link mailed with every booking taken before the cutover, and
- * the location-scoped URL a bookable product briefly had between the cutover
+ * the location-scoped URL an experience briefly had between the cutover
  * and this change. An experience's page is named by its own slug.
  */
 async function resolveRetiredExperiencePath(event: H3Event, path: string) {
@@ -77,17 +77,16 @@ async function resolveRetiredExperiencePath(event: H3Event, path: string) {
   const db = cloudflareEnv(event).db
   const organizationId = event.context.organizationId as string | null | undefined
   if (!db || !organizationId) return null
-  // Bookable is what moved: a dish or a piece of merchandise still lives at
-  // its branch's URL, and only a product that takes bookings is an experience.
-  const bookable = await queryFirst<{ slug: string } | null>(db, `
+  // Product kind owns the route. A service can take bookings while retaining
+  // its branch's product URL.
+  const experience = await queryFirst<{ slug: string } | null>(db, `
     SELECT p.slug FROM products p
       JOIN product_publications pp ON pp.product_id = p.id AND pp.organization_id = ? AND pp.published = 1
-      JOIN product_booking_configs bc ON bc.product_id = p.id
-     WHERE p.slug = ? AND p.active = 1
+     WHERE p.slug = ? AND p.active = 1 AND p.kind = 'experience'
      LIMIT 1
   `, [organizationId, slug])
-  if (!bookable) return null
-  return EXPERIENCE_PRESENTATION.productPath('', bookable.slug)
+  if (!experience) return null
+  return EXPERIENCE_PRESENTATION.productPath('', experience.slug)
 }
 
 async function resolveTenantRedirectForRequest(event: H3Event) {
