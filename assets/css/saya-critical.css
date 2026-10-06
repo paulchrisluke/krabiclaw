@@ -16,7 +16,7 @@ html {
 
 body {
   margin: 0;
-  font-family: Poppins, sans-serif;
+  font-family: var(--font-sans);
 }
 
 a {
