@@ -169,7 +169,7 @@ function justifications(tool) {
       : `${effect} Its scope is the authenticated KrabiClaw workspace, not arbitrary external entities or the public web.`,
     destructive_justification: annotations.destructiveHint
       ? `${effect} The result is irreversible or hard to reverse, so the tool requires the user's confirmation.`
-      : `${effect} A later edit undoes it; nothing is deleted or published to an audience.`,
+      : `${effect} No existing record is deleted, cancelled or refunded by it.`,
   }
 }
 
