@@ -74,6 +74,11 @@
   --blawby-primary-800:   color-mix(in oklab, var(--site-action) 30%, var(--site-ground));
   --blawby-accent-button: color-mix(in oklab, var(--site-accent) 90%, white);
   --blawby-accent-strong: color-mix(in oklab, var(--site-accent) 80%, white);
+  /* Pale tints become a lift of the ground toward the surface, not a wash of
+     the accent over a dark ground, which reads as grey-brown. */
+  --blawby-primary-100:   color-mix(in oklab, var(--site-surface) 60%, var(--site-ground));
+  --blawby-accent-100:    color-mix(in oklab, var(--site-surface) 45%, var(--site-ground));
+  --blawby-accent-200:    color-mix(in oklab, var(--site-surface) 70%, var(--site-ground));
   --ui-text-inverted:     var(--site-text);
 }
 
