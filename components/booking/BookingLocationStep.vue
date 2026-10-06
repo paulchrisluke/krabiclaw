@@ -54,7 +54,7 @@
             >
               <svg
                 v-if="modelValue === loc.id"
-                class="w-2.5 h-2.5 text-(--brand-color-foreground)"
+                class="w-2.5 h-2.5 text-on-primary"
                 xmlns="http://www.w3.org/2000/svg"
                 viewBox="0 0 12 12"
                 fill="none"

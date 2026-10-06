@@ -10,14 +10,14 @@
               type="button"
               :aria-current="index === selected ? 'true' : undefined"
               class="relative flex cursor-pointer items-start pl-4 text-left focus:outline-none"
-              :class="index === selected ? 'text-[var(--blawby-primary)]' : 'text-gray-500 hover:text-gray-700'"
+              :class="index === selected ? 'text-[var(--blawby-primary)]' : 'text-muted hover:text-toned'"
               @click="selected = index"
             >
               <span class="flex h-full flex-col items-center pr-4 pt-1">
                 <BlawbyFeatureIcon
                   :name="feature.icon"
                   class="size-5 shrink-0"
-                  :class="index === selected ? 'text-[var(--blawby-accent)]' : 'text-gray-600'"
+                  :class="index === selected ? 'text-[var(--blawby-accent)]' : 'text-muted'"
                 />
                 <span
                   class="mt-1 w-0.5 bg-[var(--blawby-accent)] transition-all duration-500 ease-in-out"
@@ -25,7 +25,7 @@
                 />
               </span>
               <span class="grow">
-                <span class="font-semibold" :class="index === selected ? 'text-[var(--blawby-primary)]' : 'text-gray-500'">{{ feature.title }}.</span>
+                <span class="font-semibold" :class="index === selected ? 'text-[var(--blawby-primary)]' : 'text-muted'">{{ feature.title }}.</span>
                 {{ ' ' }}
                 <!--
                   An item's words are its rich text when it has any, and its

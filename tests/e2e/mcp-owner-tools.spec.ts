@@ -157,15 +157,20 @@ test.describe('stateless MCP server', () => {
     })
     expect(settingsUpdate.status()).toBe(200)
 
-    const brandColorUpdate = await mcpRequest(request, baseURL!, {
+    const paletteUpdate = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
-      toolName: 'set_brand_color',
-      args: { organization_id: organizationId, color: '#0F4C5C' },
+      toolName: 'update_organization_settings',
+      args: { organization_id: organizationId, palette: { light: { action: '#0F4C5C' } } },
     })
-    expect(brandColorUpdate.status()).toBe(200)
-    const brandColorBody = await brandColorUpdate.json()
-    expect(mcpData<{ brand_color: string; updated: boolean }>(brandColorBody).brand_color).toBe('#0F4C5C')
-    expect(mcpData<{ brand_color: string; updated: boolean }>(brandColorBody).updated).toBe(true)
+    expect(mcpData<{ ok: boolean }>(await paletteUpdate.json()).ok).toBe(true)
+    const paletteRead = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'get_organization_settings',
+      args: { organization_id: organizationId },
+    })
+    const readBack = mcpData<{ settings: { palette: { light: { action: string } }; palette_source: string } }>(await paletteRead.json()).settings
+    expect(readBack.palette.light.action).toBe('#0F4C5C')
+    expect(readBack.palette_source).toBe('custom')
 
   })
 

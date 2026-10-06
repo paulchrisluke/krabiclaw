@@ -15,7 +15,7 @@ import PlatformHeader from '~/components/platform/PlatformHeader.vue'
 import PlatformCommandSearchModal from '~/components/platform/search/PlatformCommandSearchModal.vue'
 import '~/assets/css/platform-entry.css'
 
-const fontPreset = usePublicSiteTypography()
+const { fontPreset } = usePublicSiteBrand()
 
 // The stable surface file is written by `nuxt build`; under `nuxt dev` Vite serves
 // the imported entry itself, so the link exists only in built output.

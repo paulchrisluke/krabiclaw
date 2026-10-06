@@ -9,7 +9,10 @@ import {
   isSingleMediaPlacement,
   isSupportedMediaPlacement,
   isMediaPlacementOwnerType,
+  LOGO_SLOTS,
+  parseLogoPresentation,
   MAX_ORDERED_MEDIA_ASSETS,
+  type LogoPresentation,
   type MediaCategory,
   type MediaPlacementOwnerType,
 } from '~/shared/media-placement-contract'
@@ -77,6 +80,7 @@ export type StoredMediaPlacementItem = ResolvedMediaAsset & Pick<MediaAsset, 'so
   owner_id: string
   slot: string
   sort_order: number
+  presentation: LogoPresentation | null
 }
 
 export interface MediaAssetRefInput {
@@ -111,6 +115,8 @@ export interface MediaPlacementInsertInput {
   assetId: string
   sortOrder: number
   status?: 'pending' | 'active' | 'rejected'
+  /** A logo placement's shape and focal point; only logo slots carry one. */
+  presentation?: LogoPresentation | null
   createdAt?: string
   updatedAt?: string
 }
@@ -163,17 +169,20 @@ export function buildMediaPlacementInsertQuery(input: MediaPlacementInsertInput)
   if (!isSupportedMediaPlacement({ owner_type: input.ownerType, slot: input.slot })) {
     throw new HTTPError({ statusCode: 400, statusMessage: 'Media placement owner and slot are not supported' })
   }
+  if (input.presentation && !(input.ownerType === 'organization' && (LOGO_SLOTS as readonly string[]).includes(input.slot))) {
+    throw new HTTPError({ statusCode: 400, statusMessage: 'Only the organization logo placements take a presentation' })
+  }
   const createdAt = input.createdAt ?? new Date().toISOString()
   const owner = mediaPlacementOwnerQuery(input)
   return {
-    query: `INSERT INTO media_placements (id, organization_id, owner_type, owner_id, slot, asset_id, sort_order, status, created_at, updated_at)
+    query: `INSERT INTO media_placements (id, organization_id, owner_type, owner_id, slot, asset_id, sort_order, status, presentation_json, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, CASE WHEN EXISTS (${owner.query})
         AND EXISTS (SELECT 1 FROM media_assets WHERE id = ? AND organization_id = ? AND (status = 'active' OR (status = 'pending' AND ? = 'review_request' AND ? = 'pending')))
-        THEN ? ELSE NULL END, ?, ?, ?, ?)`,
+        THEN ? ELSE NULL END, ?, ?, ?, ?, ?)`,
     params: [input.id ?? crypto.randomUUID(), input.organizationId, input.ownerType, input.ownerId, input.slot,
       ...owner.params!, input.assetId, input.organizationId, input.ownerType, input.status ?? 'active',
       input.assetId,
-      input.sortOrder, input.status ?? 'active', createdAt, input.updatedAt ?? createdAt],
+      input.sortOrder, input.status ?? 'active', input.presentation ? JSON.stringify(input.presentation) : null, createdAt, input.updatedAt ?? createdAt],
   }
 }
 
@@ -189,7 +198,7 @@ export function buildMediaPlacementInsertQuery(input: MediaPlacementInsertInput)
 function buildMediaPlacementReplacementQueries(input: {
   organizationId: string
   placement: { owner_type: string; owner_id: string; slot: string }
-  media: Array<{ asset_id: string }>
+  media: Array<{ asset_id: string; presentation?: LogoPresentation | null }>
   now?: string
 }): BatchQuery[] {
   if (!isSupportedMediaPlacement(input.placement)) {
@@ -208,6 +217,7 @@ function buildMediaPlacementReplacementQueries(input: {
       slot: input.placement.slot,
       assetId: asset.asset_id,
       sortOrder,
+      presentation: asset.presentation,
       createdAt: now,
       updatedAt: now,
     })),
@@ -221,7 +231,7 @@ function buildMediaPlacementReplacementQueries(input: {
 export function buildSingleMediaPlacementQueries(input: {
   organizationId: string
   placement: { owner_type: string; owner_id: string; slot: string }
-  media: Array<{ asset_id: string }>
+  media: Array<{ asset_id: string; presentation?: LogoPresentation | null }>
   now?: string
 }): BatchQuery[] {
   if (!isSingleMediaPlacement(input.placement)) {
@@ -242,7 +252,7 @@ export function buildSingleMediaPlacementQueries(input: {
 export function insertInitialMediaPlacements(input: {
   organizationId: string
   placement: { owner_type: string; owner_id: string; slot: string }
-  media: Array<{ asset_id: string }>
+  media: Array<{ asset_id: string; presentation?: LogoPresentation | null }>
   now?: string
 }): BatchQuery[] {
   return buildMediaPlacementReplacementQueries(input)
@@ -308,6 +318,7 @@ type MediaPlacementRow = MediaAsset & {
   owner_id: string
   slot: string
   sort_order: number
+  presentation_json: string | null
 }
 
 export async function readMediaPlacements(db: DbClient, input: {
@@ -321,7 +332,7 @@ export async function readMediaPlacements(db: DbClient, input: {
   const result = new Map(ownerIds.map(id => [id, [] as StoredMediaPlacementItem[]]))
   if (!ownerIds.length) return result
   const rows = await queryAll<MediaPlacementRow>(db, `
-    SELECT mp.id AS placement_id, mp.owner_type, mp.owner_id, mp.slot, mp.sort_order,
+    SELECT mp.id AS placement_id, mp.owner_type, mp.owner_id, mp.slot, mp.sort_order, mp.presentation_json,
            ma.*
       FROM media_placements mp
       JOIN media_assets ma ON ma.id = mp.asset_id AND ma.organization_id = mp.organization_id
@@ -343,6 +354,7 @@ export async function readMediaPlacements(db: DbClient, input: {
       owner_id: row.owner_id,
       slot: row.slot,
       sort_order: row.sort_order,
+      presentation: row.presentation_json ? parseLogoPresentation(JSON.parse(row.presentation_json)) : null,
     })
   }
   return result

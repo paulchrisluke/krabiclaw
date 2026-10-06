@@ -330,7 +330,7 @@ li {
   padding: 24px;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
-  background: var(--brand-color, transparent);
-  color: var(--brand-color-foreground, inherit);
+  background: var(--ui-primary, transparent);
+  color: var(--primary-foreground, inherit);
 }
 </style>

@@ -7,7 +7,7 @@
         </svg>
       </div>
       <h1 class="blawby-display mt-8 text-4xl font-bold text-[var(--blawby-primary)]">Message received</h1>
-      <p class="mx-auto mt-4 max-w-xl leading-8 text-slate-600">Thank you for contacting us. Our team will review your message and reply as soon as possible.</p>
+      <p class="mx-auto mt-4 max-w-xl leading-8 text-muted">Thank you for contacting us. Our team will review your message and reply as soon as possible.</p>
       <div class="mt-10 flex flex-wrap justify-center gap-3">
         <BlawbyButton to="/">Back home</BlawbyButton>
         <BlawbyButton to="/contact" variant="outline">Send another message</BlawbyButton>

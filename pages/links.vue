@@ -9,7 +9,7 @@
             :alt="brandName"
             :class="profileImageClass"
           >
-          <p v-if="isBlawby" class="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--blawby-token-accent-strong)]">{{ linksPage.page.title }}</p>
+          <p v-if="isBlawby" class="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--blawby-accent-strong)]">{{ linksPage.page.title }}</p>
           <h1 :class="headingClass">{{ linksPage.page.title }}</h1>
         </div>
 
@@ -97,7 +97,7 @@ const profileImageUrl = computed(() => linksPage.value?.organization.media.find(
 const { trackLinkClick: recordLinkClick } = useOrganizationConversionTracking()
 
 const templateClass = computed(() => isBlawby.value
-  ? 'min-h-[calc(100vh-8rem)] bg-[color:var(--blawby-token-bg)] px-4 py-10 sm:px-6 sm:py-14'
+  ? 'min-h-[calc(100vh-8rem)] bg-default px-4 py-10 sm:px-6 sm:py-14'
   : 'min-h-[calc(100vh-8rem)] bg-default px-4 py-10 sm:px-6 sm:py-14')
 const shellClass = computed(() => isBlawby.value
   ? 'mx-auto max-w-md'
@@ -109,11 +109,11 @@ const profileImageClass = computed(() => isBlawby.value
   ? 'mx-auto size-18 rounded-full object-cover shadow-sm'
   : 'mx-auto size-18 rounded-full object-cover shadow-sm')
 const headingClass = computed(() => isBlawby.value
-  ? 'mt-5 text-3xl font-semibold tracking-normal text-[color:var(--blawby-token-primary-dark)]'
+  ? 'mt-5 text-3xl font-semibold tracking-normal text-highlighted'
   : 'saya-display-md mt-5 text-default')
 const linkClass = computed(() => isBlawby.value
-  ? 'group flex min-h-14 items-center rounded-lg border border-[color:var(--blawby-token-border)] bg-white px-5 py-4 text-center text-[color:var(--blawby-token-primary-dark)] no-underline shadow-sm transition hover:-translate-y-0.5 hover:border-[color:var(--blawby-token-accent)] hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[color:var(--blawby-token-accent)]'
-  : 'group flex min-h-14 items-center rounded-full border border-(--brand-color)/25 bg-(--brand-color)/8 px-5 py-4 text-center text-default no-underline shadow-sm transition hover:-translate-y-0.5 hover:bg-(--brand-color)/12 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-(--brand-color)')
+  ? 'group flex min-h-14 items-center rounded-lg border border-default bg-elevated px-5 py-4 text-center text-highlighted no-underline shadow-sm transition hover:-translate-y-0.5 hover:border-secondary hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-secondary'
+  : 'group flex min-h-14 items-center rounded-full border border-primary/25 bg-primary/8 px-5 py-4 text-center text-default no-underline shadow-sm transition hover:-translate-y-0.5 hover:bg-primary/12 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary')
 const labelClass = computed(() => isBlawby.value
   ? 'block truncate text-base font-semibold'
   : 'block truncate text-base font-semibold')

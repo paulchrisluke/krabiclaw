@@ -28,6 +28,8 @@ import { normalizeBlogSlug, resolveSlugMutation } from '~/utils/blog-editor'
 import { creationDedupeKey, creationRequestHash, organizationEventQuery, readCreationRecord } from '~/server/utils/organization-events'
 import { mcpPageInfo, type McpPageInfo } from '~/server/utils/mcp-pagination'
 import { resolvePublicTemplate } from '~/utils/template-registry'
+import { getConfig } from '~/server/utils/organization-config'
+import { isPaletteTemplate, resolveSitePalette } from '~/shared/site-palette'
 import { buildSingleMediaPlacementQueries, hydrateMediaPlacementRefs, insertInitialMediaPlacements } from '~/server/utils/media-asset-manager'
 import { COVER_SELECT, attachCoverMedia, coverJoinSql } from '~/server/utils/content/cover'
 import { attachPageQa } from '~/server/utils/location-qa'
@@ -61,19 +63,6 @@ export const BLOG_UPDATE_MUTATION_FIELDS: Array<keyof PlatformBlogUpdateInput> =
   'content_blocks',
 ]
 
-export function parseBlogEditorThemeTokens(value: string | null | undefined): ApiRecord {
-  if (value === null || value === undefined) return {}
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(value) as unknown
-  } catch {
-    throw new HTTPError({ statusCode: 500, statusMessage: 'Blog editor theme tokens are not valid JSON' })
-  }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new HTTPError({ statusCode: 500, statusMessage: 'Blog editor theme tokens must be a JSON object' })
-  }
-  return parsed as ApiRecord
-}
 
 
 
@@ -189,9 +178,8 @@ function articleCollectionOf(value: unknown): ArticleCollection {
 
 /** The tenant's template and identity, which decide article URLs and editor chrome. */
 export async function loadOrganizationTemplate(db: DbClient, organizationId: string) {
-  const organization = await queryFirst<{ organization_id: string; theme_id: string | null; vertical: string | null; name: string; brand_color: string | null }>(db, `
-    SELECT o.id AS organization_id, o.theme_id, o.vertical, o.name,
-           json_extract(o.settings_json, '$.config.brand_color') AS brand_color
+  const organization = await queryFirst<{ organization_id: string; theme_id: string | null; vertical: string | null; name: string }>(db, `
+    SELECT o.id AS organization_id, o.theme_id, o.vertical, o.name
       FROM organization o
      WHERE o.id = ? LIMIT 1
   `, [organizationId])
@@ -545,20 +533,18 @@ export async function getBlogPost(db: DbClient, postIdOrSlug: string, organizati
   const slug = typeof postFields.slug === 'string' ? postFields.slug : ''
   const [context, organization] = await Promise.all([resolveTenantContext(db, organizationId, env), loadOrganizationTemplate(db, organizationId)])
   const publicPath = slug ? tenantBlogPostPath(organization.template, slug, articleCollectionOf(postFields.collection)) : null
-  const editorThemeTokenRow = await queryFirst<{ tokens_json: string | null } | null>(db, `
-    SELECT json_extract(settings_json, ? || '.tokens') AS tokens_json FROM organization
-     WHERE id = ? AND json_extract(settings_json, ? || '.status') = 'active'
-     LIMIT 1
-  `, ['$.theme_by_template.' + organization.template.slug, organizationId, '$.theme_by_template.' + organization.template.slug])
-  const editorThemeTokens = parseBlogEditorThemeTokens(editorThemeTokenRow?.tokens_json)
+  // The canvas wears the site's light palette, so a draft reads as it will publish.
+  const templateSlug = organization.template.slug
+  const editorColors = isPaletteTemplate(templateSlug)
+    ? resolveSitePalette(templateSlug, (await getConfig(db, organizationId)).palette).light
+    : null
   return {
     ...await contentReviewUrls(attachArticleCategory(attachCoverMedia(attachPublished(postFields, Boolean(postFields.published_at)))), publicPath, organizationId, context, env),
     body: renderContentBlocksToMarkdown(rawBlocks),
     content_document: contentDocument,
     editor_template: organization.template.slug,
-    editor_theme_tokens: editorThemeTokens,
+    editor_colors: editorColors,
     editor_organization_name: organization.name,
-    editor_brand_color: organization.brand_color ?? null,
   }
 }
 

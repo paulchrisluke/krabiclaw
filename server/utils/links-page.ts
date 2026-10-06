@@ -43,7 +43,6 @@ export interface PublicOrganizationLinksPayload {
     name: string
     brand_description: string | null
     media: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string | null }>
-    brand_color: string | null
     theme_id: string | null
     vertical: string | null
     template: PublicTemplateSlug
@@ -196,8 +195,7 @@ export async function getLinksPage(db: DbClient, organizationId: string, locale 
 export async function getPublicLinksPage(env: CloudflareEnv, db: DbClient, organizationId: string, locale = 'en'): Promise<PublicOrganizationLinksPayload | null> {
   const organization = await queryFirst<ApiRecord>(db, `
     SELECT o.id, o.name, o.brand_description,
-           o.theme_id, o.vertical,
-           (o.settings_json ->> '$.config.brand_color') AS brand_color
+           o.theme_id, o.vertical
       FROM organization o
      WHERE o.id = ? AND o.status = 'active' AND o.onboarding_status = 'active'
      LIMIT 1
@@ -231,7 +229,6 @@ export async function getPublicLinksPage(env: CloudflareEnv, db: DbClient, organ
       name: typeof localizedOrganization.name === 'string' ? localizedOrganization.name : String(organization.name),
       brand_description: typeof localizedOrganization.brand_description === 'string' ? localizedOrganization.brand_description : null,
       media: (media.get(organizationId) ?? []).map(item => ({ asset_id: item.asset_id, slot: item.slot, public_url: item.public_url, thumbnail_url: item.thumbnail_url, kind: item.kind })),
-      brand_color: typeof organization.brand_color === 'string' ? organization.brand_color : null,
       theme_id: typeof organization.theme_id === 'string' ? organization.theme_id : null,
       vertical: typeof organization.vertical === 'string' ? organization.vertical : null,
       template: template.slug,

@@ -2,6 +2,8 @@ import type { TenantType } from '~/utils/tenant-routing'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
 import type { SocialImageSource } from '~/utils/social-metadata'
 import type { OrganizationFontPreset } from '~/shared/organization-fonts'
+import type { SitePalette } from '~/shared/site-palette'
+import type { SiteLogo } from '~/shared/media-placement-contract'
 
 interface TenantOrganizationState {
   tenantType: TenantType
@@ -9,6 +11,9 @@ interface TenantOrganizationState {
   organizationId: string | null
   themeId: string | null
   fontPreset: OrganizationFontPreset
+  /** The colors a Saya or Blawby site renders; null on the platform. */
+  palette: SitePalette | null
+  logos: SiteLogo[]
   organization: TenantOrganizationInfo | null
 }
 
@@ -42,6 +47,8 @@ export const useTenantOrganization = () => {
         organizationId: typeof event.context.organizationId === 'string' ? event.context.organizationId : null,
         themeId: typeof event.context.themeId === 'string' ? event.context.themeId : null,
         fontPreset: (event.context.fontPreset as OrganizationFontPreset | undefined) ?? 'default',
+        palette: (event.context.palette as SitePalette | null | undefined) ?? null,
+        logos: (event.context.logos as SiteLogo[] | undefined) ?? [],
         organization: (event.context.organization as TenantOrganizationInfo | null | undefined) ?? null
       }
     }
@@ -51,6 +58,8 @@ export const useTenantOrganization = () => {
       organizationId: null,
       themeId: null,
       fontPreset: 'default',
+      palette: null,
+      logos: [],
       organization: null
     }
   })
@@ -63,6 +72,8 @@ export const useTenantOrganization = () => {
     organizationId: tenantContext.value.organizationId,
     themeId: tenantContext.value.themeId,
     fontPreset: tenantContext.value.fontPreset,
+    palette: tenantContext.value.palette,
+    logos: tenantContext.value.logos,
     organization: tenantContext.value.organization
   }
 }

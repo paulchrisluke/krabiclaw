@@ -927,7 +927,6 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   remove_media: D,
   reorder_media: D,
   replace_content_block: D,
-  set_brand_color: D,
   set_consultation_mode: D,
   set_media: D,
   set_workspace_context: D,

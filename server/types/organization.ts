@@ -3,6 +3,8 @@
 import type { DomainStatus } from '~/server/utils/domains'
 import type { CurrencyCode } from '~/shared/currencies'
 import type { OrganizationFontPreset } from '~/shared/organization-fonts'
+import type { SitePalette, SitePalettePatch } from '~/shared/site-palette'
+import type { LogoPresentation } from '~/shared/media-placement-contract'
 
 export type { CurrencyCode }
 
@@ -31,9 +33,11 @@ export interface OrganizationSettings {
   name: string
   brand_description: string | null
   announcement: OrganizationAnnouncement | null
-  media: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string }>
+  media: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string; presentation?: LogoPresentation | null }>
   contact_email: string | null
-  brand_color: string
+  /** What the site renders: its own palette, or its template's. Null on the platform template, whose palette is fixed. */
+  palette: SitePalette | null
+  palette_source: 'custom' | 'template' | null
   font_preset: OrganizationFontPreset
   // null until the owner has chosen one. Surfaces that quote a price refuse to
   // render rather than showing an amount in a currency nobody picked.
@@ -56,7 +60,8 @@ export interface UpdateOrganizationSettingsRequest {
   // patch: the CMS leaf edits every field together, the same way the old banner did.
   announcement?: { headline: string; description?: string | null; cta_label?: string | null; cta_url?: string | null; dismissible?: boolean; enabled?: boolean } | null
   contact_email?: string
-  brand_color?: string
+  /** A starter and/or colors to change, or null to return to the template's palette. */
+  palette?: SitePalettePatch | null
   font_preset?: OrganizationFontPreset
   default_currency?: CurrencyCode
   press_email?: string
@@ -67,7 +72,7 @@ export interface UpdateOrganizationSettingsRequest {
   seo_description?: string | null
   canonical_url?: string | null
   robots?: string | null
-  media?: Array<{ asset_id: string | null; slot: 'logo' | 'favicon' | 'social_share' | 'announcement' }>
+  media?: Array<{ asset_id: string | null; slot: 'logo' | 'logo_dark' | 'favicon' | 'social_share' | 'announcement'; presentation?: LogoPresentation | null }>
 }
 
 export interface LaunchReadiness {

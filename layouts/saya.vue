@@ -1,14 +1,14 @@
 <template>
   <div
     class="tenant-layout saya-theme min-h-screen flex flex-col font-sans bg-default text-default"
-    :style="themeStyles"
+    :style="paletteStyle"
     :data-hydrated="hydrated ? 'true' : 'false'"
     :data-public-critical-shell="isHome ? 'true' : undefined"
     :data-font-preset="fontPreset"
   >
     <!-- Teleport target for Saya components (e.g. BookingModal) that need to escape
          page overflow/stacking contexts but still must render inside this div to
-         inherit the --ui-*/--brand-color tokens .saya-theme and themeStyles set here.
+         inherit the --ui-* tokens .saya-theme and the site palette set here.
          Teleporting straight to <body> puts them outside this scope entirely, which
          reads as the modal falling back to the platform's default (non-Saya) theme.
          Placed before the page content (rather than after) so it precedes any
@@ -70,28 +70,13 @@ if (import.meta.dev) useDebugLCP()
 // Persistent chrome uses the minimal shell contract. Route-specific Product and
 // experience data comes from the keyed page loader and changes independently.
 const shell = useOrganizationShellState()
-// The layout's root attributes are serialized before its children render.
-// Await the existing keyed shell on every SSR route, not only the homepage,
-// so a direct menu/contact visit cannot serialize no brand color and hydrate
-// with one.
+// Await the existing keyed shell on every SSR route, not only the homepage, so
+// a direct menu/contact visit serializes its header and footer with the shell.
 if (import.meta.server) await shell.ready
-const { config, locations, error: bootstrapError, organization: shellOrganization } = shell
+const { locations, error: bootstrapError, organization: shellOrganization } = shell
 const { isPlatform, organization } = useTenantOrganization()
 const resolvedOrganization = computed(() => shellOrganization.value || organization)
-const brandColor = computed(
-  () => config.value?.brand_color || null
-)
-const brandTextColor = computed(() => getContrastColor(brandColor.value))
-const fontPreset = usePublicSiteTypography()
-
-const themeStyles = computed(() => {
-  const styles: Record<string, string> = {}
-  if (brandColor.value) {
-    styles['--brand-color'] = brandColor.value
-    styles['--brand-color-foreground'] = brandTextColor.value
-  }
-  return styles
-})
+const { fontPreset, paletteStyle } = usePublicSiteBrand()
 
 // A page under /locations/<slug> is about exactly one location: the location
 // itself, its menu, or a single dish. Printing every location's address, phone
@@ -127,31 +112,4 @@ const scopedLocationSlug = computed(() => {
 const footerLocations = computed(() => (scopedLocationSlug.value === null
   ? locations.value
   : locations.value.filter(location => location.slug === scopedLocationSlug.value)))
-
-if (import.meta.client) {
-  const sayaTheme = usePlatformTheme()
-  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)')
-  const onSystemThemeChange = () => sayaTheme.sync()
-
-  onMounted(() => sayaTheme.restore())
-  prefersDark.addEventListener('change', onSystemThemeChange)
-  const stopThemeWatch = watch(sayaTheme.preference, sayaTheme.sync)
-
-  onBeforeUnmount(() => {
-    prefersDark.removeEventListener('change', onSystemThemeChange)
-    stopThemeWatch()
-  })
-}
 </script>
-
-<style>
-/* Saya theme CSS variables */
-.saya-theme {
-  /* A site that has not chosen a colour yet wears the platform's, so the first
-     preview in onboarding already looks like Krabiclaw rather than a green
-     nobody picked. themeStyles above replaces both values the moment the owner
-     answers the brand step. */
-  --brand-color: var(--kc-coral);
-  --brand-color-foreground: #fff;
-}
-</style>

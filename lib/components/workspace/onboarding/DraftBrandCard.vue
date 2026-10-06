@@ -1,38 +1,30 @@
 <template>
   <div class="onboarding-intake-card">
-      <UFormField v-if="showBrand" label="Brand color">
-        <div class="flex flex-wrap items-center gap-2">
+      <UFormField v-if="showBrand" label="Colors" description="Light and dark colors that go together. You can fine-tune them later in Brand.">
+        <div class="grid grid-cols-2 gap-2 sm:grid-cols-4" data-testid="onboarding-palettes">
           <button
-            v-for="swatch in colorPresets"
-            :key="swatch"
+            v-for="starter in STARTER_PALETTES"
+            :key="starter.id"
             type="button"
-            class="size-7 rounded-full border-2 transition disabled:pointer-events-none disabled:opacity-50"
-            :class="form.brandColor === swatch ? 'scale-110 border-highlighted' : 'border-transparent'"
-            :style="{ background: swatch }"
-            :aria-label="`Use ${swatch} as brand color`"
+            class="rounded-lg border-2 p-1.5 text-left transition disabled:pointer-events-none disabled:opacity-50"
+            :class="form.paletteStarter === starter.id ? 'border-highlighted' : 'border-default hover:border-accented'"
+            :aria-pressed="form.paletteStarter === starter.id"
+            :aria-label="`Use the ${starter.label} colors`"
             :disabled="disabled"
-            @click="setBrandColor(swatch)"
-          />
-          <label
-            class="relative flex size-7 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 transition"
-            :class="[
-              customColorSelected ? 'scale-110 border-highlighted' : 'border-default bg-default text-muted hover:border-primary',
-              disabled ? 'pointer-events-none opacity-50' : '',
-            ]"
-            :style="customColorSelected ? { background: form.brandColor } : undefined"
-            aria-label="Choose custom brand color"
+            @click="form.paletteStarter = starter.id"
           >
-            <UIcon v-if="!customColorSelected" name="i-lucide-plus" class="size-4" />
-            <UInput
-              :model-value="form.brandColor"
-              type="color"
-              class="absolute inset-0 cursor-pointer opacity-0"
-              aria-label="Choose custom brand color"
-              :disabled="disabled"
-              @update:model-value="setCustomBrandColor"
-             />
-          </label>
+            <span class="flex h-8 overflow-hidden rounded" :style="{ background: starter.palette.light.ground }">
+              <span class="m-1 flex-1 rounded-sm" :style="{ background: starter.palette.light.action }" />
+              <span class="my-1 mr-1 w-1.5 rounded-sm" :style="{ background: starter.palette.light.accent }" />
+              <span class="w-1/3" :style="{ background: starter.palette.dark.ground }" />
+            </span>
+            <span class="mt-1 block text-xs font-medium text-highlighted">{{ starter.label }}</span>
+          </button>
         </div>
+      </UFormField>
+
+      <UFormField v-if="showBrand" label="Website font">
+        <USelect :model-value="form.fontPreset ?? undefined" :items="fontItems" @update:model-value="value => form.fontPreset = value ?? null" value-key="value" label-key="label" class="w-full" placeholder="The template's own" :disabled="disabled" />
       </UFormField>
 
       <div v-if="showBrand" class="rounded-xl border border-default bg-elevated p-3">
@@ -59,6 +51,24 @@
             {{ form.logoPreviewUrl ? 'Replace logo' : 'Upload logo' }}
           </UButton>
           <UInput ref="logoInput" type="file" accept="image/*" class="hidden" @change="event => uploadDraftImage(event, 'logo')" />
+        </div>
+        <div v-if="form.logoPreviewUrl" class="mt-3 flex gap-2" role="radiogroup" aria-label="Logo shape">
+          <button
+            v-for="shape in LOGO_SHAPE_OPTIONS"
+            :key="shape.value"
+            type="button"
+            role="radio"
+            class="flex flex-1 flex-col items-center gap-1 rounded-lg border-2 p-2 text-xs font-medium text-highlighted transition"
+            :class="(form.logoShape || 'original') === shape.value ? 'border-highlighted' : 'border-default hover:border-accented'"
+            :aria-checked="(form.logoShape || 'original') === shape.value"
+            :disabled="disabled"
+            @click="form.logoShape = shape.value"
+          >
+            <span class="flex h-10 items-center justify-center">
+              <img :src="form.logoPreviewUrl" alt="" :class="shape.value === 'original' ? 'h-8 w-auto max-w-16 object-contain' : ['size-10 object-cover', shape.value === 'circle' ? 'rounded-full' : 'rounded-md']">
+            </span>
+            {{ shape.label }}
+          </button>
         </div>
       </div>
 
@@ -124,6 +134,9 @@
 </template>
 
 <script setup lang="ts">
+import { STARTER_PALETTES } from '~/shared/site-palette'
+import { ORGANIZATION_FONT_OPTIONS, type OrganizationFontPreset } from '~/shared/organization-fonts'
+import type { LogoShape } from '~/shared/media-placement-contract'
 type DraftUploadedImage = {
   draftAssetId: string
   cloudflareImageId: string
@@ -135,7 +148,9 @@ type DraftUploadedImage = {
 }
 
 export type DraftBrandForm = {
-  brandColor: string
+  paletteStarter: string | null
+  fontPreset: OrganizationFontPreset | null
+  logoShape: LogoShape | null
   logoNote: string
   logoPreviewUrl: string
   logoImage: DraftUploadedImage | null
@@ -157,12 +172,16 @@ const props = defineProps<{
   disabled?: boolean
 }>()
 
-const emit = defineEmits<{
+defineEmits<{
   submit: []
-  'brand-color-change': []
 }>()
 
-const colorPresets = ['#3F3F46', '#FB7461', '#0EA5E9', '#16A34A', '#D97706', '#1F2547']
+const fontItems = [...ORGANIZATION_FONT_OPTIONS]
+const LOGO_SHAPE_OPTIONS: Array<{ value: LogoShape; label: string }> = [
+  { value: 'original', label: 'Whole logo' },
+  { value: 'square', label: 'Square' },
+  { value: 'circle', label: 'Circle' },
+]
 const logoInput = ref<{ inputRef?: HTMLInputElement | null } | null>(null)
 const heroInput = ref<{ inputRef?: HTMLInputElement | null } | null>(null)
 const logoUploading = ref(false)
@@ -174,19 +193,6 @@ const section = computed(() => props.section)
 const showBrand = computed(() => section.value === 'brand' || section.value === 'look')
 const showHero = computed(() => section.value === 'hero' || section.value === 'look')
 const activeUploadInProgress = computed(() => showBrand.value && logoUploading.value ? true : showHero.value && heroUploading.value)
-// An unset brand color is unset — not "custom". Nothing is persisted until the
-// owner picks a swatch or a custom color themselves.
-const customColorSelected = computed(() => Boolean(form.value.brandColor) && !colorPresets.includes(form.value.brandColor))
-
-function setBrandColor(color: string) {
-  if (props.disabled) return
-  form.value.brandColor = color
-  emit('brand-color-change')
-}
-
-function setCustomBrandColor(value: string | number) {
-  setBrandColor(String(value))
-}
 
 async function uploadDraftImage(event: Event, target: 'logo' | 'hero') {
   const input = event.target as HTMLInputElement

@@ -4,16 +4,15 @@
       <div data-saya-critical-header-inner class="mx-auto grid h-16 max-w-7xl grid-cols-[1fr_auto_1fr] items-center px-4 sm:px-6 lg:px-8">
         <!-- Brand logo / name -->
           <NuxtLink :to="localePath('/')" data-saya-critical-logo-link class="w-fit shrink-0 justify-self-start no-underline">
-          <div v-if="logoUrl" class="size-10 shrink-0 rounded-full overflow-hidden">
-            <img :src="logoUrl" :alt="restaurantName" loading="eager" decoding="async" class="h-full w-full object-cover" />
-          </div>
-          <!-- No logo asset: a monogram of the tenant's own name, in the
-               tenant's own brand color. It used to be --kc-navy, which put
-               Krabiclaw's platform navy on every tenant site that had not
-               uploaded a logo. -->
-          <div v-else class="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-base font-bold text-(--primary-foreground)">
-            {{ restaurantName.charAt(0).toUpperCase() }}
-          </div>
+          <SiteLogo :alt="restaurantName" size="sm" loading="eager">
+            <!-- No logo asset: a monogram of the tenant's own name, in the
+                 tenant's own action color. It used to be --kc-navy, which put
+                 Krabiclaw's platform navy on every tenant site that had not
+                 uploaded a logo. -->
+            <div class="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-base font-bold text-on-primary">
+              {{ restaurantName.charAt(0).toUpperCase() }}
+            </div>
+          </SiteLogo>
         </NuxtLink>
 
         <!-- Desktop nav -->
@@ -56,7 +55,7 @@
             v-if="primaryCtaPath"
             :to="localePath(primaryCtaPath)"
             data-saya-critical-cta
-            class="inline-flex items-center justify-center rounded-full bg-(--brand-color) px-3 py-1.5 text-xs sm:text-sm font-medium text-(--brand-color-foreground) no-underline transition hover:opacity-90"
+            class="inline-flex items-center justify-center rounded-full bg-primary px-3 py-1.5 text-xs sm:text-sm font-medium text-on-primary no-underline transition hover:opacity-90"
           >
             {{ primaryCtaLabel }}
           </NuxtLink>
@@ -180,9 +179,6 @@ onUnmounted(() => {
 })
 
 const restaurantName = computed(() => props.organization?.name?.trim() || '')
-const logoUrl = computed(() => Array.isArray(props.organization?.media)
-  ? (props.organization.media as ApiRecord[]).find(item => item.slot === 'logo')?.public_url || null
-  : null)
 const isExperienceOrganization = computed(() => props.organization?.vertical === 'experience')
 
 const productPresentation = computed(() => resolveProductPresentation(props.organization?.vertical))

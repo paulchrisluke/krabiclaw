@@ -1,5 +1,8 @@
 @import "tailwindcss" source(none);
 @import "@nuxt/ui/runtime/keyframes.css";
+/* `dark:` follows the html.dark class the theme control sets, as Nuxt UI does on
+   the dashboard, not the operating system setting. */
+@custom-variant dark (&:where(.dark, .dark *));
 @source "../../utils/form-constants.ts";
 @source "../../.nuxt/ui/carousel.ts";
 @source "../../.nuxt/ui/button.ts";
@@ -175,6 +178,57 @@
     oklch(0.73 0.16 240),
     oklch(0.71 0.16 300)
   );
+}
+
+/* ── Site palette (Saya and Blawby) ──────────────────────── */
+/* A public layout root carries the site's six colors per mode as
+   --site-<role>-light/-dark (composables/usePublicSiteBrand.ts). This picks the
+   mode, then derives every Nuxt UI token from those colors, so tints, borders
+   and inverted bands follow whatever the owner chose. */
+.saya-theme,
+.blawby-theme {
+  color-scheme: light;
+  --site-ground:    var(--site-ground-light);
+  --site-surface:   var(--site-surface-light);
+  --site-text:      var(--site-text-light);
+  --site-muted:     var(--site-muted-light);
+  --site-action:    var(--site-action-light);
+  --site-accent:    var(--site-accent-light);
+  --site-on-action: var(--site-on-action-light);
+
+  --ui-primary:          var(--site-action);
+  --color-primary:       var(--site-action);
+  --primary-foreground:  var(--site-on-action);
+  --ui-secondary:        var(--site-accent);
+  --ui-bg:               var(--site-ground);
+  --ui-bg-elevated:      var(--site-surface);
+  --ui-bg-muted:         color-mix(in oklab, var(--site-text) 4%, var(--site-ground));
+  --ui-bg-accented:      color-mix(in oklab, var(--site-text) 8%, var(--site-ground));
+  --ui-bg-inverted:      var(--site-text);
+  --ui-text:             var(--site-text);
+  --ui-text-highlighted: var(--site-text);
+  --ui-text-toned:       color-mix(in oklab, var(--site-text) 50%, var(--site-muted));
+  --ui-text-muted:       var(--site-muted);
+  --ui-text-dimmed:      color-mix(in oklab, var(--site-muted) 70%, var(--site-ground));
+  --ui-text-inverted:    var(--site-ground);
+  --ui-border:           color-mix(in oklab, var(--site-text) 12%, var(--site-ground));
+  --ui-border-muted:     color-mix(in oklab, var(--site-text) 6%, var(--site-ground));
+  --ui-border-accented:  color-mix(in oklab, var(--site-text) 22%, var(--site-ground));
+  --ui-border-inverted:  color-mix(in oklab, var(--site-ground) 15%, var(--site-text));
+  background-color: var(--ui-bg);
+  color: var(--ui-text);
+}
+
+.dark .saya-theme,
+.dark .blawby-theme {
+  color-scheme: dark;
+  --site-ground:    var(--site-ground-dark);
+  --site-surface:   var(--site-surface-dark);
+  --site-text:      var(--site-text-dark);
+  --site-muted:     var(--site-muted-dark);
+  --site-action:    var(--site-action-dark);
+  --site-accent:    var(--site-accent-dark);
+  --site-on-action: var(--site-on-action-dark);
 }
 
 /* ── Platform theme ───────────────────────────────────────── */

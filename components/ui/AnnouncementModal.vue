@@ -30,7 +30,7 @@
         <div class="relative w-full max-w-sm" @click.stop>
           <button
             type="button"
-            class="absolute -right-3 -top-3 z-10 flex size-8 items-center justify-center rounded-full bg-white text-gray-500 shadow-lg ring-1 ring-black/5 hover:bg-gray-50 hover:text-gray-800"
+            class="absolute -right-3 -top-3 z-10 flex size-8 items-center justify-center rounded-full bg-elevated text-muted shadow-lg ring-1 ring-default hover:bg-muted hover:text-highlighted"
             aria-label="Close"
             @click="dismiss"
           >
@@ -38,7 +38,7 @@
               <path d="M5.22 5.22a.75.75 0 0 1 1.06 0L10 8.94l3.72-3.72a.75.75 0 1 1 1.06 1.06L11.06 10l3.72 3.72a.75.75 0 1 1-1.06 1.06L10 11.06l-3.72 3.72a.75.75 0 0 1-1.06-1.06L8.94 10 5.22 6.28a.75.75 0 0 1 0-1.06Z" />
             </svg>
           </button>
-          <div class="overflow-hidden rounded-2xl bg-white shadow-xl">
+          <div class="overflow-hidden rounded-2xl bg-elevated shadow-xl">
             <img
               v-if="announcement?.image_url"
               :src="announcement.image_url"
@@ -46,14 +46,14 @@
               class="h-48 w-full object-cover"
             >
             <div class="space-y-3 p-6">
-              <h2 class="text-lg font-semibold text-gray-900">{{ announcement?.headline }}</h2>
-              <p v-if="announcement?.description" class="text-sm leading-6 text-gray-600">{{ announcement.description }}</p>
+              <h2 class="text-lg font-semibold text-highlighted">{{ announcement?.headline }}</h2>
+              <p v-if="announcement?.description" class="text-sm leading-6 text-muted">{{ announcement.description }}</p>
               <a
                 v-if="announcement?.cta_label && announcement?.cta_url"
                 :href="announcement.cta_url"
                 target="_blank"
                 rel="noopener noreferrer"
-                class="mt-2 inline-flex w-full items-center justify-center rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white no-underline hover:opacity-90"
+                class="mt-2 inline-flex w-full items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-on-primary no-underline hover:opacity-90"
                 @click="trackCtaClick"
               >
                 {{ announcement.cta_label }}

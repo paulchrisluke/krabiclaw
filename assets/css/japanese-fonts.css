@@ -1,5 +1,5 @@
 /*
-  Japanese faces, linked only on Japanese pages (composables/usePublicSiteTypography.ts).
+  Japanese faces, linked only on Japanese pages (composables/usePublicSiteBrand.ts).
   Google serves Japanese as about 120 unicode-range slices per weight, so these
   rules stay out of the surface sheets every other page loads.
 */

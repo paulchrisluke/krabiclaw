@@ -49,7 +49,7 @@ export function appendPublicShellQueries(
     config: push(`SELECT setting.key, setting.value
                 FROM organization s, json_each(s.settings_json, '$.config') setting
                WHERE s.id = ?
-                 AND setting.key IN ('brand_color', 'press_email', 'partnerships_email', 'catering_email', 'careers_email', 'default_timezone')
+                 AND setting.key IN ('press_email', 'partnerships_email', 'catering_email', 'careers_email', 'default_timezone')
               `, [organizationId]),
     // Where this site has something to show: the Product is published to the
     // site, offered and published at the location, and active itself. All three

@@ -1,17 +1,18 @@
 <template>
-  <footer class="bg-[var(--blawby-primary-dark)]" aria-labelledby="blawby-footer-heading">
+  <footer class="border-t border-default bg-elevated" aria-labelledby="blawby-footer-heading">
     <h2 id="blawby-footer-heading" class="sr-only">{{ t('blawby.footer.label') }}</h2>
     <div class="mx-auto max-w-7xl px-6 pb-8 pt-8 sm:pt-12 lg:px-8 lg:pt-16">
       <div class="xl:grid xl:grid-cols-3 xl:gap-8">
         <div class="space-y-8">
-          <NuxtLink v-if="brandName || footerLogo" :to="localePath('/')" class="inline-flex no-underline" :aria-label="`${brandName} home`">
-            <img v-if="footerLogo" :src="footerLogo" :alt="brandName" loading="lazy" decoding="async" class="blawby-footer-logo max-h-16 w-auto max-w-[248px]">
-            <span v-else class="blawby-display text-2xl text-white">{{ brandName }}</span>
+          <NuxtLink v-if="brandName" :to="localePath('/')" class="inline-flex no-underline" :aria-label="`${brandName} home`">
+            <SiteLogo :alt="brandName" size="lg" loading="lazy">
+              <span class="blawby-display text-2xl text-highlighted">{{ brandName }}</span>
+            </SiteLogo>
           </NuxtLink>
           <BlawbyRichText
             v-if="description"
             :content="description"
-            class="blawby-footer-copy max-w-xl text-sm leading-6 text-gray-300"
+            class="blawby-footer-copy max-w-xl text-sm leading-6 text-muted"
           />
           <ul v-if="documents.length" class="flex flex-wrap gap-x-4 gap-y-2 text-sm" role="list">
             <li v-for="document in documents" :key="document.asset_id">
@@ -22,7 +23,7 @@
 
         <div class="mt-16 grid grid-cols-2 gap-8 md:grid-cols-4 xl:col-span-2 xl:mt-0">
           <div v-for="group in footerGroups" :key="group.label" v-show="group.items.length">
-            <h3 class="text-sm font-semibold leading-6 text-white">{{ group.label }}</h3>
+            <h3 class="text-sm font-semibold leading-6 text-highlighted">{{ group.label }}</h3>
             <ul class="mt-6 space-y-4" role="list">
               <li v-for="item in group.items" :key="item.id">
                 <NuxtLink :to="localePath(item.path)" class="blawby-footer-link text-sm leading-6 no-underline">{{ item.title }}</NuxtLink>
@@ -32,7 +33,7 @@
         </div>
       </div>
 
-      <SiteFooterBar :name="compliance?.entity_name || brandName" class="mt-16 border-t border-white/10 pt-8 leading-5 text-gray-400 sm:mt-20 lg:mt-24" />
+      <SiteFooterBar :name="compliance?.entity_name || brandName" color-mode class="mt-16 border-t border-default pt-8 leading-5 text-muted sm:mt-20 lg:mt-24" />
     </div>
   </footer>
 </template>
@@ -51,7 +52,6 @@ const { localePath, t } = useI18n()
 const brandName = computed(() => props.organization.name || props.compliance?.entity_name || '')
 const description = computed(() => props.compliance?.footer_disclaimer || props.organization.brand_description || '')
 const documents = computed(() => props.compliance?.media.filter(item => item.slot === 'document' && item.public_url) ?? [])
-const footerLogo = computed(() => props.organization.media.find(item => item.slot === 'logo')?.public_url || null)
 function linksFor(paths: string[]) {
   const byPath = new Map(props.pageLinks.map(item => [item.path, item]))
   return paths.flatMap(path => {
@@ -73,10 +73,10 @@ const footerGroups = computed(() => [
 
 <style scoped>
 .blawby-footer-link {
-  color: #d1d5db;
+  color: var(--ui-text-muted);
 }
 
 .blawby-footer-link:hover {
-  color: #fff;
+  color: var(--ui-text-highlighted);
 }
 </style>

@@ -7,6 +7,14 @@ import { getOrganizationForMcp } from '~/server/utils/mcp-workflows'
 import { resolveMcpWorkspace } from '~/server/utils/mcp-context'
 import { loadSettingsPayload, updateOrganizationSettingsFields } from '~/server/utils/organization-settings'
 import { ORGANIZATION_FONT_OPTIONS, ORGANIZATION_FONT_PRESETS } from '~/shared/organization-fonts'
+import { SITE_PALETTE_ROLES, STARTER_PALETTES, paletteContrast, type SitePalette, type SitePalettePatch } from '~/shared/site-palette'
+import { resolveColor } from '~/utils/color-utils'
+
+const PALETTE_COLORS_SCHEMA = {
+  type: 'object',
+  properties: Object.fromEntries(SITE_PALETTE_ROLES.map(entry => [entry.role, { type: 'string', description: entry.rule }])),
+  additionalProperties: false,
+} as const
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { NOT_HANDLED, assertDomainSuccess, mutationContextPayload, requiredString, workspaceContextPayload } from './execution'
 
@@ -108,6 +116,8 @@ export const ORGANIZATIONS_TOOLS: McpToolDefinition[] = [
               name: { type: ['string', 'null'] },
               brand_description: { type: ['string', 'null'] },
               font_preset: { type: 'string', enum: [...ORGANIZATION_FONT_PRESETS] },
+              palette: { type: ['object', 'null'], description: 'The colors the site renders, light and dark: its own, or its template\'s. Null on the platform template.', properties: { light: PALETTE_COLORS_SCHEMA, dark: PALETTE_COLORS_SCHEMA } },
+              palette_source: { type: ['string', 'null'], enum: ['custom', 'template', null] },
               announcement: ANNOUNCEMENT_SCHEMA,
               media: { type: 'array', items: ORGANIZATION_MEDIA_ITEM_SCHEMA },
               contact_email: { type: ['string', 'null'] },
@@ -131,7 +141,7 @@ export const ORGANIZATIONS_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'update_organization_settings',
-      description: "Change the selected site’s brand, description, website font, contact email, default currency, announcement or Live/Draft status. Only supplied settings change. An announcement replaces all its fields, and null removes it. Logos and announcement images are separate media placements; this tool does not change them.",
+      description: "Change the selected site’s brand, description, website font, colors, contact email, default currency, announcement or Live/Draft status. Only supplied settings change. An announcement replaces all its fields, and null removes it. Logos and announcement images are separate media placements; this tool does not change them.",
       domain: 'organizations',
       minimumRole: 'admin',
       confirmRequired: false,
@@ -139,6 +149,16 @@ export const ORGANIZATIONS_TOOLS: McpToolDefinition[] = [
         name: { type: 'string' },
         brand_description: { type: 'string' },
         font_preset: { type: 'string', enum: [...ORGANIZATION_FONT_PRESETS], description: `Website heading and body fonts, on every template: ${ORGANIZATION_FONT_OPTIONS.map(option => `${option.value} (${option.label})`).join(', ')}. Thai and Japanese text renders in every choice.` },
+        palette: {
+          type: ['object', 'null'],
+          description: `Saya and Blawby website colors, each with a light and a dark value. Roles: ${SITE_PALETTE_ROLES.map(entry => `${entry.role} (${entry.rule})`).join(' ')} Start from a starter (${STARTER_PALETTES.map(entry => entry.id).join(', ')}) and/or name only the roles to change; colors are #RRGGBB or a plain description such as "forest green". Borders and tints are derived. null returns to the template's colors. The result reports any text or button pair below WCAG AA contrast.`,
+          properties: {
+            starter: { type: 'string', enum: STARTER_PALETTES.map(entry => entry.id) },
+            light: PALETTE_COLORS_SCHEMA,
+            dark: PALETTE_COLORS_SCHEMA,
+          },
+          additionalProperties: false,
+        },
         announcement: ANNOUNCEMENT_SCHEMA,
         contact_email: { type: ['string', 'null'], description: 'Public contact email shown to guests. Pass null to clear it.' },
         default_currency: { type: 'string', enum: [...SUPPORTED_CURRENCIES], description: 'ISO 4217 code. Existing prices keep their stored currency and amount; nothing is converted.' },
@@ -158,6 +178,7 @@ export const ORGANIZATIONS_TOOLS: McpToolDefinition[] = [
           entity: { type: 'string', enum: ['organization_settings'] },
           id: { type: 'string' },
           changed_fields: { type: 'array', items: { type: 'string' } },
+          contrast_warnings: { type: 'array', items: { type: 'object', properties: { mode: { type: 'string' }, pair: { type: 'string' }, ratio: { type: 'number' }, minimum: { type: 'number' } }, required: ['mode', 'pair', 'ratio', 'minimum'] } },
           updated_at: { type: 'string' },
           context: { type: 'object' },
         },
@@ -172,27 +193,17 @@ export const ORGANIZATIONS_TOOLS: McpToolDefinition[] = [
       required: ['mode'],
       outputSchema: { type: 'object', properties: { settings: { type: 'object', properties: { mode: { type: 'string', enum: ['native', 'external_url', 'native_disabled'] } }, required: ['mode'] } }, required: ['settings'] },
     }),
-  organizationTool({
-      name: 'set_brand_color',
-      description: "Set the selected site’s brand accent color from a color description or hex value. Applies to Saya theme accents such as buttons, links and highlights; it does not change layout or other template settings.",
-      domain: 'organizations',
-      minimumRole: 'admin',
-      confirmRequired: false,
-      inputSchema: {
-        color: { type: 'string', description: 'Color description in natural language (e.g., "earthy", "warm terracotta", "ocean blue") or hex format (e.g., #8F1D21).' },
-      },
-      required: ['color'],
-      outputSchema: {
-        type: 'object',
-        properties: {
-          brand_color: { type: 'string', description: 'The resolved hex color code that was set.' },
-          updated: { type: 'boolean' },
-          description: { type: 'string', description: 'Human-readable description of what color was set.' },
-        },
-        required: ['brand_color', 'updated', 'description'],
-      },
-    }),
 ]
+
+// MCP callers may describe a color in words; the stored palette holds hex only.
+function resolvePaletteColorNames(patch: SitePalettePatch): SitePalettePatch {
+  const resolveMode = (colors: SitePalettePatch['light']) => colors && Object.fromEntries(Object.entries(colors).map(([role, value]) => {
+    const resolved = typeof value === 'string' ? resolveColor(value) : null
+    if (!resolved) throw mcpProtocolError(MCP_ERROR.invalidParams, `Unsupported color for ${role}: ${String(value)}`)
+    return [role, resolved]
+  }))
+  return { ...patch, ...(patch.light && { light: resolveMode(patch.light) }), ...(patch.dark && { dark: resolveMode(patch.dark) }) }
+}
 
 export async function handleOrganizationsTools(ctx: McpExecutorContext): Promise<unknown> {
   const { toolName, args, organization } = ctx
@@ -225,10 +236,11 @@ export async function handleOrganizationsTools(ctx: McpExecutorContext): Promise
         ),
       };
     case "update_organization_settings": {
-      const updates = args as Record<
+      const updates = { ...args } as Record<
         string,
         unknown
       >;
+      if (updates.palette && typeof updates.palette === 'object') updates.palette = resolvePaletteColorNames(updates.palette as SitePalettePatch);
       const result = await updateOrganizationSettingsFields(
         organization.db,
         organization.env,
@@ -237,7 +249,7 @@ export async function handleOrganizationsTools(ctx: McpExecutorContext): Promise
         organization.userId
       );
       assertDomainSuccess(result);
-      const settingsResult = (result.data as { settings: { updated_at: string } }).settings;
+      const settingsResult = (result.data as { settings: { updated_at: string; palette: SitePalette | null } }).settings;
       const updateSettingsContext = await mutationContextPayload(organization);
       return renderStructuredResponse(
         {
@@ -245,6 +257,7 @@ export async function handleOrganizationsTools(ctx: McpExecutorContext): Promise
           entity: "organization_settings",
           id: organization.organizationId,
           changed_fields: Object.keys(updates),
+          contrast_warnings: settingsResult.palette ? paletteContrast(settingsResult.palette).filter(check => check.ratio < check.minimum) : [],
           updated_at: settingsResult.updated_at,
           context: updateSettingsContext,
         },
@@ -254,28 +267,6 @@ export async function handleOrganizationsTools(ctx: McpExecutorContext): Promise
     }
     case "set_consultation_mode":
       return { settings: await setPublicConsultationMode(organization.db, organization.organizationId, requiredString(args, 'mode') as 'native' | 'external_url' | 'native_disabled') }
-    case "set_brand_color": {
-      const { resolveColor } = await import("~/utils/color-utils");
-      const colorInput = requiredString(args, "color");
-      const resolvedColor = resolveColor(colorInput);
-      if (!resolvedColor) {
-        throw mcpProtocolError(MCP_ERROR.invalidParams, `Unsupported color: ${colorInput}`);
-      }
-      const result = await updateOrganizationSettingsFields(
-        organization.db,
-        organization.env,
-        organization.organizationId,
-        { brand_color: resolvedColor },
-        organization.userId,
-      );
-      assertDomainSuccess(result);
-      return {
-        brand_color: resolvedColor,
-        updated: true,
-        description: `Set brand color to ${resolvedColor} from "${colorInput}"`,
-        context: await mutationContextPayload(organization),
-      };
-    }
     default:
       return NOT_HANDLED
   }
