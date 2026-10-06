@@ -4,6 +4,7 @@ import { authRequestHeaders, loginAs } from './helpers/auth'
 import { tenantHostIsAddressable, testBaseUrl } from './test-env'
 import { environmentTenantAliasSlug } from '../../server/utils/tenant-hosts'
 import { formatMinorAmount } from '../../shared/prices'
+import { starterPalette } from '../../shared/site-palette'
 
 /**
  * The subdomain the site is stored under, from the host this environment frames
@@ -177,6 +178,11 @@ test('a new owner builds a draft and creates a site through the routed flow', as
   await advance('Next', 'look')
   const next = page.getByRole('button', { name: 'Next', exact: true })
   await expect(next).toBeDisabled()
+  // The look: a starter palette and a font, both written to the site.
+  await page.getByRole('button', { name: 'Use the Forest colors' }).click()
+  await expect(page.getByRole('button', { name: 'Use the Forest colors' })).toHaveAttribute('aria-pressed', 'true')
+  await step('look').getByRole('combobox').click({ timeout: 30_000 })
+  await page.getByRole('option', { name: 'Lora', exact: true }).click({ timeout: 30_000 })
   await page.getByPlaceholder('A clear promise guests remember').fill('Fresh from the Andaman, every morning')
   await expect(next).toBeEnabled()
   await advance('Next', 'review')
@@ -215,7 +221,15 @@ test('a new owner builds a draft and creates a site through the routed flow', as
   // preview token anywhere: that is what activation means.
   const live = await request.get(asAnyone.url, { headers: asAnyone.headers })
   expect(live.status()).toBe(200)
-  expect(await live.text()).toContain(name)
+  const liveHtml = await live.text()
+  expect(liveHtml).toContain(name)
+  // The look the owner chose is the site's: the Forest palette and Lora.
+  const settings = await (await page.request.get(`/api/organizations/${organizationId}/settings`)).json() as { settings: { palette: { light: { action: string } }; palette_source: string; font_preset: string } }
+  expect(settings.settings.palette_source).toBe('custom')
+  expect(settings.settings.palette.light.action).toBe(starterPalette('forest').light.action)
+  expect(settings.settings.font_preset).toBe('lora')
+  expect(liveHtml).toContain('data-font-preset="lora"')
+  expect(liveHtml).toContain(`--site-action-light:${starterPalette('forest').light.action}`)
 
   // The new site's section holds the slug the other tenant's collection holds.
   const own = await page.request.get(`/api/editor/organizations/${organizationId}/collections`)

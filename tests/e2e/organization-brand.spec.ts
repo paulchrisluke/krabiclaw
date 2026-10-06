@@ -103,12 +103,12 @@ test('Sarabun saves through Brand and renders for its Saya tenant in English, Th
   const settingsUrl = `/api/organizations/${organizationId}/settings`
   const initial = await owner.get(settingsUrl)
   await expectStatus(initial, 200)
-  const original = (await initial.json() as { settings: { font_preset: string; brand_color: string } }).settings
+  const original = (await initial.json() as { settings: { font_preset: string } }).settings
   const localePath = `/api/editor/organizations/${organizationId}/locales`
   const patch = async (data: Record<string, unknown>) => expectStatus(await owner.patch(settingsUrl, { data }), 200)
   const dashboard = await browser.newContext({ baseURL, storageState: await owner.storageState(), viewport: { width: 1280, height: 900 } })
   try {
-    await patch({ font_preset: 'default', brand_color: '' })
+    await patch({ font_preset: 'default' })
     const cms = await dashboard.newPage()
     // The deployed dashboard serves the Zaraz consent modal, whose overlay
     // intercepts pointer events until it is dismissed; openTenantPage accepts it.
@@ -127,7 +127,7 @@ test('Sarabun saves through Brand and renders for its Saya tenant in English, Th
     await expect(cms.getByRole('button', { name: 'Save', exact: true })).toBeDisabled()
     const persisted = await owner.get(settingsUrl)
     await expectStatus(persisted, 200)
-    expect(await persisted.json()).toMatchObject({ settings: { font_preset: 'sarabun', brand_color: '' } })
+    expect(await persisted.json()).toMatchObject({ settings: { font_preset: 'sarabun' } })
     const mcpRead = await mcpRequest(owner, baseURL, { method: 'tools/call', toolName: 'get_organization_settings', args: { organization_id: organizationId } })
     expect(mcpData<{ settings: { font_preset: string } }>(await mcpRead.json()).settings.font_preset).toBe('sarabun')
     await expectStatus(await owner.patch(settingsUrl, { data: { font_preset: 'https://example.com/font.css' } }), 400)
@@ -160,7 +160,7 @@ test('Sarabun saves through Brand and renders for its Saya tenant in English, Th
     expect(reset.loaded.some(face => face.family === 'Noto Sans Thai')).toBe(true)
   } finally {
     const assertRestored = await restoreAll([
-      ['font_preset and brand_color', () => owner.patch(settingsUrl, { data: { font_preset: original.font_preset, brand_color: original.brand_color } })],
+      ['font_preset', () => owner.patch(settingsUrl, { data: { font_preset: original.font_preset } })],
     ])
     await dashboard.close()
     await owner.dispose()
@@ -228,6 +228,160 @@ test('every catalog preset saves through MCP and renders on Blawby and the platf
   } finally {
     const assertRestored = await restoreAll([
       ['font_preset', () => owner.patch(settingsUrl, { data: { font_preset: original.font_preset } })],
+    ])
+    await owner.dispose()
+    assertRestored()
+  }
+})
+
+const rgb = (hex: string) => `rgb(${[1, 3, 5].map(index => parseInt(hex.slice(index, index + 2), 16)).join(', ')})`
+
+// The palette a public page renders in one color scheme, read from its layout root.
+async function renderedPalette(browser: Browser, url: string, headers: Record<string, string>, root: string, colorScheme: 'light' | 'dark') {
+  const guest = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme, serviceWorkers: 'block' })
+  try {
+    const page = await guest.newPage()
+    const response = await openTenantPage(page, `${url}${url.includes('?') ? '&' : '?'}sample=${randomUUID()}`, headers)
+    expect(response?.status(), url).toBe(200)
+    return await page.evaluate(selector => {
+      const layout = document.querySelector(selector)!
+      const style = getComputedStyle(layout)
+      const logo = document.querySelector('[data-site-logo] [data-logo-shape]:not(.hidden)')
+      return {
+        dark: document.documentElement.classList.contains('dark'),
+        primary: style.getPropertyValue('--ui-primary').trim(),
+        onPrimary: style.getPropertyValue('--primary-foreground').trim(),
+        background: style.backgroundColor,
+        logoShape: logo?.getAttribute('data-logo-shape') ?? null,
+        logoPosition: logo ? getComputedStyle(logo.querySelector('img')!).objectPosition : null,
+      }
+    }, root)
+  } finally { await guest.close() }
+}
+
+test('a starter palette saved through Brand colors the Saya site in light and dark', async ({ browser, playwright }) => {
+  const { starterPalette, onActionColor } = await import('../../shared/site-palette')
+  const forest = starterPalette('forest')
+  const organizationId = E2E_KIKUZUKI_ORGANIZATION_ID
+  const baseURL = testBaseUrl()
+  const owner = await playwright.request.newContext({ baseURL })
+  await loginAs(owner, baseURL)
+  const settingsUrl = `/api/organizations/${organizationId}/settings`
+  const initial = await owner.get(settingsUrl)
+  await expectStatus(initial, 200)
+  const original = (await initial.json() as { settings: { palette: unknown; palette_source: string } }).settings
+  const dashboard = await browser.newContext({ baseURL, storageState: await owner.storageState(), viewport: { width: 1280, height: 900 } })
+  try {
+    await expectStatus(await owner.patch(settingsUrl, { data: { palette: null } }), 200)
+    const cms = await dashboard.newPage()
+    await openTenantPage(cms, `${baseURL}/dashboard/${organizationId}/brand/color`, {})
+    await cms.getByRole('button', { name: 'Use the Forest palette' }).click({ timeout: 30_000 })
+    await expect(cms.getByTestId('palette-preview-dark')).toHaveCSS('background-color', rgb(forest.dark.ground))
+    const saved = await Promise.all([
+      cms.waitForResponse(response => response.request().method() === 'PATCH' && new URL(response.url()).pathname === '/api/dashboard/settings', { timeout: 60_000 }),
+      cms.getByRole('button', { name: 'Save', exact: true }).click({ timeout: 30_000 }),
+    ]).then(([response]) => response)
+    expect(saved.status(), await saved.text()).toBe(200)
+
+    // Read back through the settings API and MCP, not the response that wrote it.
+    const persisted = await owner.get(settingsUrl)
+    expect((await persisted.json() as { settings: { palette: unknown } }).settings.palette).toEqual(forest)
+    const mcpRead = await mcpRequest(owner, baseURL, { method: 'tools/call', toolName: 'get_organization_settings', args: { organization_id: organizationId } })
+    expect(mcpData<{ settings: { palette_source: string } }>(await mcpRead.json()).settings.palette_source).toBe('custom')
+
+    for (const mode of ['light', 'dark'] as const) {
+      const rendered = await renderedPalette(browser, `${kikuzukiTestBaseUrl()}/`, kikuzukiTestExtraHeaders(), '.tenant-layout', mode)
+      expect(rendered.dark).toBe(mode === 'dark')
+      expect(rendered.primary).toBe(forest[mode].action)
+      expect(rendered.onPrimary).toBe(onActionColor(forest[mode]))
+      expect(rendered.background).toBe(rgb(forest[mode].ground))
+    }
+
+    // Another tenant keeps its own colors.
+    const pottery = await owner.get('/api/organizations/org-user-pottery-house/settings')
+    const potteryPalette = (await pottery.json() as { settings: { palette: { light: { action: string } } } }).settings.palette
+    expect((await renderedPalette(browser, `${potteryHouseBaseURL}/`, potteryHouseExtraHeaders, '.tenant-layout', 'light')).primary).toBe(potteryPalette.light.action)
+  } finally {
+    const assertRestored = await restoreAll([
+      ['palette', () => owner.patch(settingsUrl, { data: { palette: original.palette_source === 'custom' ? original.palette : null } })],
+    ])
+    await dashboard.close()
+    await owner.dispose()
+    assertRestored()
+  }
+})
+
+test('palette changes through MCP reach the CMS and Blawby, and invalid colors are refused before writing', async ({ browser, playwright }) => {
+  const { TEMPLATE_PALETTES } = await import('../../shared/site-palette')
+  const baseURL = testBaseUrl()
+  const owner = await playwright.request.newContext({ baseURL })
+  await loginAs(owner, baseURL)
+  const settingsUrl = `/api/organizations/${NCLS_ORGANIZATION_ID}/settings`
+  const initial = await owner.get(settingsUrl)
+  await expectStatus(initial, 200)
+  const original = (await initial.json() as { settings: { palette: unknown; palette_source: string } }).settings
+  const update = (palette: unknown) => mcpRequest(owner, baseURL, { method: 'tools/call', toolName: 'update_organization_settings', args: { organization_id: NCLS_ORGANIZATION_ID, palette } })
+  const readPalette = async () => (await (await owner.get(settingsUrl)).json() as { settings: { palette: typeof TEMPLATE_PALETTES.blawby } }).settings.palette
+  try {
+    await expectStatus(await owner.patch(settingsUrl, { data: { palette: null } }), 200)
+    mcpData(await (await update({ light: { action: '#0F4C5C' } })).json())
+    const changed = await readPalette()
+    expect(changed.light).toEqual({ ...TEMPLATE_PALETTES.blawby.light, action: '#0F4C5C' })
+    expect(changed.dark).toEqual(TEMPLATE_PALETTES.blawby.dark)
+
+    // A color that is not #RRGGBB, or a role there is not, writes nothing.
+    for (const invalid of [{ light: { action: '#12' } }, { light: { border: '#000000' } }]) {
+      const body = await (await update(invalid)).json()
+      expect(() => mcpData(body)).toThrow()
+    }
+    expect(await readPalette()).toEqual(changed)
+
+    // The CMS reads back what MCP saved.
+    const dashboard = await browser.newContext({ baseURL, storageState: await owner.storageState(), viewport: { width: 1280, height: 900 } })
+    try {
+      const cms = await dashboard.newPage()
+      await openTenantPage(cms, `${baseURL}/dashboard/north-carolina-legal-services/brand/color`, {})
+      await expect(cms.getByRole('textbox', { name: 'Action light hex color' })).toHaveValue('#0F4C5C', { timeout: 30_000 })
+    } finally { await dashboard.close() }
+
+    // Blawby renders the palette, and its dark mode.
+    const light = await renderedPalette(browser, `${blawbyTestBaseUrl()}/`, blawbyTestExtraHeaders(), '.blawby-shell', 'light')
+    expect(light.primary).toBe('#0F4C5C')
+    const dark = await renderedPalette(browser, `${blawbyTestBaseUrl()}/`, blawbyTestExtraHeaders(), '.blawby-shell', 'dark')
+    expect(dark.dark).toBe(true)
+    expect(dark.background).toBe(rgb(TEMPLATE_PALETTES.blawby.dark.ground))
+  } finally {
+    const assertRestored = await restoreAll([
+      ['palette', () => owner.patch(settingsUrl, { data: { palette: original.palette_source === 'custom' ? original.palette : null } })],
+    ])
+    await owner.dispose()
+    assertRestored()
+  }
+})
+
+test('a logo presentation set through MCP reads back and crops the header logo around its focus', async ({ browser, playwright }) => {
+  const organizationId = E2E_KIKUZUKI_ORGANIZATION_ID
+  const baseURL = testBaseUrl()
+  const owner = await playwright.request.newContext({ baseURL })
+  await loginAs(owner, baseURL)
+  const settingsUrl = `/api/organizations/${organizationId}/settings`
+  const logoOf = async () => (await (await owner.get(settingsUrl)).json() as { settings: { media: Array<{ asset_id: string; slot: string; presentation: unknown }> } }).settings.media.find(item => item.slot === 'logo')!
+  const original = await logoOf()
+  const setLogo = (presentation: unknown) => mcpRequest(owner, baseURL, { method: 'tools/call', toolName: 'set_media', args: { organization_id: organizationId, placement: { owner_type: 'organization', owner_id: organizationId, slot: 'logo' }, asset_id: original.asset_id, presentation } })
+  try {
+    const square = { shape: 'square', focus: { x: 0.2, y: 0.5 } }
+    mcpData(await (await setLogo(square)).json())
+    expect((await logoOf()).presentation).toEqual(square)
+    const rendered = await renderedPalette(browser, `${kikuzukiTestBaseUrl()}/`, kikuzukiTestExtraHeaders(), '.tenant-layout', 'light')
+    expect(rendered.logoShape).toBe('square')
+    expect(rendered.logoPosition).toBe('20% 50%')
+    // A focus outside the image is refused, and the stored presentation stands.
+    const refused = await (await setLogo({ shape: 'circle', focus: { x: 2, y: 0 } })).json()
+    expect(() => mcpData(refused)).toThrow()
+    expect((await logoOf()).presentation).toEqual(square)
+  } finally {
+    const assertRestored = await restoreAll([
+      ['logo presentation', async () => setLogo(original.presentation)],
     ])
     await owner.dispose()
     assertRestored()
