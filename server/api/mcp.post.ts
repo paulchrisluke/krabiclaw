@@ -21,8 +21,7 @@ import {
   getActiveEntitlements, getVisibleOrganizationContext, requireMcpUser, roleSatisfies, type McpUserContext, } from "~/server/utils/mcp-auth";
 import { MCP_PROMPTS, renderMcpPrompt } from "~/server/utils/mcp-prompts";
 import { cloudflareEnv } from "~/server/utils/api-response";
-import { createDb } from "~/server/db";
-import { drainPublicResourceCacheInvalidations, purgePublicResourceCacheNow } from "~/server/utils/public-resource-cache";
+import { purgePublicResourceCacheNow } from "~/server/utils/public-resource-cache";
 import { resolveMissingMcpCredential, type McpToolMeta } from "~/server/utils/mcp-runtime";
 import {
   buildMcpAuthChallengeForError, describeMcpAuthTelemetryError, getCloudflareWaitUntil, isMcpMutatingTool, mcpAuthRequiredResult, mcpToolErrorResult, setMcpAuthChallenge, } from "~/server/utils/mcp-route-helpers";
@@ -299,26 +298,11 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
         recordRequestPhase(event, "mcp_cache_purge", cacheStartedAt);
       }
     }
-    // The write above queued "this site changed"; drain it now so the site's
-    // search index follows the tool call, the way a dashboard write's does.
-    if (isMcpMutatingTool(toolDef) && resolvedOrganizationId) {
-      const env = cloudflareEnv(event);
-      const kv = env.ORGANIZATION_CACHE;
-      const db = env.db ?? (env.DB ? createDb(env.DB) : null);
-      if (!kv || !db) throw new Error("ORGANIZATION_CACHE and DB bindings are required to drain site changes after a tenant MCP write");
-      try {
-        await drainPublicResourceCacheInvalidations(db, kv, env, { organizationId: resolvedOrganizationId });
-      } catch (drainError) {
-        const reason = `${toolName} wrote its change to organization ${resolvedOrganizationId}, but the site's cache or search index was not updated: ${describeErrorForTelemetry(drainError)}`;
-        purgeFailure = purgeFailure ? `${purgeFailure}; ${reason}` : reason;
-      }
-    }
-
     logMcpEventDetached(event, cfEnv.DB, {
       userId: mcpUser.userId, organizationId: mcpUser.activeOrganizationId ?? null,  requestId: null, method: "tools/call", toolName, toolDomain: toolDef?.domain ?? null, isMutating: isMcpMutatingTool(toolDef), arguments: rawArgs, result: structuredContent, status: purgeFailure ? "error" : "success", errorMessage: purgeFailure, httpStatus: 200, oauthClientId: mcpUser.oauthClientId ?? null, durationMs: Date.now() - toolStartedAt, });
 
     return {
-      isError: purgeFailure !== null, structuredContent, content: [{ type: "text", text: purgeFailure ?? modelText }],
+      isError: purgeFailure !== null, structuredContent, content: [{ type: "text", text: purgeFailure ? `${purgeFailure}\n\n${modelText}` : modelText }],
       ...(isRender && result.privateMeta ? { _meta: result.privateMeta } : {}),
     };
   });

@@ -57,9 +57,10 @@ threads at intake, and Better Auth's member hooks. The drainer
 environment. In production it also runs `syncOrganizationSearchIndex()`, which lists the site's own items by its hashed
 organization key segment, rebuilds its documents from D1, uploads the ones whose
 `content_hash` changed and deletes the ones that are gone. Dashboard editor responses
-and mutating MCP tool calls await the scoped drain before reporting success. The scheduled task also drains queued work every two minutes. A failed
-drain is reported to the caller and retained for reconciliation. A write therefore costs
-one list of the site's items plus one upload per changed record; Cloudflare indexes the upload asynchronously, usually within seconds.
+and mutating MCP tool calls purge the site's caches before reporting success and never
+wait on AI Search: the scheduled task drains queued work every two minutes. A failed
+drain row is retried and then retained as failed for reconciliation. Cloudflare indexes
+an accepted upload asynchronously; nothing waits for it to finish.
 
 ## Rebuild flow
 
@@ -89,8 +90,8 @@ the platform or other businesses.
 
 Production CI (`.github/workflows/ci.yml`) runs a blocking rebuild when a file
 that defines the indexed corpus or its rendering changes. A failed rebuild fails
-the deploy job. Nonproduction writes still wait for cache invalidation, but do
-not access or require AI Search.
+the deploy job. Nonproduction drains purge caches only; they do not access or
+require AI Search.
 
 ## Environment expectations
 
