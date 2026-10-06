@@ -822,6 +822,8 @@ test('Facebook video: a Reel is published by finishing its upload session, any o
     const newId = JSON.parse((await publication(gone.post.id))!.provider_handles_json).video_id as string
     assert.notEqual(newId, goneId)
     assert.equal((await publishPost(env, 'org-a', gone.post.id, { expectedUpdatedAt: gone.post.updated_at, targets: [targets.facebook()] }, 'owner')).outcomes[0]!.status, 'published')
+    assert.deepEqual(await publication(gone.post.id).then(row => [row!.state, row!.provider_post_id, row!.provider_handles_json]), ['published', `${PAGE}_${newId}`, JSON.stringify({ video_id: newId })])
+    assert.equal(meta.fbVideos.get(newId)?.published, true)
 
     // Neither path ever asks Facebook to flip a video to published.
     assert.equal(meta.sent(request => request.method === 'POST' && request.host === 'graph.facebook.com' && /\/(reel|video)-\d+$/.test(request.path)).length, 0)
