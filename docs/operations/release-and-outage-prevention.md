@@ -219,6 +219,27 @@ the initial load immediately before deployment; carry important edits explicitly
 and preserve writes to the new database. After each deployment, verify schema,
 foreign keys and customer journeys on the new binding before promoting further.
 
+The v11-to-v12 replacement drops `organization.feature_overrides` and
+`business_locations.feature_overrides` and their CHECK constraints (#1267):
+site capabilities come from the organization's vertical and theme alone.
+`organization` is the parent of nearly every table and `business_locations` is
+referenced too, so neither column could be dropped in place. The v11 chain,
+including its forward migrations `0001`–`0005`, is archived in
+`migrations-history/v11/`; an older chain reaches v11 through those forward
+migrations before the copy. A non-null override fails the transfer; staging and
+production held none on 2026-10-05. Both v12 databases were created with
+`--location wnam` and Cloudflare reported WNAM before loading:
+
+- `krabiclaw-production-v12`: `27366e55-3b79-48db-9593-29a163a00dff`
+- `krabiclaw-staging-v12`: `799c4af0-5d61-4102-ad3a-d3f8f8fedaaf`
+
+```sh
+node --experimental-strip-types scripts/pull-production-snapshot.ts --staging --source krabiclaw-staging-v11 --out staging-v12-initial.sqlite
+node --experimental-strip-types scripts/pull-production-snapshot.ts --production --source krabiclaw-production-v11 --out production-v12-initial.sqlite
+node --experimental-strip-types scripts/pull-production-snapshot.ts --staging --source krabiclaw-staging-v11 --out staging-v12-final.sqlite --delta-from staging-v12-initial.sqlite
+node --experimental-strip-types scripts/pull-production-snapshot.ts --production --source krabiclaw-production-v11 --out production-v12-final.sqlite --delta-from production-v12-initial.sqlite
+```
+
 Before dropping or retiring a legacy table or writer:
 
 - remove every runtime reader and writer;

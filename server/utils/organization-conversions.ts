@@ -127,6 +127,13 @@ function allowlistedProperties(rule: ConversionEventDefinition, properties: Reco
   return Object.keys(kept).length > 0 ? kept : null
 }
 
+/** A UUID-shaped identity derived from an event's organization, name and entity. */
+async function entityEventId(organizationId: string, eventName: string, entityId: string): Promise<string> {
+  const hex = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${organizationId}:${eventName}:${entityId}`)))]
+    .map(byte => byte.toString(16).padStart(2, '0')).join('')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`
+}
+
 /**
  * Records one conversion for `input.organizationId`.
  *
@@ -160,6 +167,9 @@ export async function recordOrganizationConversionEvent(db: DbClient, origin: { 
   }
 
   if (input.id !== undefined && !isCanonicalEventId(input.id)) throw new Error('An event id must be a canonical UUID')
+  // A server interaction about an entity happens once per entity, so its identity comes from that entity, as an outcome's does.
+  const identity = input.id ?? (rule.producer === 'server' && rule.kind === 'interaction' && input.entityId
+    ? await entityEventId(input.organizationId, input.eventName, input.entityId) : undefined)
   const properties = allowlistedProperties(rule, input.properties)
 
   const now = input.occurredAt ?? new Date().toISOString()
@@ -202,7 +212,7 @@ export async function recordOrganizationConversionEvent(db: DbClient, origin: { 
     }
   }
 
-  const id = input.id ?? crypto.randomUUID()
+  const id = identity ?? crypto.randomUUID()
   const ipHash = origin ? await hashIp(getClientIp({ req: origin })) : null
   const payload = JSON.stringify({ event_name: input.eventName, stage: input.stage, entity_type: input.entityType ?? null,
     entity_id: input.entityId ?? null, page_type: input.pageType ?? null, route_path: input.routePath ?? null, cta_destination: input.ctaDestination ?? null,
@@ -221,7 +231,7 @@ export async function recordOrganizationConversionEvent(db: DbClient, origin: { 
 
   // An interaction with a supplied identity that already exists is the same interaction delivered
   // again. The identity must be this organization's own: another tenant's event is never returned.
-  if (input.id) {
+  if (identity) {
     const same = await queryFirst<{ organization_id: string }>(db, 'SELECT organization_id FROM analytics_events WHERE id = ?', [id])
     if (same?.organization_id !== input.organizationId) throw new Error('Analytics event id belongs to another organization')
     return { id, created: false }

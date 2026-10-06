@@ -153,7 +153,7 @@ const json = (value: unknown, status = 200) => new Response(JSON.stringify(value
 
 async function setUp() {
   const runtime = new Miniflare({ workers: [{ config: {
-    name: 'social-publication-proof', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'social-publication-proof', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } },
     env: { DB: { type: 'd1' }, MEDIA_BUCKET: { type: 'r2' } },
   } }] })

@@ -72,8 +72,8 @@ const digest = (rows, names) => hash(rows.map(row => JSON.stringify(names.map(na
  * is either mapped below or must hold nothing; a value nobody maps fails.
  */
 const RETIRED_COLUMNS = {
-  organization: ['integrations_json'],
-  business_locations: ['description_provenance'],
+  organization: ['integrations_json', 'feature_overrides'],
+  business_locations: ['description_provenance', 'feature_overrides'],
   products: ['tags'],
 }
 
@@ -378,7 +378,7 @@ export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = n
     let sourceFiles = files
     assert(ledger.length > 0, 'Source migration ledger is missing')
     let recognized = false
-    for (const directory of [MIGRATIONS_DIRECTORY, 'migrations-history/v10', 'migrations-history/v9', 'migrations-history/v8', 'migrations-history/v7']) {
+    for (const directory of [MIGRATIONS_DIRECTORY, 'migrations-history/v11', 'migrations-history/v10', 'migrations-history/v9', 'migrations-history/v8', 'migrations-history/v7']) {
       const candidates = readdirSync(resolve(directory)).filter(name => /^\d{4}_.+\.sql$/u.test(name)).sort()
       if (ledger.length > candidates.length || !ledger.every((name, index) => name === candidates[index])) continue
       const expected = new Database(':memory:')
@@ -421,6 +421,13 @@ export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = n
     if (fromV7) {
       for (const name of readdirSync('migrations-history/v8').filter(name => /^\d{4}_.+\.sql$/u.test(name)).sort().slice(1)) {
         stage.exec(readFileSync(resolve('migrations-history/v8', name), 'utf8'))
+      }
+    }
+    // v12 retires per-site capability overrides: capabilities come from the vertical and theme alone.
+    for (const table of ['organization', 'business_locations']) {
+      if (columns(stage, table).includes('feature_overrides')) {
+        assert(stage.prepare(`SELECT count(*) AS n FROM ${qi(table)} WHERE feature_overrides IS NOT NULL`).get().n === 0,
+          `${table}.feature_overrides holds values nothing maps; no rows were copied`)
       }
     }
     if (columns(stage, 'products').includes('tags')) {
@@ -472,6 +479,12 @@ export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = n
       const normalizedTable = readFileSync('migrations-history/v8/0000_baseline.sql', 'utf8').split('--> statement-breakpoint').find(statement => statement.includes('CREATE TABLE `organization_integrations`'))
       assert(normalizedTable, 'Archived normalized integration schema is missing')
       stage.exec(normalizedTable)
+    }
+    // An older archived chain reaches v11 through v11's forward migrations, which the v12 baseline absorbed.
+    if (sourceDirectory !== MIGRATIONS_DIRECTORY && sourceDirectory !== 'migrations-history/v11') {
+      for (const name of readdirSync('migrations-history/v11').filter(name => /^\d{4}_.+\.sql$/u.test(name)).sort().slice(1)) {
+        stage.exec(readFileSync(resolve('migrations-history/v11', name), 'utf8'))
+      }
     }
     if (sourceDirectory !== MIGRATIONS_DIRECTORY) {
       for (const name of files.slice(1)) stage.exec(readFileSync(resolve(MIGRATIONS_DIRECTORY, name), 'utf8'))

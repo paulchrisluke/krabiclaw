@@ -31,6 +31,8 @@ export default definePlugin((nitroApp) => {
     // A hit is the cached entry itself. Writing it back renewed its TTL on every
     // request, so a page with steady traffic served the same HTML indefinitely.
     if (response.headers.get('x-edge-cache') === 'HIT') return
+    const cacheControl = response.headers.get('cache-control') ?? ''
+    if (/(?:^|,)\s*(?:private|no-store|no-cache)(?:\s*(?:=|,|$))/i.test(cacheControl)) return
 
     if (request.url.includes('?')) return
     if (SKIP_PREFIXES.some(p => path.startsWith(p))) return

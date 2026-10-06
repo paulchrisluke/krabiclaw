@@ -1,6 +1,8 @@
 import { HTTPError } from 'nitro'
 import type Stripe from 'stripe'
 import { execute, queryFirst, type DbClient } from '~/server/db'
+import { getConfig } from '~/server/utils/organization-config'
+import { organizationLogo } from '~/server/notifications/hero'
 
 export type StripeConnectStatus =
   | 'creating'
@@ -58,6 +60,7 @@ export interface StripeConnectProjection {
   cardPaymentsStatus: StripeCapabilityStatus | null
   requirements: StripeConnectRequirement[]
   stripeRefreshedAt: string
+  financialContractSupported?: boolean
 }
 
 function parseRequirements(value: string): StripeConnectRequirement[] {
@@ -123,10 +126,11 @@ export function buildStripeConnectOnboardingUrls(
   if (origin.username || origin.password || origin.pathname !== '/' || origin.search || origin.hash) {
     throw new Error('Stripe Connect platform origin must be an origin without credentials, path, query, or fragment')
   }
-  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(organizationSlug)) {
+  if (!organizationSlug.trim() || /[\/\\]/u.test(organizationSlug) || Array.from(organizationSlug).some(character => character.codePointAt(0)! < 32)) {
     throw new Error('Stripe Connect organization slug is invalid')
   }
-  const returnUrl = new URL(`/dashboard/${organizationSlug}/settings/connect`, origin)
+  const returnUrl = new URL(`/dashboard/${encodeURIComponent(organizationSlug)}/settings/payments`, origin)
+  returnUrl.searchParams.set('tab', 'payouts')
   returnUrl.searchParams.set('stripe_connect', 'returned')
   const refreshUrl = new URL('/api/dashboard/connect/refresh', origin)
   refreshUrl.searchParams.set('org', organizationSlug)
@@ -233,7 +237,7 @@ export async function projectStripeConnectedAccount(
   db: DbClient,
   input: StripeConnectProjection,
 ): Promise<StripeConnectedAccount> {
-  const status = deriveStripeConnectStatus(input)
+  const status = input.financialContractSupported === false ? 'restricted' : deriveStripeConnectStatus(input)
   const country = normalizeStripeConnectCountry(input.country)
   const updated = await execute(db, `
     UPDATE stripe_connected_accounts
@@ -287,6 +291,7 @@ function accountProjection(
     country: normalizeStripeConnectCountry(country),
     livemode: account.livemode,
     cardPaymentsStatus: cardPaymentsStatus === undefined ? null : cardPaymentsStatus,
+    financialContractSupported: account.dashboard==='express' && account.defaults?.responsibilities?.fees_collector==='application' && account.defaults.responsibilities.losses_collector==='stripe',
     requirements: normalizeAccountRequirements(account),
     stripeRefreshedAt: refreshedAt,
   }
@@ -294,6 +299,7 @@ function accountProjection(
 
 const STRIPE_CONNECT_ACCOUNT_INCLUDE: Stripe.V2.Core.AccountRetrieveParams.Include[] = [
   'configuration.merchant',
+  'defaults',
   'identity',
   'requirements',
 ]
@@ -308,7 +314,32 @@ export async function refreshStripeConnectedAccount(
   const account = await stripe.v2.core.accounts.retrieve(connected.stripeAccountId, {
     include: STRIPE_CONNECT_ACCOUNT_INCLUDE,
   }, stripeContext === undefined ? {} : { stripeContext })
+  // A refresh the dashboard asked for also carries the business's brand to Stripe, so its Checkout and receipts look like the business.
+  if (stripeContext === undefined) await syncStripeConnectedBranding(db, stripe, connected.organizationId, account)
   return await projectStripeConnectedAccount(db, accountProjection(connected, account))
+}
+
+/**
+ * Stripe's Checkout, receipts and payout emails for a connected account use
+ * that account's branding. The business already has a brand colour and a logo
+ * here; this gives Stripe the same, uploading the logo once.
+ */
+export async function syncStripeConnectedBranding(db: DbClient, stripe: Stripe, organizationId: string, account: Stripe.V2.Core.Account): Promise<void> {
+  const [config, logoUrl] = await Promise.all([getConfig(db, organizationId), organizationLogo(db, organizationId)])
+  const current = account.configuration?.merchant?.branding
+  const branding: { primary_color?: string; logo?: string; icon?: string } = {}
+  const color = typeof config.brand_color === 'string' && /^#[0-9a-fA-F]{6}$/.test(config.brand_color) ? config.brand_color : null
+  if (color && current?.primary_color?.toLowerCase() !== color.toLowerCase()) branding.primary_color = color
+  if (logoUrl && !current?.logo) {
+    const response = await fetch(logoUrl)
+    if (!response.ok) throw new Error(`The business logo could not be read for Stripe (${response.status})`)
+    const type = response.headers.get('content-type') ?? 'image/png'
+    const file = await stripe.files.create({ purpose: 'business_logo', file: { data: Buffer.from(await response.arrayBuffer()), name: `logo.${type.includes('svg') ? 'svg' : type.includes('jpeg') ? 'jpg' : 'png'}`, type } })
+    branding.logo = file.id
+    branding.icon = file.id
+  }
+  if (!Object.keys(branding).length) return
+  await stripe.v2.core.accounts.update(account.id, { configuration: { merchant: { branding } } })
 }
 
 export async function ensureStripeConnectedAccount(
@@ -322,6 +353,7 @@ export async function ensureStripeConnectedAccount(
     livemode: boolean
   },
 ): Promise<StripeConnectedAccount> {
+  if (normalizeStripeConnectCountry(input.country) !== 'US') throw new HTTPError({ statusCode: 400, statusMessage: 'Payments onboarding currently supports US businesses' })
   const reservation = await reserveStripeConnectedAccount(db, input)
   if (reservation.stripeAccountId) return await refreshStripeConnectedAccount(db, stripe, reservation)
 
@@ -336,11 +368,11 @@ export async function ensureStripeConnectedAccount(
         merchant: { capabilities: { card_payments: { requested: true } } },
       },
       defaults: {
-        responsibilities: { fees_collector: 'application', losses_collector: 'application' },
+        responsibilities: { fees_collector: 'application', losses_collector: 'stripe' },
       },
       metadata: { krabiclaw_organization_id: input.organizationId },
       include: STRIPE_CONNECT_ACCOUNT_INCLUDE,
-    }, { idempotencyKey: `krabiclaw-connect-account:express:${input.organizationId}` })
+    }, { idempotencyKey: `krabiclaw-connect-account:express-managed-risk:${input.organizationId}` })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Stripe account creation failed'
     await markStripeConnectedAccountCreationFailed(db, reservation.id, message)
@@ -359,38 +391,25 @@ export async function createStripeConnectOnboardingLink(
     use_case: {
       type: 'account_onboarding',
       account_onboarding: {
-        configurations: ['merchant'],
         collection_options: { fields: 'eventually_due', future_requirements: 'include' },
         return_url: input.returnUrl,
         refresh_url: input.refreshUrl,
       },
     },
-  })
+  } as Stripe.V2.Core.AccountLinkCreateParams)
+  // The pinned preview removes the stable SDK's configurations input; the
+  // account's enabled configuration determines the hosted collection flow.
   const parsed = new URL(link.url)
-  if (parsed.protocol !== 'https:' || parsed.origin !== 'https://connect.stripe.com') {
+  if (parsed.protocol !== 'https:' || !['https://connect.stripe.com', 'https://accounts.stripe.com'].includes(parsed.origin)) {
     throw new Error('Stripe returned an untrusted onboarding URL')
   }
   return parsed.toString()
 }
 
 export async function listStripeConnectCountries(stripe: Stripe): Promise<string[]> {
-  const countries: string[] = []
-  let startingAfter: string | undefined
-  do {
-    const page = await stripe.countrySpecs.list({
-      limit: 100,
-      ...(startingAfter ? { starting_after: startingAfter } : {}),
-    })
-    for (const country of page.data) {
-      countries.push(country.id.toUpperCase())
-    }
-    if (page.has_more) {
-      const lastCountry = page.data.at(-1)
-      if (!lastCountry) throw new Error('Stripe Country Specs pagination returned an empty page')
-      startingAfter = lastCountry.id
-    } else {
-      startingAfter = undefined
-    }
-  } while (startingAfter)
-  return countries.sort()
+  // Fetch only the country the current Accounts v2 managed-risk boundary accepts.
+  // Enumerating every Stripe country adds unrelated pagination to CMS onboarding.
+  const country = await stripe.countrySpecs.retrieve('US')
+  if (country.id.toUpperCase() !== 'US') throw new Error('Stripe returned an unexpected country specification')
+  return ['US']
 }

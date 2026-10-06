@@ -4,7 +4,7 @@
   "app_info": {
     "display_name": "KrabiClaw",
     "subtitle": "Manage your business website",
-    "description": "Manage your KrabiClaw business website from ChatGPT. Choose a site and location, edit products, variants and prices, publish announcements and blog articles, update page content and translations, and upload or assign media. Review contact and table reservation inquiries, create and manage Product bookings and consultations, and propose guest-approved changes from your connected workspace. Booking writes reserve real capacity and may email guests; required online payment returns a payment-required result before unpaid allocation. Publishing and content changes can appear on your public website. A KrabiClaw account with access to the selected business is required. Site and location setup and deletion are managed in the KrabiClaw CMS.",
+    "description": "Manage your KrabiClaw business website from ChatGPT. Choose a site and location, edit products, variants and prices, publish announcements and blog articles, update page content and translations, and upload or assign media. Review contact and table reservation inquiries, create and manage Product bookings and consultations, and propose guest-approved changes from your connected workspace. Booking writes reserve real capacity and may email guests; required online payment reserves capacity and opens hosted Checkout. Publishing and content changes can appear on your public website. A KrabiClaw account with access to the selected business is required. Site and location setup and deletion are managed in the KrabiClaw CMS.",
     "category": "BUSINESS"
   },
   "tools": {
@@ -128,6 +128,18 @@
         "destructive_justification": "Creates an empty collection for the selected organization; products are added to it separately. Existing content is not deleted or overwritten."
       }
     },
+    "create_payment_checkout": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Freezes an immutable one-time order before creating seller-scoped hosted Stripe Checkout. Bookings use create_product_booking and its canonical guest request and capacity hold; the buyer approves payment in Stripe.",
+        "open_world_justification": "The frozen canonical Price and purchase identity are sent to the seller-scoped Stripe Checkout; the buyer authorizes any payment in Stripe.",
+        "destructive_justification": "Freezes an immutable one-time order before creating seller-scoped hosted Stripe Checkout. Bookings use create_product_booking and its canonical guest request and capacity hold; the buyer approves payment in Stripe. Existing content is not deleted or overwritten."
+      }
+    },
     "create_post": {
       "annotations": {
         "readOnlyHint": false,
@@ -159,9 +171,9 @@
         "destructiveHint": false
       },
       "justifications": {
-        "read_only_justification": "Atomically creates a tenant Product booking and guest inbox thread, with caller idempotency, operator provenance and explicit guest acknowledgement choice. Uses public capacity and payment policy; payment-required sessions fail before unpaid allocation.",
+        "read_only_justification": "Atomically creates a tenant Product booking and guest inbox thread, with caller idempotency, operator provenance and explicit guest acknowledgement choice. Uses public capacity and payment policy; required positive collection reserves a hold and hands off to hosted Checkout without creating an unpaid Booking.",
         "open_world_justification": "Sends owner alerts and, when requested, an acknowledgement email to the supplied guest address.",
-        "destructive_justification": "Atomically creates a tenant Product booking and guest inbox thread, with caller idempotency, operator provenance and explicit guest acknowledgement choice. Uses public capacity and payment policy; payment-required sessions fail before unpaid allocation. Existing content is not deleted or overwritten."
+        "destructive_justification": "Atomically creates a tenant Product booking and guest inbox thread, with caller idempotency, operator provenance and explicit guest acknowledgement choice. Uses public capacity and payment policy; required positive collection reserves a hold and hands off to hosted Checkout without creating an unpaid Booking. Existing content is not deleted or overwritten."
       }
     },
     "create_qa": {
@@ -440,6 +452,54 @@
         "destructive_justification": "Reads the selected organization settings. Existing content is not deleted or overwritten."
       }
     },
+    "get_payment": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads one authorized tenant payment, its native refund and dispute projections.",
+        "open_world_justification": "Reads one authorized tenant payment, its native refund and dispute projections. Its scope is the authenticated KrabiClaw workspace, not arbitrary external entities or the public web.",
+        "destructive_justification": "Reads one authorized tenant payment, its native refund and dispute projections. Existing content is not deleted or overwritten."
+      }
+    },
+    "get_payment_payouts": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads native Stripe balance and payouts in the selected seller account; moves no funds.",
+        "open_world_justification": "The seller-scoped Stripe account is queried for native balance and payouts.",
+        "destructive_justification": "Reads native Stripe balance and payouts in the selected seller account; moves no funds. Existing content is not deleted or overwritten."
+      }
+    },
+    "get_payment_summary": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads UTC tenant financial and usage summaries, retaining separate currency totals.",
+        "open_world_justification": "Reads UTC tenant financial and usage summaries, retaining separate currency totals. Its scope is the authenticated KrabiClaw workspace, not arbitrary external entities or the public web.",
+        "destructive_justification": "Reads UTC tenant financial and usage summaries, retaining separate currency totals. Existing content is not deleted or overwritten."
+      }
+    },
+    "get_payments_usage": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads durable attributable usage delivery state and native Metronome invoices.",
+        "open_world_justification": "The separate operating Metronome customer is queried for native invoices.",
+        "destructive_justification": "Reads durable attributable usage delivery state and native Metronome invoices. Existing content is not deleted or overwritten."
+      }
+    },
     "get_post": {
       "annotations": {
         "readOnlyHint": true,
@@ -546,6 +606,18 @@
         "read_only_justification": "Reads the authenticated user workspace selection and available context.",
         "open_world_justification": "Reads the authenticated user workspace selection and available context. Its scope is the authenticated KrabiClaw workspace, not arbitrary external entities or the public web.",
         "destructive_justification": "Reads the authenticated user workspace selection and available context. Existing content is not deleted or overwritten."
+      }
+    },
+    "issue_payment_refund": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Issues an idempotent native connected-account refund only for an existing explicit authenticated browser approval.",
+        "open_world_justification": "The browser-approved amount and connected-account PaymentIntent are sent to Stripe for a native principal refund.",
+        "destructive_justification": "Issues an idempotent native connected-account refund only for an existing explicit authenticated browser approval. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "list_article_categories": {
@@ -704,6 +776,18 @@
         "destructive_justification": "Lists organizations accessible to the authenticated user without provisioning one. Existing content is not deleted or overwritten."
       }
     },
+    "list_payments": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads a bounded page of seller-scoped tenant transactions and immutable purchase snapshots.",
+        "open_world_justification": "Reads a bounded page of seller-scoped tenant transactions and immutable purchase snapshots. Its scope is the authenticated KrabiClaw workspace, not arbitrary external entities or the public web.",
+        "destructive_justification": "Reads a bounded page of seller-scoped tenant transactions and immutable purchase snapshots. Existing content is not deleted or overwritten."
+      }
+    },
     "list_posts": {
       "annotations": {
         "readOnlyHint": true,
@@ -786,6 +870,18 @@
         "read_only_justification": "Overwrites the selected location's special hours with the given days reopened, so guests can book them on the public website again.",
         "open_world_justification": "Overwrites the selected location's special hours with the given days reopened, so guests can book them on the public website again. Its scope is the authenticated KrabiClaw workspace, not arbitrary external entities or the public web.",
         "destructive_justification": "Overwrites the selected location's special hours with the given days reopened, so guests can book them on the public website again. Existing state is deleted, replaced or overwritten rather than only appended."
+      }
+    },
+    "open_payments_onboarding": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Returns the selected merchant authenticated integration URL for Stripe-hosted onboarding; creates no account itself.",
+        "open_world_justification": "Returns the selected merchant authenticated integration URL for Stripe-hosted onboarding; creates no account itself. Its scope is the authenticated KrabiClaw workspace, not arbitrary external entities or the public web.",
+        "destructive_justification": "Returns the selected merchant authenticated integration URL for Stripe-hosted onboarding; creates no account itself. Existing content is not deleted or overwritten."
       }
     },
     "publish_blog_post": {
@@ -1002,6 +1098,18 @@
         "read_only_justification": "Replaces the submitted translations for one resource type and locale; omitted resources remain untouched.",
         "open_world_justification": "Replaces the submitted translations for one resource type and locale; omitted resources remain untouched. Its scope is the authenticated KrabiClaw workspace, not arbitrary external entities or the public web.",
         "destructive_justification": "Replaces the submitted translations for one resource type and locale; omitted resources remain untouched. Existing state is deleted, replaced or overwritten rather than only appended."
+      }
+    },
+    "request_payment_refund": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Prepares an actor-bound expiring browser financial approval; creates no provider refund.",
+        "open_world_justification": "Prepares an actor-bound expiring browser financial approval; creates no provider refund. Its scope is the authenticated KrabiClaw workspace, not arbitrary external entities or the public web.",
+        "destructive_justification": "Prepares an actor-bound expiring browser financial approval; creates no provider refund. Existing content is not deleted or overwritten."
       }
     },
     "request_product_booking_change": {

@@ -20,6 +20,7 @@ import { requestInsertQueries, threadPayloadForGuest, getThreadOperationalRecord
 import { executeGuestThreadOperation } from '../../server/domain/guest-threads/operations.ts'
 import { occurrenceKey } from '../../shared/bookings.ts'
 import { addLocalDays, localDateTimeToInstant, localNow } from '../../utils/timezone.ts'
+import type { CloudflareEnv } from '../../server/utils/auth.ts'
 
 const ORG = 'org-sessions'
 const LOCATION = 'loc-sessions'
@@ -29,13 +30,13 @@ const NOW = '2026-09-11T00:00:00.000Z'
 
 async function boot(legacy = false) {
   const runtime = new Miniflare({ workers: [{ config: {
-    name: 'availability-proof', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'availability-proof', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } },
     env: { DB: { type: 'd1' } },
   } }] })
   const db = await runtime.getD1Database('DB')
   const statements = legacy
-    ? ['0000_baseline'].flatMap(name => readFileSync(`migrations/${name}.sql`, 'utf8').split('--> statement-breakpoint').map(sql => sql.trim()).filter(Boolean))
+    ? ['0000_baseline'].flatMap(name => readFileSync(`migrations-history/v11/${name}.sql`, 'utf8').split('--> statement-breakpoint').map(sql => sql.trim()).filter(Boolean))
     : await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))
   await db.batch(statements.map(statement => db.prepare(statement)))
   await db.prepare(`INSERT INTO organization (id, name, slug, subdomain, settings_json, theme_id, default_currency, status, onboarding_status, url_structure, vertical, updated_at)
@@ -235,6 +236,35 @@ test('the occurrence key is the intended local start, not the actual instant', (
 })
 
 
+test('required online collection follows the canonical subscription entitlement while disabling remains available', { timeout: 120_000 }, async () => {
+  const { runtime, db } = await boot()
+  const scope = { organizationId: ORG, productId: PRODUCT, actorId: ACTOR }
+  const env = { DB: db, STRIPE_SECRET_KEY: 'sk_test_local_d1_no_stripe_requests', BETTER_AUTH_URL: 'https://proof.example', BETTER_AUTH_SECRET: 'local-proof-secret-long-enough-for-auth', NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://krabiclaw.test' } as CloudflareEnv
+  try {
+    const before = await db.prepare('SELECT online_payment_required, updated_at FROM product_booking_configs WHERE product_id = ?').bind(PRODUCT).first()
+    const invalidations = await db.prepare('SELECT COUNT(*) FROM public_resource_cache_invalidations').first('COUNT(*)')
+    await assert.rejects(() => setProductBookingConfig(db, { ...scope, patch: { online_payment_required: true } }), { statusCode: 403 })
+    await assert.rejects(() => setProductBookingConfig(db, { ...scope, env, patch: { online_payment_required: true } }), { statusCode: 403 })
+    await db.prepare("INSERT INTO subscription(id,plan,referenceId,status,periodEnd) VALUES('booking-entitlement','growth',?,'active',4070908800)").bind(ORG).run()
+    await assert.rejects(() => setProductBookingConfig(db, { ...scope, env, patch: { online_payment_required: true } }), { statusCode: 403 })
+    await db.prepare("UPDATE subscription SET plan='commerce',status='past_due' WHERE id='booking-entitlement'").run()
+    await assert.rejects(() => setProductBookingConfig(db, { ...scope, env, patch: { online_payment_required: true } }), { statusCode: 403 })
+    assert.deepEqual(await db.prepare('SELECT online_payment_required, updated_at FROM product_booking_configs WHERE product_id = ?').bind(PRODUCT).first(), before)
+    assert.equal(await db.prepare('SELECT COUNT(*) FROM public_resource_cache_invalidations').first('COUNT(*)'), invalidations)
+
+    await db.prepare("UPDATE subscription SET status='active' WHERE id='booking-entitlement'").run()
+    await setProductBookingConfig(db, { ...scope, env, patch: { online_payment_required: true } })
+    assert.equal(await db.prepare('SELECT online_payment_required FROM product_booking_configs WHERE product_id = ?').bind(PRODUCT).first('online_payment_required'), 1)
+    await db.prepare("UPDATE subscription SET status='canceled' WHERE id='booking-entitlement'").run()
+    await setProductBookingConfig(db, { ...scope, patch: { duration_minutes: 60 } })
+    assert.equal(await db.prepare('SELECT online_payment_required FROM product_booking_configs WHERE product_id = ?').bind(PRODUCT).first('online_payment_required'), 1, 'other settings preserve the saved policy after downgrade')
+    await setProductBookingConfig(db, { ...scope, env, patch: { online_payment_required: false } })
+    assert.equal(await db.prepare('SELECT online_payment_required FROM product_booking_configs WHERE product_id = ?').bind(PRODUCT).first('online_payment_required'), 0)
+    await setProductBookingConfig(db, { ...scope, patch: { online_payment_required: false } })
+    assert.equal(await db.prepare('SELECT online_payment_required FROM product_booking_configs WHERE product_id = ?').bind(PRODUCT).first('online_payment_required'), 0)
+  } finally { await runtime.dispose() }
+})
+
 test('shared booking defaults retain omissions, zero and null; all history blocks removal', { timeout: 120_000 }, async () => {
   const { runtime, db } = await boot()
   const scope = { organizationId: ORG, productId: PRODUCT, actorId: ACTOR }
@@ -395,7 +425,7 @@ test('provider additive migration keeps the separately held weekly columns and t
     await db.prepare("UPDATE product_availability_rules SET end_time='16:00',interval_minutes=30,interval_weeks=2,effective_from_date='2026-01-01',effective_until_date='2030-01-01',duration_minutes=30,capacity=0 WHERE id='held-rule'").run()
     await db.prepare("INSERT INTO organization_integrations(id,organization_id,provider,account_id,target_id,target_name,measurement_id,revision,created_at,updated_at)VALUES('retained-analytics',?,'google_analytics','linked-account','properties/123','Analytics','G-RETAINED','original-revision',?,?)").bind(ORG,NOW,NOW).run()
     const integrationBefore=await db.prepare("SELECT * FROM organization_integrations WHERE id='retained-analytics'").first()
-    await db.batch(readFileSync('migrations/0001_calendar_member_scheduling.sql', 'utf8').split('--> statement-breakpoint').map(sql => sql.trim()).filter(Boolean).map(sql => db.prepare(sql)))
+    await db.batch(readFileSync('migrations-history/v11/0001_calendar_member_scheduling.sql', 'utf8').split('--> statement-breakpoint').map(sql => sql.trim()).filter(Boolean).map(sql => db.prepare(sql)))
     const row = await db.prepare("SELECT end_time,interval_minutes,interval_weeks,effective_from_date,effective_until_date,duration_minutes,capacity FROM product_availability_rules WHERE id='held-rule'").first()
     assert.deepEqual(row, { end_time: '16:00', interval_minutes: 30, interval_weeks: 2, effective_from_date: '2026-01-01', effective_until_date: '2030-01-01', duration_minutes: 30, capacity: 0 })
     assert.deepEqual(await db.prepare("SELECT * FROM organization_integrations WHERE id='retained-analytics'").first(),{...integrationBefore,calendar_group:null,include_reservations:null,status:null,last_error:null})
@@ -403,10 +433,10 @@ test('provider additive migration keeps the separately held weekly columns and t
     await db.prepare("INSERT INTO member(id,organizationId,userId) VALUES('integrity-member',?,'integrity-user')").bind(ORG).run()
     await db.prepare("INSERT INTO member_scheduling(member_id,organization_id,timezone,weekly_json,time_off_json,windows_json,windows_until,public_name,calendar_revision,updated_at,updated_by) VALUES('integrity-member',?,'Asia/Bangkok','[]','[]','[]','2030-01-01T00:00:00.000Z','Retained profile','retained-revision',?,?)").bind(ORG,NOW,ACTOR).run()
     const scheduleBefore=await db.prepare("SELECT * FROM member_scheduling WHERE member_id='integrity-member'").first()
-    await db.batch(readFileSync('migrations/0002_calendar_member_integrity.sql','utf8').split('--> statement-breakpoint').map(sql=>sql.trim()).filter(Boolean).map(sql=>db.prepare(sql)))
+    await db.batch(readFileSync('migrations-history/v11/0002_calendar_member_integrity.sql','utf8').split('--> statement-breakpoint').map(sql=>sql.trim()).filter(Boolean).map(sql=>db.prepare(sql)))
     assert.deepEqual(await db.prepare("SELECT * FROM member_scheduling WHERE member_id='integrity-member'").first(),scheduleBefore,'the forward constraint migration preserves the exact schedule and profile')
     const analyticsBefore=await db.prepare("SELECT id,organization_id,provider,account_id,target_id,target_name,measurement_id,verified,verification_token,status,last_error,revision,created_at,updated_at FROM organization_integrations WHERE provider='google_analytics'").first()
-    await db.batch(readFileSync('migrations/0003_calendar_connection.sql','utf8').split('--> statement-breakpoint').map(sql=>sql.trim()).filter(Boolean).map(sql=>db.prepare(sql)))
+    await db.batch(readFileSync('migrations-history/v11/0003_calendar_connection.sql','utf8').split('--> statement-breakpoint').map(sql=>sql.trim()).filter(Boolean).map(sql=>db.prepare(sql)))
     assert.deepEqual(await db.prepare("SELECT * FROM organization_integrations WHERE provider='google_analytics'").first(),analyticsBefore,'removing calendar export policy preserves the exact Analytics identity and credentials reference')
     await db.prepare("INSERT INTO organization(id,name,slug) VALUES('foreign-org','Foreign','foreign-org')").run()
     await assert.rejects(db.prepare("UPDATE member_scheduling SET organization_id='foreign-org' WHERE member_id='integrity-member'").run(),/FOREIGN KEY/)

@@ -1,7 +1,10 @@
 # Stripe catalog operator plan
 
-`scripts/seed-stripe.mjs` reconciles the new-sale recurring catalog for Starter
-(free, with no Stripe product) and Growth (`$49` per month or `$588` per year). Managed (`$149`)
+`scripts/seed-stripe.mjs` reconciles the new-sale recurring catalog for Basic
+(free, with no Stripe product), Growth (`$49` per month, with an optional existing
+`$588` annual price), and Commerce (`$89` per month). Commerce includes Growth's
+features and Payments and has no annual price. `shared/billing-model.ts` owns the
+fixed USD subscription amounts. Managed (`$149`)
 and SEO Accelerator (`$349`) are retired from new offers. Every product and
 price, including already-archived products and inactive or one-time prices, is
 read into the reviewed snapshot. Only products whose metadata explicitly names
@@ -13,7 +16,7 @@ the product, including duplicates. Inactive products are never cleared or
 archived. Retired products are never created, updated, or marketed, and an absent retired product
 produces no operation. Retired plan
 identities are not valid runtime entitlements; the runtime sale model accepts
-only Starter and Growth. Historical fulfillment rows remain raw read-only audit
+only Basic, Growth and Commerce. Historical fulfillment rows remain raw read-only audit
 history, while archiving a product or price prevents new purchases.
 
 The script does not create one-time credit, add-on, or auto-top-up products, and
@@ -61,6 +64,28 @@ real test-mode checkout journey, while catalog drift is planned, reviewed, and
 applied separately with the commands below. This prevents unrelated product
 metadata copy from blocking an application or incident release.
 
+Public plan reads share the canonical `ORGANIZATION_CACHE` catalog entry
+`stripe-plans:v5:<actual app.buildId>` for up to one hour. Tenant CMS content
+purges do not refresh this global entry. A genuine new application build selects
+a fresh entry; restarting the same built Worker retains its persistent cache.
+After catalog changes, verify the actual public plan and Markdown reads as well
+as the native zero-operation read-back.
+
+Paid-plan changes also require the target account's native Stripe customer
+portal configuration. Better Auth Stripe uses `subscription_update_confirm` for
+its hosted confirmation. Enable subscription updates, allow price changes, and
+select only the canonical offered Product/Price IDs from that account's verified
+catalog. Read the saved products with
+`expand=['features.subscription_update.products']`; the ordinary configuration
+response omits them. Preserve existing cancellation, payment-method, invoice,
+proration and timing settings unless the operator explicitly changes them.
+Verify an actual Better Auth plan-change confirmation and its signed webhook
+read-back. New subscription Checkout alone does not qualify an existing
+subscription's plan-change flow. The catalog planner does not configure this
+portal, and the isolated E2E Sandbox configuration does not qualify staging.
+[Stripe portal configuration](https://docs.stripe.com/api/customer_portal/configurations/update),
+[native confirmation flows](https://docs.stripe.com/customer-management/portal-deep-links).
+
 Review the plan and its `providerSnapshotSha256`, `operations`, and fixed
 amounts. Apply only the reviewed file, with the exact hash copied from its
 `planSha256` field:
@@ -74,7 +99,7 @@ STRIPE_SECRET_KEY=rk_test_... yarn stripe:catalog:apply -- \
 
 `--journal-file` is mandatory for every apply. The operator writes the journal
 atomically before the first provider mutation. It is keyed to the exact plan
-SHA, provider snapshot SHA, Stripe account ID, and test account mode; reusing
+SHA, provider snapshot SHA, Stripe account ID, and selected account mode; reusing
 the path for any other plan, snapshot, account, or mode is refused. Each operation is recorded as
 `pending`, `running`, `applied`, or `failed` with only sanitized IDs/URLs and
 error evidence. A failed apply exits non-zero with `status=incomplete`; review
@@ -82,8 +107,10 @@ the journal and resume the same signed plan only after the named action is
 safe. The journal never claims compensation or completion when a provider
 mutation may have succeeded without a durable result.
 
-The signed operation order creates or reconciles the canonical Growth product,
-required monthly price, any unambiguous existing annual price, and image first.
+The signed operation order creates or reconciles each offered plan's canonical
+product, required monthly price, any supported unambiguous existing annual price,
+and configured image first. Commerce does not require a product image. The full
+planner also reconciles the existing Site Language catalog family.
 For active retired products, it clears a signed active default price before
 deactivating prices and archiving the product. The planner never invents an
 annual amount when no annual price exists. The operator re-reads the provider
@@ -94,22 +121,22 @@ when the provider state matches the journal evidence. On completion, a fresh
 provider snapshot must produce zero remaining operations against the same desired model;
 otherwise the journal remains `incomplete` and a new reviewed plan is required.
 
-If the read-only snapshot contains more than one active Growth product, plan
+If the read-only snapshot contains more than one active product for an offered plan, plan
 generation fails closed and prints every conflicting product ID. Resolve the
-ambiguity explicitly when regenerating the plan with a Growth-only override:
+ambiguity explicitly when regenerating the plan with that plan's override:
 
 ```bash
 STRIPE_SECRET_KEY=rk_test_... yarn stripe:catalog:plan -- \
   --canonical-product growth=prod_...
 ```
 
-The override must name Growth and an active product whose `metadata.plan_id`
+The override must name an offered paid plan and an active product whose `metadata.plan_id`
 matches exactly; retired Managed/SEO overrides are rejected. The signed plan
 records its resolved `canonicalProductIds` selection. For every non-canonical
-Growth duplicate, and for every active retired product, the plan deactivates
+offered-plan duplicate, and for every active retired product, the plan deactivates
 all active prices (recurring or one-time) and archives the product, each guarded by the
 reviewed provider snapshot. An active retired default price is cleared first;
-the canonical Growth product and inactive products are not cleared. There is no
+canonical offered products and inactive products are not cleared. There is no
 automatic first-product selection.
 
 For an existing canonical product, monthly and annual base prices are resolved
@@ -123,30 +150,44 @@ snapshot includes each price's `lookup_key` and normalized metadata, so these
 selection inputs are covered by the review hash. On the selected product only
 non-canonical base-price candidates are deactivated.
 
-Apply is refused unless the key is test mode (`sk_test_` or `rk_test_`), the
-plan hash is intact, the confirmation matches exactly, the plan is test-mode
-and bound to the current exact Stripe account, local image files still match
+Apply defaults to test mode (`sk_test_` or `rk_test_`). Live apply requires
+`--require-live-mode` on the reviewed plan and apply commands. Apply is refused
+unless the key and plan have the selected mode, the
+plan hash is intact, the confirmation matches exactly, the plan is
+bound to the current exact Stripe account, local image files still match
 their planned hashes, and the provider snapshot is unchanged when a new
 journal starts. During resume, each pending operation revalidates its signed
 target and canonical safety boundary against a fresh snapshot. A failed
 operation performs no mutation from that operation; earlier journaled
 operations remain applied and are reported as such. Use a restricted
-test-mode key with read-account plus the catalog/file permissions required for
+key for the selected mode with read-account plus the catalog/file permissions required for
 this task;
 never place a key in a plan file or commit it.
 
-There is no live-mode apply path. A live key may be used for read-only planning,
-but a plan generated from live state cannot be applied by this command.
+For an authorized production catalog change, use the configured live key in the
+environment and retain the same account, snapshot, SHA and journal safeguards:
+
+```bash
+node scripts/seed-stripe.mjs --dry-run --require-live-mode \
+  --plan-file .tmp/stripe-live-catalog-plan.json
+node scripts/seed-stripe.mjs --apply --require-live-mode \
+  --plan-file .tmp/stripe-live-catalog-plan.json \
+  --confirm-sha256 <planSha256> \
+  --journal-file .tmp/stripe-live-catalog-apply.json
+```
+
+The two mode guards are mutually exclusive and are checked before constructing
+the Stripe client. Omitting the live guard cannot apply a live key or plan.
 
 ## Organization metadata and webhook cutover
 
 The same operator script has an explicit `--ownership-file` mode for the Epoch 5
-handoff. Catalog mutation still requires a test key. Ownership mode accepts the
+handoff. Ownership mode accepts the
 inventory's exact account and mode, including live, and changes only Customer
 metadata, non-canceled Subscription metadata, and the existing webhook URL. Run
 this during the canonical release cutover, before removing the old webhook route
-from production. The current request authorizes staging only; production execution
-belongs to the owner.
+from production. Execute only for the exact environment and account authorized
+by the operator.
 
 Create a private JSON inventory from the verified epoch export's Better Auth
 Organization customer IDs and the read-only Stripe endpoint census:
@@ -166,6 +207,9 @@ Organization customer IDs and the read-only Stripe endpoint census:
 
 Use the configured environment key. Keep inventory, plan and journal outside Git;
 the plan includes provider identifiers and ownership metadata.
+
+For an endpoint-only cutover, set `organizations` to `[]` and provide the exact
+existing `webhook` inventory. This preserves customer and subscription state.
 
 ```sh
 node scripts/seed-stripe.mjs --ownership-file /private/ownership.json --dry-run --plan-file /private/ownership-plan.json

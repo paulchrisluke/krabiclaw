@@ -161,7 +161,7 @@ export async function memberSchedulingList(actor: SchedulingActor) {
  if(!membership)throw new HTTPError({statusCode:403,message:'Membership required'})
  const {roleAllows}=await import('~/server/utils/member-access')
  const admin=await roleAllows({...membership,permissions:{members:['read']}})
- const members=await queryAll<{id:string;name:string;is_self:number}>(actor.env.DB,`SELECT m.id,u.name,m.userId=? AS is_self FROM member m JOIN user u ON u.id=m.userId WHERE m.organizationId=? AND (?=1 OR m.userId=?)`,[actor.userId,actor.organizationId,Number(admin),actor.userId])
+ const members=await queryAll<{id:string;name:string;image:string|null;is_self:number}>(actor.env.DB,`SELECT m.id,u.name,u.image,m.userId=? AS is_self FROM member m JOIN user u ON u.id=m.userId WHERE m.organizationId=? AND (?=1 OR m.userId=?)`,[actor.userId,actor.organizationId,Number(admin),actor.userId])
  return Promise.all(members.map(async ({is_self,...member})=>({...member,self:Boolean(is_self),scheduling:await readMemberScheduling(actor.env.DB,actor.organizationId,member.id)})))
 }
 export async function connectPersonalCalendar(actor:SchedulingActor, memberId:string, accountId:string) {

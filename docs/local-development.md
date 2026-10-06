@@ -45,6 +45,15 @@ AI Search runs only in production. Local and CI E2E use the native `e2e`
 Wrangler environment, which has local D1/KV/DO bindings and no AI Search
 binding. Site writes still await cache purges.
 
+Cloudflare [Quick Tunnels](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/)
+expose a local Worker through a temporary `*.trycloudflare.com` development
+hostname. Configure the application origins to that exact HTTPS URL and run
+Wrangler with `--upstream-protocol https` so it preserves the HTTPS origin
+sent to Better Auth. Set `MEDIA_BASE_URL` to `<HTTPS origin>/__media` for local
+uploads; keep `NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN` on the configured localhost
+fixture domain. These hosts skip production AI Search and public caches;
+they do not enable tenant headers, trusted origins, or development routes.
+
 Local `.env` sets `ZARAZ_ANALYTICS=absent` and leaves `CF_ZONE_ID` unset, and
 the Playwright runner sets the same. The only Zaraz zone is production's, so a
 local reconcile would rewrite production's tags. With Zaraz declared absent,
@@ -137,6 +146,14 @@ password. Sign in through the normal `/login` page; there is no developer-login
 shortcut. Test identities used for explicit authorization scenarios remain local
 fixtures for role and access tests. Playwright creates these through Better Auth using the same configured password. Their provisioning through Better Auth does not alter the review account.
 
+For buyer journeys sign in as `buyer@playwright.example` with `CANARY_LOGIN_PASSWORD`:
+a verified account with no organization. Playwright provisions it before every
+suite; after `local:setup`, create it for manual use with the Worker running:
+
+```sh
+corepack yarn local:actors
+```
+
 `schema:local` applies new forward migrations when the schema changes. A rare
 replacement baseline, such as the v6 WNAM cutover, starts a new migration
 history; a local D1 created under the prior baseline then fails the schema
@@ -189,6 +206,13 @@ serves its website at `kikuzuki-krabi-thailand.localhost:3000`.
 
 ## Before pushing
 
+Pull-request E2E uses the isolated Stripe Sandbox credentials in
+`STRIPE_SECRET_KEY_E2E` and `NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_E2E`. The workflow
+binds these to the ordinary application variables. Staging's configured account
+and its existing customers remain separate. Native Payments qualification uses
+the same isolated Sandbox, the reviewed catalog, dedicated local webhook
+listeners and the normal Better Auth subscription flow.
+
 ```sh
 corepack yarn quality && corepack yarn test:unit && corepack yarn test:d1 && corepack yarn test:migrations && corepack yarn test:mcp
 corepack yarn chatgpt:submission:check && corepack yarn lint:migrations && corepack yarn lint:schema-drift
@@ -207,12 +231,12 @@ corepack yarn mcp:catalog:write
 corepack yarn chatgpt:submission:write
 ```
 
-`yarn install` normally runs `patch-package` through `postinstall`. If Yarn did
-not rerun it after a dependency change, use:
-
-```sh
-corepack yarn patch-package --error-on-fail
-```
+Dependency patches (`patches/*.patch`) are applied by Yarn's `patch:` protocol
+from `package.json`, so every `yarn install` applies them and fails if one no
+longer applies. To change one, run `corepack yarn patch <package>`, edit the
+printed folder, then `corepack yarn patch-commit -s <folder>` and move the
+generated file from the ignored `.yarn/patches/` into `patches/`, updating its
+`package.json` reference.
 
 ## Isolated MCP verification
 

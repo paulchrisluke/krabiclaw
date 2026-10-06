@@ -26,7 +26,10 @@ import { organizationAccessControl, organizationRoles } from '~/utils/organizati
 import { platformAdminAccessControl, platformAdminRoles } from '~/utils/platform-admin-access'
 import { createStripePlanLoader } from '~/server/utils/better-auth-stripe'
 import { handleStripeGa4Event } from '~/server/utils/stripe-ga4'
+import { notifyPaymentsInvoiceEvent } from '~/server/domain/payments/billing-notifications'
+import { setUpPaymentsBillingForSubscriptionEvent } from '~/server/domain/payments/usage'
 import { createStripeClient } from '~/server/utils/stripe-client'
+import { deleteBuyerCustomers } from '~/server/utils/billing-customer'
 import { unwrapInstrumentedD1 } from '~/server/utils/request-metrics'
 import { timingSafeEqualText } from '~/server/utils/dev-route-auth'
 import { notifyOrganizationInvited } from '~/server/utils/notifications'
@@ -353,6 +356,13 @@ export function createAuth(env: CloudflareEnv) {
         update: { after: integrationAccountLinked },
       },
       user: {
+        delete: {
+          before: async (user) => {
+            // A deleted account's Customer at every business it paid goes with it, and the cards saved there.
+            await deleteBuyerCustomers(db, stripeClient, user.id)
+            await execute(db, "DELETE FROM activity_entries WHERE kind='notification' AND scope_kind='global' AND target_user_id=?", [user.id])
+          },
+        },
         update: {
           after: async (user) => {
             // A renamed member reads under the new name wherever they are a member.
@@ -551,6 +561,23 @@ export function createAuth(env: CloudflareEnv) {
               query: `UPDATE ${table} SET user_id = ? WHERE user_id = ?`,
               params: [to, from],
             })),
+            ...['payments', 'payment_orders', 'payment_checkout_holds'].map(table => ({
+              query: `UPDATE ${table} SET buyer_user_id = ? WHERE buyer_user_id = ?`,
+              params: [to, from],
+            })),
+            { query: 'UPDATE payment_claims SET claimed_user_id = ? WHERE claimed_user_id = ?', params: [to, from] },
+            {
+              query: "UPDATE activity_entries SET actor_user_id=? WHERE kind='acknowledgement' AND actor_user_id=? AND parent_id IN (SELECT id FROM activity_entries WHERE kind='notification' AND scope_kind='global' AND target_user_id=?)",
+              params: [to, from, from],
+            },
+            {
+              query: "UPDATE activity_entries SET actor_user_id=? WHERE kind='acknowledgement' AND actor_kind='guest' AND scope_kind='request' AND actor_user_id=? AND request_id IN (SELECT id FROM requests WHERE user_id=?)",
+              params: [to, from, to],
+            },
+            {
+              query: "UPDATE activity_entries SET target_user_id=? WHERE kind='notification' AND scope_kind='global' AND target_user_id=?",
+              params: [to, from],
+            },
             { query: 'UPDATE media_assets SET created_by_user_id = ? WHERE created_by_user_id = ?', params: [to, from] },
           ], { operation: 'anonymous-account-link' })
         },
@@ -613,10 +640,12 @@ export function createAuth(env: CloudflareEnv) {
         },
         // The plugin's own /api/auth/stripe/webhook handlers own the
         // `subscription` table, and Stripe's delivery retries are the retry
-        // mechanism. This hook adds analytics only; a throw here returns a
+        // mechanism. This hook adds analytics, Payments status alerts and Payments fees billing set-up; a throw here returns a
         // non-2xx so Stripe redelivers the event.
         onEvent: async (event) => {
           await handleStripeGa4Event(env, db, stripeClient, event)
+          await notifyPaymentsInvoiceEvent(db, stripeClient, env, event)
+          await setUpPaymentsBillingForSubscriptionEvent(db, stripeClient, env, event)
         },
       }),
       organizationDeletionCleanupPlugin(env),

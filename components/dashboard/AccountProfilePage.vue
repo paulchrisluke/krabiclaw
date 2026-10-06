@@ -60,7 +60,7 @@ export const DETAIL_LABELS: Record<string, string> = {
 /** The signed-in person's account, for the three leaves that edit parts of it. */
 export interface AccountEditor {
   sessionData: ComputedRef<{
-    user?: { name?: string | null; email?: string | null; image?: string | null; phoneNumber?: string | null; phoneNumberVerified?: boolean | null; emailVerified?: boolean | null } | null
+    user?: { id: string; name?: string | null; email?: string | null; image?: string | null; phoneNumber?: string | null; phoneNumberVerified?: boolean | null; emailVerified?: boolean | null } | null
     session?: { token?: string | null } | null
   } | null | undefined>
   // personal information: rows that edit in place
@@ -106,6 +106,7 @@ export const accountEditorKey = Symbol('account-editor') as InjectionKey<Account
 </script>
 
 <script setup lang="ts">
+import { dashboardScopeHeaderModelKey } from '~/lib/components/workspace/dashboard/dashboardScopeHeaderContext'
 // -nocheck
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import { authClient } from '~/lib/auth-client'
@@ -114,6 +115,12 @@ import { authClient } from '~/lib/auth-client'
 // The level runs while setup is still synchronous: it injects the record the
 // `<RouterView>` above rendered, and an `await` before it would bind nothing.
 const level = useRouteLevel()
+// The businesses this account belongs to, read off the layout's one list of them.
+const scopeHeaderModel = inject(dashboardScopeHeaderModelKey, null)
+const businessesSummary = computed(() => {
+  const count = (scopeHeaderModel?.value.peers ?? []).filter(peer => peer.label !== 'Personal').length
+  return count === 0 ? 'Start a business' : count === 1 ? '1 business' : `${count} businesses`
+})
 const profilePath = level.path
 const session = authClient.useSession()
 const sessionData = computed(() => session.value.data)
@@ -270,6 +277,8 @@ const groups = computed<EditorNavigationGroup[]>(() => [
       { id: 'notifications', label: 'Notifications', summary: notificationSummary.value, to: `${profilePath.value}/notifications` },
       { id: 'calendar', label: 'Your availability', summary: 'Hours, time off and Google Calendar', to: `${profilePath.value}/calendar` },
       { id: 'appearance', label: 'Appearance', summary: `${themePreference.value.charAt(0).toUpperCase()}${themePreference.value.slice(1)} theme`, to: `${profilePath.value}/appearance` },
+      { id: 'payments', label: 'Payments', summary: 'Your payments and refunds', to: `${profilePath.value}/payments` },
+      { id: 'businesses', label: 'Businesses', summary: businessesSummary.value, to: `${profilePath.value}/businesses` },
       { id: 'log-out', label: 'Log out', action: {} },
     ],
   },

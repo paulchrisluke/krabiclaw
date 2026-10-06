@@ -26,7 +26,7 @@ const NOW = '2026-09-11T00:00:00.000Z'
 
 async function boot() {
   const runtime = new Miniflare({ workers: [{ config: {
-    name: 'catalog-proof', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'catalog-proof', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } },
     env: { DB: { type: 'd1' } },
   } }] })

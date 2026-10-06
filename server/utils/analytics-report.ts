@@ -34,7 +34,7 @@ const eventList = (predicate: (definition: typeof CONVERSION_EVENT_CATALOG[keyof
   ORGANIZATION_CONVERSION_EVENT_NAMES.filter(name => predicate(CONVERSION_EVENT_CATALOG[name])).map(name => `'${name}'`).join(', ')
 const OUTCOME_EVENT_NAMES = new Set<string>(ORGANIZATION_CONVERSION_EVENT_NAMES.filter(name => CONVERSION_EVENT_CATALOG[name].outcome))
 const OUTCOME_EVENT_SQL_LIST = eventList(definition => definition.outcome)
-const SERVER_DELIVERED_EVENT_SQL_LIST = eventList(definition => definition.ga4Sender !== 'browser')
+const SERVER_DELIVERED_EVENT_SQL_LIST = eventList(definition => definition.ga4 !== null && definition.ga4Sender !== 'browser')
 
 export async function resolveOrganizationAnalyticsContext(db: DbClient, organizationId: string): Promise<OrganizationContext> {
   const row = await queryFirst<{ organization_id: string; analytics_data_start_at: string | null; timezone: string | null }>(db, `
@@ -67,7 +67,10 @@ const sessionFactsSql = (organization: string, candidates: string) => `SELECT e.
 
 // `views` is materialized: inlined, the planner folded it into the
 // returning-visitor subquery and scanned every organization's pageviews on every
-// date for each session, 12M rows for one day of one tenant.
+// date for each session, 12M rows for one day of one tenant. The session
+// candidates' earlier-pageview check is pinned to the session index: on its
+// created_at index it read every earlier pageview per candidate, 16.7M rows and
+// 11s for one unsummarized day of the platform tenant (#1278).
 const daySummariesSql = `WITH input AS (SELECT ? organization_id, ? starts_at, ? ends_at),
   views AS MATERIALIZED (
     SELECT e.*, (payload_json ->> '$.country') country,
@@ -78,7 +81,7 @@ const daySummariesSql = `WITH input AS (SELECT ? organization_id, ? starts_at, ?
   ), session_candidates AS MATERIALIZED (
     SELECT DISTINCT candidate.session_id FROM analytics_events candidate JOIN input i ON candidate.organization_id = i.organization_id
     WHERE candidate.kind = 'pageview' AND candidate.created_at >= i.starts_at
-      AND EXISTS (SELECT 1 FROM analytics_events previous WHERE previous.organization_id = candidate.organization_id
+      AND EXISTS (SELECT 1 FROM analytics_events previous INDEXED BY analytics_events_org_session_idx WHERE previous.organization_id = candidate.organization_id
         AND previous.kind = 'pageview' AND previous.session_id = candidate.session_id AND previous.created_at < i.ends_at)
   ), sessions AS (${sessionFactsSql('(SELECT organization_id FROM input)', 'SELECT session_id FROM session_candidates')}),
   metrics AS (SELECT COUNT(*) page_views, COUNT(DISTINCT session_id) unique_sessions,

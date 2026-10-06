@@ -1,3 +1,5 @@
+import { REQUEST_CURRENT_BUYER_SQL } from '~/server/domain/requests'
+import { BUYER_UNREAD_THREAD_SQL, buyerUnreadThreadParams } from './entries'
 import { messagePreview } from './attachments'
 import { execute, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
@@ -38,14 +40,15 @@ const OPERATIONAL_RECORD_SQL = `
  * reservation stays Current while it is being served, and a thread with no
  * occurrence is Current until someone archives it.
  */
-function mailboxWhere(mailbox: GuestThreadMailbox, now: string): { sql: string; params: string[] } {
+function mailboxWhere(mailbox: GuestThreadMailbox, now: string, buyerAudience=false): { sql: string; params: string[] } {
+  if (buyerAudience) return mailbox === 'current' ? {sql:' AND (op.ends_at IS NULL OR op.ends_at >= ?)',params:[now]} : {sql:' AND op.ends_at < ?',params:[now]}
   return mailbox === 'current'
     ? { sql: ' AND gt.archived_at IS NULL AND (op.ends_at IS NULL OR op.ends_at >= ?)', params: [now] }
     : { sql: ' AND (gt.archived_at IS NOT NULL OR op.ends_at < ?)', params: [now] }
 }
 
-function mailboxFields(row: { archived_at: string | null; record_ends_at: string | null }, now: string) {
-  const state = resolveGuestThreadMailbox(row, row.record_ends_at === null ? null : { ends_at: row.record_ends_at }, now)
+function mailboxFields(row: { archived_at: string | null; record_ends_at: string | null }, now: string, buyerAudience=false) {
+  const state = resolveGuestThreadMailbox(row, row.record_ends_at === null ? null : { ends_at: row.record_ends_at }, now, buyerAudience?'buyer':'member')
   return {
     mailbox: state.mailbox,
     manuallyArchived: state.manuallyArchived,
@@ -180,6 +183,7 @@ type GuestThreadListRow = GuestThreadRow & {
   guest_name: string
   location_title: string | null
   organization_name?: string | null
+  organization_vertical?: string | null
   latest_message_body: string | null
   latest_message_kind: 'message' | null
   latest_message_photos: number
@@ -198,11 +202,17 @@ type GuestThreadListRow = GuestThreadRow & {
 /** Returns list view models with member-specific unread and one canonical `preview` field. */
 export async function listGuestThreads(
   db: DbClient,
-  organizationId: string,
+  organizationId: string | null,
   opts: ListGuestThreadsOptions,
 ): Promise<GuestThreadListItemViewModel[]> {
-  const params: Array<string | number> = [organizationId]
-  let where = 'gt.organization_id = ?'
+  if (!organizationId && !opts.buyerAudience) throw new Error('Thread list requires organization scope')
+  if (opts.buyerAudience && !opts.userId) throw new Error('Buyer thread list requires authenticated identity')
+  const params: Array<string | number> = opts.buyerAudience ? [opts.userId] : [organizationId!]
+  let where = opts.buyerAudience ? 'gt.user_id = ?' : 'gt.organization_id = ?'
+  if (opts.buyerAudience) {
+    where += ` AND ${REQUEST_CURRENT_BUYER_SQL.replaceAll('r.','gt.')}`
+    if (organizationId) { where += ' AND gt.organization_id = ?'; params.push(organizationId) }
+  }
 
   if (opts.locationId) {
     where += ' AND gt.location_id = ?'
@@ -220,7 +230,7 @@ export async function listGuestThreads(
   // listed as Current and labelled Past.
   const now = new Date().toISOString()
   if (opts.mailbox) {
-    const mailbox = mailboxWhere(opts.mailbox, now)
+    const mailbox = mailboxWhere(opts.mailbox, now, opts.buyerAudience)
     where += mailbox.sql
     params.push(...mailbox.params)
   }
@@ -228,13 +238,13 @@ export async function listGuestThreads(
   const limit = Math.max(1, Math.min(opts.limit ?? 100, 200))
 
   const unreadFilter = opts.unreadOnly && opts.userId
-    ? `
+    ? opts.buyerAudience ? ` AND ${BUYER_UNREAD_THREAD_SQL}` : `
       AND EXISTS (
         SELECT 1 FROM activity_entries n
         JOIN activity_entries notification_entry ON notification_entry.id = n.parent_id
         LEFT JOIN activity_entries nr ON nr.parent_id = n.id AND nr.actor_user_id = ? AND nr.kind = 'acknowledgement'
         WHERE notification_entry.request_id = gt.id
-          AND (n.target_user_id IS NULL OR n.target_user_id = ?)
+          AND ${opts.buyerAudience ? 'n.target_user_id = ?' : '(n.target_user_id IS NULL OR n.target_user_id = ?)'}
           AND nr.id IS NULL AND n.kind = 'notification'
       )
     `
@@ -243,37 +253,38 @@ export async function listGuestThreads(
   const rows = await queryAll<GuestThreadListRow>(db, `
     SELECT
       gt.*,
-      ${SOURCE_GUEST_NAME_SQL} AS guest_name,
+      ${SOURCE_GUEST_NAME_SQL} AS guest_name, o.name AS organization_name, o.vertical AS organization_vertical,
       bl.title AS location_title,
       (
         SELECT body FROM activity_entries
-        WHERE request_id = gt.id AND kind = 'message'
+        WHERE request_id = gt.id AND kind = 'message' ${opts.buyerAudience ? "AND ((actor_kind='guest' AND channel IN ('web','email','whatsapp')) OR (actor_kind='member' AND event_name='thread.member_reply'))" : ''}
         ORDER BY sequence DESC LIMIT 1
       ) AS latest_message_body,
       (
         SELECT kind FROM activity_entries
-        WHERE request_id = gt.id AND kind = 'message'
+        WHERE request_id = gt.id AND kind = 'message' ${opts.buyerAudience ? "AND ((actor_kind='guest' AND channel IN ('web','email','whatsapp')) OR (actor_kind='member' AND event_name='thread.member_reply'))" : ''}
         ORDER BY sequence DESC LIMIT 1
       ) AS latest_message_kind,
       (
         SELECT COUNT(*) FROM media_placements mp
         WHERE mp.owner_type = 'activity_entry' AND mp.slot = 'attachments' AND mp.status = 'active'
-          AND mp.owner_id = (SELECT id FROM activity_entries WHERE request_id = gt.id AND kind = 'message' ORDER BY sequence DESC LIMIT 1)
+          AND mp.owner_id = (SELECT id FROM activity_entries WHERE request_id = gt.id AND kind = 'message' ${opts.buyerAudience ? "AND ((actor_kind='guest' AND channel IN ('web','email','whatsapp')) OR (actor_kind='member' AND event_name='thread.member_reply'))" : ''} ORDER BY sequence DESC LIMIT 1)
       ) AS latest_message_photos,
       ${SOURCE_PREVIEW_SQL} AS source_preview,
       ${SOURCE_PREVIEW_COLUMNS},
       ${PLACE_IMAGE_COLUMNS},
       op.status AS operational_status
     FROM requests gt${OPERATIONAL_RECORD_SQL}
+    JOIN organization o ON o.id=gt.organization_id
     LEFT JOIN business_locations bl ON bl.id = gt.location_id${PLACE_IMAGE_SQL}
     WHERE gt.kind IN ('contact', 'reservation', 'booking') AND ${where}
     ${unreadFilter}
     ORDER BY gt.updated_at DESC
     LIMIT ?
-  `, opts.unreadOnly && opts.userId ? [...params, opts.userId, opts.userId, limit] : [...params, limit])
+  `, opts.unreadOnly && opts.userId ? [...params, ...(opts.buyerAudience?buyerUnreadThreadParams(opts.userId):[opts.userId,opts.userId]), limit] : [...params, limit])
 
   const unreadIds = opts.userId
-    ? new Set(await listUnreadThreadIds(db, rows.map(row => row.id), opts.userId))
+    ? new Set(await listUnreadThreadIds(db, rows.map(row => row.id), opts.userId, opts.buyerAudience))
     : new Set<string>()
   const items: GuestThreadListItemViewModel[] = []
   for (const row of rows ?? []) {
@@ -281,11 +292,14 @@ export async function listGuestThreads(
     const preview = sourcePreviewText(row)
     items.push({
       id: row.id,
+      organizationId: row.organization_id,
+      organizationName: row.organization_name ?? null,
+      organizationVertical: row.organization_vertical ?? null,
       guestName: row.guest_name,
       submissionType: row.kind,
       contextLabel: preview ?? '',
       locationLabel: row.location_title,
-      conversationState: row.conversation_state,
+      conversationState: opts.buyerAudience ? null : row.conversation_state,
       operationalStatus: row.operational_status,
       operationalStatusLabel: row.operational_status ? formatOperationalStatusLabel(row.kind, row.operational_status) : null,
       unread,
@@ -294,14 +308,15 @@ export async function listGuestThreads(
         ? { kind: 'message', text: messagePreview(row.latest_message_body, row.latest_message_photos) }
         : (preview ? { kind: 'submission', text: preview } : null),
       lastActivityAt: row.updated_at,
-      needsAttention: row.conversation_state === 'needs_attention',
+      needsAttention: opts.buyerAudience ? unread : row.conversation_state === 'needs_attention',
       // Two renditions of one asset, not two sources: a row 60px wide takes the
       // thumbnail, and an asset with no rendition yet is served at full size.
       imageUrl: mediaStillUrl({ kind: row.place_image_kind, public_url: row.place_image_public_url, thumbnail_url: row.place_image_thumbnail_url }),
       whenLabel: row.record_starts_at && row.record_timezone
         ? formatThreadWhenLabel(row.record_starts_at, row.record_timezone)
         : null,
-      ...mailboxFields(row, now),
+      ...mailboxFields(row, now, opts.buyerAudience),
+      ...(opts.buyerAudience ? {canArchive:false,canUnarchive:false} : {}),
     })
   }
   return items
@@ -385,7 +400,7 @@ export async function listOrganizationGuestThreads(
     ${unreadFilter}
     ORDER BY gt.updated_at DESC
     LIMIT ?
-  `, opts.unreadOnly && opts.userId ? [...params, opts.userId, opts.userId, limit] : [...params, limit])
+  `, opts.unreadOnly && opts.userId ? [...params, ...(opts.buyerAudience?buyerUnreadThreadParams(opts.userId):[opts.userId,opts.userId]), limit] : [...params, limit])
 
   const unreadIds = opts.userId
     ? new Set(await listUnreadThreadIds(db, rows.map(row => row.id), opts.userId))
@@ -426,8 +441,12 @@ export async function listOrganizationGuestThreads(
   return items
 }
 
-async function listUnreadThreadIds(db: DbClient, threadIds: string[], userId: string): Promise<string[]> {
+async function listUnreadThreadIds(db: DbClient, threadIds: string[], userId: string, buyerAudience=false): Promise<string[]> {
   if (threadIds.length === 0) return []
+  if(buyerAudience){
+    const rows=await queryAll<{request_id:string}>(db,`SELECT gt.id request_id FROM requests gt WHERE gt.user_id=? AND gt.id IN (SELECT value FROM json_each(?)) AND ${BUYER_UNREAD_THREAD_SQL}`,[userId,d1JsonStringSet(threadIds),...buyerUnreadThreadParams(userId)])
+    return rows.map(row=>row.request_id)
+  }
   const rows = await queryAll<{ request_id: string }>(db, `
     SELECT gt.id AS request_id
     FROM requests gt${OPERATIONAL_RECORD_SQL}
@@ -437,7 +456,7 @@ async function listUnreadThreadIds(db: DbClient, threadIds: string[], userId: st
         JOIN activity_entries notification_entry ON notification_entry.id = n.parent_id
         LEFT JOIN activity_entries nr ON nr.parent_id = n.id AND nr.actor_user_id = ? AND nr.kind = 'acknowledgement'
         WHERE notification_entry.request_id = gt.id
-          AND (n.target_user_id IS NULL OR n.target_user_id = ?)
+          AND ${buyerAudience ? 'n.target_user_id = ?' : '(n.target_user_id IS NULL OR n.target_user_id = ?)'}
           AND nr.id IS NULL AND n.kind = 'notification'
       )
   `, [d1JsonStringSet(threadIds), userId, userId])
@@ -463,10 +482,9 @@ export async function updateThreadProjectionIfLatestEntry(
   entryId: string,
   update: { conversationState: ConversationState },
 ): Promise<void> {
-  const now = new Date().toISOString()
   await execute(db, `
     UPDATE requests
-    SET conversation_state = ?, resolved_at = ?, updated_at = ?
+    SET conversation_state = ?, resolved_at = CASE WHEN ? = 'resolved' THEN (SELECT occurred_at FROM activity_entries WHERE id=?) ELSE NULL END, updated_at = (SELECT occurred_at FROM activity_entries WHERE id=?)
     WHERE id = ?
       AND EXISTS (
         SELECT 1
@@ -480,7 +498,7 @@ export async function updateThreadProjectionIfLatestEntry(
               AND later.sequence > projected.sequence
           )
       )
-  `, [update.conversationState, update.conversationState === 'resolved' ? now : null, now, threadId, entryId])
+  `, [update.conversationState, update.conversationState, entryId, entryId, threadId, entryId])
 }
 
 /**

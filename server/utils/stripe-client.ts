@@ -1,15 +1,18 @@
 import Stripe from 'stripe'
 import {
   STRIPE_API_VERSION,
+  STRIPE_PAYMENTS_API_VERSION,
   STRIPE_REQUEST_TIMEOUT_MS,
 } from '~/shared/stripe-contract'
 
 export { STRIPE_API_VERSION, STRIPE_REQUEST_TIMEOUT_MS } from '~/shared/stripe-contract'
 
-export function createStripeClient(secretKey: string): Stripe {
+export function createStripeClient(secretKey: string, purpose: 'canonical' | 'payments' = 'canonical'): Stripe {
   return new Stripe(secretKey, {
-    apiVersion: STRIPE_API_VERSION,
-    maxNetworkRetries: 0,
+    // The stable SDK supports these primitives; preview versions are outside its literal API-version type.
+    apiVersion: (purpose === 'payments' ? STRIPE_PAYMENTS_API_VERSION : STRIPE_API_VERSION) as Stripe.LatestApiVersion,
+    // The Worker runtime uses the SDK fetch transport rather than Node sockets.
+    httpClient: Stripe.createFetchHttpClient(),
     timeout: STRIPE_REQUEST_TIMEOUT_MS,
   })
 }

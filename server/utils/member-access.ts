@@ -303,6 +303,7 @@ export interface OrganizationNotificationMember {
 export async function listOrganizationNotificationMembers(
   env: CloudflareEnv,
   organizationId: string,
+  options: { /** Member rows to include whatever their role: the person a booking is assigned to. */ includeMemberIds?: readonly string[] } = {},
 ): Promise<OrganizationNotificationMember[]> {
   const adapter = await organizationAdapter(env)
   const members = await listAllOrganizationMembers(adapter, organizationId)
@@ -310,7 +311,7 @@ export async function listOrganizationNotificationMembers(
   // a duplicated alert.
   const byUserId = new Map<string, { id: string; email: string }>()
   for (const member of members) {
-    if (!member.user || !isOrganizationWideRole(String(member.role))) continue
+    if (!member.user || !(isOrganizationWideRole(String(member.role)) || options.includeMemberIds?.includes(member.id))) continue
     byUserId.set(member.user.id, { id: member.user.id, email: member.user.email })
   }
   if (byUserId.size === 0) return []

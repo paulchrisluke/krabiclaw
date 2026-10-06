@@ -11,7 +11,13 @@ import { appendEntry } from '../../server/domain/guest-threads/entries.ts'
 import { executeGuestThreadOperation } from '../../server/domain/guest-threads/operations.ts'
 import { listGuestThreads, updateThreadProjectionIfLatestEntry } from '../../server/domain/guest-threads/repository.ts'
 import { requestBookingChange, respondToBookingChange } from '../../server/domain/guest-threads/booking-changes.ts'
-import { notifyContactSubmitted } from '../../server/utils/notifications.ts'
+import { notifyContactSubmitted, notifyFinancialNotification } from '../../server/utils/notifications.ts'
+import { createCanonicalNotification } from '../../server/utils/notification-center.ts'
+import { buildNotificationVisibilityFilter, type NotificationVisibilityPrincipal } from '../../server/utils/notification-access.ts'
+import { acknowledgeNotification } from '../../server/utils/notification-acknowledgement.ts'
+import { setNotificationPreference } from '../../server/domain/notification-preferences.ts'
+import { guestPaymentMessage, ownerPaymentMessage } from '../../server/notifications/payment-events.ts'
+import { getResendClient, resendData } from '../../server/utils/resend.ts'
 import { getReviewBookingContext } from '../../server/utils/review-requests.ts'
 import { sendReviewRequestForBooking } from '../../server/utils/review-request-delivery.ts'
 import { renderNotificationEmail } from '../../server/emails/render.ts'
@@ -21,7 +27,7 @@ import type { CloudflareEnv } from '../../server/utils/auth.ts'
 
 test('D1 claims fence concurrent sends and bound ambiguous provider retries', async () => {
   const runtime = new Miniflare({ workers: [{ config: {
-    name: 'guest-delivery-proof', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'guest-delivery-proof', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export class Hub { fetch() { return new Response(null, { status: 204 }) } } export default { fetch() { return new Response("ok") } }' } } },
     exports: { Hub: { type: 'durable-object', storage: 'sqlite' } },
     env: { DB: { type: 'd1' }, GUEST_INBOX_HUBS: { type: 'durable-object', worker: 'guest-delivery-proof', exportName: 'Hub' } },
@@ -311,7 +317,7 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
 test('D1 status-email retries preserve recorded content and reject superseded bookings', async (t) => {
   t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-10-01T10:00:00Z') })
   const runtime = new Miniflare({ workers: [{ config: {
-    name: 'status-retry-proof', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'status-retry-proof', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } },
     env: { DB: { type: 'd1' } },
   } }] })
@@ -343,7 +349,8 @@ test('D1 status-email retries preserve recorded content and reject superseded bo
       env: { EMAIL_DELIVERY_MODE: 'provider', RESEND_API_KEY: 'controlled-provider-only', NUXT_PUBLIC_PLATFORM_DOMAIN: 'proof.example' },
     }
     const cancel = { ...input, action: 'cancel', idempotencyKey: 'cancel-status' }
-    assert.equal((await executeGuestThreadOperation(db, cancel)).ok, true)
+    assert.deepEqual(await executeGuestThreadOperation(db, cancel), { ok: false, status: 502, reason: 'delivery_failed', message: '503 application_error: Internal server error. We are unable to process your request right now, please try again later.' })
+    assert.equal(await db.prepare("SELECT status FROM reservations WHERE id='reservation-status'").first('status'), 'cancelled')
     assert.equal(requests.length, 1)
     const deliveryId = 'guest-thread-email:booking-status:cancel-status'
     assert.equal((await getDeliveryById(db, deliveryId))!.status, 'failed')
@@ -383,7 +390,7 @@ test('D1 status-email retries preserve recorded content and reject superseded bo
 
 test('a booking move into a full session leaves the original booking exactly as it was', async () => {
   const runtime = new Miniflare({ workers: [{ config: {
-    name: 'booking-move-proof', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'booking-move-proof', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export class Hub { fetch() { return new Response(null, { status: 204 }) } } export default { fetch() { return new Response("ok") } }' } } },
     exports: { Hub: { type: 'durable-object', storage: 'sqlite' } },
     env: { DB: { type: 'd1' }, GUEST_INBOX_HUBS: { type: 'durable-object', worker: 'booking-move-proof', exportName: 'Hub' } },
@@ -457,7 +464,7 @@ test('a booking move into a full session leaves the original booking exactly as 
 
 test('a review request reads the visit from the record that holds it', async () => {
   const runtime = new Miniflare({ workers: [{ config: {
-    name: 'review-request-proof', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'review-request-proof', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export class Hub { fetch() { return new Response(null, { status: 204 }) } } export default { fetch() { return new Response("ok") } }' } } },
     exports: { Hub: { type: 'durable-object', storage: 'sqlite' } },
     env: { DB: { type: 'd1' }, GUEST_INBOX_HUBS: { type: 'durable-object', worker: 'review-request-proof', exportName: 'Hub' } },
@@ -511,5 +518,176 @@ test('a review request reads the visit from the record that holds it', async () 
     assert.match(html, /Sep 11, 2026, 8:00\s?PM/, 'the visit renders in the reservation timezone')
     assert.match(html, /6 guests/)
     assert.doesNotMatch(html, />\s*your reservation\s*</, 'the headline phrase is never rendered as a detail value')
+  } finally { await runtime.dispose() }
+})
+
+test('financial notification replay preserves per-recipient receipts and isolates personal, merchant and platform audiences', { timeout: 120_000 }, async () => {
+  const runtime = new Miniflare({ workers: [{ config: {
+    name: 'financial-notification-proof', compatibilityDate: '2024-11-01',
+    manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export class Hub { fetch() { return new Response(null, { status: 204 }) } } export default { fetch() { return new Response("ok") } }' } } },
+    exports: { Hub: { type: 'durable-object', storage: 'sqlite' } },
+    env: { DB: { type: 'd1' }, GUEST_INBOX_HUBS: { type: 'durable-object', worker: 'financial-notification-proof', exportName: 'Hub' } },
+  } }] })
+  try {
+    const db = await runtime.getD1Database('DB')
+    const env = { ...await runtime.getBindings<CloudflareEnv>(), BETTER_AUTH_SECRET: 'local-proof-secret-long-enough-for-auth', BETTER_AUTH_URL: 'https://proof.example',
+      STRIPE_SECRET_KEY: 'sk_test_local_d1_no_stripe_requests', NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://proof.example',
+      EMAIL_DELIVERY_MODE: 'log_only', WHATSAPP_DELIVERY_MODE: 'log_only' }
+    await db.batch((await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))).map(statement => db.prepare(statement)))
+    await db.batch([
+      "INSERT INTO organization (id,name,slug) VALUES ('merchant','Merchant','merchant')",
+      "INSERT INTO organization (id,name,slug) VALUES ('other-merchant','Other','other-merchant')",
+      ...['owner-a', 'owner-b', 'owner-off', 'buyer', 'other-user', 'staff'].map(id => `INSERT INTO user (id,name,email,emailVerified) VALUES ('${id}','${id}','${id}@proof.example',1)`),
+      "INSERT INTO member (id,organizationId,userId,role) VALUES ('member-a','merchant','owner-a','owner')",
+      "INSERT INTO member (id,organizationId,userId,role) VALUES ('member-b','merchant','owner-b','admin')",
+      "INSERT INTO member (id,organizationId,userId,role) VALUES ('member-off','merchant','owner-off','owner')",
+      "INSERT INTO member (id,organizationId,userId,role) VALUES ('member-staff','merchant','staff','member')",
+      "INSERT INTO member (id,organizationId,userId,role) VALUES ('member-other','other-merchant','other-user','owner')",
+    ].map(statement => db.prepare(statement)))
+    assert.equal(await db.prepare('SELECT count(*) n FROM user').first('n'), 6)
+    assert.deepEqual((await db.prepare("SELECT userId,role FROM member WHERE organizationId='merchant' ORDER BY userId").all()).results,
+      [{ userId: 'owner-a', role: 'owner' }, { userId: 'owner-b', role: 'admin' }, { userId: 'owner-off', role: 'owner' }, { userId: 'staff', role: 'member' }])
+    await setNotificationPreference(db, env, 'owner-off', 'organization_and_billing', { email: false, whatsapp: false })
+    assert.deepEqual(await db.prepare("SELECT email_enabled,whatsapp_enabled FROM user_notification_preferences WHERE user_id='owner-off' AND category='organization_and_billing'").first(), { email_enabled: 0, whatsapp_enabled: 0 })
+    assert.equal(await db.prepare("SELECT count(*) n FROM activity_entries WHERE kind='notification'").first('n'), 0)
+
+    const eventKey = 'financial-proof:capture'
+    const payment = { kind: 'payment_captured' as const, organizationName: 'Merchant', amount: 10000, currency: 'USD' as const, productTitle: 'Class' }
+    const input = { organizationId: 'merchant', eventKey, ownerMessage: ownerPaymentMessage(payment),
+      guest: { userId: 'buyer', email: 'buyer@proof.example', message: guestPaymentMessage(payment) } }
+    await notifyFinancialNotification(env, db, input)
+    const rows = (await db.prepare('SELECT id,scope_kind,organization_id,target_user_id,parent_id,request_id FROM activity_entries WHERE event_name=? ORDER BY scope_kind').bind(eventKey).all()).results
+    assert.equal(rows.length, 2)
+    const buyer = rows.find(row => row.scope_kind === 'global')!, merchant = rows.find(row => row.scope_kind === 'organization')!
+    assert.deepEqual({ ...buyer, id: undefined }, { id: undefined, scope_kind: 'global', organization_id: null, target_user_id: 'buyer', parent_id: null, request_id: null })
+    assert.deepEqual({ ...merchant, id: undefined }, { id: undefined, scope_kind: 'organization', organization_id: 'merchant', target_user_id: null, parent_id: null, request_id: null })
+    assert.equal(await db.prepare('SELECT count(*) n FROM requests').first('n'), 0, 'a financial notification does not manufacture a guest conversation')
+    const receipts = (await db.prepare('SELECT * FROM guest_thread_deliveries ORDER BY id').all()).results
+    assert.equal(receipts.length, 3)
+    assert.equal(new Set(receipts.map(row => row.id)).size, 3, 'eligible merchant recipients and the buyer have distinct delivery claims')
+    assert.deepEqual(receipts.map(row => ({ entry_id: row.entry_id, purpose: row.purpose, channel: row.channel, provider: row.provider, status: row.status })).sort((a, b) => a.purpose.localeCompare(b.purpose)),
+      [
+        { entry_id: merchant.id, purpose: 'owner_alert', channel: 'email', provider: 'log_only', status: 'sent' },
+        { entry_id: merchant.id, purpose: 'owner_alert', channel: 'email', provider: 'log_only', status: 'sent' },
+        { entry_id: merchant.id, purpose: 'status_update', channel: 'email', provider: 'log_only', status: 'sent' },
+      ])
+    for (const receipt of receipts) {
+      assert.ok(String(receipt.id).length <= 256, 'the durable financial key fits Resend\'s documented idempotency limit')
+      assert.match(String(receipt.provider_message_id), /^log-only:email:/u)
+    }
+    await Promise.all([notifyFinancialNotification(env, db, input), notifyFinancialNotification(env, db, input)])
+    assert.deepEqual((await db.prepare('SELECT * FROM guest_thread_deliveries ORDER BY id').all()).results, receipts, 'replays do not claim or send settled receipts again')
+    assert.deepEqual((await db.prepare('SELECT id,scope_kind,organization_id,target_user_id,parent_id,request_id FROM activity_entries WHERE event_name=? ORDER BY scope_kind').bind(eventKey).all()).results, rows)
+
+    await createCanonicalNotification(db, { scope: 'global', targetUserId: 'other-user', template: 'personal.other', title: 'Other buyer', idempotencyKey: 'personal-other' })
+    await createCanonicalNotification(db, { scope: 'global', targetUserId: 'owner-a', template: 'personal.owner', title: 'Own purchase', idempotencyKey: 'personal-owner' })
+    await createCanonicalNotification(db, { scope: 'global', template: 'platform.alert', title: 'Platform alert', idempotencyKey: 'platform-alert' })
+    await createCanonicalNotification(db, { publishEnv: env, scope: 'organization', organizationId: 'other-merchant', template: 'merchant.other', title: 'Other merchant', idempotencyKey: 'other-merchant-alert' })
+    const cases: Array<{ principal: NotificationVisibilityPrincipal; ids: unknown[] }> = [
+      { principal: { userId: 'buyer', platformAdmin: false, organization: null }, ids: [buyer.id] },
+      { principal: { userId: 'other-user', platformAdmin: false, organization: null }, ids: ['personal-other'] },
+      { principal: { userId: 'owner-a', platformAdmin: false, organization: null }, ids: ['personal-owner'] },
+      { principal: { userId: 'owner-a', platformAdmin: false, organization: { id: 'merchant', role: 'owner' } }, ids: [merchant.id] },
+      { principal: { userId: 'other-user', platformAdmin: false, organization: { id: 'other-merchant', role: 'owner' } }, ids: ['other-merchant-alert'] },
+      { principal: { userId: 'staff', platformAdmin: false, organization: { id: 'merchant', role: 'member' } }, ids: [] },
+      { principal: { userId: 'buyer', platformAdmin: true, organization: null }, ids: [buyer.id, 'platform-alert'] },
+      { principal: { userId: 'owner-a', platformAdmin: true, organization: { id: 'merchant', role: 'owner' } }, ids: [merchant.id] },
+    ]
+    for (const { principal, ids } of cases) {
+      const filter = buildNotificationVisibilityFilter(principal)
+      const actual = (await db.prepare(`SELECT n.id FROM activity_entries n WHERE ${filter.whereSql} ORDER BY n.id`).bind(...filter.whereParams).all()).results
+      assert.deepEqual(actual.map(row => row.id), ids.sort(), JSON.stringify(principal))
+    }
+    const own = { userId: 'buyer', ...buildNotificationVisibilityFilter({ userId: 'buyer', platformAdmin: false, organization: null }) }
+    const other = { userId: 'other-user', ...buildNotificationVisibilityFilter({ userId: 'other-user', platformAdmin: false, organization: null }) }
+    assert.equal(await acknowledgeNotification(db, other, String(buyer.id)), false)
+    assert.equal(await acknowledgeNotification(db, own, String(merchant.id)), false)
+    assert.equal(await db.prepare("SELECT count(*) n FROM activity_entries WHERE kind='acknowledgement'").first('n'), 0)
+    assert.equal(await acknowledgeNotification(db, own, String(buyer.id)), true)
+    assert.deepEqual((await db.prepare("SELECT parent_id,actor_user_id FROM activity_entries WHERE kind='acknowledgement'").all()).results, [{ parent_id: buyer.id, actor_user_id: 'buyer' }])
+    // One key names one alert: a replay with a different audience returns the first write and changes nothing.
+    assert.equal(await createCanonicalNotification(db, { scope: 'organization', organizationId: 'other-merchant', template: eventKey, title: 'Changed audience', idempotencyKey: String(merchant.id) }), String(merchant.id))
+    assert.equal(await db.prepare('SELECT organization_id FROM activity_entries WHERE id=?').bind(merchant.id).first('organization_id'), 'merchant')
+
+    const differentlyCasedEvent = 'financial-proof:Capture'
+    await notifyFinancialNotification(env, db, { ...input, eventKey: differentlyCasedEvent })
+    assert.equal(await db.prepare('SELECT count(*) n FROM activity_entries WHERE event_name=?').bind(differentlyCasedEvent).first('n'), 2)
+    assert.equal(await db.prepare('SELECT count(*) n FROM guest_thread_deliveries d JOIN activity_entries n ON n.id=d.entry_id WHERE n.event_name=?').bind(differentlyCasedEvent).first('n'), 3, 'case-sensitive event identities retain their own recipient receipts')
+    assert.equal(await db.prepare('SELECT count(*) n FROM guest_thread_deliveries').first('n'), 6)
+
+    const contactKey = 'financial-proof:contact'
+    await notifyFinancialNotification(env, db, { ...input, eventKey: contactKey, guest: { ...input.guest, userId: null } })
+    const contactRows = (await db.prepare('SELECT scope_kind,target_user_id FROM activity_entries WHERE event_name=?').bind(contactKey).all()).results
+    assert.deepEqual(contactRows, [{ scope_kind: 'organization', target_user_id: null }], 'an email destination alone is not a personal audience')
+    const contactReceipts = (await db.prepare('SELECT * FROM guest_thread_deliveries ORDER BY id').all()).results
+    assert.equal(contactReceipts.length, 9)
+    await notifyFinancialNotification(env, db, { ...input, eventKey: contactKey })
+    assert.equal(await db.prepare("SELECT count(*) n FROM activity_entries WHERE event_name=? AND scope_kind='global' AND target_user_id='buyer'").bind(contactKey).first('n'), 1)
+    assert.deepEqual((await db.prepare('SELECT * FROM guest_thread_deliveries ORDER BY id').all()).results, contactReceipts, 'an explicit buyer identity does not send the same contact email again')
+    await db.prepare('DELETE FROM activity_entries WHERE id=?').bind(buyer.id).run()
+    assert.equal(await db.prepare('SELECT id FROM activity_entries WHERE id=?').bind(buyer.id).first('id'), null)
+    assert.deepEqual((await db.prepare('SELECT * FROM guest_thread_deliveries ORDER BY id').all()).results, contactReceipts, 'deleting a personal alert retains the merchant financial mail receipts')
+    await notifyFinancialNotification(env, db, { ...input, guest: { ...input.guest, userId: null } })
+    assert.deepEqual((await db.prepare('SELECT * FROM guest_thread_deliveries ORDER BY id').all()).results, contactReceipts, 'contact replay after personal deletion does not resend a settled email')
+  } finally { await runtime.dispose() }
+})
+
+test('native Resend test transport persists one delivered financial email through dispatcher replay', {
+  timeout: 60_000,
+  skip: process.env.PAYMENTS_NATIVE_RESEND_TEST !== '1',
+}, async (t) => {
+  assert.ok(process.env.RESEND_API_KEY?.trim(), 'explicit native qualification requires the configured Resend credential')
+  const runtime = new Miniflare({ workers: [{ config: {
+    name: 'native-financial-email-proof', compatibilityDate: '2024-11-01',
+    manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } },
+    env: { DB: { type: 'd1' } },
+  } }] })
+  try {
+    const db = await runtime.getD1Database('DB')
+    await db.batch((await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))).map(statement => db.prepare(statement)))
+    await db.prepare("INSERT INTO user (id,name,email,emailVerified) VALUES ('native-recipient','Native transport test','delivered@resend.dev',1)").run()
+    assert.equal(await db.prepare('SELECT email FROM user WHERE id=?').bind('native-recipient').first('email'), 'delivered@resend.dev')
+    assert.equal(await db.prepare('SELECT count(*) n FROM guest_thread_deliveries').first('n'), 0)
+    const env = { ...await runtime.getBindings<CloudflareEnv>(), NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://proof.example',
+      EMAIL_DELIVERY_MODE: 'provider', WHATSAPP_DELIVERY_MODE: 'log_only', RESEND_API_KEY: process.env.RESEND_API_KEY,
+      ...(process.env.EMAIL_FROM ? { EMAIL_FROM: process.env.EMAIL_FROM } : {}) }
+    const input = { organizationId: null, eventKey: `native-resend-transport:${crypto.randomUUID()}`,
+      guest: { userId: 'native-recipient', email: 'delivered@resend.dev', message: guestPaymentMessage({ kind: 'payment_captured', organizationName: 'Sandbox transport qualification', amount: 10000, currency: 'USD' }) } }
+    await notifyFinancialNotification(env, db, input)
+    const receipt = await db.prepare('SELECT * FROM guest_thread_deliveries').first()
+    assert(receipt)
+    assert.equal(receipt.channel, 'email')
+    assert.equal(receipt.provider, 'resend')
+    assert.equal(receipt.purpose, 'status_update')
+    assert.equal(receipt.status, 'sent')
+    assert.equal(receipt.error, null)
+    assert.ok(String(receipt.id).length <= 256)
+    assert.match(String(receipt.provider_message_id), /^[0-9a-f]{8}-[0-9a-f-]{27}$/iu)
+    assert.deepEqual(await db.prepare('SELECT kind,scope_kind,target_user_id,organization_id,request_id FROM activity_entries WHERE id=?').bind(receipt.entry_id).first(),
+      { kind: 'notification', scope_kind: 'global', target_user_id: 'native-recipient', organization_id: null, request_id: null })
+    const client = getResendClient(env)
+    let native = await resendData('native financial test email readback', () => client.emails.get(String(receipt.provider_message_id)))
+    const deadline = Date.now() + 20_000
+    while (native.last_event !== 'delivered' && Date.now() < deadline) {
+      assert.ok(['queued', 'sent'].includes(native.last_event), `native test email reached ${native.last_event}`)
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      native = await resendData('native financial test email readback', () => client.emails.get(String(receipt.provider_message_id)))
+    }
+    assert.equal(native.id, receipt.provider_message_id)
+    assert.deepEqual(native.to, ['delivered@resend.dev'])
+    assert.equal(native.subject, input.guest.message.title)
+    assert.equal(native.last_event, 'delivered')
+    assert.match(native.html ?? '', /100\.00 USD/u)
+    await notifyFinancialNotification(env, db, input)
+    assert.deepEqual(await db.prepare('SELECT * FROM guest_thread_deliveries').first(), receipt)
+    assert.equal(await db.prepare('SELECT count(*) n FROM guest_thread_deliveries').first('n'), 1)
+    assert.equal(await db.prepare("SELECT count(*) n FROM activity_entries WHERE kind='notification'").first('n'), 1)
+    const replayReadback = await resendData('native financial test email replay readback', () => client.emails.get(String(receipt.provider_message_id)))
+    assert.equal(replayReadback.id, native.id)
+    assert.equal(replayReadback.last_event, 'delivered')
+    t.diagnostic(JSON.stringify({ evidence: 'native Resend test transport', checked_at: new Date().toISOString(), recipient: 'delivered@resend.dev',
+      email_id: native.id, last_event: native.last_event, receipt_id_length: String(receipt.id).length,
+      persisted_notifications: 1, persisted_deliveries: 1, replay_provider_id_unchanged: true,
+      actual_financial_trigger_qualified: false, actual_owner_inbox_qualified: false }))
   } finally { await runtime.dispose() }
 })

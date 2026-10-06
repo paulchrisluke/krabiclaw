@@ -13,7 +13,7 @@ import {
   isNewSalePlan,
 } from '~/shared/billing-model'
 import {
-  assertGrowthStripeCatalogPrices,
+  assertStripeCatalogPrices,
   selectStripeCatalogPrice,
 } from '~/server/utils/stripe-catalog'
 
@@ -63,7 +63,7 @@ export async function getBetterAuthStripePlans(
     if (!planId) continue
     // Stripe may contain old or unrelated products. Only the canonical
     // recurring plans are meaningful to Better Auth billing. Runtime plan
-    // identity is intentionally Starter/Growth only; retired catalog products
+    // identity comes from shared billing policy; retired catalog products
     // remain an operator cleanup concern, not an entitlement source.
     if (!isKnownRecurringPlan(planId)) continue
     if (!options.includeFeatureDisabled && !isNewSalePlan(planId)) continue
@@ -78,7 +78,7 @@ export async function getBetterAuthStripePlans(
     }
     const yearly = selectStripeCatalogPrice(product, billablePrices, 'year')
     if (isNewSalePlan(planId)) {
-      assertGrowthStripeCatalogPrices(monthly, yearly)
+      assertStripeCatalogPrices(planId, monthly, yearly)
     }
     if (yearly && yearly.currency !== monthly.currency) {
       throw new Error(`Stripe product ${product.id} has monthly and annual prices in different currencies`)

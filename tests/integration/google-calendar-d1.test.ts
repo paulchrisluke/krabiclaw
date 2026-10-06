@@ -13,7 +13,7 @@ import { symmetricEncrypt } from 'better-auth/crypto'
 import calendarSyncTask from '../../server/tasks/google-calendar-sync.ts'
 
 test('committed consultation projection is tenant scoped, private, idempotent and fenced during cancellation and cleanup', { timeout: 120_000 }, async (t) => {
-  const mf = new Miniflare({ workers: [{ config: { name: 'calendar-proof', type: 'worker', compatibilityDate: '2024-11-01', manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } }, env: { DB: { type: 'd1' } } } }] })
+  const mf = new Miniflare({ workers: [{ config: { name: 'calendar-proof', compatibilityDate: '2024-11-01', manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } }, env: { DB: { type: 'd1' } } } }] })
   try {
     const db = await mf.getD1Database('DB')
     const statements = await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))
@@ -78,6 +78,12 @@ test('committed consultation projection is tenant scoped, private, idempotent an
     await syncCalendarOrganization(env, 'org', 25, provider)
     assert.equal(events.size, 1)
     assert.equal(events.get(String(link?.event_id))?.summary, 'Booking — Jane Doe')
+    // A booking moved to a team member updates the same event to name them.
+    await db.prepare("INSERT INTO member(id,organizationId,userId,role,createdAt) VALUES('member-owner','org','owner','owner',?)").bind(Date.now()).run()
+    await db.prepare("UPDATE bookings SET assigned_member_id='member-owner',updated_at=? WHERE id=?").bind(new Date().toISOString(), bookingId).run()
+    await syncCalendarOrganization(env, 'org', 25, provider)
+    assert.equal(events.size, 1)
+    assert.equal(events.get(String(link?.event_id))?.description, 'Status: confirmed\nTeam member: Owner\nhttps://krabiclaw.test/dashboard/org/messages/thread')
     await updateSession(db, { organizationId: 'org', sessionId: 's', actorId: 'actor', startsAt: '2099-11-01T15:00:00.000Z', endsAt: '2099-11-01T15:30:00.000Z' })
     cancelDuringPut = true
     await syncCalendarOrganization(env, 'org', 25, provider)
@@ -152,7 +158,7 @@ test('committed consultation projection is tenant scoped, private, idempotent an
 
 
 test('bounded Calendar backfill resumes and cancelled historical Sessions are cleaned', { timeout: 120_000 }, async (t) => {
-  const mf = new Miniflare({ workers: [{ config: { name: 'calendar-budget-proof', type: 'worker', compatibilityDate: '2024-11-01', manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } }, env: { DB: { type: 'd1' } } } }] })
+  const mf = new Miniflare({ workers: [{ config: { name: 'calendar-budget-proof', compatibilityDate: '2024-11-01', manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } }, env: { DB: { type: 'd1' } } } }] })
   try {
     const db = await mf.getD1Database('DB')
     const statements = await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))
@@ -207,7 +213,7 @@ test('bounded Calendar backfill resumes and cancelled historical Sessions are cl
 })
 
 test('scheduled Calendar sync reports thrown and event failures while projecting healthy organizations', { timeout: 120_000 }, async t => {
-  const mf = new Miniflare({ workers: [{ config: { name: 'calendar-task-proof', type: 'worker', compatibilityDate: '2024-11-01', manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } }, env: { DB: { type: 'd1' } } } }] })
+  const mf = new Miniflare({ workers: [{ config: { name: 'calendar-task-proof', compatibilityDate: '2024-11-01', manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } }, env: { DB: { type: 'd1' } } } }] })
   try {
     const db = await mf.getD1Database('DB')
     await db.batch((await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))).map(sql => db.prepare(sql)))
@@ -254,7 +260,7 @@ test('scheduled Calendar sync reports thrown and event failures while projecting
 
 
 test('automatic Calendar connection recovers a hidden calendar after ambiguous creation and reuses it on reconnect', {timeout:120000}, async t => {
- const runtime=new Miniflare({workers:[{config:{name:'calendar-setup-proof',type:'worker',compatibilityDate:'2024-11-01',manifest:{mainModule:'index.mjs',modules:{'index.mjs':{type:'esm',contents:'export default {fetch(){return new Response("ok")}}'}}},env:{DB:{type:'d1'}}}}]})
+ const runtime=new Miniflare({workers:[{config:{name:'calendar-setup-proof',compatibilityDate:'2024-11-01',manifest:{mainModule:'index.mjs',modules:{'index.mjs':{type:'esm',contents:'export default {fetch(){return new Response("ok")}}'}}},env:{DB:{type:'d1'}}}}]})
  try {
   const db=await runtime.getD1Database('DB')
   await db.batch((await generateSQLiteMigration(await generateSQLiteDrizzleJson({}),await generateSQLiteDrizzleJson(schema))).map(sql=>db.prepare(sql)))

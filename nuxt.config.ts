@@ -76,7 +76,6 @@ function publicSurfaceCssAssetFileName(assetInfo: { name?: string; fileName?: st
 }
 
 export default defineNuxtConfig({
-  ignore: ['**/.worktrees/**', '**/.claude/**'],
   modules: [
     '@nuxt/scripts',
     '@nuxtjs/robots',
@@ -182,6 +181,7 @@ export default defineNuxtConfig({
       appName: process.env.NUXT_PUBLIC_APP_NAME || '',
       platformUrl: process.env.NUXT_PUBLIC_SITE_URL || '',
       helpUrl: process.env.NUXT_PUBLIC_HELP_URL || 'https://krabiclaw.com/help',
+      stripePublishableKey: process.env.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '',
 
       whatsappNumber: process.env.NUXT_PUBLIC_WHATSAPP_NUMBER || process.env.WHATSAPP_NUMBER || '16197200000',
       perfPublicTestPage: publicPerfTestPage,
@@ -205,7 +205,7 @@ export default defineNuxtConfig({
     },
     server: {
       watch: {
-        ignored: ['**/.worktrees/**', '**/.claude/**', '**/.wrangler/**', '**/.data/**', '**/node_modules/**', '**/.git/**', '**/.nuxt/**', '**/.output/**', '**/dist/**']
+        ignored: ['**/.wrangler/**', '**/.data/**', '**/node_modules/**', '**/.git/**', '**/.nuxt/**', '**/.output/**', '**/dist/**']
       },
       allowedHosts: ['.krabiclaw.com']
     },
@@ -395,7 +395,7 @@ export default defineNuxtConfig({
   // Global watcher exclusions
   watchers: {
     chokidar: {
-      ignored: ['**/.worktrees/**', '**/.claude/**', '**/.wrangler/**', '**/.data/**', '**/node_modules/**', '**/.git/**', '**/.nuxt/**', '**/.output/**', '**/dist/**']
+      ignored: ['**/.wrangler/**', '**/.data/**', '**/node_modules/**', '**/.git/**', '**/.nuxt/**', '**/.output/**', '**/dist/**']
     }
   },
 

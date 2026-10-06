@@ -7,7 +7,7 @@ import { createSystemSubdomain, isSystemSubdomainSpent, ensureDomainAvailable, r
 import { listDashboardEvents } from '../../server/utils/dashboard-events.ts'
 
 test('domain claims fence stale results and permanent subdomain reservations survive organization deletion', async (t) => {
-  const miniflare = new Miniflare({ workers: [{ config: { name: 'owner-domain-test', type: 'worker', compatibilityDate: '2024-11-01', manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } }, env: { DB: { type: 'd1' } } } }] })
+  const miniflare = new Miniflare({ workers: [{ config: { name: 'owner-domain-test', compatibilityDate: '2024-11-01', manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } }, env: { DB: { type: 'd1' } } } }] })
   try {
     const db = await miniflare.getD1Database('DB')
     const statements = await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))

@@ -1,7 +1,6 @@
 import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { previewSecretOf, resolvePreviewAuthorization } from '~/server/utils/preview-token'
 import { loadPublicProductApiDetail, loadPublicProductReviews, loadPublicProductSessions } from '~/server/utils/public-products'
-import { publicLocationPayload } from '~/server/utils/public-products'
 import { defineHandler } from 'nitro'
 import { getRouterParam } from 'nitro/h3'
 import { getQuery } from 'nitro/h3'
@@ -29,7 +28,7 @@ export default defineHandler(async (event) => {
     const priceSelection = { currency: result.currency, location_id: result.location.id, at: new Date().toISOString() }
     return jsonResponse({
       product: result.product,
-      location: publicLocationPayload(result.location),
+      location: result.location,
       currency: result.currency,
       vertical: result.organization.vertical,
       brandName: result.organization.name,

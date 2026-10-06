@@ -13,7 +13,7 @@ import { roleSatisfies } from '../../server/utils/mcp-auth.ts'
 import type { CloudflareEnv } from '../../server/utils/auth.ts'
 
 test('member self-service uses Better Auth permissions, public approval is admin-only, and selected disconnected busy data fails closed for only that member', {timeout:120000},async(t)=>{
- const runtime=new Miniflare({workers:[{config:{name:'member-scheduling-proof',type:'worker',compatibilityDate:'2024-11-01',manifest:{mainModule:'index.mjs',modules:{'index.mjs':{type:'esm',contents:'export default {fetch(){return new Response("ok")}}'}}},env:{DB:{type:'d1'}}}}]})
+ const runtime=new Miniflare({workers:[{config:{name:'member-scheduling-proof',compatibilityDate:'2024-11-01',manifest:{mainModule:'index.mjs',modules:{'index.mjs':{type:'esm',contents:'export default {fetch(){return new Response("ok")}}'}}},env:{DB:{type:'d1'}}}}]})
  const db=await runtime.getD1Database('DB')
  try {
   await db.batch((await generateSQLiteMigration(await generateSQLiteDrizzleJson({}),await generateSQLiteDrizzleJson(schema))).map(sql=>db.prepare(sql)))
@@ -117,7 +117,6 @@ test('member self-service uses Better Auth permissions, public approval is admin
   const following=new Date(Date.parse(start)+86400000).toISOString(),followingEnd=new Date(Date.parse(end)+86400000).toISOString()
   await db.prepare("INSERT INTO product_sessions(id,organization_id,product_id,timezone,starts_at,ends_at,capacity,created_by,updated_by)VALUES('group','org','two','UTC',?,?,3,'owner','owner')").bind(following,followingEnd).run()
   const group=await Promise.all([1,2].map(()=>claimSessionCapacity(db,{organizationId:'org',productId:'two',sessionId:'group',productVariantId:'variant-two',partySize:1})))
-  await db.prepare("UPDATE product_booking_configs SET assigned_member_id='member-one' WHERE product_id='two'").run()
   const revision=await db.prepare('SELECT updated_at FROM bookings WHERE id=?').bind(group[0].bookingId).first<string>('updated_at')
   await assert.rejects(()=>reassignBookingProvider(own,{booking_id:group[0].bookingId,member_id:'member-one',expected_updated_at:revision!,idempotency_key:'self-reassignment'}))
   const move={booking_id:group[0].bookingId,member_id:'member-one',expected_updated_at:revision!,idempotency_key:'group-reassignment'}
@@ -130,9 +129,10 @@ test('member self-service uses Better Auth permissions, public approval is admin
   assert.equal(JSON.parse(audit!).old_member_id,'member-two')
   assert.equal(JSON.parse(audit!).new_member_id,'member-one')
   assert.equal(JSON.parse(audit!).actor_user_id,'owner')
-  await db.prepare("UPDATE product_booking_configs SET assigned_member_id='member-one' WHERE product_id='two'").run()
+  assert.equal(await db.prepare("SELECT assigned_member_id FROM product_booking_configs WHERE product_id='two'").first('assigned_member_id'),'member-two','moving one booking leaves the service with its provider')
+  await assert.rejects(()=>reassignBookingProvider(owner,{...move,idempotency_key:'already-there'}),/already with that team member/)
   const occupiedRevision=await db.prepare('SELECT updated_at FROM bookings WHERE id=?').bind(healthy.bookingId).first<string>('updated_at')
-  await assert.rejects(()=>reassignBookingProvider(owner,{booking_id:healthy.bookingId,member_id:'member-one',expected_updated_at:occupiedRevision!,idempotency_key:'overlap-refused'}),/Reassignment refused/)
+  await assert.rejects(()=>reassignBookingProvider(owner,{booking_id:healthy.bookingId,member_id:'member-one',expected_updated_at:occupiedRevision!,idempotency_key:'overlap-refused'}),/isn’t free at this time/)
   assert.equal(await db.prepare('SELECT assigned_member_id FROM bookings WHERE id=?').bind(healthy.bookingId).first('assigned_member_id'),'member-two')
 
  }finally{await runtime.dispose()}

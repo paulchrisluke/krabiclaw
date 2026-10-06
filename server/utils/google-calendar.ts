@@ -14,6 +14,8 @@ export interface CalendarSubject {
   ends_at: string
   timezone: string
   guest_name: string | null
+  /** Who delivers a booking; reservations have none. */
+  member_name: string | null
   revision: string
 }
 interface EventLink {
@@ -96,7 +98,7 @@ export function calendarEvent(subject: CalendarSubject, dashboardUrl: string | n
   const noun = subject.booking_kind === 'booking' ? 'Booking' : 'Reservation'
   return {
     summary: `${subject.status === 'pending' ? 'Pending ' + noun.toLowerCase() : noun}${subject.guest_name ? ' — ' + subject.guest_name : ''}`,
-    description: `Status: ${subject.status}${dashboardUrl ? `\n${dashboardUrl}` : ''}`,
+    description: `Status: ${subject.status}${subject.member_name ? `\nTeam member: ${subject.member_name}` : ''}${dashboardUrl ? `\n${dashboardUrl}` : ''}`,
     start: { dateTime: subject.starts_at, timeZone: subject.timezone },
     end: { dateTime: subject.ends_at, timeZone: subject.timezone },
     visibility: 'private',
@@ -111,18 +113,20 @@ export async function calendarSubjects(db: DbClient, organizationId: string, int
   const now = new Date().toISOString()
   return queryAll<CalendarSubject>(db, `WITH subjects AS (
     SELECT 'booking' booking_kind, b.id operational_id, b.request_id, b.status,
-      s.starts_at, s.ends_at, s.timezone, json_extract(r.payload_json, '$.guest.name') guest_name,
+      s.starts_at, s.ends_at, s.timezone, json_extract(r.payload_json, '$.guest.name') guest_name, member.name member_name,
       json_array(b.updated_at, s.updated_at, r.updated_at, c.updated_at,
         (SELECT MAX(a.sequence) FROM activity_entries a WHERE a.request_id=b.request_id),
-        b.status, s.starts_at, s.ends_at, s.timezone, json_extract(r.payload_json,'$.guest.name')) revision
+        b.status, s.starts_at, s.ends_at, s.timezone, json_extract(r.payload_json,'$.guest.name'), member.name) revision
     FROM bookings b JOIN product_sessions s ON s.id=b.product_session_id AND s.organization_id=b.organization_id
       JOIN product_booking_configs c ON c.product_id=b.product_id AND c.organization_id=b.organization_id
       LEFT JOIN requests r ON r.id=b.request_id AND r.organization_id=b.organization_id
+      LEFT JOIN (SELECT m.id, m.organizationId, COALESCE(NULLIF(ms.public_name,''), u.name, u.email) name FROM member m JOIN user u ON u.id=m.userId
+        LEFT JOIN member_scheduling ms ON ms.member_id=m.id) member ON member.id=b.assigned_member_id AND member.organizationId=b.organization_id
     WHERE b.organization_id=? AND b.status IN ('pending','confirmed')
       AND s.status='scheduled' AND s.ends_at>? AND (? IS NULL OR (?='booking' AND b.id=?))
     UNION ALL
     SELECT 'reservation', b.id, b.request_id, b.status, b.starts_at, b.ends_at, b.timezone,
-      json_extract(r.payload_json,'$.guest.name'),
+      json_extract(r.payload_json,'$.guest.name'), NULL,
       json_array(b.updated_at, r.updated_at,
         (SELECT MAX(a.sequence) FROM activity_entries a WHERE a.request_id=b.request_id),
         b.status, b.starts_at, b.ends_at, b.timezone, json_extract(r.payload_json,'$.guest.name'))

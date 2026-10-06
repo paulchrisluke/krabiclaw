@@ -73,8 +73,11 @@ export function buildCanonicalNotificationInsert(
 
 export async function createCanonicalNotification(db: DbClient, input: CreateNotificationInput): Promise<string> {
   const statement = buildCanonicalNotificationInsert(input, input.idempotencyKey)
-  const result = await execute(db, statement.query, statement.params)
-  if (Number(result.meta.changes ?? 0) > 0 && input.publishEnv && input.organizationId) {
+  // The id is the event's identity: a replay inserts nothing and returns the same alert.
+  await execute(db, statement.query, statement.params)
+  // Publication can fail after the insert commits. A replay must publish the
+  // invalidation again; duplicate invalidations only ask readers to refresh.
+  if (input.publishEnv && input.organizationId) {
     await publishNotificationInvalidation(input.publishEnv, {
       type: 'notification.created',
       organizationId: input.organizationId,

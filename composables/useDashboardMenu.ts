@@ -19,24 +19,26 @@ export function useDashboardLeafFooters() {
  * the two shells, so the redirect and the layout cannot disagree.
  */
 export function useDashboardPane() {
-  return useMediaQuery('(min-width: 1024px)')
+  return useMediaQuery(() => {
+    const breakpoint = getComputedStyle(document.documentElement).getPropertyValue('--breakpoint-lg').trim()
+    if (!breakpoint) throw createError({ statusCode: 500, statusMessage: 'Dashboard pane breakpoint is not configured.', fatal: true })
+    return `(min-width: ${breakpoint})`
+  })
 }
 
 export function useDashboardMenu() {
   const route = useRoute()
   const scopeHeaderModel = inject(dashboardScopeHeaderModelKey, null)
   const organizationSettings = useOrganizationSettingsNavigation()
+  const personal = computed(() => typeof route.name === 'string' && route.name.startsWith('dashboard-account'))
 
   const orgBase = computed(() => {
     const slug = route.params.orgSlug
     return typeof slug === 'string' && slug ? `/dashboard/${slug}` : null
   })
 
-  /** Links shown in the top nav and the bottom bar; the organization surfaces build their own. */
-  const primaryNavItems = computed<Array<{ key: string; label: string; icon: string; to: string; active: boolean }> | null>(() => null)
-
   /** The Menu tab is the organization's settings level; its rows are the leaves beneath it. */
-  const menuPageTo = computed(() => orgBase.value ? `${orgBase.value}/settings` : '/dashboard')
+  const menuPageTo = computed(() => personal.value ? '/dashboard/account/menu' : orgBase.value ? `${orgBase.value}/settings` : '/dashboard')
 
   const notificationsTo = computed(() => orgBase.value ? `${orgBase.value}/settings/notifications` : null)
 
@@ -47,11 +49,25 @@ export function useDashboardMenu() {
     await navigateTo({ path: '/login', query: { redirect } })
   }
 
-  const groups = computed<EditorNavigationGroup[]>(() => organizationSettings.groups.value)
+  // Airbnb's "Switch to hosting": one row above Log out. One business switches straight to it;
+  // several open the list under Account settings; none offers to start one.
+  const switchRow = computed(() => {
+    const businesses = (scopeHeaderModel?.value.peers ?? []).filter(peer => peer.label !== 'Personal')
+    if (businesses.length === 1) return businesses[0]!.to ? { id: 'switch-business', label: `Switch to ${businesses[0]!.label}`, to: businesses[0]!.to } : { id: 'switch-business', label: `Switch to ${businesses[0]!.label}`, action: {} }
+    if (businesses.length > 1) return { id: 'switch-business', label: 'Switch to a business', to: '/dashboard/account/profile/businesses' }
+    return { id: 'switch-business', label: 'Start a business', to: '/dashboard/onboarding' }
+  })
+  const groups = computed<EditorNavigationGroup[]>(() => personal.value ? [{
+    id: 'account', items: [
+      { id: 'account', label: 'Account settings', to: '/dashboard/account/profile' },
+      switchRow.value,
+      { id: 'log-out', label: 'Log out', action: {} },
+    ],
+  }] : organizationSettings.groups.value)
   const activeItem = computed(() => organizationSettings.activeItem.value)
 
   /** Organization switcher. */
   const scopeModel = computed(() => scopeHeaderModel?.value ?? null)
 
-  return { primaryNavItems, menuPageTo, notificationsTo, groups, activeItem, scopeModel, logOut }
+  return { menuPageTo, notificationsTo, groups, activeItem, scopeModel, logOut, personal }
 }

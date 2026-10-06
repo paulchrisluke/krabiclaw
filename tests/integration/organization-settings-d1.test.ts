@@ -9,7 +9,7 @@ import { getWhatsAppWorkspaceState, patchWhatsAppWorkspaceState, getMcpWorkspace
 
 test('organization settings and workspace patches preserve independent owners and hold no provider credentials', async () => {
   const miniflare = new Miniflare({ workers: [{ config: {
-    name: 'owner-settings-test', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'owner-settings-test', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': {
       type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }',
     } } }, env: { DB: { type: 'd1' } },

@@ -19,8 +19,8 @@ export type ScheduledTaskName =
   | 'social-card-cleanup'
   | 'sessions-materialize'
   | 'stripe-ga4-intent-retention'
-  | 'stripe-webhook-retry'
   | 'article-broadcast-send'
+  | 'payments-reconcile'
 
 type TaskLoader = () => Promise<{ default: ScheduledTaskDefinition }>
 
@@ -31,7 +31,7 @@ export const SCHEDULED_TASKS: Readonly<Record<string, readonly ScheduledTaskName
   '*/10 * * * *': ['domain-reconciliation', 'zaraz-analytics-reconciliation'],
   '0 3 * * *': ['domain-reconciliation-daily', 'analytics-aggregate-daily', 'stripe-ga4-intent-retention'],
   '0 0 * * SUN': ['google-places-sync'],
-  '0 * * * *': ['review-request-automation', 'stripe-webhook-retry', 'social-card-cleanup'],
+  '0 * * * *': ['review-request-automation', 'social-card-cleanup', 'payments-reconcile'],
 }
 
 const TASK_LOADERS: Readonly<Record<ScheduledTaskName, TaskLoader>> = {
@@ -47,7 +47,7 @@ const TASK_LOADERS: Readonly<Record<ScheduledTaskName, TaskLoader>> = {
   'sessions-materialize': async () => import('./tasks/sessions-materialize'),
   'google-places-sync': async () => import('./tasks/google-places-sync'),
   'review-request-automation': async () => import('./tasks/review-request-automation'),
-  'stripe-webhook-retry': async () => import('./tasks/stripe-webhook-retry'),
+  'payments-reconcile': async () => import('./tasks/payments-reconcile'),
   'article-broadcast-send': async () => import('./tasks/article-broadcast-send'),
 }
 
@@ -80,14 +80,24 @@ export async function runScheduledTasks(
 
   const outcomes = await Promise.allSettled(names.map(async (name) => {
     const task = await loadTask(name)
-    await task.run({
+    return await task.run({
       name,
       payload: { scheduledTime },
       context: { cloudflare: { env } },
     })
   }))
-  const failures = outcomes.flatMap((outcome, index) => outcome.status === 'rejected'
-    ? [new Error(`Scheduled task "${names[index]}" failed: ${outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason)}`, { cause: outcome.reason })]
-    : [])
+  const failures = outcomes.flatMap((outcome, index) => {
+    if (outcome.status === 'fulfilled') {
+      const value = outcome.value
+      if (typeof value === 'object' && value !== null && 'result' in value) {
+        const result = value.result
+        if (typeof result === 'object' && result !== null && 'skipped' in result && typeof result.skipped === 'string') {
+          console.info('[scheduled-task-skip]', { task: names[index], skipped: result.skipped })
+        }
+      }
+      return []
+    }
+    return [new Error(`Scheduled task "${names[index]}" failed: ${outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason)}`, { cause: outcome.reason })]
+  })
   if (failures.length) throw new AggregateError(failures, `${failures.length} of ${names.length} scheduled tasks failed for "${cron}": ${failures.map(error => error.message).join('; ')}`)
 }

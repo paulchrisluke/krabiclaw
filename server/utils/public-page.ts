@@ -579,15 +579,11 @@ async function loadPublicPageSource(
   let collections: Collection[] = []
   if (includeProducts) {
     const locationCapabilityRows = (batchResults[shellIndexes.locations] as { results: Record<string, unknown>[] })?.results ?? []
-    const enabledLocationIds = new Set(locationCapabilityRows.filter((location) => {
-      const { capabilities } = resolveOrganizationCmsCapabilities(String(organization.vertical), organization.theme_id, {
-        organizationEnabledFeatures: organization.feature_overrides,
-        locationEnabledFeatures: location.feature_overrides as string | null,
-      })
-      return capabilities.managers.some(manager => manager.key === 'location.products')
-    }).map(location => String(location.id)))
+    const { capabilities } = resolveOrganizationCmsCapabilities(String(organization.vertical), organization.theme_id)
+    const offersLocationProducts = capabilities.managers.some(manager => manager.key === 'location.products')
+    const activeLocationIds = new Set(locationCapabilityRows.map(location => String(location.id)))
     const productIdRows = ((batchResults[idxProducts] as { results: Record<string, unknown>[] })?.results ?? [])
-      .filter(row => enabledLocationIds.has(String(row.location_id)))
+      .filter(row => offersLocationProducts && activeLocationIds.has(String(row.location_id)))
     const productIds = [...new Set(productIdRows.map(row => String(row.id)))]
     const productMediaRows = (batchResults[idxProductMedia] as { results: ProductMediaRow[] })?.results ?? []
     const mediaByProduct = new Map<string, ProductMediaRow[]>()

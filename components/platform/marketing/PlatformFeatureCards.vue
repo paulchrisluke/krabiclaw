@@ -5,7 +5,7 @@
     Saya grid reads its own: the map keys presentation on the template and the
     block type, and what the block says about its own rows stays the block's.
   -->
-  <PlatformPricingComparison v-if="isComparison" :block="block" :page="page" />
+  <PlatformPricingComparison v-if="isComparison" :block="block" />
   <PlatformPlansSection v-else-if="isPlans" :block="block" :page="page" />
   <section v-else-if="page.recipe === 'products'" class="kc-product-more" data-parity-section="product-more">
     <div class="kc-product-more__inner">

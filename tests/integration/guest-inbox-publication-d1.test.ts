@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { Miniflare } from 'miniflare'
+import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api'
+import * as schema from '../../server/db/schema.ts'
 import { publishDashboardInvalidation, publishGuestInboxThreadEvent } from '../../server/cloudflare/guest-inbox-events.ts'
+import { createCanonicalNotification } from '../../server/utils/notification-center.ts'
 
 test('every way the inbox hub can fail rejects publication, not just the ones that answered 4xx', { timeout: 30_000 }, async () => {
   const runtime = new Miniflare({ workers: [{ config: {
-    name: 'inbox-publication-proof', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'inbox-publication-proof', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: `
       export class FaultHub {
         constructor(ctx) { this.ctx = ctx }
@@ -59,6 +62,31 @@ test('every way the inbox hub can fail rejects publication, not just the ones th
     await assert.rejects(() => publishGuestInboxThreadEvent(env, db, {
       threadId: 'proof-thread', type: 'thread.changed',
     }), /Failed query/)
+
+    await db.batch((await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))).map(statement => db.prepare(statement)))
+    await db.prepare("INSERT INTO organization (id,name,slug) VALUES ('healthy','Healthy','healthy')").run()
+    const notification = {
+      scope: 'organization' as const, organizationId: 'healthy', template: 'payments.usage_invoice_paid',
+      title: 'Payments invoice paid', message: '$1.40 USD paid', idempotencyKey: 'native-invoice-paid',
+    }
+    await assert.rejects(() => createCanonicalNotification(db, { ...notification, publishEnv: {} }), /binding is not configured/)
+    const persisted = await db.prepare("SELECT id,scope_kind,organization_id,event_name,body FROM activity_entries WHERE dedupe_key='notification:native-invoice-paid'").first()
+    assert(persisted)
+    assert.deepEqual(persisted, { id: 'native-invoice-paid', scope_kind: 'organization', organization_id: 'healthy', event_name: 'payments.usage_invoice_paid', body: '$1.40 USD paid' })
+    assert.equal((await (await namespace.get(namespace.idFromName('healthy')).fetch('https://guest-inbox.internal/observed')).json()).type, 'thread.changed')
+
+    const replayId = await createCanonicalNotification(db, { ...notification, publishEnv: env })
+    assert.equal(replayId, persisted.id)
+    const published = await (await namespace.get(namespace.idFromName('healthy')).fetch('https://guest-inbox.internal/observed')).json()
+    assert.equal(published.type, 'notification.created')
+    assert.equal(published.organizationId, 'healthy')
+    assert.equal(published.targetUserId, null)
+    assert.equal(await db.prepare("SELECT count(*) n FROM activity_entries WHERE dedupe_key='notification:native-invoice-paid'").first('n'), 1)
+    assert.equal(await createCanonicalNotification(db, { ...notification, publishEnv: env }), persisted.id)
+    const repeated = await (await namespace.get(namespace.idFromName('healthy')).fetch('https://guest-inbox.internal/observed')).json()
+    assert.equal(repeated.type, 'notification.created')
+    assert.notEqual(repeated.eventId, published.eventId, 'an idempotent row replay still publishes its invalidation')
+    assert.equal(await db.prepare("SELECT count(*) n FROM activity_entries WHERE kind='notification'").first('n'), 1)
   } finally {
     await runtime.dispose()
   }

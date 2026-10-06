@@ -28,6 +28,7 @@ export function useCreateWalk<K extends string>(options: {
   existingBlocked?: (outstanding: readonly K[]) => boolean
   commit: () => Promise<void>
 }) {
+  const route = useRoute()
   const label = (key: K) => toValue(options.labels)[key]
   const outstanding = computed(() => toValue(options.order).filter(key => options.missing(key)))
   const nextOutstanding = computed(() => outstanding.value.find(key => key !== options.openKey.value) ?? null)
@@ -49,7 +50,7 @@ export function useCreateWalk<K extends string>(options: {
   async function save() {
     if (saveDisabled.value) return
     if (options.isNew.value && nextOutstanding.value) {
-      await navigateTo(`${options.recordPath.value}/${nextOutstanding.value}`)
+      await navigateTo({ path: `${options.recordPath.value}/${nextOutstanding.value}`, query: route.query })
       return
     }
     await options.commit()
@@ -57,7 +58,7 @@ export function useCreateWalk<K extends string>(options: {
 
   function startOrCreate() {
     const next = outstanding.value[0]
-    if (next) return void navigateTo(`${options.recordPath.value}/${next}`)
+    if (next) return void navigateTo({ path: `${options.recordPath.value}/${next}`, query: route.query })
     void save()
   }
 

@@ -1,7 +1,7 @@
 // Get billing status for organization
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { getOrganizationBillingStatus } from '../../utils/billing'
+import { getOrganizationBillingStatus, scheduledPlanChange } from '../../utils/billing'
 import { resolveRequestedOrganization } from '~/server/utils/dashboard-context'
 
 export default defineHandler(async (event) => {
@@ -34,9 +34,10 @@ export default defineHandler(async (event) => {
   try {
     // Get billing status
     const billingStatus = await getOrganizationBillingStatus(env, db, organization.id)
+    const scheduledPlan = billingStatus.stripeScheduleId ? await scheduledPlanChange(env, billingStatus.stripeScheduleId) : null
 
     return jsonResponse({
-      success: true, billing: { ...billingStatus, organizationId: organization.id }, userRole: organization.role
+      success: true, billing: { ...billingStatus, scheduledPlan, organizationId: organization.id }, userRole: organization.role
     })
 
   } catch (error) {

@@ -1,3 +1,4 @@
+import { retainPaymentsForTenantDeletion } from '~/server/domain/payments/retention'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import type { CloudflareEnv } from '~/server/utils/auth'
@@ -43,6 +44,7 @@ export async function cleanupOrganizationBeforeDelete(
   organizationId: string,
 ): Promise<void> {
   const db = env.DB
+  await retainPaymentsForTenantDeletion(db, organizationId)
   await stageCalendarOrganizationCleanup(db, organizationId)
   await deleteOrganizationCustomDomains(env, db, organizationId)
 

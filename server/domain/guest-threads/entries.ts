@@ -1,14 +1,17 @@
+import { REQUEST_CURRENT_BUYER_SQL } from '~/server/domain/requests'
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import type { GuestThreadActorKind, GuestThreadChannel, GuestThreadEntryKind, GuestThreadEntryRow } from './types'
 
 export class GuestThreadEntryDedupeConflictError extends Error {}
+export class GuestThreadEntryOwnershipError extends Error {}
 
 export interface AppendEntryInput {
   threadId: string
   kind: GuestThreadEntryKind
   actorKind: GuestThreadActorKind
   actorUserId?: string | null
+  buyerUserId?: string
   channel?: GuestThreadChannel | null
   body?: string | null
   eventName?: string | null
@@ -27,10 +30,11 @@ function matchingDedupeEntry(
   input: AppendEntryInput,
   payloadJson: string | null,
 ): GuestThreadEntryRow {
+  const buyerWebReplay = !!input.buyerUserId && input.kind === 'message' && input.actorKind === 'guest' && input.channel === 'web'
   const matches = entry.request_id === input.threadId
     && entry.kind === input.kind
     && entry.actor_kind === input.actorKind
-    && entry.actor_user_id === (input.actorUserId ?? null)
+    && (buyerWebReplay || entry.actor_user_id === (input.actorUserId ?? null))
     && entry.channel === (input.channel ?? null)
     && entry.body === (input.body ?? null)
     && entry.event_name === (input.eventName ?? null)
@@ -52,6 +56,8 @@ function matchingDedupeEntry(
  * the remaining idempotent work.
  */
 export async function appendEntry(db: DbClient, input: AppendEntryInput): Promise<GuestThreadEntryRow> {
+  const ownerWhere=`EXISTS(SELECT 1 FROM requests r WHERE r.id=? AND r.user_id=? AND ${REQUEST_CURRENT_BUYER_SQL})`
+  if(input.buyerUserId&&!await queryFirst(db,`SELECT 1 WHERE ${ownerWhere}`,[input.threadId,input.buyerUserId]))throw new GuestThreadEntryOwnershipError('Conversation is not owned by this buyer')
   const payloadJson = JSON.stringify(input.payloadJson ?? {})
   if (input.dedupeKey) {
     const existing = await findEntryByDedupeKey(db, input.dedupeKey)
@@ -70,6 +76,7 @@ export async function appendEntry(db: DbClient, input: AppendEntryInput): Promis
       SELECT ?, ?, ?, 'request', ?, ?, ?, ?, ?, ?, ?, COALESCE(MAX(sequence), 0) + 1, ?, ?
       FROM activity_entries
       WHERE request_id = ?
+      ${input.buyerUserId?`HAVING ${ownerWhere}`:''}
       ON CONFLICT DO NOTHING
     `, [
       id,
@@ -85,9 +92,11 @@ export async function appendEntry(db: DbClient, input: AppendEntryInput): Promis
       occurredAt,
       createdAt,
       input.threadId,
+      ...(input.buyerUserId?[input.threadId,input.buyerUserId]:[]),
     ])
 
     if (Number(result?.meta?.changes ?? 0) === 0) {
+      if(input.buyerUserId&&!await queryFirst(db,`SELECT 1 WHERE ${ownerWhere}`,[input.threadId,input.buyerUserId]))throw new GuestThreadEntryOwnershipError('Conversation is not owned by this buyer')
       const duplicate = await findEntryByDedupeKey(db, dedupeKey)
       if (duplicate) return matchingDedupeEntry(duplicate, input, payloadJson)
       throw new Error('Guest thread entry conflicted with an existing ledger fact')
@@ -119,7 +128,7 @@ export async function getEntryById(db: DbClient, id: string): Promise<GuestThrea
 export async function listThreadEntries(db: DbClient, threadId: string): Promise<GuestThreadEntryRow[]> {
   const rows = await queryAll<GuestThreadEntryRow>(db, `
     SELECT * FROM activity_entries
-    WHERE request_id = ?
+    WHERE request_id = ? AND sequence IS NOT NULL
     ORDER BY sequence ASC, occurred_at ASC, id ASC
   `, [threadId])
   return rows ?? []
@@ -128,7 +137,7 @@ export async function listThreadEntries(db: DbClient, threadId: string): Promise
 export async function getLatestEntry(db: DbClient, threadId: string): Promise<GuestThreadEntryRow | null> {
   return await queryFirst<GuestThreadEntryRow>(db, `
     SELECT * FROM activity_entries
-    WHERE request_id = ?
+    WHERE request_id = ? AND sequence IS NOT NULL
     ORDER BY sequence DESC, occurred_at DESC, id DESC
     LIMIT 1
   `, [threadId])
@@ -152,4 +161,28 @@ export async function getLatestEntryByKind(
 export function parseEntryPayload(entry: GuestThreadEntryRow): Record<string, unknown> | null {
   if (!entry.payload_json) return null
   return JSON.parse(entry.payload_json) as Record<string, unknown>
+}
+
+export const BUYER_OPERATION_EVENTS = [
+ 'booking.confirm','booking.reject','booking.cancel','reservation.confirm','reservation.reject','reservation.cancel',
+ 'booking_change.requested','booking_change.accepted','booking_change.declined',
+ 'payment.payment_captured','payment.payment_failed','payment.refund_pending','payment.refund_succeeded','payment.refund_failed','payment.refund_canceled',
+] as const
+/** Guest-visible facts; staff diagnostics and financial disputes have no buyer audience. */
+export function isBuyerVisibleThreadEntry(entry:GuestThreadEntryRow):boolean {
+ return entry.kind==='submission'
+  || (entry.kind==='message'&&((entry.actor_kind==='guest'&&['web','email','whatsapp'].includes(entry.channel??''))||(entry.actor_kind==='member'&&entry.event_name==='thread.member_reply')))
+  || (entry.kind==='operation'&&(BUYER_OPERATION_EVENTS as readonly string[]).includes(entry.event_name??''))
+}
+/** The same public activity vocabulary, with per-user canonical acknowledgement rows. */
+export const BUYER_UNREAD_THREAD_SQL = `EXISTS (
+ SELECT 1 FROM activity_entries e WHERE e.request_id=gt.id
+  AND (e.actor_user_id IS NULL OR e.actor_user_id<>?)
+  AND ((e.kind='message' AND e.actor_kind='member' AND e.event_name='thread.member_reply')
+    OR (e.kind='operation' AND e.event_name IN (SELECT value FROM json_each(?))))
+  AND NOT EXISTS(SELECT 1 FROM activity_entries a WHERE a.kind='acknowledgement' AND a.parent_id=e.id AND a.actor_user_id=?)
+)`
+
+export function buyerUnreadThreadParams(userId:string):[string,string,string] {
+ return [userId,d1JsonStringSet(BUYER_OPERATION_EVENTS),userId]
 }
