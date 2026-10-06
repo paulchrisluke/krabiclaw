@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { dismissPreviewToolbar, waitForNuxtHydration } from './helpers'
 import { authRequestHeaders, loginAs } from './helpers/auth'
+import { mcpData, mcpRequest } from './helpers/mcp'
 import { isAccountActivityResponse } from '../../shared/account-activity'
 import { isBookingDetailsResponse } from '../../composables/useBookingDetails'
 
@@ -379,6 +380,14 @@ test.describe('dashboard pane hierarchy', () => {
       pageId = product.page!.id
       const bound = (await (await page.request.get(`${editor}/pages/${pageId}`)).json() as { page: { product_id: string | null } }).page
       expect(bound.product_id).toBe(productId)
+      // MCP reads the same pair, and the editor URL it hands an agent opens this record.
+      const viaMcp = mcpData<{ product: { page: { id: string; path: string } | null; admin_edit_url: string | null } }>(await (await mcpRequest(page.request, baseURL!, {
+        method: 'tools/call', toolName: 'get_product', args: { organization_id: 'org-ncls-blawby', product_id: productId },
+      })).json()).product
+      expect(viaMcp.page).toMatchObject({ id: pageId, path: product.page!.path })
+      expect(viaMcp.admin_edit_url).toBe(`${services}/products/${productId}`)
+      await open(page, viaMcp.admin_edit_url!)
+      await expect(page.locator('#dashboard-panel-product')).toContainText(name)
 
       // Its page is edited as the Product's Page content.
       await page.locator('#dashboard-panel-product').getByRole('link', { name: new RegExp(`^Page content ${product.page!.path.replaceAll('/', '\\/')}`) }).click()

@@ -169,6 +169,34 @@ test('Kikuzuki keeps its Thai shell and collection translations on a hard load',
 })
 
 
+// Brand's Translations row is a link to the Brand's translations mode, and the
+// mode reads the organization's own localization, the type the registry knows.
+test('Kikuzuki Brand translations open from their URL in the stored language', async ({ browser, playwright }) => {
+  const baseURL = testBaseUrl()
+  const owner = await playwright.request.newContext({ baseURL })
+  try {
+    await loginAs(owner, baseURL)
+    const dashboardContext = await browser.newContext({ baseURL, storageState: await owner.storageState() })
+    const cms = await dashboardContext.newPage()
+    try {
+      const brandPath = `/dashboard/${organizationId}/brand`
+      await openTenantPage(cms, `${baseURL}${brandPath}`, {})
+      await expect(cms.locator('#dashboard-panel-organization-brand').getByRole('link', { name: /^Translations/ })).toHaveAttribute('href', `${brandPath}?editMode=translations`)
+      const loaded = cms.waitForResponse(response => response.request().method() === 'GET'
+        && new URL(response.url()).pathname === `/api/editor/organizations/${organizationId}/localization/organization/${organizationId}/${locale}`)
+      await openTenantPage(cms, `${baseURL}${brandPath}?editMode=translations&locale=${locale}`, {})
+      expect((await loaded).status()).toBe(200)
+      await expect(cms.getByTestId('localize-field-name')).toHaveValue('Kikuzuki กระบี่ ประเทศไทย')
+      await expect(cms.getByTestId('localize-field-brand_description')).toHaveValue('อาหารญี่ปุ่นต้นตำรับในกระบี่')
+    } finally {
+      await cms.close()
+      await dashboardContext.close()
+    }
+  } finally {
+    await owner.dispose()
+  }
+})
+
 test('Kikuzuki Localize preserves its translated address', async ({ browser, playwright }) => {
   const baseURL = testBaseUrl()
   const owner = await playwright.request.newContext({ baseURL })
