@@ -112,14 +112,20 @@ test('Krabiclaw social viewer keyboard navigation changes the visible media', as
   const response = await openTenantPage(page, `${testBaseUrl()}/`, {})
   expect(response?.status()).toBe(200)
   await waitForNuxtHydration(page)
-  const firstCard = page.locator('[data-social-posts=block] [data-social-post]').first()
-  // The newest post's channel decides whose account name shows; assert the
-  // unlinked mark carries one rather than naming the channel that posted last.
-  const channelMark = firstCard.getByLabel(/^Posted on (Facebook|Instagram)$/)
+  const cards = page.locator('[data-social-posts=block] [data-social-post]')
+  const mark = /^Posted on (Facebook|Instagram)$/
+  // A website-only post carries no channel mark; the newest post may be one
+  // (production, 2026-10-06). The first card published to a channel carries
+  // its account name in an unlinked mark, not the channel's own name.
+  const firstCard = cards.first()
+  const socialCard = cards.filter({ has: page.getByLabel(mark) }).first()
+  await expect(socialCard).toBeVisible()
+  if (!(await firstCard.getByLabel(mark).count())) await expect(firstCard.locator('time, a')).toHaveCount(0)
+  const channelMark = socialCard.getByLabel(mark)
   await expect(channelMark).toBeVisible()
   await expect(channelMark).toHaveText(/\S/)
-  await expect(firstCard.locator('time, a')).toHaveCount(0)
-  await firstCard.click()
+  await expect(socialCard.locator('time, a')).toHaveCount(0)
+  await socialCard.click()
   const viewer = page.getByRole('dialog', { name: 'Media Lightbox' })
   await expect(viewer).toBeVisible()
   const pictures = viewer.locator('section')
