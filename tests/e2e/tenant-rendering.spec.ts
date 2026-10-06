@@ -119,13 +119,13 @@ test('Krabiclaw social viewer keyboard navigation changes the visible media', as
   // its account name in an unlinked mark, not the channel's own name.
   const firstCard = cards.first()
   const socialCard = cards.filter({ has: page.getByLabel(mark) }).first()
-  await expect(socialCard).toBeVisible()
-  if (!(await firstCard.getByLabel(mark).count())) await expect(firstCard.locator('time, a')).toHaveCount(0)
   const channelMark = socialCard.getByLabel(mark)
   await expect(channelMark).toBeVisible()
   await expect(channelMark).toHaveText(/\S/)
   await expect(socialCard.locator('time, a')).toHaveCount(0)
-  await socialCard.click()
+  await expect(firstCard.locator('time, a')).toHaveCount(0)
+  // The viewer opens on the card that was clicked; the first card puts the first picture at the top.
+  await firstCard.click()
   const viewer = page.getByRole('dialog', { name: 'Media Lightbox' })
   await expect(viewer).toBeVisible()
   const pictures = viewer.locator('section')
