@@ -40,7 +40,7 @@ import {
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { createCanonicalNotification } from '~/server/utils/notification-center'
 import { buildOwnerThreadInboxUrl, dashboardOrigin, getPlatformDomain, resolveDashboardSlugs } from '~/server/utils/dashboard-notification-links'
-import { claimDelivery, createDeliveryReceipt, getDeliveryClaimEligibility, recordDeliveryOutcome, waitForDeliverySettlement } from '~/server/domain/guest-threads/deliveries'
+import { createDeliveryReceipt, isDeliverySent, recordDeliveryOutcome } from '~/server/domain/guest-threads/deliveries'
 import { appendEntry, findEntryByDedupeKey } from '~/server/domain/guest-threads/entries'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 import type { GuestThreadDeliveryPurpose } from '~/server/domain/guest-threads/types'
@@ -328,21 +328,10 @@ async function sendEmailNotification(
         idempotencyKey: deliveryContext.idempotencyKey,
       })
     : null
-  const claim = delivery ? await claimDelivery(db, delivery.id) : null
-  if (claim && !claim.claimed) {
-    const settled = await waitForDeliverySettlement(db, claim.delivery)
-    const succeeded = settled.status === 'sent' || settled.status === 'delivered' || settled.status === 'read'
-    const eligibility = getDeliveryClaimEligibility(settled)
-    if (!succeeded && settled.provider === 'resend' && (eligibility === 'claimable' || eligibility === 'in_flight')) {
-      throw new Error('Email delivery remains eligible for webhook retry')
-    }
-    // Another worker owns this receipt. If it settled as sent there is nothing
-    // left to do; if it settled as failed, this call has no delivery either, and
-    // says so rather than resolving as though it had one.
-    if (!succeeded) throw new Error(`Email delivery already settled as ${settled.status}: ${settled.error ?? 'no provider error recorded'}`)
-    if (deliveryContext?.threadId) await publishGuestInboxThreadEvent(env, db, { threadId: deliveryContext.threadId, type: 'delivery.changed' })
-    return
-  }
+  // A receipt that already reached Resend is this event's email for this
+  // recipient: a replayed event sends nothing. Otherwise the receipt id is the
+  // Resend idempotency key, so a concurrent replay cannot send it twice.
+  if (delivery && isDeliverySent(delivery)) return
 
   const result = await sendEmail(env, {
     to: opts.to,
@@ -353,17 +342,14 @@ async function sendEmailNotification(
     unsubscribeOneClickUrl: opts.unsubscribeOneClickUrl ?? null,
     idempotencyKey: delivery?.id,
   })
-  let requestWebhookRetry = false
-  if (claim?.claimed && deliveryContext) {
-    const outcome = await recordDeliveryOutcome(db, {
-      claim,
+  if (delivery) {
+    await recordDeliveryOutcome(db, {
+      deliveryId: delivery.id,
       status: result.status,
       providerMessageId: result.status === 'sent' ? result.messageId : null,
       error: result.status === 'sent' ? null : result.error,
     })
-    if (deliveryContext.threadId) await publishGuestInboxThreadEvent(env, db, { threadId: deliveryContext.threadId, type: 'delivery.changed' })
-    const eligibility = getDeliveryClaimEligibility(outcome)
-    requestWebhookRetry = outcome.provider === 'resend' && (eligibility === 'claimable' || eligibility === 'in_flight')
+    if (deliveryContext?.threadId) await publishGuestInboxThreadEvent(env, db, { threadId: deliveryContext.threadId, type: 'delivery.changed' })
   }
   if (result.status === 'sent') {
     console.info(provider === 'log_only' ? 'email_delivery_log_only' : 'email_delivery_sent', {
@@ -375,19 +361,9 @@ async function sendEmailNotification(
     })
     return
   }
-  // A send that will not be retried is a terminal failure, and it is raised.
-  // Returning false made a failed delivery indistinguishable from a successful
-  // one to Promise.allSettled, which is how a booking could answer 200 with the
-  // owner's email never sent. The outcome is already recorded against the
-  // delivery receipt above; this is what makes the caller account for it.
-  console.error('email_delivery_failed', {
-    organizationId: opts.organizationId,
-    template: opts.template,
-    status: result.status,
-    error: result.error,
-  })
-  if (requestWebhookRetry) throw new Error('Email delivery remains eligible for webhook retry')
-  throw new Error(`Email delivery failed (${result.status}): ${result.error ?? 'no provider error reported'}`)
+  // A failed send is raised, so the caller accounts for it rather than
+  // answering as though the email went out.
+  throw new Error(`Email delivery failed: ${result.error}`)
 }
 
 async function sendWhatsAppThreadNotification(
@@ -409,27 +385,11 @@ async function sendWhatsAppThreadNotification(
     purpose: opts.delivery.purpose,
     idempotencyKey: opts.delivery.idempotencyKey,
   })
-  const claim = await claimDelivery(db, delivery.id)
-  if (!claim.claimed) {
-    const settled = await waitForDeliverySettlement(db, claim.delivery)
-    return settled.status === 'skipped' || settled.status === 'sent' || settled.status === 'delivered' || settled.status === 'read'
-  }
+  if (isDeliverySent(delivery) || delivery.status === 'skipped') return true
 
-  let result: Awaited<ReturnType<typeof sendWhatsAppNotification>>
-  try {
-    result = await sendWhatsAppNotification(env, opts)
-  } catch (error) {
-    await recordDeliveryOutcome(db, {
-      claim,
-      status: 'unknown',
-      error: error instanceof Error ? error.message : String(error),
-    })
-    if (opts.delivery.threadId) await publishGuestInboxThreadEvent(env, db, { threadId: opts.delivery.threadId, type: 'delivery.changed' })
-    throw error
-  }
-
+  const result = await sendWhatsAppNotification(env, opts)
   await recordDeliveryOutcome(db, {
-    claim,
+    deliveryId: delivery.id,
     status: result.status,
     providerMessageId: result.status === 'sent' ? result.messageId ?? null : null,
     error: result.status === 'skipped' ? result.reason : result.success ? null : result.error,

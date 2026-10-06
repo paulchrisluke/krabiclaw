@@ -6,7 +6,7 @@ import { threadPayloadForGuest, requestInsertQueries, getGuestRequest } from '..
 import { upsertLocationReservationConfig } from '../../server/utils/reservations.ts'
 import test from 'node:test'
 import { Miniflare } from 'miniflare'
-import { claimDelivery, createDeliveryReceipt, getDeliveryById, getDeliveryRetryEligibility, isVisibleDeliveryFailure, listThreadDeliveries, recordDeliveryOutcome } from '../../server/domain/guest-threads/deliveries.ts'
+import { createDeliveryReceipt, getDeliveryById, isVisibleDeliveryFailure, listThreadDeliveries, recordDeliveryOutcome } from '../../server/domain/guest-threads/deliveries.ts'
 import { appendEntry } from '../../server/domain/guest-threads/entries.ts'
 import { executeGuestThreadOperation } from '../../server/domain/guest-threads/operations.ts'
 import { listGuestThreads, updateThreadProjectionIfLatestEntry } from '../../server/domain/guest-threads/repository.ts'
@@ -25,7 +25,7 @@ import { reviewRequestMessage } from '../../server/notifications/guest-events.ts
 import { formatTimestamp } from '../../utils/timezone.ts'
 import type { CloudflareEnv } from '../../server/utils/auth.ts'
 
-test('D1 claims fence concurrent sends and bound ambiguous provider retries', async () => {
+test('a guest-thread email is sent once per event: replays send nothing, a failed send goes again, and a late reply never moves the thread', async () => {
   const runtime = new Miniflare({ workers: [{ config: {
     name: 'guest-delivery-proof', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export class Hub { fetch() { return new Response(null, { status: 204 }) } } export default { fetch() { return new Response("ok") } }' } } },
@@ -98,104 +98,23 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
     await db.prepare("INSERT INTO activity_entries (id,request_id,kind,scope_kind,actor_kind,channel,dedupe_key,sequence,occurred_at) VALUES ('entry-proof','contact-proof','message','request','guest','email','proof',2,'2026-09-05T00:00:00.000Z')").run()
 
 
-    for (const provider of ['meta', 'resend'] as const) {
-      const receipt = await createDeliveryReceipt(db, { entryId: 'entry-proof', channel: provider === 'meta' ? 'whatsapp' : 'email', provider, purpose: 'member_reply', idempotencyKey: `${provider}-proof` })
-      assert.notEqual(getDeliveryRetryEligibility(receipt), 'retryable')
-      const now = Date.now()
-      const claims = await Promise.all([claimDelivery(db, receipt.id, now), claimDelivery(db, receipt.id, now)])
-      assert.equal(claims.filter(result => result.claimed).length, 1)
-      const winner = claims.find(result => result.claimed)!
-      assert(winner.claimed)
-      assert.equal((await claimDelivery(db, receipt.id, now + 1)).claimed, false)
+    const reply = (body: string, idempotencyKey: string) => executeGuestThreadOperation(db, {
+      threadId: 'contact-proof', action: 'reply', actorUserId: 'user-proof', body, idempotencyKey, env })
+    const deliveryRow = (id: string) => db.prepare('SELECT status, provider_message_id FROM guest_thread_deliveries WHERE id = ?').bind(id).first<{ status: string; provider_message_id: string | null }>()
 
-      if (provider === 'meta') {
-        assert.equal((await claimDelivery(db, receipt.id, now + 60_000)).claimed, false)
-        await db.prepare("UPDATE guest_thread_deliveries SET status = 'failed' WHERE id = ?").bind(receipt.id).run()
-        assert.equal((await claimDelivery(db, receipt.id, now + 60_000)).claimed, false)
-        continue
-      }
-
-      const retried = await claimDelivery(db, receipt.id, now + 60_000)
-      assert(retried.claimed)
-      assert.notEqual(retried.claimVersion, winner.claimVersion)
-      await recordDeliveryOutcome(db, { claim: winner, status: 'failed', error: 'late failure' })
-      assert.equal((await getDeliveryById(db, receipt.id))!.status, 'unknown')
-      await db.prepare("UPDATE guest_thread_deliveries SET status = 'delivered' WHERE id = ?").bind(receipt.id).run()
-      await recordDeliveryOutcome(db, { claim: retried, status: 'failed', error: 'late failure after webhook' })
-      assert.equal((await getDeliveryById(db, receipt.id))!.status, 'delivered')
-
-      await db.prepare("UPDATE guest_thread_deliveries SET status = 'unknown', created_at = ?, updated_at = ? WHERE id = ?")
-        .bind(new Date(now - 86_400_000).toISOString(), new Date(now - 60_000).toISOString(), receipt.id).run()
-      assert.equal((await claimDelivery(db, receipt.id, now)).claimed, false)
-      assert.notEqual(getDeliveryRetryEligibility((await getDeliveryById(db, receipt.id))!), 'retryable')
-    }
-    const failedReceipt = await createDeliveryReceipt(db, { entryId: 'entry-proof', channel: 'email', provider: 'resend', purpose: 'member_reply', idempotencyKey: 'failed-email-proof' })
-    const firstAttempt = await claimDelivery(db, failedReceipt.id)
-    assert(firstAttempt.claimed)
-    const failure = await recordDeliveryOutcome(db, { claim: firstAttempt, status: 'failed', error: 'provider rejected request' })
-    const retry = await claimDelivery(db, failedReceipt.id, Date.parse(failure.updated_at))
-    assert(retry.claimed)
-    assert(retry.claimVersion > failure.updated_at)
-    assert.equal(retry.delivery.error, null)
-    await recordDeliveryOutcome(db, { claim: firstAttempt, status: 'sent' })
-    assert.equal((await getDeliveryById(db, failedReceipt.id))!.status, 'unknown')
-    const sent = await recordDeliveryOutcome(db, { claim: retry, status: 'sent' })
-    assert.equal(sent.status, 'sent')
-
-    const operationKey = 'held-reply-proof'
+    // A reply is sent, and its receipt carries the provider's message id.
+    const operationKey = 'reply-proof'
     const operationDedupeKey = `guest-thread-operation:contact-proof:${operationKey}`
     const deliveryId = `guest-thread-email:contact-proof:${operationKey}`
-    await db.prepare(`
-      INSERT INTO activity_entries
-        (id, request_id, kind, scope_kind, actor_kind, actor_user_id, channel, body, event_name, dedupe_key, sequence, occurred_at)
-      VALUES ('entry-held-reply', 'contact-proof', 'message', 'request', 'member', 'user-proof', 'email', 'A held reply', 'thread.member_reply', ?, 3, ?)
-    `).bind(operationDedupeKey, new Date().toISOString()).run()
-    const heldReceipt = await createDeliveryReceipt(db, {
-      entryId: 'entry-held-reply',
-      channel: 'email',
-      provider: 'resend',
-      purpose: 'member_reply',
-      idempotencyKey: deliveryId,
-    })
-    const heldClaim = await claimDelivery(db, heldReceipt.id)
-    assert.equal(heldClaim.claimed, true)
-    const heldDeliveries = await listThreadDeliveries(db, 'contact-proof')
-    assert.equal(heldDeliveries.filter(delivery => isVisibleDeliveryFailure(delivery)).some(delivery => delivery.id === deliveryId), false,
-      'a claim still in flight is not surfaced as a failure')
-    assert.equal(heldDeliveries.some(delivery => delivery.id === heldReceipt.id), true,
-      'but the thread still knows the send exists, and on which channel')
-
-    const accepted = await executeGuestThreadOperation(db, {
-      threadId: 'contact-proof',
-            action: 'reply',
-      actorUserId: 'user-proof',
-      body: 'A held reply',
-      idempotencyKey: operationKey,
-      env: { EMAIL_DELIVERY_MODE: 'provider', NUXT_PUBLIC_PLATFORM_DOMAIN: 'proof.example' },
-    })
-    assert.deepEqual({ ok: accepted.ok, status: accepted.status }, { ok: true, status: 202 })
-
-    const acceptedRetry = await executeGuestThreadOperation(db, {
-      threadId: 'contact-proof',
-            action: 'retry_delivery',
-      actorUserId: 'user-proof',
-      deliveryId,
-      idempotencyKey: 'held-retry-proof',
-      env: { EMAIL_DELIVERY_MODE: 'provider', NUXT_PUBLIC_PLATFORM_DOMAIN: 'proof.example' },
-    })
-    assert.deepEqual({ ok: acceptedRetry.ok, status: acceptedRetry.status }, { ok: true, status: 202 })
-
-    await recordDeliveryOutcome(db, { claim: heldClaim, status: 'sent', providerMessageId: 'provider-proof' })
-    const replay = await executeGuestThreadOperation(db, {
-      threadId: 'contact-proof',
-            action: 'reply',
-      actorUserId: 'user-proof',
-      body: 'A held reply',
-      idempotencyKey: operationKey,
-      env: { EMAIL_DELIVERY_MODE: 'provider', NUXT_PUBLIC_PLATFORM_DOMAIN: 'proof.example' },
-    })
-    assert.deepEqual({ ok: replay.ok, status: replay.status }, { ok: true, status: 200 })
+    assert.deepEqual(await reply('A reply', operationKey).then(outcome => ({ ok: outcome.ok, status: outcome.status })), { ok: true, status: 200 })
+    const sent = await deliveryRow(deliveryId)
+    assert.equal(sent?.status, 'sent')
+    assert.match(sent?.provider_message_id ?? '', /^log-only:email:/)
     assert.equal((await db.prepare('SELECT conversation_state FROM requests WHERE id = ?').bind('contact-proof').first<{ conversation_state: string }>())?.conversation_state, 'waiting_on_guest')
+
+    // Replaying the same reply sends nothing: the receipt keeps its message id.
+    assert.equal((await reply('A reply', operationKey)).ok, true)
+    assert.equal((await deliveryRow(deliveryId))?.provider_message_id, sent?.provider_message_id)
 
     // A thread reaches 'resolved' through its record's own lifecycle, which
     // writes the state alongside the entry that caused it. Both halves matter
@@ -209,21 +128,12 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
       dedupeKey: 'lifecycle-resolve-proof',
     })
     await updateThreadProjectionIfLatestEntry(db, 'contact-proof', resolvingEntry.id, { conversationState: 'resolved' })
-
-    const replayAfterResolve = await executeGuestThreadOperation(db, {
-      threadId: 'contact-proof',
-            action: 'reply',
-      actorUserId: 'user-proof',
-      body: 'A held reply',
-      idempotencyKey: operationKey,
-      env: { EMAIL_DELIVERY_MODE: 'provider', NUXT_PUBLIC_PLATFORM_DOMAIN: 'proof.example' },
-    })
-    assert.deepEqual({ ok: replayAfterResolve.ok, status: replayAfterResolve.status }, { ok: true, status: 200 })
+    assert.equal((await reply('A reply', operationKey)).ok, true)
     assert.equal((await db.prepare('SELECT conversation_state FROM requests WHERE id = ?').bind('contact-proof').first<{ conversation_state: string }>())?.conversation_state, 'resolved')
 
+    // A reply whose send completes after a newer guest message leaves the
+    // thread on that message.
     const delayedOperationKey = 'delayed-reply-proof'
-    const delayedOperationDedupeKey = `guest-thread-operation:contact-proof:${delayedOperationKey}`
-    const delayedDeliveryId = `guest-thread-email:contact-proof:${delayedOperationKey}`
     const delayedReplyEntry = await appendEntry(db, {
       threadId: 'contact-proof',
       kind: 'message',
@@ -232,18 +142,15 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
       channel: 'email',
       body: 'A delayed reply',
       eventName: 'thread.member_reply',
-      dedupeKey: delayedOperationDedupeKey,
+      dedupeKey: `guest-thread-operation:contact-proof:${delayedOperationKey}`,
     })
-    const delayedReceipt = await createDeliveryReceipt(db, {
+    await createDeliveryReceipt(db, {
       entryId: delayedReplyEntry.id,
       channel: 'email',
-      provider: 'resend',
+      provider: 'log_only',
       purpose: 'member_reply',
-      idempotencyKey: delayedDeliveryId,
+      idempotencyKey: `guest-thread-email:contact-proof:${delayedOperationKey}`,
     })
-    const delayedClaim = await claimDelivery(db, delayedReceipt.id)
-    assert.equal(delayedClaim.claimed, true)
-
     const inboundEntry = await appendEntry(db, {
       threadId: 'contact-proof',
       kind: 'message',
@@ -253,21 +160,13 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
       dedupeKey: 'email:newer-guest-reply-proof',
     })
     await updateThreadProjectionIfLatestEntry(db, 'contact-proof', inboundEntry.id, { conversationState: 'needs_attention' })
-    await recordDeliveryOutcome(db, { claim: delayedClaim, status: 'sent', providerMessageId: 'provider-delayed-proof' })
-
-    const delayedCompletion = await executeGuestThreadOperation(db, {
-      threadId: 'contact-proof',
-            action: 'reply',
-      actorUserId: 'user-proof',
-      body: 'A delayed reply',
-      idempotencyKey: delayedOperationKey,
-      env: { EMAIL_DELIVERY_MODE: 'provider', NUXT_PUBLIC_PLATFORM_DOMAIN: 'proof.example' },
-    })
-    assert.deepEqual({ ok: delayedCompletion.ok, status: delayedCompletion.status }, { ok: true, status: 200 })
+    assert.deepEqual(await reply('A delayed reply', delayedOperationKey).then(outcome => ({ ok: outcome.ok, status: outcome.status })), { ok: true, status: 200 })
+    assert.equal((await deliveryRow(`guest-thread-email:contact-proof:${delayedOperationKey}`))?.status, 'sent')
     assert.equal((await db.prepare('SELECT conversation_state FROM requests WHERE id = ?').bind('contact-proof').first<{ conversation_state: string }>())?.conversation_state, 'needs_attention')
 
-    const retryOperationKey = 'failed-reply-proof'
-    const retryEntry = await appendEntry(db, {
+    // A failed send shows on the thread, and replaying the reply sends it again.
+    const failedOperationKey = 'failed-reply-proof'
+    const failedEntry = await appendEntry(db, {
       threadId: 'contact-proof',
       kind: 'message',
       actorKind: 'member',
@@ -275,38 +174,22 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
       channel: 'email',
       body: 'A failed reply',
       eventName: 'thread.member_reply',
-      dedupeKey: `guest-thread-operation:contact-proof:${retryOperationKey}`,
+      dedupeKey: `guest-thread-operation:contact-proof:${failedOperationKey}`,
     })
-    const retryReceipt = await createDeliveryReceipt(db, {
-      entryId: retryEntry.id,
+    const failedReceipt = await createDeliveryReceipt(db, {
+      entryId: failedEntry.id,
       channel: 'email',
-      provider: 'resend',
+      provider: 'log_only',
       purpose: 'member_reply',
-      idempotencyKey: `guest-thread-email:contact-proof:${retryOperationKey}`,
+      idempotencyKey: `guest-thread-email:contact-proof:${failedOperationKey}`,
     })
-    const retryClaim = await claimDelivery(db, retryReceipt.id)
-    assert.equal(retryClaim.claimed, true)
-    await recordDeliveryOutcome(db, { claim: retryClaim, status: 'failed', error: 'provider rejected request' })
+    await recordDeliveryOutcome(db, { deliveryId: failedReceipt.id, status: 'failed', error: 'provider rejected request' })
+    assert.equal((await listThreadDeliveries(db, 'contact-proof')).filter(isVisibleDeliveryFailure).some(delivery => delivery.id === failedReceipt.id), true)
+    assert.equal((await reply('A failed reply', failedOperationKey)).ok, true)
+    const resent = await getDeliveryById(db, failedReceipt.id)
+    assert.deepEqual({ status: resent?.status, error: resent?.error }, { status: 'sent', error: null })
+    assert.equal(isVisibleDeliveryFailure(resent!), false)
 
-    const secondResolvingEntry = await appendEntry(db, {
-      threadId: 'contact-proof',
-      kind: 'operation',
-      actorKind: 'system',
-      eventName: 'thread.completed',
-      dedupeKey: 'lifecycle-resolve-after-failure-proof',
-    })
-    await updateThreadProjectionIfLatestEntry(db, 'contact-proof', secondResolvingEntry.id, { conversationState: 'resolved' })
-
-    const retriedAfterResolve = await executeGuestThreadOperation(db, {
-      threadId: 'contact-proof',
-            action: 'retry_delivery',
-      actorUserId: 'user-proof',
-      deliveryId: retryReceipt.id,
-      idempotencyKey: 'retry-after-resolve-proof',
-      env: { NUXT_PUBLIC_PLATFORM_DOMAIN: 'proof.example' },
-    })
-    assert.deepEqual({ ok: retriedAfterResolve.ok, status: retriedAfterResolve.status }, { ok: true, status: 200 })
-    assert.equal((await db.prepare('SELECT conversation_state FROM requests WHERE id = ?').bind('contact-proof').first<{ conversation_state: string }>())?.conversation_state, 'resolved')
     assert.equal((await db.prepare('SELECT count(*) count FROM activity_entries WHERE dedupe_key = ?').bind(operationDedupeKey).first<{ count: number }>())?.count, 1)
     assert.equal((await db.prepare('SELECT count(*) count FROM guest_thread_deliveries WHERE id = ?').bind(deliveryId).first<{ count: number }>())?.count, 1)
   } finally {
@@ -314,7 +197,7 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
   }
 })
 
-test('D1 status-email retries preserve recorded content and reject superseded bookings', async (t) => {
+test('a replayed status email sends its recorded content and refuses a superseded booking', async (t) => {
   t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-10-01T10:00:00Z') })
   const runtime = new Miniflare({ workers: [{ config: {
     name: 'status-retry-proof', compatibilityDate: '2024-11-01',
@@ -359,22 +242,21 @@ test('D1 status-email retries preserve recorded content and reject superseded bo
     // sent copy contains it rather than being it.
     assert.ok(original.text.includes('Your reservation for Oct 1, 2098, 6:00 PM for 2 guests has been cancelled.'))
     assert.ok(original.html.includes('Your reservation for Oct 1, 2098, 6:00 PM for 2 guests has been cancelled.'))
-    assert.equal((await executeGuestThreadOperation(db, { ...input, action: 'retry_delivery', deliveryId, idempotencyKey: 'retry-unchanged' })).status, 502)
+    // Replaying the cancel sends the recorded email again, unchanged.
+    assert.equal((await executeGuestThreadOperation(db, cancel)).status, 502)
     assert.deepEqual(requests[1], original)
 
     // Moving the reservation is what makes the pending send stale — the thread
     // carries no copy of the time to move.
     await db.prepare("UPDATE reservations SET starts_at = '2098-10-02T11:00:00.000Z', ends_at = '2098-10-02T13:00:00.000Z' WHERE request_id = 'booking-status'").run()
     const attemptsBefore = requests.length
-    for (const request of [cancel, { ...input, action: 'retry_delivery', deliveryId, idempotencyKey: 'retry-changed' }]) {
-      assert.equal((await executeGuestThreadOperation(db, request)).status, 409)
-    }
+    assert.equal((await executeGuestThreadOperation(db, cancel)).status, 409)
     assert.equal(requests.length, attemptsBefore)
     // Cancelling is the one transition, so a second one has nothing to move:
     // the record is already cancelled and the stale send stays refused.
     reject = false
     const afterCancellation = requests.length
-    for (const request of [{ ...input, action: 'cancel', idempotencyKey: 'cancel-again' }, { ...input, action: 'retry_delivery', deliveryId, idempotencyKey: 'retry-cancelled' }]) {
+    for (const request of [{ ...input, action: 'cancel', idempotencyKey: 'cancel-again' }, cancel]) {
       assert.equal((await executeGuestThreadOperation(db, request)).status, 409)
     }
     assert.equal(requests.length, afterCancellation)
