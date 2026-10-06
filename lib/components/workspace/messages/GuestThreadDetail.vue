@@ -183,9 +183,12 @@
              edge and a 32px send circle at the right — pale until there is
              something to send. A pasted photo is added the same way. The
              form's own spacing goes in `class`: `ui.root` is forwarded to the
-             textarea inside it as well. -->
+             textarea inside it as well. It does not take focus on mount: on
+             desktop the first conversation opens beside the list, and Nuxt
+             UI's default autofocus took the keyboard away from the list. -->
         <UChatPrompt
           v-model="draft"
+          :autofocus="false"
           placeholder="Write a message…"
           color="neutral"
           :disabled="(!props.personalScope && !thread.guestEmail)"
