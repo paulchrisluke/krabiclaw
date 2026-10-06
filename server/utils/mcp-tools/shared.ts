@@ -834,6 +834,13 @@ export type RawMcpToolDefinition = Omit<McpToolDefinition, 'annotations' | 'secu
 // The explicit catalog table below is authoritative. Website/CMS operations
 // stay within the selected workspace even when its content is publicly visible.
 // Publishing to a social audience and downloading host files cross that boundary.
+//
+// `destructiveHint` follows OpenAI's definition — "irreversible or difficult to
+// reverse" — not "writes". An edit that a later edit undoes is W. Deleting,
+// publishing to an audience, cancelling, refunding and bulk replacement are D,
+// and every D tool requires confirmation; validateToolAnnotations holds the two
+// together. On 2026-10-06 every update_* tool was D, which told ChatGPT a price
+// change was in the class of a deletion (#1259).
 const R: McpToolAnnotations = Object.freeze({
   readOnlyHint: true,
   idempotentHint: true,
@@ -846,11 +853,11 @@ const D: McpToolAnnotations = Object.freeze({ readOnlyHint: false, openWorldHint
 /** Submission-review contract. Every real public tool is listed explicitly. */
 export const EXPECTED_TOOL_ANNOTATIONS = {
   create_qa: W,
-  update_qa: D,
+  update_qa: W,
   delete_qa: D,
-  reorder_qa: D,
+  reorder_qa: W,
   get_member_scheduling: R,
-  set_member_scheduling: D,
+  set_member_scheduling: W,
   set_member_busy_calendars: { ...D, openWorldHint: true },
   reassign_product_booking: { ...D, openWorldHint: true, idempotentHint: true },
   get_payment_summary: R,
@@ -862,7 +869,7 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   issue_payment_refund: { ...D, openWorldHint: true, idempotentHint: true },
   create_payment_checkout: { ...W, openWorldHint: true, idempotentHint: true },
   open_payments_onboarding: W,
-  set_product_booking_config: D,
+  set_product_booking_config: W,
   delete_product_booking_config: D,
   replace_product_weekly_schedule: D,
   create_product_booking: { ...W, openWorldHint: true, idempotentHint: true },
@@ -924,47 +931,47 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   publish_blog_post: D,
   publish_post: { ...D, openWorldHint: true },
   put_resource_localization: D,
-  remove_media: D,
-  reorder_media: D,
-  replace_content_block: D,
-  set_consultation_mode: D,
-  set_media: D,
-  set_workspace_context: D,
+  remove_media: W,
+  reorder_media: W,
+  replace_content_block: W,
+  set_consultation_mode: W,
+  set_media: W,
+  set_workspace_context: W,
   reconcile_products: D,
-  update_blog_post: D,
-  update_location: D,
+  update_blog_post: W,
+  update_location: W,
   get_calendar: R,
-  block_dates: D,
-  open_dates: D,
-  update_media_asset: D,
-  update_post: D,
-  update_product: D,
-  update_organization_settings: D,
+  block_dates: W,
+  open_dates: W,
+  update_media_asset: W,
+  update_post: W,
+  update_product: W,
+  update_organization_settings: W,
   update_site_page: D,
   delete_site_page: D,
   save_media_attachment: { ...W, openWorldHint: true },
   list_products: R,
-  set_product_publication: D,
-  set_product_location: D,
+  set_product_publication: W,
+  set_product_location: W,
   remove_product_location: D,
   list_collections: R,
   create_collection: W,
-  update_collection: D,
+  update_collection: W,
   delete_collection: D,
   // Replaces the whole membership list: products left out lose their place in
   // the collection, which is a removal the caller must mean.
   set_collection_products: D,
-  reorder_collections: D,
-  reorder_blog_posts: D,
+  reorder_collections: W,
+  reorder_blog_posts: W,
   list_article_categories: R,
   create_article_category: W,
-  update_article_category: D,
+  update_article_category: W,
   delete_article_category: D,
-  reorder_article_categories: D,
+  reorder_article_categories: W,
   get_product_catalog_localization: R,
   replace_resource_localizations: D,
   get_reservation_policy: R,
-  update_reservation_policy: D,
+  update_reservation_policy: W,
 } as const satisfies Record<string, McpToolAnnotations>
 
 export function buildToolAnnotationsByName() {
@@ -992,6 +999,9 @@ export function validateToolAnnotations(name: string, annotations: McpToolAnnota
     if (confirmRequired) {
       throw new Error(`Read-only MCP tool "${name}" cannot require confirmation.`)
     }
+  } else if (annotations.destructiveHint && !confirmRequired) {
+    // Destructive means irreversible, and an irreversible act is confirmed.
+    throw new Error(`Destructive tool "${name}" must require confirmation.`)
   }
 }
 

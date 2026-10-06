@@ -54,12 +54,11 @@ export default defineHandler(async (event) => {
     actorUserId: session.user.id,
     body: field('body'),
     photos,
-    deliveryId: field('deliveryId'),
     idempotencyKey,
     env,
   })
 
-  if (outcome.ok || outcome.reason === 'delivery_failed' || outcome.reason === 'delivery_unknown') {
+  if (outcome.ok || outcome.reason === 'delivery_failed') {
     const changedThread = outcome.ok ? outcome.thread : thread
     const invalidations = [
       publishDashboardInvalidation(env, {
@@ -71,7 +70,7 @@ export default defineHandler(async (event) => {
         occurredAt: new Date().toISOString(),
       }),
     ]
-    if (['reply', 'confirm', 'reject', 'cancel', 'complete', 'retry_delivery'].includes(action)) {
+    if (['reply', 'confirm', 'reject', 'cancel', 'complete'].includes(action)) {
       invalidations.push(publishDashboardInvalidation(env, {
         eventId: crypto.randomUUID(),
         type: 'delivery.changed',
@@ -89,7 +88,7 @@ export default defineHandler(async (event) => {
   }
 
   if (outcome.ok === false) {
-    if (outcome.reason === 'thread_not_found' || outcome.reason === 'source_not_found' || outcome.reason === 'delivery_not_found') {
+    if (outcome.reason === 'thread_not_found' || outcome.reason === 'source_not_found') {
       return jsonResponse({ error: 'Thread not found' }, { status: 404 })
     }
     if (outcome.reason === 'invalid_transition') {
@@ -107,7 +106,7 @@ export default defineHandler(async (event) => {
     if (outcome.reason === 'missing_idempotency_key') {
       return jsonResponse({ error: 'Idempotency key is required' }, { status: 400 })
     }
-    if (outcome.reason === 'delivery_failed' || outcome.reason === 'delivery_unknown') {
+    if (outcome.reason === 'delivery_failed') {
       return jsonResponse({ error: outcome.message }, { status: outcome.status })
     }
     return jsonResponse({ error: 'Operation failed' }, { status: 400 })

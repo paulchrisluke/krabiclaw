@@ -17,7 +17,7 @@
                 <BlawbyFeatureIcon
                   :name="feature.icon"
                   class="size-5 shrink-0"
-                  :class="index === selected ? 'text-[var(--blawby-accent)]' : 'text-muted'"
+                  :class="index === selected ? 'text-[var(--blawby-accent-strong)]' : 'text-muted'"
                 />
                 <span
                   class="mt-1 w-0.5 bg-[var(--blawby-accent)] transition-all duration-500 ease-in-out"

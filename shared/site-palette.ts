@@ -54,7 +54,7 @@ export const TEMPLATE_PALETTES = {
   ),
   blawby: palette(
     colors('#FBFAF7', '#FFFFFF', '#162033', '#565D6A', '#25356C', '#C19855'),
-    colors('#0F1524', '#161F3B', '#E8EAF0', '#A9B0C0', '#9DB1E6', '#D4B07A'),
+    colors('#0E0E10', '#18181B', '#F4F4F5', '#A1A1AA', '#9DB1E6', '#C19855'),
   ),
 } as const satisfies Record<string, SitePalette>
 

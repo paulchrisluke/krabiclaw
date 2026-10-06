@@ -27,6 +27,7 @@ import type {
   ProductOption,
   ProductSource,
   ProductVariant,
+  ProductVariantInput,
   ReconcileProductInput,
   UpdateCollectionInput,
   UpdateProductInput,
@@ -840,8 +841,21 @@ function productWrites(
       })
     }
     for (const price of options.writePrices ? variant.prices : []) {
+      // A restated price keeps its row: payments and checkout holds reference
+      // price ids, and a kept row keeps when it was created.
       writes.push({
-        query: `INSERT INTO prices (id, organization_id, product_variant_id, location_id, active, currency, unit_amount, type,
+        query: upsert
+          ? `INSERT INTO prices (id, organization_id, product_variant_id, location_id, active, currency, unit_amount, type,
+                  recurring_interval, recurring_interval_count, tax_behavior, compare_at_unit_amount, valid_from_at, valid_until_at,
+                  source, created_at, updated_at, created_by, updated_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (id) DO UPDATE SET location_id = excluded.location_id, active = excluded.active, currency = excluded.currency,
+                  unit_amount = excluded.unit_amount, type = excluded.type, recurring_interval = excluded.recurring_interval,
+                  recurring_interval_count = excluded.recurring_interval_count, tax_behavior = excluded.tax_behavior,
+                  compare_at_unit_amount = excluded.compare_at_unit_amount, valid_from_at = excluded.valid_from_at,
+                  valid_until_at = excluded.valid_until_at, source = excluded.source, updated_at = excluded.updated_at, updated_by = excluded.updated_by
+                WHERE prices.organization_id = excluded.organization_id AND prices.product_variant_id = excluded.product_variant_id`
+          : `INSERT INTO prices (id, organization_id, product_variant_id, location_id, active, currency, unit_amount, type,
                   recurring_interval, recurring_interval_count, tax_behavior, compare_at_unit_amount, valid_from_at, valid_until_at,
                   source, created_at, updated_at, created_by, updated_by)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -1030,17 +1044,9 @@ async function planProductUpdate(db: DbClient, input: {
       id: option.id, name: option.name, sort_order: option.sort_order,
       values: option.values.map(value => ({ id: value.id, value: value.value, sort_order: value.sort_order })),
     })),
-    variants: patch.variants ?? current.variants.map(variant => ({
-      id: variant.id, name: variant.name, sku: variant.sku, active: variant.active, sort_order: variant.sort_order,
-      option_values: variant.option_values,
-      prices: variant.prices.map(price => ({
-        id: price.id,
-        unit_amount: price.unit_amount, currency: price.currency, location_id: price.location_id, active: price.active,
-        type: price.type, recurring_interval: price.recurring_interval, recurring_interval_count: price.recurring_interval_count,
-        tax_behavior: price.tax_behavior, compare_at_unit_amount: price.compare_at_unit_amount,
-        valid_from_at: price.valid_from_at, valid_until_at: price.valid_until_at, source: price.source,
-      })),
-    })),
+    variants: patch.variants === undefined
+      ? current.variants.map(variant => ({ ...variantInput(variant), prices: variant.prices.map(priceInput) }))
+      : patch.variants.map((supplied, index) => mergeVariantPatch(supplied, current.variants.find(variant => variant.id === supplied.id), `variants[${index}]`)),
     details: patch.details ?? current.details,
   }
   const planned = await planProduct(db, organizationId, merged, {
@@ -1061,12 +1067,14 @@ async function planProductUpdate(db: DbClient, input: {
   // prices keep their rows, their identity and their scopes; only a caller
   // that restated the variants is describing the offers.
   const writesPrices = patch.variants !== undefined
+  const keptPrices = d1JsonArray(planned.variants.flatMap(variant => variant.prices.map(price => price.id)))
   const writes: BatchQuery[] = [
     // Selections and named details are rebuilt wholesale: nothing
     // references them, so replacing them is simpler and cannot drift.
     { query: 'DELETE FROM product_variant_option_values WHERE organization_id = ? AND product_id = ?', params: [organizationId, productId] },
+    // Prices the caller no longer states go; restated ones are upserted in place.
     ...(writesPrices
-      ? [{ query: 'DELETE FROM prices WHERE organization_id = ? AND product_variant_id IN (SELECT id FROM product_variants WHERE organization_id = ? AND product_id = ?)', params: [organizationId, organizationId, productId] }]
+      ? [{ query: 'DELETE FROM prices WHERE organization_id = ? AND product_variant_id IN (SELECT id FROM product_variants WHERE organization_id = ? AND product_id = ?) AND id NOT IN (SELECT value FROM json_each(?))', params: [organizationId, organizationId, productId, keptPrices] }]
       : []),
     // Options, values and variants are UPSERTED, never dropped and recreated:
     // bookings reference variant identity, and recreating a variant under a
@@ -1083,6 +1091,53 @@ async function planProductUpdate(db: DbClient, input: {
     ...input.cacheInvalidations,
   ]
   return { writes, keptVariants }
+}
+
+const variantInput = (variant: ProductVariant) => ({
+  id: variant.id, name: variant.name, sku: variant.sku, active: variant.active, sort_order: variant.sort_order, option_values: variant.option_values,
+})
+const priceInput = (price: Price): PriceInput => ({
+  id: price.id, unit_amount: price.unit_amount, currency: price.currency, location_id: price.location_id, active: price.active,
+  type: price.type, recurring_interval: price.recurring_interval, recurring_interval_count: price.recurring_interval_count,
+  tax_behavior: price.tax_behavior, compare_at_unit_amount: price.compare_at_unit_amount,
+  valid_from_at: price.valid_from_at, valid_until_at: price.valid_until_at, source: price.source,
+})
+
+/**
+ * An edit names what changes. A variant restated with its id keeps every field
+ * it does not restate; its prices merge by id, so a price restated with its id
+ * keeps its row — payments and checkout holds reference price ids — and its
+ * unstated fields, and a price left out is kept. A variant or price without an
+ * id is new, and must say what it is.
+ */
+function mergeVariantPatch(supplied: ProductVariantInput, current: ProductVariant | undefined, field: string): ProductVariantInput {
+  if (!current) {
+    if (supplied.id) invalid(`${field}.id ${supplied.id} does not belong to this product`)
+    if (typeof supplied.name !== 'string') invalid(`${field}.name is required for a new variant`)
+    for (const [index, price] of (supplied.prices ?? []).entries()) {
+      if (price.id) invalid(`${field}.prices[${index}].id names a price this product does not have`)
+      if (typeof price.unit_amount !== 'number') invalid(`${field}.prices[${index}].unit_amount is required for a new price`)
+    }
+    return supplied
+  }
+  const base = variantInput(current)
+  // Prices merge by id: a restated price is updated in place, a new one is
+  // added, and a price left unstated is kept. An offer stops with `active`
+  // or `valid_until_at`, never by being left out of a list.
+  const prices = current.prices.map(priceInput)
+  for (const [index, price] of (supplied.prices ?? []).entries()) {
+    const at = price.id ? prices.findIndex(candidate => candidate.id === price.id) : -1
+    if (price.id && at < 0) invalid(`${field}.prices[${index}].id ${price.id} does not belong to variant ${current.id}`)
+    if (at < 0 && typeof price.unit_amount !== 'number') invalid(`${field}.prices[${index}].unit_amount is required for a new price`)
+    if (at < 0) prices.push(price)
+    else prices[at] = { ...prices[at]!, ...definedFields(price) }
+  }
+  return { ...base, ...definedFields(supplied), prices }
+}
+
+/** The fields a patch actually states; `undefined` is absence, `null` is a value. */
+function definedFields<T extends object>(value: T): Partial<T> {
+  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined)) as Partial<T>
 }
 
 /**

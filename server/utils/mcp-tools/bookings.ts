@@ -112,6 +112,6 @@ export async function handleBookingsTools(ctx: McpExecutorContext): Promise<unkn
     return { success: true, request_id: thread.id, change_status: 'awaiting_guest_acceptance', record: await getThreadOperationalRecord(db, thread.id) }
   }
   const outcome = await executeGuestThreadOperation(db, { threadId: thread.id, organizationId, action: toolName.split('_')[0]!, actorUserId: organization.userId, idempotencyKey: key, env })
-  if (outcome.ok || outcome.reason === 'delivery_failed' || outcome.reason === 'delivery_unknown') await publishGuestInboxThreadEvent(env, db, { threadId: thread.id, type: 'thread.changed' })
+  if (outcome.ok || outcome.reason === 'delivery_failed') await publishGuestInboxThreadEvent(env, db, { threadId: thread.id, type: 'thread.changed' })
   return { ...outcome, record: await getThreadOperationalRecord(db, thread.id) }
 }

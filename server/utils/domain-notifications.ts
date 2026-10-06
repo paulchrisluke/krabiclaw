@@ -29,7 +29,8 @@ interface DomainNotificationInput {
   dashboardUrl: string
 }
 
-function supportEmails(env: DomainNotificationEnv): string[] {
+/** The KrabiClaw operator addresses operational mail is copied to. */
+export function platformOperatorEmails(env: { PLATFORM_OWNER_EMAILS?: string }): string[] {
   return String(env.PLATFORM_OWNER_EMAILS || '')
     .split(',')
     .map(email => email.trim())
@@ -83,7 +84,7 @@ export async function notifyDomainLifecycle(
   const memberAddresses = new Set(memberRecipients.map(recipient => recipient.to))
   const recipients: Array<{ to: string; unsubscribeUrl: string | null; unsubscribeOneClickUrl: string | null }> = [
     ...memberRecipients,
-    ...[...new Set(supportEmails(env))]
+    ...[...new Set(platformOperatorEmails(env))]
       .filter(address => !memberAddresses.has(address))
       .map(to => ({ to, unsubscribeUrl: null, unsubscribeOneClickUrl: null })),
   ]

@@ -9,6 +9,29 @@
 
         <UAlert v-if="impersonateError" color="error" variant="soft" icon="i-lucide-circle-alert" :description="impersonateError" />
 
+        <!-- A link from the onboarding email names one account and the business
+             it opens. Showing it never impersonates; the button does. -->
+        <template v-if="target">
+          <UAlert v-if="targetError" color="error" variant="soft" title="Could not open this customer" :description="targetError" />
+          <div v-else-if="targetUser" class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-default bg-elevated p-4" data-testid="focused-account">
+            <div class="min-w-0">
+              <p class="truncate text-base text-highlighted">{{ targetUser.name || targetUser.email }}</p>
+              <p class="truncate text-sm text-muted">{{ targetUser.email }}</p>
+            </div>
+            <UButton
+              size="sm"
+              color="primary"
+              class="rounded-full"
+              :disabled="targetUser.id === currentUserId"
+              :loading="impersonatingUserId === targetUser.id"
+              @click="impersonate(targetUser.id, target.organizationId)"
+            >
+              Impersonate and open their business
+            </UButton>
+          </div>
+          <USkeleton v-else class="h-20 rounded-lg" />
+        </template>
+
         <UAlert v-if="loadError" color="error" variant="soft" title="Could not load accounts" :description="loadError" />
 
         <div v-else-if="loading" class="space-y-2">
@@ -102,12 +125,27 @@ async function changePage(direction: number) {
   await loadUsers(offset.value + direction * pageSize)
 }
 
-async function impersonate(userId: string) {
+// With a business named, Better Auth makes it the impersonated session's active
+// organization, which it refuses unless the person belongs to it; refused, the
+// impersonation is stopped rather than left open on some other business.
+async function impersonate(userId: string, organizationId?: string) {
   impersonatingUserId.value = userId
   impersonateError.value = null
   try {
     const result = await authClient.admin.impersonateUser({ userId })
     if (result.error) throw new Error(result.error.message)
+    if (organizationId) {
+      const active = await authClient.organization.setActive({ organizationId })
+        .catch((error: unknown) => ({ data: null, error: { message: error instanceof Error ? error.message : String(error) } }))
+      if (active.error || !active.data) {
+        const stopped = await authClient.admin.stopImpersonating()
+        if (stopped.error) throw new Error(`${active.error?.message ?? 'The business could not be opened'}, and impersonation could not be stopped: ${stopped.error.message}`)
+        throw new Error(`This person cannot open that business: ${active.error?.message ?? 'it was not found'}`)
+      }
+      await refreshSession()
+      await navigateTo(`/dashboard/${active.data.slug}`)
+      return
+    }
     await refreshSession()
     await navigateTo('/dashboard')
   } catch (error) {
@@ -117,5 +155,41 @@ async function impersonate(userId: string) {
   }
 }
 
-onMounted(() => void loadUsers())
+const route = useRoute()
+const target = computed(() => {
+  const userId = typeof route.query.user === 'string' ? route.query.user : null
+  const organizationId = typeof route.query.organization === 'string' ? route.query.organization : null
+  return userId && organizationId ? { userId, organizationId } : null
+})
+const targetUser = ref<PlatformUser | null>(null)
+const targetError = ref<string | null>(null)
+
+async function loadTarget() {
+  targetUser.value = null
+  targetError.value = null
+  const requested = target.value
+  if (!requested) return
+  const result = await authClient.admin.listUsers({
+    query: { filterField: 'id', filterValue: requested.userId, filterOperator: 'eq', limit: 1 },
+  })
+  // Another link was opened while this one loaded.
+  if (target.value?.userId !== requested.userId || target.value.organizationId !== requested.organizationId) return
+  if (result.error) {
+    targetError.value = result.error.message ?? 'Failed to load this account.'
+    return
+  }
+  const user = result.data.users[0]
+  if (!user) {
+    targetError.value = 'This account no longer exists.'
+    return
+  }
+  targetUser.value = { id: user.id, name: user.name ?? null, email: user.email, role: user.role ?? null, banned: user.banned ?? null }
+}
+
+watch(target, () => void loadTarget())
+
+onMounted(() => {
+  void loadUsers()
+  void loadTarget()
+})
 </script>

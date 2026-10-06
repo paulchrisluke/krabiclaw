@@ -244,7 +244,6 @@ async function deliverEmail(db: DbClient, env: ChangeEnv, thread: GuestThreadRow
     submissionId: thread.id,
   })
   if (sent.status === 'failed') throw new HTTPError({ statusCode: 502, message: sent.error || 'Guest email could not be sent' })
-  if (sent.status === 'unknown') throw new HTTPError({ statusCode: 504, message: sent.error || 'Guest email outcome is unknown' })
   await notifyBookingChangeOwner(env, db, {
     organizationId: thread.organization_id, organizationName: organization.name,
     locationId: (status === 'accepted' && proposal.after.kind === 'reservation' ? proposal.after.locationId : proposal.before.locationId) ?? '',

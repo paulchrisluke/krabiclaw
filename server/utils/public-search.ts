@@ -400,45 +400,6 @@ async function uploadIndexItem(env: CloudflareEnv, key: string, content: string,
   await withRetries(() => searchNamespace(env).get(platformKnowledgeInstanceId(env)).items.upload(key, content, { metadata }))
 }
 
-async function waitForIndexing(env: CloudflareEnv, timeoutMs = 10 * 60 * 1000, organizationId?: string) {
-  const instance = searchNamespace(env).get(platformKnowledgeInstanceId(env))
-  const startedAt = Date.now()
-
-  // One failed stats read does not end the wait — the documents are already
-  // uploaded and this loop only confirms completion. But the last failure is kept
-  // rather than logged, so that when the budget does run out the error says what
-  // actually went wrong instead of "timed out". A whole window of identical
-  // errors is our instance being unhealthy, and that is the thing worth naming.
-  let lastStatusError: unknown = null
-  while (Date.now() - startedAt < timeoutMs) {
-    try {
-      if (organizationId) {
-        const items = await listOrganizationItems(env, organizationId)
-        if (items.every(item => !['queued', 'running', 'outdated'].includes(item.status))) return
-      } else {
-        const stats = await instance.stats()
-        const { queued, running, outdated } = stats
-        if (![queued, running, outdated].every(value => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0)) {
-          throw new Error('AI Search stats omitted or returned invalid queued, running, or outdated counts')
-        }
-        if (queued === 0 && running === 0 && outdated === 0) return
-      }
-      lastStatusError = null
-    } catch (error) {
-      lastStatusError = error
-    }
-    await new Promise(resolve => setTimeout(resolve, 1000))
-  }
-
-  if (lastStatusError) {
-    throw new Error(
-      `Timed out waiting for AI Search indexing; the last status read failed with: ${lastStatusError instanceof Error ? lastStatusError.message : String(lastStatusError)}`,
-      { cause: lastStatusError },
-    )
-  }
-  throw new Error('Timed out waiting for AI Search indexing to complete')
-}
-
 export async function buildTenantBlogDocuments(db: DbClient, platformOrganizationId?: string, organizationId?: string | null): Promise<PlatformKnowledgeDocument[]> {
   const platformId = platformOrganizationId ?? (await getPlatformOrganization(db)).id
   const [posts, contentBodies] = await Promise.all([queryAll<TenantBlogDocRow>(db, `
@@ -989,27 +950,13 @@ export async function syncOrganizationSearchIndex(env: CloudflareEnv, db: DbClie
   const publicCorpus = organizationId === platformId ? await rebuildPlatformKnowledgeIndex(env, db) : null
   const [existingItems, baseRecords] = await Promise.all([listOrganizationItems(env, organizationId), buildOrganizationDocuments(db, organizationId)])
   const records = expandDocumentsForSurfaces(baseRecords)
-  let result = await reconcileIndexItems(env, existingItems, records, { maxUploads: SYNC_UPLOADS_PER_RUN })
-  let indexingUnconfirmedReason: string | null = null
-  if (result.indexed === 0 && result.pending > 0) {
-    // A pass waiting only on accepted, metadata-less items must let AI Search
-    // progress instead of immediately polling and resetting the same queue.
-    try {
-      await waitForIndexing(env, 45_000, organizationId)
-    } catch (error) {
-      indexingUnconfirmedReason = error instanceof Error ? error.message : String(error)
-    }
-    if (!indexingUnconfirmedReason) {
-      result = await reconcileIndexItems(env, await listOrganizationItems(env, organizationId), records, { maxUploads: SYNC_UPLOADS_PER_RUN })
-    }
-  }
+  const result = await reconcileIndexItems(env, existingItems, records, { maxUploads: SYNC_UPLOADS_PER_RUN })
   console.warn(`[ai-search] organization ${organizationId}: uploaded ${result.indexed}, unchanged ${result.unchanged}, pending ${result.pending}, deleted ${result.deleted} in ${((Date.now() - startedAt) / 1000).toFixed(1)}s`)
   return {
     indexed: result.indexed + (publicCorpus?.indexed ?? 0),
     unchanged: result.unchanged + (publicCorpus?.unchanged ?? 0),
     pending: result.pending + (publicCorpus?.pending ?? 0),
     deleted: result.deleted + (publicCorpus?.deleted ?? 0),
-    indexingUnconfirmedReason: [publicCorpus?.indexingUnconfirmedReason, indexingUnconfirmedReason].filter(Boolean).join('; ') || null,
   }
 }
 
@@ -1022,7 +969,6 @@ export async function syncOrganizationSearchIndex(env: CloudflareEnv, db: DbClie
 export async function rebuildPlatformKnowledgeIndex(
   env: CloudflareEnv,
   db: DbClient,
-  options: { confirmIndexing?: boolean } = {},
 ) {
   const rebuildStartedAt = Date.now()
   const elapsed = () => `${((Date.now() - rebuildStartedAt) / 1000).toFixed(1)}s`
@@ -1044,31 +990,10 @@ export async function rebuildPlatformKnowledgeIndex(
   const result = await reconcileIndexItems(env, platformItems, platformRecords, { maxUploads: SYNC_UPLOADS_PER_RUN })
   console.warn(`[ai-search] rebuild uploaded ${result.indexed}/${platformRecords.length} records, pending ${result.pending}, deleted ${result.deleted} stale items in ${elapsed()}`)
 
-  // Cloudflare processes indexing asynchronously after accepting uploads.
-  // Waiting for every item would delay this response and keep its client request
-  // open. Observe indexing for a short window and report whether it completed;
-  // the caller can see an unconfirmed result separately from an upload failure.
-  let indexingConfirmed = false
-  let indexingUnconfirmedReason: string | null = null
-  if (options.confirmIndexing !== false) {
-    try {
-      await waitForIndexing(env, 45 * 1000)
-      indexingConfirmed = true
-    } catch (error) {
-      // Returned rather than logged. The rebuild really can outlive this request,
-      // so not-yet-confirmed is not a failed rebuild — but the caller is the one
-      // entitled to decide that, and it cannot if the reason only ever reached a
-      // console. This is what the deploy step prints.
-      indexingUnconfirmedReason = error instanceof Error ? error.message : String(error)
-    }
-  }
-
   return {
     instanceId: platformKnowledgeInstanceId(env),
     ...result,
     organizations: [...liveOrganizations],
-    indexingConfirmed,
-    indexingUnconfirmedReason,
   }
 }
 

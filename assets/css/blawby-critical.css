@@ -116,8 +116,11 @@ button {
   color: #fff;
 }
 
+/* The photo's bottom edge is a transparent curve that shows the page ground.
+   Above the bottom padding, where the copy sits, the backdrop is the brand navy
+   so the white headline reads before the photo has painted. */
 [data-blawby-critical-hero][data-has-background="true"] {
-  background: var(--blawby-bg);
+  background: linear-gradient(to bottom, var(--blawby-primary-dark) calc(100% - 9rem), var(--blawby-bg) calc(100% - 9rem));
 }
 
 [data-blawby-critical-hero] > img {

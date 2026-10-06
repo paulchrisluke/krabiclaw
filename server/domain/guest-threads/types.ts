@@ -10,7 +10,7 @@ export type GuestThreadSubmissionType = 'contact' | 'reservation' | 'booking'
 export type GuestThreadDeliveryChannel = 'email' | 'whatsapp'
 export type GuestThreadDeliveryProvider = 'resend' | 'meta' | 'log_only'
 export type GuestThreadDeliveryPurpose = 'owner_alert' | 'guest_acknowledgement' | 'member_reply' | 'status_update'
-export type GuestThreadDeliveryStatus = 'pending' | 'accepted' | 'sent' | 'delivered' | 'read' | 'failed' | 'unknown' | 'skipped'
+export type GuestThreadDeliveryStatus = 'pending' | 'accepted' | 'sent' | 'delivered' | 'read' | 'failed' | 'skipped'
 
 export type GuestThreadRow = GuestRequest
 
@@ -159,8 +159,6 @@ export interface GuestThreadDeliveryFailureViewModel {
   channel: GuestThreadDeliveryChannel
   purpose: GuestThreadDeliveryPurpose
   error: string | null
-  status: 'failed' | 'unknown'
-  retryable: boolean
   createdAt: string
 }
 

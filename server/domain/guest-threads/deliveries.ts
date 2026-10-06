@@ -11,65 +11,9 @@ import type {
   GuestThreadSubmissionType,
 } from './types'
 
-export type DeliveryRetryEligibility = 'retryable' | 'unsupported' | 'settled'
-
-export type DeliveryClaimEligibility = 'claimable' | 'in_flight' | 'expired' | 'unsupported' | 'settled'
-
-export type DeliveryClaimResult =
-  | { claimed: true; delivery: GuestThreadDeliveryRow; claimVersion: string }
-  | { claimed: false; delivery: GuestThreadDeliveryRow }
-
-const DELIVERY_KEY_LIFETIME_MS = 24 * 60 * 60 * 1000
-const UNKNOWN_DELIVERY_LEASE_MS = 10 * 1000
-
-function timestampMs(value: string): number | null {
-  const parsed = Date.parse(value)
-  return Number.isFinite(parsed) ? parsed : null
-}
-
-function nextTimestamp(current: string, nowMs: number): string {
-  const currentMs = timestampMs(current)
-  return new Date(currentMs === null ? nowMs : Math.max(nowMs, currentMs + 1)).toISOString()
-}
-
-export function getDeliveryClaimEligibility(
-  delivery: GuestThreadDeliveryRow,
-  nowMs = Date.now(),
-): DeliveryClaimEligibility {
-  if (delivery.status === 'pending') return 'claimable'
-  if (delivery.status !== 'failed' && delivery.status !== 'unknown') return 'settled'
-  if (delivery.provider === 'meta') return 'unsupported'
-
-  const createdAtMs = timestampMs(delivery.created_at)
-  const keyAgeMs = createdAtMs === null ? null : nowMs - createdAtMs
-  if (keyAgeMs === null || keyAgeMs < 0 || keyAgeMs >= DELIVERY_KEY_LIFETIME_MS) return 'expired'
-  if (delivery.status === 'failed') {
-    return delivery.provider === 'resend' ? 'claimable' : 'unsupported'
-  }
-
-  const updatedAtMs = timestampMs(delivery.updated_at)
-  if (updatedAtMs === null || nowMs - updatedAtMs <= UNKNOWN_DELIVERY_LEASE_MS) return 'in_flight'
-  return 'claimable'
-}
-
-export function getDeliveryRetryEligibility(
-  delivery: GuestThreadDeliveryRow,
-  nowMs = Date.now(),
-): DeliveryRetryEligibility {
-  if (delivery.channel !== 'email' || (delivery.purpose !== 'member_reply' && delivery.purpose !== 'status_update')) {
-    return 'unsupported'
-  }
-  if (delivery.status !== 'failed' && delivery.status !== 'unknown') return 'settled'
-  return getDeliveryClaimEligibility(delivery, nowMs) === 'claimable' ? 'retryable' : 'settled'
-}
-
-export function isDeliveryClaimInFlight(
-  delivery: GuestThreadDeliveryRow,
-  nowMs = Date.now(),
-): boolean {
-  return delivery.status === 'unknown'
-    && delivery.error === null
-    && getDeliveryClaimEligibility(delivery, nowMs) === 'in_flight'
+/** Whether a delivery reached its provider; a webhook may since have moved it on. */
+export function isDeliverySent(delivery: GuestThreadDeliveryRow): boolean {
+  return delivery.status === 'accepted' || delivery.status === 'sent' || delivery.status === 'delivered' || delivery.status === 'read'
 }
 
 export async function createDeliveryReceipt(
@@ -108,19 +52,6 @@ export async function getDeliveryById(db: DbClient, id: string): Promise<GuestTh
   return await queryFirst<GuestThreadDeliveryRow>(db, `
     SELECT * FROM guest_thread_deliveries WHERE id = ? LIMIT 1
   `, [id])
-}
-
-/** A concurrent caller waits for the claimed send; it never sends a second message. */
-export async function waitForDeliverySettlement(db: DbClient, delivery: GuestThreadDeliveryRow): Promise<GuestThreadDeliveryRow> {
-  const deadline = Date.now() + UNKNOWN_DELIVERY_LEASE_MS
-  while (delivery.status === 'pending' || (delivery.status === 'unknown' && delivery.error === null)) {
-    if (Date.now() >= deadline) throw new Error(`Delivery ${delivery.id} remained in progress without a recorded outcome`)
-    await new Promise(resolve => setTimeout(resolve, 50))
-    const current = await getDeliveryById(db, delivery.id)
-    if (!current) throw new Error(`Delivery ${delivery.id} disappeared while waiting for its outcome`)
-    delivery = current
-  }
-  return delivery
 }
 
 export async function getDeliveryByProviderMessageId(
@@ -244,59 +175,35 @@ export async function applyResendEmailEvent(
   return 'advanced'
 }
 
-export async function claimDelivery(
-  db: DbClient,
-  deliveryId: string,
-  nowMs = Date.now(),
-): Promise<DeliveryClaimResult> {
-  const delivery = await getDeliveryById(db, deliveryId)
-  if (!delivery) throw new Error('Guest thread delivery not found')
-  if (getDeliveryClaimEligibility(delivery, nowMs) !== 'claimable') {
-    return { claimed: false, delivery }
-  }
-
-  const claimVersion = nextTimestamp(delivery.updated_at, nowMs)
-  const claimed = await execute(db, `
-    UPDATE guest_thread_deliveries
-    SET status = 'unknown', error = NULL, updated_at = ?
-    WHERE id = ? AND status = ? AND updated_at = ?
-  `, [claimVersion, delivery.id, delivery.status, delivery.updated_at])
-  const current = await getDeliveryById(db, delivery.id)
-  if (!current) throw new Error('Guest thread delivery not found')
-  if (claimed.meta.changes === 0 || current.status !== 'unknown' || current.updated_at !== claimVersion) {
-    return { claimed: false, delivery: current }
-  }
-  return { claimed: true, delivery: current, claimVersion }
-}
-
+/**
+ * Writes a send's outcome onto its receipt. A receipt that already reached the
+ * provider keeps its state: a duplicate send Resend refused is not this email's
+ * outcome, and a webhook may already have moved it on.
+ */
 export async function recordDeliveryOutcome(
   db: DbClient,
   input: {
-    claim: Extract<DeliveryClaimResult, { claimed: true }>
+    deliveryId: string
     status: Exclude<GuestThreadDeliveryStatus, 'pending'>
     providerMessageId?: string | null
     error?: string | null
   },
 ): Promise<GuestThreadDeliveryRow> {
-  const outcomeVersion = nextTimestamp(input.claim.claimVersion, Date.now())
   await execute(db, `
     UPDATE guest_thread_deliveries
     SET status = ?, provider_message_id = COALESCE(?, provider_message_id), error = ?, updated_at = ?
-    WHERE id = ? AND status = 'unknown' AND updated_at = ?
-  `, [
-    input.status,
-    input.providerMessageId ?? null,
-    input.error ?? null,
-    outcomeVersion,
-    input.claim.delivery.id,
-    input.claim.claimVersion,
-  ])
-
-  const updated = await getDeliveryById(db, input.claim.delivery.id)
+    WHERE id = ? AND status NOT IN ('accepted', 'sent', 'delivered', 'read')
+  `, [input.status, input.providerMessageId ?? null, input.error ?? null, new Date().toISOString(), input.deliveryId])
+  const updated = await getDeliveryById(db, input.deliveryId)
   if (!updated) throw new Error('Guest thread delivery not found')
   return updated
 }
 
+/**
+ * Sends a guest-thread email once. A receipt that already reached Resend is
+ * returned as it is; anything else is sent under the receipt's id, which is
+ * the Resend idempotency key, so a repeated request cannot send it twice.
+ */
 export async function deliverGuestThreadEmail(
   db: DbClient,
   input: {
@@ -311,33 +218,22 @@ export async function deliverGuestThreadEmail(
   },
 ): Promise<GuestThreadDeliveryRow> {
   if (input.delivery.channel !== 'email') throw new Error('Delivery channel is not email')
-  const claim = await claimDelivery(db, input.delivery.id)
-  if (!claim.claimed) return claim.delivery
-
-  try {
-    const result = await sendReplyEmail(input.env, {
-      to: input.to,
-      fromName: input.fromName,
-      subject: input.subject,
-      email: input.email,
-      submissionType: input.submissionType as SubmissionType,
-      submissionId: input.submissionId,
-      idempotencyKey: input.delivery.id,
-    })
-
-    return await recordDeliveryOutcome(db, {
-      claim,
-      status: result.status,
-      providerMessageId: result.messageId ?? null,
-      error: result.error ?? null,
-    })
-  } catch (error) {
-    return await recordDeliveryOutcome(db, {
-      claim,
-      status: 'unknown',
-      error: error instanceof Error ? error.message : String(error),
-    })
-  }
+  if (isDeliverySent(input.delivery)) return input.delivery
+  const result = await sendReplyEmail(input.env, {
+    to: input.to,
+    fromName: input.fromName,
+    subject: input.subject,
+    email: input.email,
+    submissionType: input.submissionType as SubmissionType,
+    submissionId: input.submissionId,
+    idempotencyKey: input.delivery.id,
+  })
+  return await recordDeliveryOutcome(db, {
+    deliveryId: input.delivery.id,
+    status: result.status,
+    providerMessageId: result.messageId ?? null,
+    error: result.error ?? null,
+  })
 }
 
 /**
@@ -355,8 +251,7 @@ export async function listThreadDeliveries(db: DbClient, threadId: string): Prom
   `, [threadId])
 }
 
-/** A failure worth showing: settled badly, and not a claim still in flight. */
-export function isVisibleDeliveryFailure(delivery: GuestThreadDeliveryRow, nowMs = Date.now()): boolean {
-  if (delivery.status !== 'failed' && delivery.status !== 'unknown') return false
-  return !isDeliveryClaimInFlight(delivery, nowMs)
+/** A failure worth showing in the thread. */
+export function isVisibleDeliveryFailure(delivery: GuestThreadDeliveryRow): boolean {
+  return delivery.status === 'failed'
 }

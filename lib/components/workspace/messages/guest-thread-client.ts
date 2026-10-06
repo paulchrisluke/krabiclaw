@@ -72,8 +72,6 @@ function isDeliveryFailure(value: unknown): value is GuestThreadDeliveryFailureV
       || value.purpose === 'status_update'
     )
     && (value.error === null || typeof value.error === 'string')
-    && (value.status === 'failed' || value.status === 'unknown')
-    && typeof value.retryable === 'boolean'
     && typeof value.createdAt === 'string'
 }
 

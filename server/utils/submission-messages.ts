@@ -85,7 +85,7 @@ export async function findSubmissionByPhone(db: DbClient, phone: string, organiz
 }
 
 export interface SendReplyEmailResult {
-  status: 'sent' | 'failed' | 'unknown'
+  status: 'sent' | 'failed'
   messageId?: string
   error?: string
 }

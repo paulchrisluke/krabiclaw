@@ -65,8 +65,14 @@
 /* In dark mode the deep bands sit just off the dark ground, and the strong
    accents lighten instead of darken, so the same components read on either. */
 .dark .blawby-theme {
-  --blawby-primary-dark:  color-mix(in oklab, var(--site-action) 18%, var(--site-ground));
-  --blawby-primary-800:   color-mix(in oklab, var(--site-action) 30%, var(--site-ground));
+  /* Text is white and grey in dark mode, never the action color: headings,
+     nav and labels that take the brand navy in light mode take the text. */
+  --blawby-primary:       var(--site-text);
+  --ui-text-highlighted:  var(--site-text);
+  /* Brand bands keep the light mode's deep action color: dark mode turns the
+     page near-black and grey, not the bands. */
+  --blawby-primary-dark:  color-mix(in oklab, var(--site-action-light) 60%, black);
+  --blawby-primary-800:   color-mix(in oklab, var(--site-action-light) 85%, black);
   --blawby-accent-strong: color-mix(in oklab, var(--site-accent) 80%, white);
   /* Pale tints become a lift of the ground toward the surface, not a wash of
      the accent over a dark ground, which reads as grey-brown. The band tint

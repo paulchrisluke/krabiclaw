@@ -11,7 +11,7 @@ import { hasOrganizationEntitlement } from '../../server/utils/billing.ts'
 import { notifyDomainLifecycle } from '../../server/utils/domain-notifications.ts'
 import { notifyContactSubmitted, notifyGuestThreadReply } from '../../server/utils/notifications.ts'
 import { requestInsertQueries } from '../../server/domain/requests.ts'
-import { claimDelivery, createDeliveryReceipt, getDeliveryById, getDeliveryRetryEligibility, isVisibleDeliveryFailure, recordDeliveryOutcome } from '../../server/domain/guest-threads/deliveries.ts'
+import { createDeliveryReceipt, getDeliveryById, isDeliverySent, isVisibleDeliveryFailure, recordDeliveryOutcome } from '../../server/domain/guest-threads/deliveries.ts'
 import { appendEntry } from '../../server/domain/guest-threads/entries.ts'
 import whatsappWebhook from '../../server/api/whatsapp/webhook.post.ts'
 
@@ -104,23 +104,20 @@ test('organization messaging entitlement fences Meta calls while preserving noti
       const before = metaCalls
       await notifyGuestThreadReply(providerEnv, db, { organizationId: 'paid', organizationName: 'paid', threadId: 'contact-paid', sourceEntryId: entry.id, submissionType: 'contact', submissionId: 'contact-paid', guestName: 'Guest', inboundChannel: 'email', messagePreview: 'Opted out' })
       assert.equal(metaCalls, before)
-      // A claimed notification whose organization downgrades is explicitly
-      // skipped, settled and not represented as a failed or sent delivery.
+      // A notification whose organization downgrades is explicitly skipped,
+      // not represented as a failed or sent delivery.
       const receipt = await createDeliveryReceipt(db, { entryId: entry.id, channel: 'whatsapp', provider: 'meta', purpose: 'owner_alert', idempotencyKey: 'downgrade-proof' })
-      const claim = await claimDelivery(db, receipt.id)
-      assert(claim.claimed)
       await db.prepare("UPDATE subscription SET status='canceled' WHERE id='paid-sub'").run()
       const result = await send('paid')
       assert.equal(result.status, 'skipped')
       if (result.status !== 'skipped') assert.fail('Expected a skipped result')
-      await recordDeliveryOutcome(db, { claim, status: result.status, error: result.reason })
+      await recordDeliveryOutcome(db, { deliveryId: receipt.id, status: result.status, error: result.reason })
       const persisted = await getDeliveryById(db, receipt.id)
       assert(persisted)
       assert.equal(persisted.status, 'skipped')
       assert.equal(persisted.provider_message_id, null)
       assert.equal(isVisibleDeliveryFailure(persisted), false)
-      assert.notEqual(getDeliveryRetryEligibility(persisted), 'retryable')
-      assert.equal((await claimDelivery(db, receipt.id)).claimed, false)
+      assert.equal(isDeliverySent(persisted), false)
       assert.equal(metaCalls, before)
     } finally {
       globalThis.fetch = originalFetch

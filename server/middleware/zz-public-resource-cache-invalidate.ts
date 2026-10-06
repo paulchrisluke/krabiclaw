@@ -1,8 +1,9 @@
-// H3 middleware wraps dashboard editor handlers, so cache/index failure changes
-// the write's HTTP result before it can report success.
+// H3 middleware wraps dashboard editor handlers, so a cache purge failure changes
+// the write's HTTP result before it can report success. The search index follows
+// from the scheduled drain of the change the write recorded.
 import { onResponse } from 'nitro/h3'
 import type { DbClient } from '~/server/db'
-import { drainPublicResourceCacheInvalidations, purgeOrganizationCaches, type OrganizationChangeDrainEnv } from '~/server/utils/public-resource-cache'
+import { purgeOrganizationCaches } from '~/server/utils/public-resource-cache'
 
 const EDITOR_ORGANIZATIONS_PREFIX = '/api/editor/organizations/'
 
@@ -17,14 +18,14 @@ export default onResponse(async (response, event) => {
   const organizationId = params && typeof params.organizationId === 'string' ? params.organizationId : undefined
   if (!organizationId) throw new Error('Organization ID is required to invalidate a successful dashboard write')
 
-  const runtimeEnv = request.runtime?.cloudflare?.env as ({
+  const runtimeEnv = request.runtime?.cloudflare?.env as {
     DB?: DbClient
     ORGANIZATION_CACHE?: KVNamespace
-  } & OrganizationChangeDrainEnv) | undefined
+    NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN?: string
+  } | undefined
   const kv = runtimeEnv?.ORGANIZATION_CACHE
   if (!kv || !runtimeEnv?.DB) throw new Error('ORGANIZATION_CACHE and DB bindings are required to purge site caches after a dashboard write')
 
   await purgeOrganizationCaches(runtimeEnv.DB, kv, organizationId, runtimeEnv.NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN)
-  await drainPublicResourceCacheInvalidations(runtimeEnv.DB, kv, runtimeEnv, { organizationId })
   return response
 })

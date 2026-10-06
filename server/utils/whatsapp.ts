@@ -300,7 +300,7 @@ export function buildWhatsAppTemplatePayload(template: WhatsAppTemplate, vars: R
 export type SendWhatsAppResult =
   | { success: true; status: 'sent'; messageId: string | undefined }
   | { success: true; status: 'skipped'; reason: 'messaging_not_enabled' }
-  | { success: false; status: 'failed' | 'unknown'; error: string }
+  | { success: false; status: 'failed'; error: string }
 
 export async function sendWhatsAppNotification(
   env: CloudflareEnv & WhatsAppEnv,
@@ -365,7 +365,7 @@ export async function sendWhatsAppNotification(
     }
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : 'Network error'
-    result = { success: false, status: 'unknown', error: errMsg }
+    result = { success: false, status: 'failed', error: errMsg }
   }
 
   return result
@@ -468,7 +468,7 @@ export async function sendWhatsAppText(
 
     return { success: true, status: 'sent', messageId: data.messages?.[0]?.id }
   } catch (err) {
-    return { success: false, status: 'unknown', error: err instanceof Error ? err.message : String(err) }
+    return { success: false, status: 'failed', error: err instanceof Error ? err.message : String(err) }
   }
 }
 
