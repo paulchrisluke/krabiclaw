@@ -1,3 +1,4 @@
+import {createCanonicalNotification} from '../../server/utils/notification-center.ts'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import Stripe from 'stripe'
@@ -74,7 +75,16 @@ test('Checkout proof attaches ownership without exposing merchant financial data
   await db.prepare("INSERT INTO payment_refunds(id,payment_id,idempotency_key,stripe_refund_id,amount,reason,status,error,created_by,created_at,updated_at) VALUES('refund:claim','claim','refund-retry:claim','re:claim',1000,'requested_by_customer','pending','operator-only diagnostic','other',?,?)").bind(NOW,NOW).run()
   const token=crypto.randomUUID()+crypto.randomUUID(),hash=await tokenHash(token)
   await db.prepare("INSERT INTO payment_claims(token_hash,payment_id,expires_at)VALUES(?,'claim','2099-01-01T00:00:00.000Z')").bind(hash).run()
+  // The capture webhook alerted the buyer the payment named before the return proved who it belongs to; the proof moves that alert with the purchase.
+  await db.prepare("INSERT INTO user(id,name,email,isAnonymous) VALUES('anon-buyer','Guest','anon-buyer@customers.krabiclaw.local',1)").run()
+  await db.prepare("UPDATE payments SET buyer_user_id='anon-buyer' WHERE id='claim'").run()
+  await db.prepare("INSERT INTO activity_entries(id,kind,scope_kind,actor_kind,target_user_id,event_name,payload_json,dedupe_key,occurred_at) VALUES('payments:acct_seller:0:pi:claim:succeeded:payment_captured:buyer','notification','global','system','anon-buyer','payments:acct_seller:0:pi:claim:succeeded:payment_captured','{}','notification:payments:acct_seller:0:pi:claim:succeeded:payment_captured:buyer','2026-01-01T00:00:00.000Z'),('payments:acct_seller:0:pi:other:succeeded:payment_captured:buyer','notification','global','system','anon-buyer','payments:acct_seller:0:pi:other:succeeded:payment_captured','{}','notification:other','2026-01-01T00:00:00.000Z')").run()
   assert.deepEqual(await claimCheckoutReturn(db,'verified',token),{payment_id:'claim',claimed:true})
+  assert.deepEqual((await db.prepare("SELECT id,target_user_id FROM activity_entries WHERE kind='notification' AND scope_kind='global' ORDER BY id").all()).results,[
+   {id:'payments:acct_seller:0:pi:claim:succeeded:payment_captured:buyer',target_user_id:'verified'},
+   {id:'payments:acct_seller:0:pi:other:succeeded:payment_captured:buyer',target_user_id:'anon-buyer'},
+  ],'only this purchase\'s alerts follow the proof')
+  await createCanonicalNotification(db,{scope:'global',template:'payments:acct_seller:0:pi:claim:succeeded:payment_captured',targetUserId:'verified',idempotencyKey:'payments:acct_seller:0:pi:claim:succeeded:payment_captured:buyer',title:'Payment received',deepLink:'/dashboard/account/activity/payment/claim'})
   const originalClaim=await db.prepare('SELECT * FROM payment_claims WHERE token_hash=?').bind(hash).first()
   const originalPayment=await db.prepare("SELECT * FROM payments WHERE id='claim'").first()
   const originalHold=await db.prepare("SELECT * FROM payment_checkout_holds WHERE payment_id='claim'").first()
