@@ -105,8 +105,11 @@ class FakeMeta {
       if (body.upload_phase === 'start') { const id = this.id('reel-'); this.fbVideos.set(id, { ready: 1, publish: false, published: false, postId: null, reel: true }); return json({ video_id: id, upload_url: `https://rupload.facebook.com/video-upload/v25.0/${id}` }) }
       const video = this.fbVideos.get(body.video_id ?? '')
       if (body.upload_phase !== 'finish' || !video?.reel || !video.uploaded || body.video_state !== 'PUBLISHED') return json({ error: { message: 'Invalid parameter', code: 100, fbtrace_id: 'trace-reel' } }, 400)
+      // Production 2026-10-06: the finish answers with the Page post it made.
       video.publish = true
-      return json({ success: true })
+      video.postId = `${PAGE}_${body.video_id}`
+      this.fbPosts.set(video.postId, { published: true, attached: [] })
+      return json({ success: true, post_id: video.postId })
     }
     if (method === 'GET' && path === `${PAGE}/posts`) {
       const offset = Number(query.get('after') ?? 0)
@@ -122,8 +125,6 @@ class FakeMeta {
     const video = this.fbVideos.get(path)
     if (video && method === 'GET') {
       if (query.get('fields')?.includes('source')) return json({ source: 'https://video.xx.fbcdn.net/v.mp4', picture: 'https://scontent.xx.fbcdn.net/poster.jpg', length: 12 })
-      // A Reel session is not processed until it is finished (production, 2026-10-06: upload_complete / processing not_started for a minute).
-      if (video.reel && !video.publish) return json({ id: path, published: false, post_id: null, permalink_url: `/reel/${path}/`, status: { video_status: 'upload_complete', uploading_phase: { status: video.uploaded ? 'complete' : 'in_progress' }, processing_phase: { status: 'not_started' }, publishing_phase: { status: 'not_started' } } })
       video.ready -= 1
       const ready = video.ready < 0
       // Facebook publishes a published upload or a finished Reel once processing completes.
@@ -757,80 +758,65 @@ test('Instagram insights classify malformed provider responses and preserve loca
   }
 })
 
-test('Facebook video: a Reel is published by finishing its upload session, any other video by its upload; nothing is uploaded twice and no video is flipped to published', async () => {
+test('Facebook video: a Reel is published by finishing its upload session, any other video by its upload; Meta\u2019s answer is the publication and no video is flipped to published', async () => {
   const { runtime, db, env, cardless, meta, asset, restore } = await setUp()
   try {
     await asset('reel', 'video/mp4', 'video', { width: 720, height: 1280, duration: 12 })
     await asset('wide', 'video/mp4', 'video', { width: 1920, height: 1080, duration: 20 })
     const create = (key: string, post: Record<string, unknown>) => createPost(db, cardless, 'org-a', { post, idempotencyKey: key }, 'owner')
-    const publication = (postId: string) => db.prepare('SELECT state, provider_post_id, provider_permalink, provider_handles_json FROM post_publications WHERE post_id = ? AND channel = ?').bind(postId, 'facebook')
-      .first<{ state: string; provider_post_id: string | null; provider_permalink: string | null; provider_handles_json: string }>()
+    const publication = (postId: string) => db.prepare('SELECT state, provider_post_id, provider_permalink, provider_handles_json, error_code FROM post_publications WHERE post_id = ? AND channel = ?').bind(postId, 'facebook')
+      .first<{ state: string; provider_post_id: string | null; provider_permalink: string | null; provider_handles_json: string; error_code: string | null }>()
+    const starts = () => meta.sent(request => request.path.endsWith(`${PAGE}/video_reels`) && request.body.upload_phase === 'start').length
 
-    // A 9:16 video is a Reel: start, Facebook fetches the file, finish as PUBLISHED with the caption.
+    // A 9:16 video is a Reel: start, Facebook fetches the file, finish as PUBLISHED with the caption; the finish's post is the publication.
     const reel = await create('key-fb-reel', { body: 'Robatayaki tonight', media: [{ asset_id: 'reel', slot: 'cover' }] })
-    const first = await publishPost(env, 'org-a', reel.post.id, { expectedUpdatedAt: reel.post.updated_at, targets: [targets.facebook()] }, 'owner')
-    assert.deepEqual([first.outcomes[0]!.status, first.outcomes[0]!.code], ['processing', 'video_processing'])
-    const starts = meta.sent(request => request.path.endsWith(`${PAGE}/video_reels`) && request.body.upload_phase === 'start')
-    const uploads = meta.sent(request => request.host === 'rupload.facebook.com')
-    const finishes = meta.sent(request => request.path.endsWith(`${PAGE}/video_reels`) && request.body.upload_phase === 'finish')
-    assert.equal(starts.length, 1)
-    assert.deepEqual(uploads.map(request => [request.path, request.headers.file_url, request.headers.authorization]), [['/video-upload/v25.0/reel-1', 'https://imagedelivery.example.test/hash/reel/public', 'OAuth page-token']])
-    assert.deepEqual(finishes.map(request => [request.body.video_id, request.body.video_state, request.body.description]), [['reel-1', 'PUBLISHED', 'Robatayaki tonight']])
-    assert.equal((await publication(reel.post.id))!.state, 'preparing')
-    // Facebook is still processing; the next call reads that same Reel and does not start, upload or finish again.
-    const second = await publishPost(env, 'org-a', reel.post.id, { expectedUpdatedAt: reel.post.updated_at, targets: [targets.facebook()] }, 'owner')
-    assert.equal(second.outcomes[0]!.status, 'published', JSON.stringify(second.outcomes))
-    assert.equal(second.outcomes[0]!.public_url, 'https://www.facebook.com/reel/reel-1/')
-    assert.equal(meta.sent(request => request.path.endsWith(`${PAGE}/video_reels`) || request.host === 'rupload.facebook.com').length, 3)
-    assert.deepEqual(await publication(reel.post.id), { state: 'published', provider_post_id: `${PAGE}_reel-1`, provider_permalink: 'https://www.facebook.com/reel/reel-1/', provider_handles_json: JSON.stringify({ video_id: 'reel-1' }) })
+    const published = await publishPost(env, 'org-a', reel.post.id, { expectedUpdatedAt: reel.post.updated_at, targets: [targets.facebook()] }, 'owner')
+    assert.equal(published.outcomes[0]!.status, 'published', JSON.stringify(published.outcomes))
+    assert.equal(starts(), 1)
+    assert.deepEqual(meta.sent(request => request.host === 'rupload.facebook.com').map(request => [request.path, request.headers.file_url, request.headers.authorization]),
+      [['/video-upload/v25.0/reel-1', 'https://imagedelivery.example.test/hash/reel/public', 'OAuth page-token']])
+    assert.deepEqual(meta.sent(request => request.path.endsWith(`${PAGE}/video_reels`) && request.body.upload_phase === 'finish').map(request => [request.body.video_id, request.body.video_state, request.body.description]),
+      [['reel-1', 'PUBLISHED', 'Robatayaki tonight']])
+    assert.deepEqual(await publication(reel.post.id), { state: 'published', provider_post_id: `${PAGE}_reel-1`, provider_permalink: null, provider_handles_json: JSON.stringify({ video_id: 'reel-1' }), error_code: null })
+    assert.equal(meta.fbPosts.get(`${PAGE}_reel-1`)?.published, true)
+    // A repeat is a receipt, not another Reel.
+    assert.equal((await publishPost(env, 'org-a', reel.post.id, { expectedUpdatedAt: reel.post.updated_at, targets: [targets.facebook()] }, 'owner')).outcomes[0]!.status, 'already_published')
+    assert.equal(starts(), 1)
 
-    // Any other video is published by its upload; Facebook posts it when processing completes.
+    // Any other video is published by its upload; the video Facebook accepted is the publication.
     const wide = await create('key-fb-wide', { body: 'Kitchen tour', media: [{ asset_id: 'wide', slot: 'cover' }] })
     const uploaded = await publishPost(env, 'org-a', wide.post.id, { expectedUpdatedAt: wide.post.updated_at, targets: [targets.facebook()] }, 'owner')
-    assert.deepEqual([uploaded.outcomes[0]!.status, uploaded.outcomes[0]!.code], ['processing', 'video_processing'])
-    const videoUploads = meta.sent(request => request.path.endsWith(`${PAGE}/videos`))
-    assert.deepEqual(videoUploads.map(request => [request.body.file_url, request.body.published, request.body.description]), [['https://imagedelivery.example.test/hash/wide/public', undefined, 'Kitchen tour']])
-    assert.deepEqual(await publication(wide.post.id).then(row => [row!.state, row!.provider_handles_json]), ['preparing', JSON.stringify({ video_id: 'video-2' })])
-    const done = await publishPost(env, 'org-a', wide.post.id, { expectedUpdatedAt: wide.post.updated_at, targets: [targets.facebook()] }, 'owner')
-    assert.equal(done.outcomes[0]!.status, 'published', JSON.stringify(done.outcomes))
-    assert.equal(meta.sent(request => request.path.endsWith(`${PAGE}/videos`)).length, 1)
-    assert.equal((await publication(wide.post.id))!.provider_post_id, `${PAGE}_video-2`)
+    assert.equal(uploaded.outcomes[0]!.status, 'published', JSON.stringify(uploaded.outcomes))
+    assert.deepEqual(meta.sent(request => request.path.endsWith(`${PAGE}/videos`)).map(request => [request.body.file_url, request.body.published, request.body.description]),
+      [['https://imagedelivery.example.test/hash/wide/public', undefined, 'Kitchen tour']])
+    assert.deepEqual(await publication(wide.post.id).then(row => [row!.state, row!.provider_post_id]), ['published', 'video-2'])
 
-    // A Reel upload that is not answered: the session is already saved, so the
-    // retry resumes it — no second start — uploads again, and finishes it.
+    // A Reel upload Facebook does not answer is a failure that says so; the retry runs its own session, and the abandoned one was never public.
     const retried = await create('key-fb-reel-retry', { body: 'Second reel', media: [{ asset_id: 'reel', slot: 'cover' }] })
     meta.fault('timeout', request => request.host === 'rupload.facebook.com')
     const unanswered = await publishPost(env, 'org-a', retried.post.id, { expectedUpdatedAt: retried.post.updated_at, targets: [targets.facebook()] }, 'owner')
     assert.deepEqual([unanswered.outcomes[0]!.status, unanswered.outcomes[0]!.code], ['failed', 'provider_unreachable'])
-    assert.deepEqual(await publication(retried.post.id).then(row => [row!.state, row!.provider_handles_json]), ['failed', JSON.stringify({ video_id: 'reel-3' })])
-    const startsBefore = meta.sent(request => request.path.endsWith(`${PAGE}/video_reels`) && request.body.upload_phase === 'start').length
+    assert.equal((await publication(retried.post.id))!.state, 'failed')
     const resumed = await publishPost(env, 'org-a', retried.post.id, { expectedUpdatedAt: retried.post.updated_at, targets: [targets.facebook()] }, 'owner')
-    assert.deepEqual([resumed.outcomes[0]!.status, resumed.outcomes[0]!.code], ['processing', 'video_processing'], JSON.stringify(resumed.outcomes))
-    assert.equal(meta.sent(request => request.path.endsWith(`${PAGE}/video_reels`) && request.body.upload_phase === 'start').length, startsBefore)
-    assert.deepEqual(meta.sent(request => request.host === 'rupload.facebook.com' && request.path.endsWith('reel-3')).length, 2)
-    assert.equal((await publishPost(env, 'org-a', retried.post.id, { expectedUpdatedAt: retried.post.updated_at, targets: [targets.facebook()] }, 'owner')).outcomes[0]!.status, 'published')
+    assert.equal(resumed.outcomes[0]!.status, 'published', JSON.stringify(resumed.outcomes))
+    assert.equal(starts(), 3)
+    assert.equal((await publication(retried.post.id))!.provider_post_id, `${PAGE}_reel-4`)
 
-    // A saved video that no longer exists at Facebook is forgotten, and the
-    // post is prepared again instead of failing forever on a dead id.
-    const gone = await create('key-fb-reel-gone', { body: 'Third reel', media: [{ asset_id: 'reel', slot: 'cover' }] })
-    const goneFirst = await publishPost(env, 'org-a', gone.post.id, { expectedUpdatedAt: gone.post.updated_at, targets: [targets.facebook()] }, 'owner')
-    assert.equal(goneFirst.outcomes[0]!.code, 'video_processing')
-    const goneId = JSON.parse((await publication(gone.post.id))!.provider_handles_json).video_id as string
-    meta.fbVideos.delete(goneId)
-    const recovered = await publishPost(env, 'org-a', gone.post.id, { expectedUpdatedAt: gone.post.updated_at, targets: [targets.facebook()] }, 'owner')
-    assert.equal(recovered.outcomes[0]!.code, 'video_processing', JSON.stringify(recovered.outcomes))
-    const newId = JSON.parse((await publication(gone.post.id))!.provider_handles_json).video_id as string
-    assert.notEqual(newId, goneId)
-    assert.equal((await publishPost(env, 'org-a', gone.post.id, { expectedUpdatedAt: gone.post.updated_at, targets: [targets.facebook()] }, 'owner')).outcomes[0]!.status, 'published')
-    assert.deepEqual(await publication(gone.post.id).then(row => [row!.state, row!.provider_post_id, row!.provider_handles_json]), ['published', `${PAGE}_${newId}`, JSON.stringify({ video_id: newId })])
-    assert.equal(meta.fbVideos.get(newId)?.published, true)
+    // Meta refusing the finish is a definite non-publication.
+    const refused = await create('key-fb-reel-refused', { body: 'Third reel', media: [{ asset_id: 'reel', slot: 'cover' }] })
+    meta.fault('reject', request => request.path.endsWith(`${PAGE}/video_reels`) && request.body.upload_phase === 'finish')
+    const rejected = await publishPost(env, 'org-a', refused.post.id, { expectedUpdatedAt: refused.post.updated_at, targets: [targets.facebook()] }, 'owner')
+    assert.deepEqual([rejected.outcomes[0]!.status, rejected.outcomes[0]!.code], ['failed', 'provider_rejected'], JSON.stringify(rejected.outcomes))
 
     // Neither path ever asks Facebook to flip a video to published.
     assert.equal(meta.sent(request => request.method === 'POST' && request.host === 'graph.facebook.com' && /\/(reel|video)-\d+$/.test(request.path)).length, 0)
 
-    // Reconciliation reads the same video ids.
-    const reconciled = await reconcilePostPublication(env, 'org-a', (await db.prepare('SELECT id FROM post_publications WHERE post_id = ?').bind(reel.post.id).first<{ id: string }>())!.id, null)
-    assert.equal(reconciled.state, 'published')
+    // Reconciliation reads the Page post the finish named, and the video an upload named.
+    const reconciledReel = await reconcilePostPublication(env, 'org-a', (await db.prepare('SELECT id FROM post_publications WHERE post_id = ?').bind(reel.post.id).first<{ id: string }>())!.id, null)
+    assert.equal(reconciledReel.state, 'published')
+    for (const video of meta.fbVideos.values()) video.ready = -1
+    const reconciledWide = await reconcilePostPublication(env, 'org-a', (await db.prepare('SELECT id FROM post_publications WHERE post_id = ?').bind(wide.post.id).first<{ id: string }>())!.id, null)
+    assert.equal(reconciledWide.state, 'published')
   } finally {
     restore()
     await runtime.dispose()
