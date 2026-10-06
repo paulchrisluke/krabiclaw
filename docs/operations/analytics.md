@@ -14,8 +14,21 @@ console, and the page shows an error with a retry action instead of zero totals.
 
 Google Analytics is a delivery destination. Recorded GA4 delivery outcomes are
 reported separately from native business outcomes. Meta publishing connections
-remain in Integrations; impressions and reach on those platforms are different
+remain in Integrations; views and reach on those platforms are different
 populations from visits to the website and are not added to website traffic.
+
+Insights → Instagram reads the connected Instagram professional account live
+from Instagram for the same date range, in the organization's calendar days
+(`GET /api/dashboard/instagram-insights`, `server/utils/instagram-insights.ts`).
+It needs the Growth plan, the selected account, and the
+`instagram_business_manage_insights` permission on the Better Auth linked
+Instagram account; each missing piece is reported as its own state. Account
+totals come from `/{ig-user-id}/insights` (`period=day`, `metric_type=total_value`)
+and each feed post or reel posted in the range from `/{media-id}/insights`
+(lifetime); Instagram reports no insights for carousels. A metric Instagram did not
+return is shown as unavailable, not zero. Nothing is stored, and Instagram can take
+up to 48 hours to report recent activity. Instagram's own failures are returned as
+a 502 with its message, and the tab offers a retry.
 
 Dates are inclusive in the organization’s timezone, defaulting to the last 30
 calendar days. The dashboard offers compact 7d and 30d controls. Session

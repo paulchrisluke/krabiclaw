@@ -9,12 +9,14 @@
  *   in error; nothing about the content is known from it.
  * - `transport`: no answer, a timeout, or a server error without a Graph body.
  *   The request may or may not have taken effect.
+ * - `invalid-response`: Meta answered successfully, but the response is missing
+ *   required data or has an invalid shape.
  *
  * No request here is retried. A caller that needs to know what happened after a
  * `transport` failure reads the object it addressed.
  */
 
-export type MetaGraphFailure = 'rejected' | 'authorization' | 'transport'
+export type MetaGraphFailure = 'rejected' | 'authorization' | 'transport' | 'invalid-response'
 
 export interface MetaGraphErrorDetails { status: number | null; code: number | null; subcode: number | null; fbtraceId: string | null }
 
