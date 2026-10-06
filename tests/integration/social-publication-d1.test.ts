@@ -825,6 +825,25 @@ test('Facebook video: a Reel is published by finishing its upload session, any o
     assert.deepEqual(await publication(gone.post.id).then(row => [row!.state, row!.provider_post_id, row!.provider_handles_json]), ['published', `${PAGE}_${newId}`, JSON.stringify({ video_id: newId })])
     assert.equal(meta.fbVideos.get(newId)?.published, true)
 
+    // Facebook may not expose a Reel for a moment after its finish (100/33 on
+    // the read-back); that is processing, not an unknown outcome, and the next
+    // call reads the same video.
+    const late = await create('key-fb-reel-late', { body: 'Fourth reel', media: [{ asset_id: 'reel', slot: 'cover' }] })
+    meta.fault('missing', request => request.method === 'GET' && /\/reel-\d+$/.test(request.path), 1)
+    const lateFirst = await publishPost(env, 'org-a', late.post.id, { expectedUpdatedAt: late.post.updated_at, targets: [targets.facebook()] }, 'owner')
+    assert.deepEqual([lateFirst.outcomes[0]!.status, lateFirst.outcomes[0]!.code], ['processing', 'video_processing'], JSON.stringify(lateFirst.outcomes))
+    const lateRow = await publication(late.post.id)
+    assert.equal(lateRow!.state, 'preparing')
+    const lateId = JSON.parse(lateRow!.provider_handles_json).video_id as string
+    const finishesBefore = meta.sent(request => request.path.endsWith(`${PAGE}/video_reels`) && request.body.upload_phase === 'finish').length
+    let lateStatus = 'processing'
+    for (let attempt = 0; attempt < 3 && lateStatus === 'processing'; attempt += 1) {
+      lateStatus = (await publishPost(env, 'org-a', late.post.id, { expectedUpdatedAt: late.post.updated_at, targets: [targets.facebook()] }, 'owner')).outcomes[0]!.status
+    }
+    assert.equal(lateStatus, 'published')
+    assert.equal(meta.sent(request => request.path.endsWith(`${PAGE}/video_reels`) && request.body.upload_phase === 'finish').length, finishesBefore, 'the finish is not sent again')
+    assert.deepEqual(await publication(late.post.id).then(row => [row!.state, row!.provider_post_id]), ['published', `${PAGE}_${lateId}`])
+
     // Neither path ever asks Facebook to flip a video to published.
     assert.equal(meta.sent(request => request.method === 'POST' && request.host === 'graph.facebook.com' && /\/(reel|video)-\d+$/.test(request.path)).length, 0)
 

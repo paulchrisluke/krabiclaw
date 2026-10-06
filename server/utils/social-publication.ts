@@ -477,7 +477,16 @@ async function publishVideoToFacebook(context: ChannelContext, target: FacebookP
       return outcome(context, 'unknown', { code: 'final_unconfirmed', message })
     }
   }
-  return await settle(await readVideo(target, handles.video_id!, deadline))
+  try {
+    return await settle(await readVideo(target, handles.video_id!, deadline))
+  } catch (error) {
+    // Right after a Reel's finish, Facebook can answer 100/33 for the video it
+    // has just accepted (production, 2026-10-06: the same id read as published
+    // seconds later). Nothing was lost: the next call reads it.
+    if (!(error instanceof MetaGraphError && error.objectMissing)) throw error
+    await fence.release(['publishing'])
+    return outcome(context, 'processing', { code: 'video_processing', message: 'Facebook has accepted the video but does not expose it yet. Call publish_post again to finish it; it will publish this same video.' })
+  }
 }
 
 const pause = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
