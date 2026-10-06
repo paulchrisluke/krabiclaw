@@ -12,6 +12,7 @@
         <BlawbyButton to="/">Back home</BlawbyButton>
         <BlawbyButton to="/contact" variant="outline">Send another message</BlawbyButton>
       </div>
+      <GuestAccountPrompt class="mx-auto mt-12 max-w-xl" />
     </section>
 
     <div v-else class="min-h-screen bg-default text-default">
@@ -31,12 +32,14 @@
             <SayaButton to="/contact" variant="ghost" size="md">{{ t('saya.contact_page.send_another') }}</SayaButton>
           </div>
         </div>
+        <GuestAccountPrompt class="mt-8" />
       </div>
     </div>
   </NuxtLayout>
 </template>
 
 <script setup lang="ts">
+import GuestAccountPrompt from '~/components/booking/GuestAccountPrompt.vue'
 definePageMeta({ layout: false })
 
 const { t } = useI18n()

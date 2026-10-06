@@ -263,6 +263,7 @@ export function useSessionBooking(input: MaybeRefOrGetter<SessionBookingContext>
         organizationId: context.value.organizationId,
         organizationName: context.value.location?.title ?? context.value.organizationName,
         guestName: contact.name,
+        guestEmail: contact.email,
         startsAt: session.starts_at,
         timezone: allowTimezoneSelection.value ? bookingTimezone.value! : session.timezone,
         guests: partySize.value,

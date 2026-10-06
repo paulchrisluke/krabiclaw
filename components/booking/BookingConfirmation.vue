@@ -50,11 +50,15 @@
         </div>
         <SayaButton v-if="ctaLabel && ctaTo" :to="ctaTo" block class="mt-7">{{ ctaLabel }}</SayaButton>
       </aside>
+
+      <GuestAccountPrompt :email="guestEmail" />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import GuestAccountPrompt from '~/components/booking/GuestAccountPrompt.vue'
+
 withDefaults(defineProps<{
   kicker: string
   receiptKicker: string
@@ -65,11 +69,14 @@ withDefaults(defineProps<{
   nextStepsNotesHtml?: string
   ctaLabel?: string
   ctaTo?: string
+  /** The email the guest booked with; the account prompt offers it. */
+  guestEmail?: string | null
 }>(), {
   nextStepsStyle: 'numbered',
   nextStepsNotesHtml: '',
   ctaLabel: '',
   ctaTo: '',
+  guestEmail: null,
 })
 
 defineSlots<{

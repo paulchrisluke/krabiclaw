@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { guestAccountUrl } from '~/shared/guest-account'
 import { formatCalendarDate, formatTime, localPartsAt } from '~/utils/timezone'
 import { getGuestRequest, requestSummary, type cancelBookingRequest } from '~/server/domain/requests'
 import { queryFirst, type DbClient } from '~/server/db'
@@ -782,6 +783,7 @@ export async function notifyReservationCreated(
     notes: opts.requests ?? null, heroImageUrl: hero?.imageUrl ?? null, replyUrl: inboxUrl,
   })
   const guestEmail = await renderNotificationEmail(guestReservationReceivedMessage({
+    accountUrl: guestAccountUrl(env.NUXT_PUBLIC_PLATFORM_DOMAIN!, '/signup', opts.email),
     guestName: opts.guestName, organizationName: restaurant, organizationLogoUrl: logoUrl,
     date: prettyDate, time: prettyTime, partySize: opts.guests, notes: opts.requests,
     locationName: opts.locationName, contactPhone: opts.contactPhone, contactEmail: opts.contactEmail,
@@ -933,6 +935,7 @@ export async function notifyContactSubmitted(
     organizationName: restaurant, consentAcknowledged: Boolean(opts.consentAcknowledged), replyUrl: inboxUrl,
   })
   const guestEmail = await renderNotificationEmail(guestContactReceivedMessage({
+    accountUrl: guestAccountUrl(env.NUXT_PUBLIC_PLATFORM_DOMAIN!, '/signup', opts.email),
     guestName: opts.guestName, organizationName: restaurant, organizationLogoUrl: await organizationLogo(db, opts.organizationId),
     subject: opts.subject ? (SUBJECT_LABELS[opts.subject] ?? opts.subject) : null,
     productTitle: opts.productTitle ?? null, message: opts.message,
@@ -1100,6 +1103,7 @@ export async function notifyBookingCreated(
     notes: opts.notes ?? null, heroImageUrl: hero?.imageUrl ?? null, replyUrl: inboxUrl,
   })
   const guestEmail = await renderNotificationEmail(guestBookingReceivedMessage({
+    accountUrl: guestAccountUrl(env.NUXT_PUBLIC_PLATFORM_DOMAIN!, '/signup', opts.email),
     guestName: opts.guestName, organizationName: studio, organizationLogoUrl: logoUrl, status: opts.status,
     productTitle: opts.productTitle, date: prettyDate, time: prettyTime, partySize: String(opts.partySize),
     notes: opts.notes, contactPhone: opts.contactPhone ?? null, contactEmail: opts.contactEmail ?? null,

@@ -16,6 +16,13 @@ export default {
     "instant_notice": "Your appointment is confirmed when you book.",
     "sessions_failed": "Available times could not be loaded. Please try again."
   },
+  "guest_account": {
+    "title": "Keep track of your bookings",
+    "body": "Create a free Krabiclaw account to see your bookings, messages and receipts from every business you use, in one place.",
+    "body_email": "Create a free Krabiclaw account with {email} to see this booking, your messages and receipts from every business you use, in one place.",
+    "create": "Create an account",
+    "sign_in": "Already have an account? Sign in"
+  },
   "home": {
     "highlights": "Latest posts & photos.",
     "reviews": "Guest reviews & ratings."
