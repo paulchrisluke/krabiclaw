@@ -1,4 +1,4 @@
-import { getContrastRatio, getOptimalForeground } from '~/utils/color-utils'
+import { getContrastRatio, getOptimalForeground } from '../utils/color-utils.ts'
 
 // A site's colors: six roles, each with a light and a dark value. Everything
 // else a theme paints (borders, tints, inverted bands, hover states) is derived
