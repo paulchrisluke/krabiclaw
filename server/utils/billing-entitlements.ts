@@ -19,7 +19,7 @@ export function getPlanEntitlements(plan: string): EntitlementsMap {
     managed_service: false,
     messaging: false,
     review_requests: false,
-    additional_languages: 0,
+    additional_languages: false,
   }
 
   switch (plan) {
@@ -34,7 +34,7 @@ export function getPlanEntitlements(plan: string): EntitlementsMap {
         managed_service: true,
         messaging: true,
         review_requests: true,
-        additional_languages: 2,
+        additional_languages: true,
       }
     default:
       return base

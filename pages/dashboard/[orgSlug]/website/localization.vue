@@ -2,7 +2,7 @@
   <DashboardLeafPanel
     id="organization-localization"
     title="Languages"
-    lead="English is the permanent source language. Growth includes two secondary languages at no extra cost."
+    lead="English is the permanent source language. Growth includes every available language at no extra cost."
     :saving="busy"
     :disabled="!newLocale || Boolean(validationMessage)"
     :error="actionError ?? ''"

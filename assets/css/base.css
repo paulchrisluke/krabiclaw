@@ -127,11 +127,14 @@
   font-size: 106%;
 
   /* Script fallbacks every font stack ends with. A site's chosen family draws
-     the characters it has; Thai falls through to these, and Japanese pages add
-     their own (assets/css/japanese-fonts.css). A face downloads only when a
-     page has text in its script. */
-  --font-script-sans: "Noto Sans Thai";
-  --font-script-serif: "Noto Serif Thai";
+     the characters it has; Thai and Vietnamese fall through to these, and
+     Japanese pages add their own (assets/css/japanese-fonts.css). A face
+     downloads only when a page has text in its script. @nuxt/fonts loads only
+     the first family a declaration names, so each script's face leads its own. */
+  --font-vietnamese-sans: "Noto Sans Display";
+  --font-vietnamese-serif: "Noto Serif Display";
+  --font-script-sans: "Noto Sans Thai", var(--font-vietnamese-sans);
+  --font-script-serif: "Noto Serif Thai", var(--font-vietnamese-serif);
 
   /* Form field boundary. WCAG 2.1 SC 1.4.11 wants 3:1 for the edge of a
      control, and the decorative --ui-border this shared input class used to

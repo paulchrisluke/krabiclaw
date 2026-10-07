@@ -4,6 +4,6 @@
   rules stay out of the surface sheets every other page loads.
 */
 html:lang(ja) {
-  --font-script-sans: "Noto Sans JP", "Noto Sans Thai";
-  --font-script-serif: "Noto Serif JP", "Noto Serif Thai";
+  --font-script-sans: "Noto Sans JP", "Noto Sans Thai", var(--font-vietnamese-sans);
+  --font-script-serif: "Noto Serif JP", "Noto Serif Thai", var(--font-vietnamese-serif);
 }

@@ -1,4 +1,19 @@
 export default {
+  "booking_policy": {
+    "reservation_heading": "Reservation policies",
+    "experience_heading": "Experience policies",
+    "reservation_cancellation": "Cancel free up to {duration} before your booking.",
+    "experience_cancellation": "Free cancellation is available up to {duration} before the experience starts.",
+    "reschedule": "You can reschedule up to {duration} before the start time.",
+    "deposit_party": "Parties of {count}+ guests may require a deposit.",
+    "deposit": "A deposit may be required before confirmation.",
+    "minimum_guest_age": "The minimum guest age is {age}.",
+    "accessibility": "Please contact us before booking if you need accessibility arrangements."
+  },
+  "dates": {
+    "date_unavailable": "Date unavailable",
+    "time_unavailable": "Time unavailable"
+  },
   "booking": {
     "choose_consultation": "Choose your consultation",
     "service": "Service",

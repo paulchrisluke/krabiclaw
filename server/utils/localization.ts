@@ -168,7 +168,7 @@ export async function assertOrganizationLanguageEntitlement(
   // language went public with nothing in it. The public gate below is what
   // still insists on `published`.
   const satisfied = requires === 'published' ? row.locale_status === 'published' : Boolean(row.locale_status)
-  if (typeof entitlements.additional_languages !== 'number' || entitlements.additional_languages <= 0 || !satisfied) {
+  if (entitlements.additional_languages !== true || !satisfied) {
     localizationError(402, 'LANGUAGE_ENTITLEMENT_REQUIRED', `A ${requires === 'published' ? 'published ' : ''}language and an eligible paid plan are required`, {
       organization_id: organizationId,
       locale,

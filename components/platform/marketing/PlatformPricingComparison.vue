@@ -17,8 +17,7 @@
                 </details>
               </th>
               <td v-for="plan in plans" :key="plan.id">
-                <span v-if="row.limits?.[plan.id] !== undefined"><span aria-hidden="true">{{ row.limits[plan.id] }}</span><span class="sr-only">{{ comparisonValue(row, plan.id) }}</span></span>
-                <span v-else-if="comparisonValue(row, plan.id) === 'Included'" class="kc-pricing-comparison__included">
+                <span v-if="comparisonValue(row, plan.id) === 'Included'" class="kc-pricing-comparison__included">
                   <PlatformIcon name="check-solid" class="size-6" aria-hidden="true" />
                   <span class="sr-only">{{ comparisonValue(row, plan.id) }}</span>
                 </span>

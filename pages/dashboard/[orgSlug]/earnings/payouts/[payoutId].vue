@@ -36,10 +36,12 @@
       </section>
       <p v-if="!detail.items.length" class="mt-6 text-center text-sm text-muted">Stripe did not list any payments in this payout.</p>
     </template>
+    <PaymentsHelp class="mt-8" />
   </DashboardLeafPanel>
 </template>
 
 <script setup lang="ts">
+import PaymentsHelp from '~/components/dashboard/PaymentsHelp.vue'
 import { paymentMoney } from '~/shared/payment-display'
 import { isPayoutDetail, payoutDate, payoutStatusLabel, type PayoutDetail, type PayoutItem } from '~/shared/earnings-display'
 import { formatTimestamp } from '~/utils/timezone'

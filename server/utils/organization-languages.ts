@@ -39,12 +39,10 @@ export async function addOrganizationLanguage(
   const catalog = platformLocale(locale)
   if (!catalog) localizationError(403, 'PLATFORM_LOCALE_UNAVAILABLE', 'The platform locale is unavailable', { locale })
   const projection = await getOrganizationBillingStatus(env, db, input.organizationId)
-  if (typeof projection.entitlements.additional_languages !== 'number' || projection.entitlements.additional_languages <= 0 || !projection.stripeSubscriptionId) {
+  if (projection.entitlements.additional_languages !== true || !projection.stripeSubscriptionId) {
     localizationError(402, 'LANGUAGE_ENTITLEMENT_REQUIRED', 'An active subscription with additional website languages is required to add a language')
   }
   const now = new Date().toISOString()
-  // No public-slot count here: adding costs the site nothing until it is
-  // published, and the limit belongs where the slot is actually taken.
   await execute(db, `
     INSERT INTO organization_locales (id, organization_id, locale, label, is_source, status, created_at, updated_at)
     VALUES (?, ?, ?, ?, 0, 'disabled', ?, ?)
@@ -67,23 +65,18 @@ export async function publishOrganizationLanguage(
   const catalog = platformLocale(locale)
   if (!catalog) localizationError(403, 'PLATFORM_LOCALE_UNAVAILABLE', 'The platform locale is unavailable', { locale })
   const projection = await getOrganizationBillingStatus(env, db, input.organizationId)
-  const languageLimit = projection.entitlements.additional_languages
-  if (typeof languageLimit !== 'number' || languageLimit <= 0 || !projection.stripeSubscriptionId) {
+  if (projection.entitlements.additional_languages !== true || !projection.stripeSubscriptionId) {
     localizationError(402, 'LANGUAGE_ENTITLEMENT_REQUIRED', 'An active subscription with additional website languages is required to publish a language')
   }
   const existing = await loadLanguage(db, input.organizationId, locale)
   if (!existing) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Add the language before publishing it', { locale })
 
   const now = new Date().toISOString()
-  const result = await execute(db, `
+  await execute(db, `
     UPDATE organization_locales SET status = 'published',
       activated_at = COALESCE(activated_at, ?), disabled_at = NULL, updated_at = ?
      WHERE organization_id = ?  AND locale = ? AND is_source = 0
-       AND (SELECT COUNT(*) FROM organization_locales other
-              WHERE other.organization_id = ? AND other.is_source = 0
-                AND other.status = 'published' AND other.locale <> ?) < ?
-  `, [now, now, input.organizationId, locale, input.organizationId, locale, languageLimit])
-  if (result.meta?.changes !== 1) localizationError(409, 'LANGUAGE_ENTITLEMENT_REQUIRED', `Language could not be published because ${languageLimit} secondary languages are already published.`)
+  `, [now, now, input.organizationId, locale])
   return await loadLanguage(db, input.organizationId, locale)
 }
 

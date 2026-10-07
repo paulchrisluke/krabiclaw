@@ -6,7 +6,6 @@ import { loginMethodForPath } from '~/shared/auth/login-method'
 import { admin, anonymous, genericOAuth, getOrgAdapter, hasPermission, jwt, lastLoginMethod, organization, phoneNumber } from 'better-auth/plugins'
 import { stripe as betterAuthStripe } from '@better-auth/stripe'
 import { oauthProvider } from '@better-auth/oauth-provider'
-import type { SchemaClient, Scope } from '@better-auth/oauth-provider'
 import { cimd } from '@better-auth/cimd'
 import { fetchCimdMetadataResource } from '~/server/utils/cimd-metadata-fetch'
 import type { GenericEndpointContext } from '@better-auth/core'
@@ -51,7 +50,6 @@ async function integrationAccountLinked(account: { id: string; userId: string },
   context.integrationAccountId = account.id
 }
 
-const CIMD_TENANT_SCOPES = ['openid', 'email', 'offline_access', 'tenant'] as const
 export const OAUTH_SIGNING_POLICY = {
   algorithm: 'RS256',
   resourceSeedMode: 'merge',
@@ -106,22 +104,6 @@ function organizationDeletionCleanupPlugin(env: CloudflareEnv): BetterAuthPlugin
       }
     },
   }
-}
-
-async function configureCimdTenantScopes(event: {
-  client: SchemaClient<Scope[]>
-  clientMetadataDocument: Record<string, unknown>
-  context: GenericEndpointContext
-}) {
-  const { client, context: ctx } = event
-  const update: Record<string, unknown> = { scopes: [...CIMD_TENANT_SCOPES] }
-
-  Object.assign(client, update)
-  await ctx.context.adapter.update({
-    model: 'oauthClient',
-    where: [{ field: 'clientId', value: client.clientId }],
-    update,
-  })
 }
 
 // The generic @better-auth/core AuthContext type doesn't line up with this
@@ -585,8 +567,6 @@ export function createAuth(env: CloudflareEnv) {
         // Required: @better-auth/cimd hands the network boundary to the
         // application. See server/utils/cimd-metadata-fetch.ts.
         fetchClientMetadataResource: fetchCimdMetadataResource,
-        onClientCreated: configureCimdTenantScopes,
-        onClientRefreshed: configureCimdTenantScopes,
       }),
       organization(configuredOrganizationOptions),
       betterAuthStripe({

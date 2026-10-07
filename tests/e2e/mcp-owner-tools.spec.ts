@@ -104,7 +104,7 @@ test.describe('stateless MCP server', () => {
     for (const [type, data, message] of [
       ['showcase', { items: [{ title: ' ' }] }, 'showcase.items[0].title is required.'],
       ['steps', { items: [{}] }, 'steps.items[0].title is required.'],
-      ['language_reach', { items: [{ title: 'English', locale: 'invalid' }] }, 'language_reach.items[0].locale must be one of: en, ja, th.'],
+      ['language_reach', { items: [{ title: 'English', locale: 'invalid' }] }, 'language_reach.items[0].locale must be one of: en, ja, th, vi.'],
       ['language_reach', { items: [{ locale: 'en' }] }, 'language_reach.items[0].title is required.'],
     ] as const) {
       const invalid = await mcpRequest(request, baseURL!, {

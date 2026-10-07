@@ -148,7 +148,7 @@ export const ORGANIZATIONS_TOOLS: McpToolDefinition[] = [
       inputSchema: {
         name: { type: 'string' },
         brand_description: { type: 'string' },
-        font_preset: { type: 'string', enum: [...ORGANIZATION_FONT_PRESETS], description: `Website heading and body fonts, on every template: ${ORGANIZATION_FONT_OPTIONS.map(option => `${option.value} (${option.label})`).join(', ')}. Thai and Japanese text renders in every choice.` },
+        font_preset: { type: 'string', enum: [...ORGANIZATION_FONT_PRESETS], description: `Website heading and body fonts, on every template: ${ORGANIZATION_FONT_OPTIONS.map(option => `${option.value} (${option.label})`).join(', ')}. Thai, Vietnamese and Japanese text renders in every choice.` },
         palette: {
           type: ['object', 'null'],
           description: `Saya and Blawby website colors, each with a light and a dark value. Roles: ${SITE_PALETTE_ROLES.map(entry => `${entry.role} (${entry.rule})`).join(' ')} Start from a starter (${STARTER_PALETTES.map(entry => entry.id).join(', ')}) and/or name only the roles to change; colors are #RRGGBB or a plain description such as "forest green". Borders and tints are derived. null returns to the template's colors. The result reports any text or button pair below WCAG AA contrast.`,

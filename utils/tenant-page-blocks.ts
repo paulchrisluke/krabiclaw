@@ -1,6 +1,7 @@
 import { FAQ_BLOCK_SOURCES } from '../shared/faq-block'
 import { videoUploadDate, youTubeVideoId } from '../shared/youtube-video'
 import { isSupportedMediaPlacement } from '../shared/media-placement-contract'
+import { PLATFORM_LOCALES } from '../shared/platform-locales'
 
 export const TENANT_PAGE_SCHEMA_VERSION = 1 as const
 
@@ -419,7 +420,7 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
         title: text('Language name', { required: true }),
         locale: {
           kind: 'enum', label: 'Language', translatable: false, required: true,
-          options: [{ value: 'en', label: 'English' }, { value: 'ja', label: 'Japanese' }, { value: 'th', label: 'Thai' }],
+          options: PLATFORM_LOCALES.map(({ locale }) => ({ value: locale, label: new Intl.DisplayNames('en', { type: 'language' }).of(locale)! })),
         },
         image: { kind: 'media', label: 'Picture of the site in this language', translatable: false, section: 'image', slot: 'image' },
       },
