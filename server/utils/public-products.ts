@@ -174,7 +174,7 @@ export async function loadPublicProductCollection(
   const perLocation = await Promise.all(locations.map(location =>
     listLocationProducts(db, { organizationId: resolved.organization.id, locationId: location.id, publishedOnly: true })))
   const onlineProducts = locationSlug ? [] : (await listOrganizationProducts(db, { organizationId, publishedOnly: true }))
-    .filter(product => product.active && Boolean(product.booking?.online_timezone || product.order_url))
+    .filter(product => Boolean(product.booking?.online_timezone || product.order_url))
   const seen = new Set<string>()
   // Collections and detail routes use the same explicit product kind.
   const products = await hydrateProductMedia(db, organizationId, [...perLocation.flat(), ...onlineProducts].filter((product) => {
@@ -316,7 +316,6 @@ export async function loadPublicPageProductDetail(
   const page = await getPublicTenantPageForPath(env, db, organizationId, pagePath, { locale, preview: previewAuthorized })
   if (!page?.product_id) return null
   const product = await getProduct(db, organizationId, page.product_id)
-  if (!product.active || !product.publications.some(entry => entry.organization_id === organizationId && entry.published)) return null
   const collection = await loadPublicProductCollection(db, organizationId, productSurfaceOf(null, product), previewAuthorized)
   const found = collection?.products.find(product => product.id === page.product_id)
   if (!collection || !found) return null

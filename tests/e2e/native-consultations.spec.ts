@@ -37,10 +37,17 @@ test('native online review uses canonical Products, holds capacity, and releases
   const headers = blawbyTestExtraHeaders()
   try {
   for (let index = 0; index < 2; index++) {
-    const create = await page.request.post(`${editor}/products`, { data: { kind: 'service', details: { preparation: 'Bring a list of questions for your consultation', cancellation_policy: 'Contact us at least one day before your appointment to cancel.' }, name: `Local consultation ${stamp}-${index}`, description: 'A local test service for reviewing the native consultation flow.', variants: [{ name: 'Online', prices: [{ unit_amount: 0, currency: 'USD' }] }] } })
+    const create = await page.request.post(`${editor}/products`, { data: { kind: 'service', active: true, details: { preparation: 'Bring a list of questions for your consultation', cancellation_policy: 'Contact us at least one day before your appointment to cancel.' }, name: `Local consultation ${stamp}-${index}`, description: 'A local test service for reviewing the native consultation flow.', variants: [{ name: 'Online', prices: [{ unit_amount: 0, currency: 'USD' }] }] } })
     expect(create.status(), await create.text()).toBe(201)
     const product = (await create.json()).product
     products.push(product)
+    // This journey adopts the existing authored service page. Remove the
+    // temporary service's automatic page explicitly before binding it there.
+    expect(product.page).toBeTruthy()
+    const automaticPage = await page.request.get(`${editor}/pages/${product.page.id}`)
+    expect(automaticPage.status(), await automaticPage.text()).toBe(200)
+    const removedPage = await page.request.delete(`${editor}/pages/${product.page.id}`, { data: { expectedUpdatedAt: (await automaticPage.json()).page.document.updated_at } })
+    expect(removedPage.status(), await removedPage.text()).toBe(200)
     const config = await page.request.put(`${editor}/products/${product.id}/booking`, { data: { duration_minutes: 45, default_capacity: 1, confirmation_mode: 'review', online_payment_required: false, online_timezone: 'UTC', calendar_group: `local-${stamp}` } })
     expect(config.status(), await config.text()).toBe(200)
     const schedule = await page.request.put(`${editor}/products/${product.id}/availability`, { data: { location_id: null, slots: [{ weekday: tomorrow.getUTCDay(), start_time: '14:00' }] } })
@@ -429,7 +436,7 @@ test('native online review uses canonical Products, holds capacity, and releases
     await page.goto(`/dashboard/north-carolina-legal-services/bookings/booking/${browserBooking.request_id}`)
     await page.getByRole('link', { name: 'Team member North Carolina Legal Services', exact: true }).click()
     await expect(page.getByRole('heading', { name: 'Team member', exact: true })).toBeVisible()
-    await expect(page.getByText('Assign a team member to this service before changing this booking.', { exact: true })).toBeVisible()
+    await expect(page.getByText('Add working hours for a team member before moving this booking.', { exact: true })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeDisabled()
     for (const mode of ['external_url', 'native_disabled', 'native'] as const) {
       const switchMode = await page.request.put(`${editor}/consultation`, { data: { mode } })
@@ -438,8 +445,8 @@ test('native online review uses canonical Products, holds capacity, and releases
       expect(publicDocument.status(), await publicDocument.text()).toBe(200)
       expect((await publicDocument.json()).shell.consultation.mode).toBe(mode)
       await page.goto(service.path)
-      await expect(page.locator('[data-media-gallery]')).toHaveCount(mode === 'native' ? 1 : 0)
-      await expect(page.locator('[data-block-type="hero"]')).toHaveCount(mode === 'native' ? 0 : 1)
+      await expect(page.locator('[data-media-gallery]')).toHaveCount(1)
+      await expect(page.locator('[data-block-type="hero"]')).toHaveCount(0)
       await page.goto('/schedule')
       await expect(page.getByRole('combobox', { name: 'Service', exact: true })).toHaveCount(mode === 'native' ? 1 : 0)
       if (mode === 'external_url') await expect(page.locator('[data-parity-section="schedule-hero"] a')).toHaveAttribute('href', previous.external_url)
@@ -449,6 +456,13 @@ test('native online review uses canonical Products, holds capacity, and releases
       const retained = await page.request.get(`/api/dashboard/bookings/booking/${browserBooking.request_id}?org=north-carolina-legal-services`)
       expect((await retained.json()).booking).toMatchObject({ status: 'confirmed', operationalBookingId: browserBooking.operational_booking_id })
     }
+    const pause = await page.request.patch(`${editor}/products/${products[0]!.id}`, { data: { active: false } })
+    expect(pause.status(), await pause.text()).toBe(200)
+    await page.goto(service.path)
+    await expect(page.locator('[data-media-gallery]')).toHaveCount(1)
+    await expect(page.getByRole('button', { name: 'Request appointment', exact: true })).toHaveCount(0)
+    const resume = await page.request.patch(`${editor}/products/${products[0]!.id}`, { data: { active: true } })
+    expect(resume.status(), await resume.text()).toBe(200)
     await bindViaMcp(null)
     await page.goto(service.path)
     await expect(page.locator('[data-media-gallery]')).toHaveCount(0)

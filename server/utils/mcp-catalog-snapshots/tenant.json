@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:2cc801f4549536361a63ae3063aa4b5c68ce8c4cb7018ba43487b02b8949f4f0",
+  "fingerprint": "sha256:33fcbc9e7ffd706cde7dfb60911c0d12e2e2c1a4f1c18e023a6f1ae63792aa9a",
   "tools": [
     {
       "name": "append_content_block",
@@ -42748,7 +42748,7 @@
     },
     {
       "name": "set_consultation_mode",
-      "description": "Set how the selected website offers consultations when the user wants to enable website booking, use an external scheduler or disable booking. Native booking uses published online products linked to service pages. External scheduling requires an existing configured URL. Does not set prices or connect a calendar or payment provider.",
+      "description": "Choose the Schedule page: show online services, use an existing external scheduler, or hide the selector. Each service keeps its own booking settings.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {

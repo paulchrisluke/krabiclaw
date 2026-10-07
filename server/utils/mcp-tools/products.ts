@@ -2,6 +2,7 @@ import type { McpToolDefinition } from './shared'
 import { pageInfoObject, paginationInputSchema, resolvedMediaAssetObject, organizationTool } from './shared'
 import { TENANT_PAGE_BLOCKS_SCHEMA, TENANT_PAGE_METADATA_SCHEMA } from './content'
 import { productEditorPath } from '~/server/utils/dashboard-links'
+import { queryFirst } from '~/server/db'
 import { PRODUCT_LIMITS } from '~/server/utils/product-validation'
 import { SUPPORTED_CURRENCIES } from '~/shared/currencies'
 import { PRODUCT_KINDS, productDetailsSchema } from '~/shared/product-details'
@@ -31,6 +32,7 @@ import {
   updateProduct,
   updateMenu,
   productBookingReadiness,
+  PUBLIC_PRODUCT_SQL,
   type MenuSectionInput,
 } from '~/server/utils/product-management'
 import { assertResourceAccess, memberAccessPrincipal } from '~/server/utils/member-access'
@@ -347,8 +349,10 @@ async function productResponse(ctx: McpExecutorContext, product: Product) {
   const value = hydrated!
   const path = value.kind === 'experience' ? `/experiences/${encodeURIComponent(value.slug)}` : value.page?.path ?? null
   const readiness = value.kind === 'experience' || value.booking ? await productBookingReadiness(ctx.organization.db, ctx.organization.organizationId, value) : null
-  const published = value.publications.some(publication => publication.organization_id === ctx.organization.organizationId && publication.published)
-  const publicUrl = path && published && (value.kind !== 'experience' || readiness?.ready) && ctx.organization.publicUrl
+  const published = path && await queryFirst(ctx.organization.db, `SELECT p.id FROM products p
+    JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
+    WHERE p.organization_id = ? AND p.id = ? AND ${PUBLIC_PRODUCT_SQL}`, [ctx.organization.organizationId, value.id])
+  const publicUrl = path && published && ctx.organization.publicUrl
     ? new URL(path, ctx.organization.publicUrl).toString() : null
   return { product: { ...value, booking_readiness: readiness ? {ready:readiness.ready,missing:readiness.missing} : null, public_url: publicUrl, admin_edit_url: slug ? productEditorPath(slug, value.id) : null } }
 }

@@ -247,7 +247,7 @@ export const ORGANIZATIONS_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'set_consultation_mode',
-      description: 'Set how the selected website offers consultations when the user wants to enable website booking, use an external scheduler or disable booking. Native booking uses published online products linked to service pages. External scheduling requires an existing configured URL. Does not set prices or connect a calendar or payment provider.',
+      description: 'Choose the Schedule page: show online services, use an existing external scheduler, or hide the selector. Each service keeps its own booking settings.',
       domain: 'organizations', minimumRole: 'admin', inputSchema: { mode: { type: 'string', enum: ['native', 'external_url', 'native_disabled'] } },
       required: ['mode'],
       outputSchema: { type: 'object', properties: { settings: { type: 'object', properties: { mode: { type: 'string', enum: ['native', 'external_url', 'native_disabled'] } }, required: ['mode'] } }, required: ['settings'] },
