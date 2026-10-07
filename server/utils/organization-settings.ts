@@ -222,6 +222,7 @@ function integrationsSummary(integrations: Awaited<ReturnType<typeof listIntegra
     google_search_console: connected('google_search_console'),
     facebook: connected('facebook'),
     instagram: connected('instagram'),
+    discord: connected('discord'),
   }
 }
 

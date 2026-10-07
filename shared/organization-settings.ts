@@ -1,10 +1,14 @@
 /**
- * Integration credentials are Better Auth linked accounts. An organization
- * never holds a token: it stores the Better Auth `account.id` that granted it
- * access beside the provider resource it selected, and reads a usable token
- * through Better Auth when it needs one. The linked account belongs to the
- * user who linked it, so removing an organization's selection — or the
- * organization — leaves that account alone.
+ * OAuth integration credentials are Better Auth linked accounts. For those an
+ * organization never holds a token: it stores the Better Auth `account.id`
+ * that granted it access beside the provider resource it selected, and reads a
+ * usable token through Better Auth when it needs one. The linked account
+ * belongs to the user who linked it, so removing an organization's selection —
+ * or the organization — leaves that account alone.
+ *
+ * A Discord incoming webhook is not an OAuth grant. Its URL is a credential the
+ * organization itself was given, so the organization holds it, encrypted with
+ * Better Auth's secret, and removing the connection removes it.
  *
  * What each integration asks its provider for. Google scopes are requested
  * incrementally on the one linked Google account, so connecting Search Console
@@ -25,19 +29,22 @@ export const INTEGRATION_SCOPES = {
 } as const satisfies Record<string, readonly string[]>
 
 /** The providers an organization connects, one of each. */
-export const INTEGRATION_PROVIDERS = ['facebook', 'instagram', 'google_analytics', 'google_search_console', 'google_calendar'] as const
+export const INTEGRATION_PROVIDERS = ['facebook', 'instagram', 'discord', 'google_analytics', 'google_search_console', 'google_calendar'] as const
 export type IntegrationProvider = typeof INTEGRATION_PROVIDERS[number]
 
 /** One row of `organization_integrations`. */
 export interface OrganizationIntegration {
   organization_id: string
   provider: IntegrationProvider
-  /** The Better Auth linked account the organization acts through. */
-  account_id: string
-  /** Page id, Instagram professional account id, GA4 property id or Search Console site URL. */
+  /** The Better Auth linked account the organization acts through; null for Discord, which has none. */
+  account_id: string | null
+  /** Page id, Instagram professional account id, GA4 property id, Search Console site URL or Discord channel id. */
   target_id: string
-  /** Page name, Instagram username, GA4 property name or Search Console site URL. */
+  /** Page name, Instagram username, GA4 property name, Search Console site URL or the Discord destination's label. */
   target_name: string
+  /** Discord only: the incoming webhook and the guild Discord reported for it. Its token is never read here. */
+  webhook_id: string | null
+  guild_id: string | null
   /** Google Analytics only. */
   measurement_id: string | null
   /** Search Console only. */

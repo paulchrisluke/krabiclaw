@@ -25,7 +25,7 @@ export const MCP_PROMPTS: McpPromptDefinition[] = [
     description: "Create a short post, review its draft, and publish it to the destinations the user names.",
     arguments: [
       { name: "body", description: "The caption, as the user wants it read. Event dates, offers and codes are part of it.", required: true },
-      { name: "destinations", description: "Where to publish, in the user's words: website, Facebook, Instagram, or several. Nothing is assumed.", required: true },
+      { name: "destinations", description: "Where to publish, in the user's words: website, Facebook, Instagram, Discord, or several. Nothing is assumed.", required: true },
     ],
   },
   {
@@ -104,7 +104,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
         text: [
           `Call create_post with a new idempotency_key and this body: ${body}`,
           "If the user supplied or approved media, pass it as create_post media in the order they want it shown: the cover first, then the gallery.",
-          `Publish only to: ${destinations}. For Facebook or Instagram, call get_social_connections and use the exact target_id and connection_revision it returns; if the destination is not connected or has a problem, say so instead of publishing elsewhere.`,
+          `Publish only to: ${destinations}. For Facebook, Instagram or Discord, call get_social_connections and use the exact target_id and connection_revision it returns; if the destination is not connected or has a problem, say so instead of publishing elsewhere.`,
           "Show the user the draft's preview_url, then call publish_post with the post's updated_at as expected_updated_at and one target per named destination.",
           "Report each outcome exactly as returned. processing means call publish_post again later to finish the same post; unknown means use reconcile_post_publication, never publish again.",
         ].join(" "),
