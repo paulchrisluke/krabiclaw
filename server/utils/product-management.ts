@@ -31,6 +31,7 @@ import type {
   ProductSource,
   ProductVariant,
   ProductVariantInput,
+  ProductVariantPatchInput,
   ReconcileProductInput,
   UpdateCollectionInput,
   UpdateProductInput,
@@ -788,7 +789,7 @@ function productWrites(
   // Prices are rewritten only by a caller that actually supplied variants.
   // Saving a description restates nothing about money, and must not retire and
   // remint every offer a product has.
-  options: { writePrices: boolean } = { writePrices: true },
+  options: { writePrices: boolean; priceIds?: ReadonlySet<string>; writeOptions?: boolean; variantIds?: ReadonlySet<string> } = { writePrices: true },
 ): BatchQuery[] {
   const upsert = mode === 'upsert'
   const writes: BatchQuery[] = [{
@@ -809,7 +810,7 @@ function productWrites(
       JSON.stringify(planned.metadata), planned.tax_code, planned.source, planned.kind, JSON.stringify(planned.details), now, now, actor.actorId, actor.actorId],
   }]
 
-  for (const option of planned.options) {
+  for (const option of options.writeOptions === false ? [] : planned.options) {
     writes.push({
       query: upsert
         ? `INSERT INTO product_options (id, organization_id, product_id, name, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -833,7 +834,7 @@ function productWrites(
   }
 
   for (const variant of planned.variants) {
-    writes.push({
+    if (!options.variantIds || options.variantIds.has(variant.id)) writes.push({
       query: upsert
         ? `INSERT INTO product_variants (id, organization_id, product_id, name, sku, active, sort_order, created_at, updated_at, created_by, updated_by)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -852,6 +853,7 @@ function productWrites(
       })
     }
     for (const price of options.writePrices ? variant.prices : []) {
+      if (options.priceIds && !options.priceIds.has(price.id)) continue
       // A restated price keeps its row: payments and checkout holds reference
       // price ids, and a kept row keeps when it was created.
       writes.push({
@@ -1092,17 +1094,6 @@ export async function createProductsBatch(db: DbClient, input: {
 }
 
 /**
- * Replace a product's rows with the intended state.
- *
- * Children are deleted and rewritten rather than diffed. Diffing options,
- * values, variants and prices in place is how a half-applied edit leaves a
- * variant selecting a value that no longer exists; the whole replacement
- * commits in one batch or none of it does.
- *
- * A variant that keeps its id keeps its bookings, because bookings reference
- * the variant, not its ordinal position.
- */
-/**
  * The writes one patch makes, given the product it is patching.
  *
  * Planning is separated from loading so a batch can load every product it is
@@ -1126,6 +1117,23 @@ async function planProductUpdate(db: DbClient, input: {
 }): Promise<{ writes: BatchQuery[]; keptVariants: string }> {
   const { current, patch, organizationId } = input
   const productId = current.id
+  const variantsMode = patchListMode(patch.variants_mode, patch.variants, 'variants')
+  const suppliedVariants = patch.variants ?? []
+  const suppliedIds = new Set<string>()
+  for (const [index, variant] of suppliedVariants.entries()) {
+    if (!variant || typeof variant !== 'object' || Array.isArray(variant)) invalid(`variants[${index}] must be an object`)
+    if (variant.id && suppliedIds.has(variant.id)) invalid(`variants[${index}].id is repeated`)
+    if (variant.id) suppliedIds.add(variant.id)
+  }
+  const variants: ProductVariantInput[] = variantsMode === 'replace'
+    ? []
+    : current.variants.map(variant => ({ ...variantInput(variant), prices: variant.prices.map(priceInput) }))
+  for (const [index, supplied] of suppliedVariants.entries()) {
+    const mergedVariant = mergeVariantPatch(supplied, current.variants.find(variant => variant.id === supplied.id), `variants[${index}]`)
+    const at = supplied.id ? variants.findIndex(variant => variant.id === supplied.id) : -1
+    if (at < 0) variants.push(mergedVariant)
+    else variants[at] = mergedVariant
+  }
   const merged: CreateProductInput = {
     kind: patch.kind ?? current.kind,
     name: patch.name ?? current.name,
@@ -1140,9 +1148,7 @@ async function planProductUpdate(db: DbClient, input: {
       id: option.id, name: option.name, sort_order: option.sort_order,
       values: option.values.map(value => ({ id: value.id, value: value.value, sort_order: value.sort_order })),
     })),
-    variants: patch.variants === undefined
-      ? current.variants.map(variant => ({ ...variantInput(variant), prices: variant.prices.map(priceInput) }))
-      : patch.variants.map((supplied, index) => mergeVariantPatch(supplied, current.variants.find(variant => variant.id === supplied.id), `variants[${index}]`)),
+    variants,
     details: patch.details ?? current.details,
   }
   const planned = await planProduct(db, organizationId, merged, {
@@ -1164,11 +1170,19 @@ async function planProductUpdate(db: DbClient, input: {
   // that restated the variants is describing the offers.
   const writesPrices = patch.variants !== undefined
   const keptPrices = d1JsonArray(planned.variants.flatMap(variant => variant.prices.map(price => price.id)))
+  const currentPriceIds = new Set(current.variants.flatMap(variant => variant.prices.map(price => price.id)))
+  const suppliedPriceIds = new Set(suppliedVariants.flatMap(variant => (variant.prices ?? []).map(price => price.id).filter((id): id is string => Boolean(id))))
+  const priceIds = new Set(planned.variants.flatMap(variant => variant.prices)
+    .filter(price => !currentPriceIds.has(price.id) || suppliedPriceIds.has(price.id)).map(price => price.id))
+  const variantIds = new Set(planned.variants.filter(variant => {
+    const before = current.variants.find(candidate => candidate.id === variant.id)
+    return !before || variant.name !== before.name || variant.sku !== before.sku || variant.active !== before.active || variant.sort_order !== before.sort_order
+  }).map(variant => variant.id))
   const writes: BatchQuery[] = [
     // Selections and named details are rebuilt wholesale: nothing
     // references them, so replacing them is simpler and cannot drift.
     { query: 'DELETE FROM product_variant_option_values WHERE organization_id = ? AND product_id = ?', params: [organizationId, productId] },
-    // Prices the caller no longer states go; restated ones are upserted in place.
+    // Only explicit replacement removes prices; merged omissions remain in the plan.
     ...(writesPrices
       ? [{ query: 'DELETE FROM prices WHERE organization_id = ? AND product_variant_id IN (SELECT id FROM product_variants WHERE organization_id = ? AND product_id = ?) AND id NOT IN (SELECT value FROM json_each(?))', params: [organizationId, organizationId, productId, keptPrices] }]
       : []),
@@ -1183,7 +1197,9 @@ async function planProductUpdate(db: DbClient, input: {
     { query: 'DELETE FROM product_variants WHERE organization_id = ? AND product_id = ? AND id NOT IN (SELECT value FROM json_each(?))', params: [organizationId, productId, keptVariants] },
     { query: 'DELETE FROM product_option_values WHERE organization_id = ? AND product_id = ? AND id NOT IN (SELECT value FROM json_each(?))', params: [organizationId, productId, keptValues] },
     { query: 'DELETE FROM product_options WHERE organization_id = ? AND product_id = ? AND id NOT IN (SELECT value FROM json_each(?))', params: [organizationId, productId, keptOptions] },
-    ...productWrites(organizationId, planned, input.actor, input.now, 'upsert', { writePrices: writesPrices }),
+    ...productWrites(organizationId, planned, input.actor, input.now, 'upsert', {
+      writePrices: writesPrices, priceIds, writeOptions: patch.options !== undefined, variantIds,
+    }),
     ...input.cacheInvalidations,
   ]
   return { writes, keptVariants }
@@ -1206,7 +1222,14 @@ const priceInput = (price: Price): PriceInput => ({
  * unstated fields, and a price left out is kept. A variant or price without an
  * id is new, and must say what it is.
  */
-function mergeVariantPatch(supplied: ProductVariantInput, current: ProductVariant | undefined, field: string): ProductVariantInput {
+function mergeVariantPatch(supplied: ProductVariantPatchInput, current: ProductVariant | undefined, field: string): ProductVariantInput {
+  const pricesMode = patchListMode(supplied.prices_mode, supplied.prices, `${field}.prices`)
+  const suppliedPriceIds = new Set<string>()
+  for (const [index, price] of (supplied.prices ?? []).entries()) {
+    if (!price || typeof price !== 'object' || Array.isArray(price)) invalid(`${field}.prices[${index}] must be an object`)
+    if (price.id && suppliedPriceIds.has(price.id)) invalid(`${field}.prices[${index}].id is repeated`)
+    if (price.id) suppliedPriceIds.add(price.id)
+  }
   if (!current) {
     if (supplied.id) invalid(`${field}.id ${supplied.id} does not belong to this product`)
     if (typeof supplied.name !== 'string') invalid(`${field}.name is required for a new variant`)
@@ -1214,21 +1237,29 @@ function mergeVariantPatch(supplied: ProductVariantInput, current: ProductVarian
       if (price.id) invalid(`${field}.prices[${index}].id names a price this product does not have`)
       if (typeof price.unit_amount !== 'number') invalid(`${field}.prices[${index}].unit_amount is required for a new price`)
     }
-    return supplied
+    return supplied as ProductVariantInput
   }
   const base = variantInput(current)
   // Prices merge by id: a restated price is updated in place, a new one is
-  // added, and a price left unstated is kept. An offer stops with `active`
-  // or `valid_until_at`, never by being left out of a list.
-  const prices = current.prices.map(priceInput)
+  // added, and a price left unstated is kept unless replacement was explicit.
+  const prices = pricesMode === 'replace' ? [] : current.prices.map(priceInput)
   for (const [index, price] of (supplied.prices ?? []).entries()) {
+    const existing = price.id ? current.prices.find(candidate => candidate.id === price.id) : undefined
     const at = price.id ? prices.findIndex(candidate => candidate.id === price.id) : -1
-    if (price.id && at < 0) invalid(`${field}.prices[${index}].id ${price.id} does not belong to variant ${current.id}`)
-    if (at < 0 && typeof price.unit_amount !== 'number') invalid(`${field}.prices[${index}].unit_amount is required for a new price`)
-    if (at < 0) prices.push(price)
-    else prices[at] = { ...prices[at]!, ...definedFields(price) }
+    if (price.id && !existing) invalid(`${field}.prices[${index}].id ${price.id} does not belong to variant ${current.id}`)
+    if (!existing && typeof price.unit_amount !== 'number') invalid(`${field}.prices[${index}].unit_amount is required for a new price`)
+    const merged = existing ? { ...priceInput(existing), ...definedFields(price) } : price as PriceInput
+    if (at < 0) prices.push(merged)
+    else prices[at] = merged
   }
   return { ...base, ...definedFields(supplied), prices }
+}
+
+function patchListMode(mode: unknown, values: unknown, field: string): 'merge' | 'replace' {
+  if (mode !== undefined && mode !== 'merge' && mode !== 'replace') invalid(`${field}_mode must be merge or replace`)
+  if (mode !== undefined && values === undefined) invalid(`${field} is required when ${field}_mode is supplied`)
+  if (values !== undefined && !Array.isArray(values)) invalid(`${field} must be an array`)
+  return mode === 'replace' ? 'replace' : 'merge'
 }
 
 /** The fields a patch actually states; `undefined` is absence, `null` is a value. */
@@ -1598,7 +1629,13 @@ export async function reconcileProducts(db: DbClient, input: {
     const current = productId ? byId.get(productId) : undefined
     if (current) {
       const planned = await planProductUpdate(db, {
-        organizationId: input.organizationId, current, patch: rest, actor: input.actor, now,
+        organizationId: input.organizationId, current, patch: {
+          ...rest,
+          ...(rest.variants === undefined ? {} : {
+            variants_mode: 'replace',
+            variants: rest.variants.map(variant => ({ ...variant, ...(variant.prices === undefined ? {} : { prices_mode: 'replace' }) })),
+          }),
+        }, actor: input.actor, now,
         defaultCurrency, takenSlugs: taken, idOwners, knownSlugs,
         // One invalidation per site at the end of the batch, not one per product.
         cacheInvalidations: [],

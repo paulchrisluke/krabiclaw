@@ -127,14 +127,23 @@ const permissionGroups = computed(() => {
       icon: 'layout-dashboard',
       title: 'Access your Krabiclaw workspace',
       items: [
-        'Read and update your site content, menus, and media',
-        'Manage locations, reviews, and Q&A',
-        'Submit and track work requests',
+        'Read and edit your website, products, prices, articles, translations, and location settings',
+        'Save attachments as public media and publish to your website or connected Facebook and Instagram accounts',
+        'Read customer inquiries, reservations, booking details, names, contact information, and messages',
+        'Create and manage bookings, cancel reservations, and email guests about confirmations, cancellations, and proposed changes',
+        'Read payment reports, transactions, balances, payout history, and usage invoices; payment collection and refunds require the dashboard',
+        'Read reviews and manage authored Q&A, team schedules, calendar availability, and saved workspace selections',
       ],
     })
   }
 
-  // We hide offline_access from the UI (matching Spotify's transparent refresh token behavior)
+  if (scopes.has('offline_access')) {
+    groups.push({
+      icon: 'key',
+      title: 'Keep this connection active',
+      items: ['Continue accessing these permissions when you are not signed in, until you revoke access'],
+    })
+  }
 
   const known = new Set(['openid', 'tenant', 'offline_access'])
   const unknown = [...scopes].filter(s => !known.has(s))

@@ -15,7 +15,7 @@ const nullableString = { type: ['string', 'null'] } as const
 export const ANALYTICS_TOOLS: McpToolDefinition[] = [
   organizationTool({
     name: 'get_organization_analytics',
-    description: "Read the selected site’s website traffic, attribution, conversion rates, booking values, verified purchase revenue, refunds and signup-cohort summaries. Dates are inclusive in the site’s timezone; the default is 30 days. Amounts are minor units per currency; booking quotes are not collected revenue. Cash amounts include tax, while value fields exclude it. Session conversion rates compare converting sessions with sessions in the same attribution group; signup counts and business counts use distinct populations.",
+    description: "Read the selected site’s website overview when the user asks how the business is doing: traffic, attribution, conversion rates, booking values, verified purchase revenue, refunds and signup-cohort summaries. Dates are inclusive in the site’s timezone; the default is 30 days. Amounts are minor units per currency; booking quotes are not collected revenue. Cash amounts include tax, while value fields exclude it. Session conversion rates compare converting sessions with sessions in the same attribution group; signup counts and business counts use distinct populations.",
     domain: 'analytics',
     minimumRole: 'admin',
     confirmRequired: false,

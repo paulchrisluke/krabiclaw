@@ -228,6 +228,10 @@ export async function executeMcpToolCall(
 
   const organizationId = requiredString(normalizedArguments, "organization_id");
   const organization = await requireMcpOrganization(event, organizationId, tool.minimumRole, authenticatedUser);
+  // Attribution records the organization actually authorized for execution,
+  // including a saved workspace resolved from a bearer-authenticated request.
+  const executionContext = { organizationId: organization.organizationId, locationId: null as string | null };
+  event.context.mcpExecutionContext = executionContext;
   const args = omit(normalizedArguments, ["organization_id"]);
   const explicitLocationId = optionalString(rawArguments, "location_id");
   if (explicitLocationId) {
@@ -241,6 +245,8 @@ export async function executeMcpToolCall(
       throw mcpProtocolError(MCP_ERROR.invalidParams, "Location not found for this organization.");
     }
   }
+
+  executionContext.locationId = optionalString(normalizedArguments, "location_id");
 
   if (
     tool.requiredEntitlement &&

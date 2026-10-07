@@ -25,8 +25,8 @@ import { purgePublicResourceCacheNow } from "~/server/utils/public-resource-cach
 import { resolveMissingMcpCredential, type McpToolMeta } from "~/server/utils/mcp-runtime";
 import {
   buildMcpAuthChallengeForError, describeMcpAuthTelemetryError, getCloudflareWaitUntil, isMcpMutatingTool, mcpAuthRequiredResult, mcpToolErrorResult, setMcpAuthChallenge, } from "~/server/utils/mcp-route-helpers";
-import { logMcpToolCallEvent } from "~/server/utils/mcp-telemetry";
-import { describeErrorForTelemetry, errorChainForTelemetry } from "~/server/utils/error-telemetry";
+import { logMcpToolCallEvent, mcpTelemetryMethod } from "~/server/utils/mcp-telemetry";
+import { describeErrorForTelemetry } from "~/server/utils/error-telemetry";
 import { getRequestDataMetrics, recordRequestPhase } from "~/server/utils/request-metrics";
 import { mcpFinancialApprovalErrorResult } from "~/server/utils/mcp-financial-handoff";
 
@@ -37,8 +37,13 @@ function logMcpEventDetached(
   event: Parameters<typeof getCloudflareWaitUntil>[0], db: D1Database | undefined, input: Parameters<typeof logMcpToolCallEvent>[1], ) {
   if (!db) return;
   const env = cloudflareEnv(event);
+  const executionContext = event.context.mcpExecutionContext as { organizationId: string; locationId: string | null } | undefined;
+  const attribution = input.method === "tools/call"
+    ? { organizationId: executionContext?.organizationId ?? null, locationId: executionContext?.locationId ?? null }
+    : {};
+  const toolName = MCP_TOOLS.find(tool => tool.name === input.toolName)?.name ?? null;
   const logInput = {
-    env, ...input, userAgent: input.userAgent ?? (event.req.headers.get("user-agent")) ?? null, cfRayId: input.cfRayId ?? (event.req.headers.get("cf-ray")) ?? null, sessionId: input.sessionId ?? (event.req.headers.get("mcp-session-id")) ?? null, catalogFingerprint: input.catalogFingerprint ?? TENANT_CATALOG_FINGERPRINT, };
+    env, ...input, ...attribution, toolName, unknownToolName: input.unknownToolName ?? (input.toolName && !toolName ? input.toolName : null), cfRayId: input.cfRayId ?? (event.req.headers.get("cf-ray")) ?? null, sessionId: input.sessionId ?? (event.req.headers.get("mcp-session-id")) ?? null, catalogFingerprint: input.catalogFingerprint ?? TENANT_CATALOG_FINGERPRINT, };
   const logged = logMcpToolCallEvent(db, logInput);
   const waitUntil = getCloudflareWaitUntil(event);
   waitUntil!(logged);
@@ -62,13 +67,13 @@ Use internal organization and location IDs from get_workspace_context, list_orga
 
 Media tools save existing attachments or assets to the selected site when the user requests that action. Saving creates publicly accessible media even before assignment. save_media_attachment saves a file from the conversation, including a generated image; videos require a poster image. Use only authorized file references supplied by the host. If attachment delivery fails, report it and request a new attachment rather than inventing a URL. set_media replaces or clears one cover, hero or logo; attach_media, remove_media and reorder_media manage ordered galleries. Use the exact target owner ID and placement requested by the user.
 
-create_post makes a draft short website/social post. create_blog_post makes a draft blog or documentation article. create_product makes a catalog offering with variants and prices. Publication is a separate action; changes to already published content can appear immediately. Publish only to the destinations the user requests. Connected social targets and publication states come from get_social_connections and publication reads. Report uncertain publication outcomes and reconcile them without creating a second provider post.
+create_post makes a draft short website announcement, event notice or offer. create_blog_post makes a draft long-form blog or documentation article. The website announcement modal is an organization setting, not an article or social post. create_product makes a catalog offering with variants and prices. Publication is a separate action; changes to already published content can appear immediately. Publish only to the destinations the user requests. Connected social targets and publication states come from get_social_connections and publication reads. Report uncertain publication outcomes and reconcile them without creating a second provider post.
 
-For whole-document or collection replacement, read the latest state and preserve everything outside the requested change. Use the supplied concurrency tokens and deletion confirmations. Read all pages before claiming a complete collection or replacing it. Prices belong to variants; location offerings and website visibility are separate. Weekly schedules use Product duration/capacity; saved Sessions retain their actual facts and any Booking history protects them.
+For whole-document or collection replacement, read the latest state and preserve everything outside the requested change. Use the supplied concurrency tokens and deletion confirmations. Read all pages before claiming a complete collection or replacing it. update_product merges variants and prices by ID; omitted siblings remain. Explicit replace modes remove omitted entries, while supplied options and details replace their corresponding values. Prices belong to variants; location offerings and website visibility are separate. Weekly schedules use Product duration/capacity; saved Sessions retain their actual facts and any Booking history protects them.
 
-Product bookings and consultations use the shared session allocator and confirmation/payment policy. Required positive collection reserves an expiring hold and hands off to hosted Checkout; authenticated capture alone creates the Booking. Paid review rejection requires an actor-bound authenticated browser financial approval and full-principal refund. Payments reads and existing servicing remain available after downgrade; operating subscription billing stays separate.
+Product bookings and consultations use the shared session allocator and confirmation/payment policy. Create bookings only for a valid zero price or when online collection is disabled. Required positive online collection returns financial_action_required with a dashboard URL before any booking, hold, Checkout or financial record is created. Confirm approves a pending staff-review booking; reject declines a pending booking; cancel ends a pending or confirmed booking. These and guest change proposals can email guests and require approval for the exact action. A proposal leaves the current booking or reservation unchanged until the guest accepts. If rejection or cancellation requires a refund, the operation is incomplete and returns the authenticated dashboard URL before changing state or preparing financial records. MCP does not prepare or execute refunds, payouts, transfers or Checkout. Finance tools read the selected business’s payments, totals, payout history and operating usage; get_payments_dashboard_link only looks up its setup URL. Subscription billing remains separate. Never describe an action-required handoff as a completed booking, cancellation or refund.
 
-Contact submissions and table reservations can be read here; response/status work uses the dashboard inbox. Reviews and imported Google Q&A are managed in Google. Authored Q&A has dedicated create, update, delete and reorder tools. Language tools manage exact authored representations rather than automatic translation.
+Contact submissions and table reservations can be read here; contact replies and other inbox status work use the dashboard. Table reservation cancellation and change proposals have dedicated tools. Reviews and imported Google Q&A are managed in Google. Authored Q&A has dedicated create, update, delete and reorder tools. Language tools manage exact authored representations rather than automatic translation. get_organization_analytics reads the website overview; query_organization_analytics reads explicitly filtered events, sessions or grouped results.
 
 Report the affected site and actual result, including a returned public or preview URL when useful. Distinguish draft content, published content and unresolved external publication. Tool availability, authorization and entitlements are enforced by the server.`;
 
@@ -229,12 +234,12 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
       result = await executeMcpToolCall(event, toolName, rawArgs, mcpUser);
     } catch (toolError) {
       recordRequestPhase(event, "mcp_execute", executionStartedAt);
-      console.error({
-        event: "mcp_tool_failed", tool: toolName, request_id: null,
-        ray_id: event.req.headers.get("cf-ray"), duration_ms: Date.now() - toolStartedAt,
-        errors: errorChainForTelemetry(toolError),
-      });
       const mcpErr = asMcpError(toolError);
+      console.error({
+        event: "mcp_tool_failed", tool: toolDef?.name ?? null, request_id: null,
+        ray_id: event.req.headers.get("cf-ray"), duration_ms: Date.now() - toolStartedAt,
+        error_code: mcpErr.code, error_kind: mcpErr.kind,
+      });
       if (mcpErr.kind === "protocol") {
         // Unknown-tool and similar protocol-level failures become a real
         // JSON-RPC error, not a tool result. `toolError` carries our own
@@ -243,11 +248,11 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
         // instead of falling back to a generic internal error.
         const telemetryErrorMessage = describeErrorForTelemetry(toolError);
         logMcpEventDetached(event, cfEnv.DB, {
-          userId: mcpUser.userId, organizationId: mcpUser.activeOrganizationId ?? null,  requestId: null, method: "tools/call", toolName, toolDomain: toolDef?.domain ?? null, isMutating: false, arguments: rawArgs, status: "error", errorCode: mcpErr.code, errorMessage: telemetryErrorMessage, httpStatus: 200, jsonrpcErrorCode: mcpErr.code, jsonrpcErrorMessage: telemetryErrorMessage, unknownToolName: toolName || null, oauthClientId: mcpUser.oauthClientId ?? null, durationMs: Date.now() - toolStartedAt, });
+          userId: mcpUser.userId, requestId: null, method: "tools/call", toolName, toolDomain: toolDef?.domain ?? null, isMutating: false, arguments: rawArgs, status: "error", errorCode: mcpErr.code, errorMessage: telemetryErrorMessage, httpStatus: 200, jsonrpcErrorCode: mcpErr.code, jsonrpcErrorMessage: telemetryErrorMessage, unknownToolName: toolDef ? null : toolName || null, oauthClientId: mcpUser.oauthClientId ?? null, durationMs: Date.now() - toolStartedAt, });
         throw new ProtocolError(mcpErr.code, mcpErr.message, mcpErr.data);
       }
       logMcpEventDetached(event, cfEnv.DB, {
-        userId: mcpUser.userId, organizationId: mcpUser.activeOrganizationId ?? null,  requestId: null, method: "tools/call", toolName, toolDomain: toolDef?.domain ?? null, isMutating: isMcpMutatingTool(toolDef), arguments: rawArgs, status: "error", errorCode: mcpErr.code, errorMessage: describeErrorForTelemetry(toolError), httpStatus: 200, oauthClientId: mcpUser.oauthClientId ?? null, durationMs: Date.now() - toolStartedAt, });
+        userId: mcpUser.userId, requestId: null, method: "tools/call", toolName, toolDomain: toolDef?.domain ?? null, isMutating: isMcpMutatingTool(toolDef), arguments: rawArgs, status: "error", errorCode: mcpErr.code, errorMessage: describeErrorForTelemetry(toolError), httpStatus: 200, oauthClientId: mcpUser.oauthClientId ?? null, durationMs: Date.now() - toolStartedAt, });
       // Any other tool-execution failure (including a plain `throw new
       // Error(...)` from a business-rule guard, which asMcpError falls back
       // to classifying as kind:'transport') must still resolve as a
@@ -262,17 +267,8 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
     const structuredContent = isRender ? result.structuredContent : result;
     const modelText = isRender && result.modelText ? result.modelText : JSON.stringify(structuredContent, null, 2);
 
-    // Resolved once and reused for both telemetry and the cache-purge below.
-    const structuredContextOrganizationId = structuredContent && typeof structuredContent === "object" && "context" in structuredContent
-      ? (structuredContent.context as Record<string, unknown>)?.organization_id
-      : null;
-    const metaContextOrganizationId = isRender && result.privateMeta?.context && typeof result.privateMeta.context === "object"
-      ? (result.privateMeta.context as Record<string, unknown>)?.organization_id
-      : null;
-    const ctxOrganizationId = typeof structuredContextOrganizationId === "string" ? structuredContextOrganizationId : metaContextOrganizationId;
-    const resolvedOrganizationId = typeof ctxOrganizationId === "string"
-      ? ctxOrganizationId.trim()
-      : typeof rawArgs.organization_id === "string" ? rawArgs.organization_id.trim() : null;
+    const executionContext = event.context.mcpExecutionContext as { organizationId: string } | undefined;
+    const resolvedOrganizationId = executionContext?.organizationId ?? null;
 
     // After any mutating tool call the site's caches are cleared before the
     // response: its public resource entries and the SSR HTML for every active
@@ -299,7 +295,7 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
       }
     }
     logMcpEventDetached(event, cfEnv.DB, {
-      userId: mcpUser.userId, organizationId: mcpUser.activeOrganizationId ?? null,  requestId: null, method: "tools/call", toolName, toolDomain: toolDef?.domain ?? null, isMutating: isMcpMutatingTool(toolDef), arguments: rawArgs, result: structuredContent, status: purgeFailure ? "error" : "success", errorMessage: purgeFailure, httpStatus: 200, oauthClientId: mcpUser.oauthClientId ?? null, durationMs: Date.now() - toolStartedAt, });
+      userId: mcpUser.userId, requestId: null, method: "tools/call", toolName, toolDomain: toolDef?.domain ?? null, isMutating: isMcpMutatingTool(toolDef), arguments: rawArgs, result: structuredContent, status: purgeFailure ? "error" : "success", errorMessage: purgeFailure, httpStatus: 200, oauthClientId: mcpUser.oauthClientId ?? null, durationMs: Date.now() - toolStartedAt, });
 
     return {
       isError: purgeFailure !== null, structuredContent, content: [{ type: "text", text: purgeFailure ? `${purgeFailure}\n\n${modelText}` : modelText }],
@@ -373,7 +369,7 @@ export default defineHandler(async (event) => {
     if (missingCredential.handled) {
       requestMethod = missingCredential.requestMethod;
       console.warn("[MCP_AUTH]", JSON.stringify({
-        event: "credential_missing", ray_id: (event.req.headers.get("cf-ray")) ?? null, user_agent: (event.req.headers.get("user-agent")) ?? null, mcp_method: requestMethod ?? null, tool_name: missingCredential.requestToolName ?? null, }));
+        event: "credential_missing", ray_id: (event.req.headers.get("cf-ray")) ?? null, mcp_method: mcpTelemetryMethod(requestMethod), tool_name: MCP_TOOLS.find(tool => tool.name === missingCredential.requestToolName)?.name ?? null, }));
       return missingCredential.response;
     }
 
@@ -383,7 +379,7 @@ export default defineHandler(async (event) => {
 
     console.info('[MCP_REQUEST]', JSON.stringify({
       event: 'mcp_request_started', request_id: getRequestDataMetrics(event).requestId,
-      rpc_id: requestId ?? null, method: requestMethod ?? null,
+      method: mcpTelemetryMethod(requestMethod),
       ray_id: event.req.headers.get('cf-ray'),
     }));
 
@@ -440,7 +436,7 @@ export default defineHandler(async (event) => {
   } finally {
     console.info('[MCP_REQUEST]', JSON.stringify({
       event: 'mcp_request_finished', request_id: getRequestDataMetrics(event).requestId,
-      rpc_id: requestId ?? null, method: requestMethod ?? null,
+      rpc_id: requestId ?? null, method: mcpTelemetryMethod(requestMethod),
       ray_id: event.req.headers.get('cf-ray'), duration_ms: Date.now() - requestStartedAt,
     }));
   }
