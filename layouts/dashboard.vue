@@ -18,7 +18,7 @@
     </div>
 
     <div
-      v-if="context.error.value"
+      v-if="shellError"
       class="flex min-h-screen items-center justify-center bg-default px-6"
       data-testid="dashboard-context-error"
     >
@@ -33,21 +33,12 @@
         </UButton>
       </UCard>
     </div>
-    <div
-      v-else-if="!contextReady"
-      class="flex min-h-screen items-center justify-center bg-default px-6"
-      data-testid="dashboard-context-loading"
-    >
-      <div class="w-full max-w-xl space-y-4">
-        <div class="h-7 w-48 animate-pulse rounded bg-elevated" />
-        <div class="h-32 animate-pulse rounded-xl bg-elevated" />
-      </div>
-    </div>
 
     <div v-else>
     <DashboardTopNav
       :items="showNavChrome ? primaryNavItems : []"
       :home-to="topNavHomeTo"
+      :menu-active="isMenuPageActive"
       @menu="menuOpen = true"
     />
 
@@ -66,14 +57,18 @@
         v-model:open="dashboardSearchOpen"
         v-model:search-term="dashboardSearchTerm"
         title="Search"
-        description="Search this business"
+        description="Search this organization"
         placeholder="Search…"
         size="lg"
         :fullscreen="isPhoneWidth"
         :groups="dashboardSearchGroups"
         :loading="dashboardSearchLoading"
         :color-mode="false"
-      />
+      >
+        <template v-if="dashboardSearchError" #footer>
+          <p class="text-sm text-error" role="alert" data-testid="dashboard-search-error">{{ dashboardSearchError }}</p>
+        </template>
+      </UDashboardSearch>
 
       <slot />
     </UDashboardGroup>
@@ -108,6 +103,18 @@
     </nav>
     </div>
 
+    <!-- A failed background refetch leaves the shell on what it had and says so. -->
+    <UAlert
+      v-if="shellRefetchError"
+      color="error"
+      variant="soft"
+      icon="i-lucide-circle-alert"
+      class="fixed inset-x-4 top-4 z-50 mx-auto max-w-md"
+      :description="shellRefetchError"
+      :actions="[{ label: 'Try again', onClick: () => void retryDashboardContext() }]"
+      data-testid="dashboard-refetch-error"
+    />
+
     <!-- A refused organization switch stays on screen: the session did not move. -->
     <UAlert
       v-if="organizationSwitchError"
@@ -130,7 +137,7 @@
 import DashboardTopNav from '~/lib/components/workspace/dashboard/DashboardTopNav.vue'
 import DashboardMenuSlideover from '~/lib/components/workspace/dashboard/DashboardMenuSlideover.vue'
 import type { DashboardScopeHeaderModel } from '~/lib/components/workspace/dashboard/DashboardScopeHeader.vue'
-import { dashboardOrganizationParentKey, dashboardScopeHeaderModelKey } from '~/lib/components/workspace/dashboard/dashboardScopeHeaderContext'
+import { dashboardScopeHeaderModelKey } from '~/lib/components/workspace/dashboard/dashboardScopeHeaderContext'
 import { authClient } from '~/lib/auth-client'
 import { reconcileAnalyticsConsent } from '~/composables/useAnalyticsConsentReconciliation'
 import { useAnalytics } from '~/composables/useAnalytics'
@@ -174,7 +181,7 @@ const refreshSession = () => session.value.refetch()
 const { trackDashboardVisited, setUserId } = useAnalytics()
 const impersonationError = ref<string | null>(null)
 const stoppingImpersonation = ref(false)
-const { searchTerm: dashboardSearchTerm, loading: dashboardSearchLoading, groups: dashboardSearchGroups } = useDashboardSearch()
+const { searchTerm: dashboardSearchTerm, loading: dashboardSearchLoading, error: dashboardSearchError, groups: dashboardSearchGroups } = useDashboardSearch()
 // The Menu's Search row and a list's search icon open the same palette ⌘K does.
 // Registered for this layout's lifetime only: a hook left behind by an earlier
 // mount toggled the palette a second time and cancelled the first.
@@ -189,16 +196,28 @@ onMounted(() => {
   unhookSearchToggle = nuxtApp.hooks.hook('dashboard:search:toggle', () => { dashboardSearchOpen.value = !dashboardSearchOpen.value })
 })
 onBeforeUnmount(() => { unhookSearchToggle?.(); unhookSearchToggle = null })
-// This layout owns the context request. Nothing below it starts one.
-const context = useDashboardContextOwner()
+// The dashboard-context middleware has loaded the route's organization context
+// before the route arrives here, so a scope change keeps the previous screen
+// until the new one can render, and this layout never waits on it.
 const dashboard = useDashboardOrganization()
-// The page renders once the result held is the one for the destination route.
-// A refresh keeps the same-scope result in place, so the page stays mounted; a
-// scope change holds the previous scope's result until the new one lands, so
-// the page waits.
-const contextReady = computed(() => context.data.value?.key === context.contextKey.value)
-const platformTheme = usePlatformTheme()
 const organizationsState = authClient.useListOrganizations()
+// The shell's scope is Better Auth's session and organizations: until both have
+// answered once, no tabs are drawn rather than Personal's for a moment.
+const shellScopeKnown = computed(() => !session.value.isPending && !unref(organizationsState).isPending)
+// What the shell could not load replaces it only when there is nothing to show.
+// Better Auth keeps the session and organizations it already had when a
+// background refetch fails, so that failure is reported over the shell instead.
+const shellError = computed(() =>
+  dashboard.error.value
+  ?? (session.value.data ? null : session.value.error)
+  ?? (unref(organizationsState).data ? null : unref(organizationsState).error)
+  ?? null)
+const shellRefetchError = computed(() => {
+  if (shellError.value) return null
+  const error = session.value.error ?? unref(organizationsState).error
+  return error ? getErrorMessage(error, 'Your account could not be refreshed') : null
+})
+const platformTheme = usePlatformTheme()
 
 if (import.meta.client) {
   const prefersDark = window.matchMedia('(prefers-color-scheme: dark)')
@@ -222,36 +241,29 @@ watch(
 
 
 const dashboardContextErrorMessage = computed(() =>
-  getErrorMessage(context.error.value, 'Dashboard context request failed'),
+  getErrorMessage(shellError.value, 'Dashboard context request failed'),
 )
 const dashboardContextRequestId = computed(() =>
-  context.error.value instanceof ApiClientError
-    ? context.error.value.requestId
+  shellError.value instanceof ApiClientError
+    ? shellError.value.requestId
     : null,
 )
 
-const retryDashboardContext = () => context.refresh()
+async function retryDashboardContext() {
+  await Promise.all([dashboard.refresh(), session.value.refetch(), unref(organizationsState).refetch()])
+}
 
 const organization = dashboard.organization
 
 const organizations = computed<readonly AuthOrganization[]>(() => unref(organizationsState)?.data ?? [])
-const activeOrganizationId = computed(() => {
-  const session = sessionData.value?.session as { activeOrganizationId?: string | null } | undefined
-  return session?.activeOrganizationId ?? null
-})
-// The account pages are user-scoped, not organization-scoped, so they carry no
-// organization in the path, and the session's active organization answers
-// "back to which org?".
+// The shell's scope — the switcher, the tabs, Menu — is read in one place
+// (useDashboardMenu): the organization the route names, otherwise Better Auth's
+// active organization. Personal is neither. Account settings opened from inside
+// an organization stays in that organization.
 //
-// Only that one. Falling back to the first organization the account belongs to
-// sent Back from Account into a business the person had never opened — it read
-// as an answer while being a guess. With no active organization there is no
-// parent, and the level renders no Back rather than a wrong one.
-//
-// Setting the active organization is #905's work, not this change's: it belongs
-// to `/api/post-login` and to explicit selection in the scope switcher, never to
-// a side effect of visiting an organization's route.
-const accountOrganization = computed(() => organizations.value.find(org => org.id === activeOrganizationId.value) ?? null)
+// Setting the active organization belongs to `/api/post-login` and to explicit
+// selection in the scope switcher, never to a side effect of visiting a route.
+const { menuPageTo, personal, organization: scopeOrganization, activeOrganizationId } = useDashboardMenu()
 
 const impersonatedBy = computed(() => {
   const session = sessionData.value?.session as { impersonatedBy?: string } | undefined
@@ -266,14 +278,11 @@ provideDashboardInvalidations(realtimeOrganizationSlug)
 
 // Read straight off the route for navigation and routing purposes
 const routeLocationSlug = computed(() => typeof route.params.locationSlug === 'string' ? route.params.locationSlug : null)
-const routeName = computed(() => typeof route.name === 'string' ? route.name : '')
-const isAccountRoute = computed(() => routeName.value.startsWith('dashboard-account'))
-const organizationLabel = computed(() => organization.value?.name ?? 'Organization')
-// The organization is the business, and the business's mark is its `logo`
-// media placement. There is no second source: an organization with no logo
-// renders no avatar rather than another business's image or a generic icon
-// standing in for one.
-const organizationAvatar = computed(() =>
+// The organization's mark is its `logo` media placement, loaded with the
+// dashboard context of the route's organization. There is no second source: a
+// route with no organization context renders no avatar rather than another
+// organization's image or a generic icon standing in for one.
+const scopeOrganizationAvatar = computed(() =>
   mediaStillUrl(organization.value?.media.find(item => item.slot === 'logo')) ?? undefined)
 
 // Progressive drill-in: exactly one scope is active per route, and the sidebar's
@@ -281,7 +290,7 @@ const organizationAvatar = computed(() =>
 // there is no separate sidebar shell per scope, only scope-driven content inside
 // the one stable header/nav slots (see issue #316's "one stable sidebar" rule).
 //
-// A business is its organization, so the drill-in is organization → location.
+// The drill-in is organization → location.
 const scope = computed<'organization' | 'location'>(() => routeLocationSlug.value ? 'location' : 'organization')
 
 // One reusable scope-header model feeds both the desktop sidebar and the mobile
@@ -290,27 +299,26 @@ const scope = computed<'organization' | 'location'>(() => routeLocationSlug.valu
 const scopeHeaderModel = computed<DashboardScopeHeaderModel>(() => {
   return {
     current: {
-      label: isAccountRoute.value ? 'Personal' : organizationLabel.value,
-      avatar: isAccountRoute.value ? sessionData.value?.user?.image ?? undefined : organizationAvatar.value,
+      label: personal.value ? 'Personal' : scopeOrganization.value?.name ?? 'Organization',
+      avatar: personal.value ? sessionData.value?.user?.image ?? undefined : scopeOrganizationAvatar.value,
     },
     parent: null,
     // Peers carry no mark. `organization.logo` is Better Auth's column and
     // nothing here writes it, and the dashboard context loads media for the
     // active organization only — drawing anything for a peer would claim
     // "no logo" where the truth is "not loaded".
-    peers: [{ label: 'Personal', active: isAccountRoute.value, onSelect: () => void selectOrganization(null) }, ...organizations.value.map((org) => ({
+    peers: [{ label: 'Personal', active: personal.value, onSelect: () => void selectOrganization(null) }, ...organizations.value.map((org) => ({
       id: org.id,
       label: org.name,
-      active: !isAccountRoute.value && org.id === organization.value?.id,
+      active: org.id === scopeOrganization.value?.id,
       // Which one is a plain link is the *session's* question, not the route's.
-      // A route can be open in an organization the session is not active in —
-      // that is the case #905 exists for — and comparing against the route left
-      // that peer as a link that never told Better Auth anything.
+      // A route can be open in an organization the session is not active in,
+      // and that peer must tell Better Auth before it navigates.
       ...(org.id === activeOrganizationId.value
         ? { to: `/dashboard/${encodeURIComponent(org.slug)}` }
         : { onSelect: () => void selectOrganization(org) }),
     }))],
-    createAction: { label: 'Start a business', to: '/dashboard/onboarding' }
+    createAction: { label: 'New organization', to: '/dashboard/onboarding' }
   }
 })
 
@@ -350,10 +358,6 @@ async function activateOrganization(org: { id: string, slug: string } | null) {
 }
 
 provide(dashboardScopeHeaderModelKey, scopeHeaderModel)
-provide(dashboardOrganizationParentKey, computed(() => {
-  const target = isAccountRoute.value ? accountOrganization.value : organization.value ?? accountOrganization.value
-  return target ? { label: target.name, to: `/dashboard/${encodeURIComponent(target.slug)}/settings` } : null
-}))
 
 interface DashboardMobileNavItem {
   key: string
@@ -364,64 +368,34 @@ interface DashboardMobileNavItem {
 }
 
 /**
- * Which tab the current route belongs to: the root of its nested route tree,
- * or where that root's declared `meta.back` leads when the root is a workspace
- * reached from a tab — a location editor from Locations, a booking from Today.
- *
- * Prefix matching cannot answer this. Pages lives at `/pages` but is nested
- * under Menu, so the URL says nothing about Menu while every way out of it
- * leads there. Reading the same tree Back reads means the lit tab is always
- * the one the walk ends at.
+ * The tab a screen belongs to is declared by its destination root as
+ * `definePageMeta({ tab })` — Today, Calendar, Catalog, Messages or Menu. It
+ * is read, never inferred: not from the URL, not from where Back leads. A
+ * screen that declares none lights no tab rather than borrowing one.
  */
-function tabRootPath(stops: readonly string[]): string | null {
-  let location = router.resolve(route.fullPath)
-  const seen = new Set<string>()
-  while (location.matched[0]) {
-    const root = location.matched[0]
-    const path = routeRecordPath(router, root, location.params)
-    if (stops.includes(path)) return path
-    if (seen.has(path)) return null
-    seen.add(path)
-    const declared = root.meta?.back
-    if (typeof declared !== 'string') return null
-    const target = router.getRoutes().find(candidate => candidate.name === declared)
-    if (!target) throw new Error(`Route "${declared}" named in meta.back does not exist`)
-    // Account settings carries no organization and has no tab lit.
-    const keys = [...target.path.matchAll(/:(\w+)/g)].map(match => match[1]!)
-    if (keys.some(key => location.params[key] === undefined)) return null
-    location = router.resolve(routeRecordPath(router, target, location.params))
-  }
-  return null
-}
-
-
-
-/**
- * A tab is active when the walk above ends at it. Two tabs could otherwise
- * claim one route, because their paths nest: a location's Messages lives under
- * the Locations path.
- */
-function withActiveItem<T extends { to?: string }>(items: T[], root: string | null): Array<T & { active: boolean }> {
-  return items.map(item => ({ ...item, active: Boolean(item.to) && item.to === root }))
-}
+const activeTab = computed(() => {
+  const tab = route.matched[0]?.meta.tab
+  return typeof tab === 'string' ? tab : null
+})
 
 /** The tabs themselves; which one is lit is answered after they are known. */
 const navTargets = computed<DashboardMobileNavItem[]>(() => {
-  if (isAccountRoute.value) return [
+  // A flow that creates an organization, such as onboarding, declares it has no tabs.
+  if (route.meta.tabs === false || !shellScopeKnown.value) return []
+  if (personal.value) return [
     { key: 'today', label: 'Today', icon: 'i-lucide-bookmark', to: '/dashboard/account' },
     { key: 'calendar', label: 'Calendar', icon: 'i-lucide-calendar-days', to: '/dashboard/account/calendar' },
     { key: 'messages', label: 'Messages', icon: 'i-lucide-message-square', to: '/dashboard/account/messages' },
   ]
-  const routeOrgSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null
-  if (!routeOrgSlug) return []
-  const routeOrgBase = `/dashboard/${encodeURIComponent(routeOrgSlug)}`
-  const items: DashboardMobileNavItem[] = [
-    { key: 'today', label: 'Today', icon: 'i-lucide-bookmark', to: routeOrgBase },
-    { key: 'calendar', label: 'Calendar', icon: 'i-lucide-calendar-days', to: `${routeOrgBase}/calendar` },
-    { key: 'locations', label: 'Locations', icon: 'i-lucide-map-pin', to: `${routeOrgBase}/locations` },
-    { key: 'messages', label: 'Messages', icon: 'i-lucide-message-square', to: `${routeOrgBase}/messages` },
+  if (!scopeOrganization.value) return []
+  const organizationBase = `/dashboard/${encodeURIComponent(scopeOrganization.value.slug)}`
+  return [
+    { key: 'today', label: 'Today', icon: 'i-lucide-bookmark', to: organizationBase },
+    { key: 'calendar', label: 'Calendar', icon: 'i-lucide-calendar-days', to: `${organizationBase}/calendar` },
+    // Everything the organization offers, whatever its kind; Airbnb's Listings tab.
+    { key: 'catalog', label: 'Catalog', icon: 'i-lucide-layout-grid', to: `${organizationBase}/products` },
+    { key: 'messages', label: 'Messages', icon: 'i-lucide-message-square', to: `${organizationBase}/messages` },
   ]
-  return items
 })
 
 // The top nav (tablet and desktop, md and up) and the bottom bar (mobile, below
@@ -429,18 +403,11 @@ const navTargets = computed<DashboardMobileNavItem[]>(() => {
 // "Menu" opens the slideover at md and up and navigates to the menu page below
 // it, because a slideover is the wrong control on a phone.
 const menuOpen = ref(false)
-const { menuPageTo } = useDashboardMenu()
 
-/** Every tab the walk may end at, Menu included. */
-const tabStops = computed(() => [
-  ...navTargets.value.map(item => item.to).filter((to): to is string => Boolean(to)),
-  menuPageTo.value,
-])
-const activeTabPath = computed(() => tabRootPath(tabStops.value))
-const primaryNavItems = computed(() => withActiveItem(navTargets.value, activeTabPath.value))
+const primaryNavItems = computed(() => navTargets.value.map(item => ({ ...item, active: item.key === activeTab.value })))
 // A signed-in owner always gets the header: the wordmark and the account menu
 // are user-scoped and need no organization. Only the nav links and the bottom
-// bar wait for an organization, because Today, Calendar, Locations and Messages do not
+// bar wait for an organization, because Today, Calendar, Catalog and Messages do not
 // exist until there is one. Gating both together is what left an owner who
 // abandoned onboarding with no way to reach account settings or log out.
 const showNavChrome = computed(() => primaryNavItems.value.length > 0)
@@ -449,13 +416,10 @@ const showNavChrome = computed(() => primaryNavItems.value.length > 0)
 const leafFooters = useDashboardLeafFooters()
 const showBottomNav = computed(() => showNavChrome.value && leafFooters.value === 0)
 const topNavHomeTo = computed(() => {
-  if (isAccountRoute.value) return '/dashboard/account'
-  const routeOrgSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null
-  return routeOrgSlug ? `/dashboard/${encodeURIComponent(routeOrgSlug)}` : '/dashboard'
+  if (personal.value) return '/dashboard/account'
+  return scopeOrganization.value ? `/dashboard/${encodeURIComponent(scopeOrganization.value.slug)}` : '/dashboard'
 })
-// Menu is lit by the same walk as the other tabs, so a page reached through it
-// — Pages, Blog, Website, and every level under them — lights Menu and nothing else.
-const isMenuPageActive = computed(() => activeTabPath.value === menuPageTo.value)
+const isMenuPageActive = computed(() => activeTab.value === 'menu')
 
 
 
@@ -465,7 +429,7 @@ onMounted(async () => {
   if (organizationId) {
     trackDashboardVisited(scope.value, organizationId)
   }
-  // Which page and tab of a business's dashboard was opened (Earnings, Transactions, a payout, the Payments tabs), on the same event.
+  // Which page and tab of an organization's dashboard was opened (Earnings, Transactions, a payout, the Payments tabs), on the same event.
   let lastSection = ''
   watch(() => [route.name, route.query.tab] as const, ([name, tab]) => {
     const id = organization.value?.id

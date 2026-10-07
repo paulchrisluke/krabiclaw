@@ -1,3 +1,4 @@
+import { blogEditorPath } from '~/server/utils/dashboard-links'
 import { HTTPError } from 'nitro';
 
 import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
@@ -326,7 +327,7 @@ async function contentReviewUrls(
 ) {
   const id = String(record.id ?? '')
   // Every site's articles, Krabiclaw's included, are edited in the shared dashboard CMS.
-  const adminEditUrl = context ? `/dashboard/${context.orgSlug}/blog/${id}` : null
+  const adminEditUrl = context ? blogEditorPath(context.orgSlug, id) : null
   const isPublished = typeof record.status === 'string' ? record.status === 'published' : Boolean(record.published_at)
 
   // An unpublished article is previewed the same way everything unpublished is

@@ -11,5 +11,5 @@ export default defineHandler(async (event) => {
   const { env, db, organization } = await requireOrganizationAccess(event, organizationId)
   const entitlement = await assertOrganizationLanguageEntitlement(env, db, organization.id, locale)
   if (entitlement.source) throw createError({ statusCode: 422, statusMessage: 'Choose an additional language' })
-  return await getOrganizationLocalizationProgress(db, { organizationId: organization.id, locale: entitlement.locale })
+  return await getOrganizationLocalizationProgress(db, { organizationId: organization.id, organizationSlug: organization.slug, locale: entitlement.locale })
 })

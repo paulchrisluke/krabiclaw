@@ -266,6 +266,13 @@ Preserve the actual amounts, charge basis, currency, billing interval and
 conditions. Public pages and their Markdown, SEO and LLM projections use the
 same canonical published pricing content.
 
+## Dashboard CMS
+
+CMS work starts from `DESIGN.md`: its workspace map, its ownership table and
+its rule for admitting a new concern. Read the generated route tree and the
+existing editor and domain operation before adding a file, and remove what the
+change replaces in the same change.
+
 ## Local development
 
 Follow `docs/local-development.md`.

@@ -1,17 +1,16 @@
 <template>
-  <!-- One collection: its products, in the order customers see them. Each is a level below. -->
-  <DashboardIndexPanel id="location-collection" :title="collection?.name ?? presentation.collectionLabel">
+  <!-- One collection: its products, in the order customers see them. Each opens its one editor in Catalog. -->
+  <DashboardIndexPanel id="menu-section" :title="collection?.name ?? 'Section'">
     <DashboardListEditor
       v-model:editing="editing"
       v-model:selected="selected"
-      :title="collection?.name ?? presentation.collectionLabel"
-      :description="`Customers see ${presentation.itemLabelPlural.toLowerCase()} in this order.`"
+      :title="collection?.name ?? 'Section'"
+      description="Guests see items in this order."
       :items="listItems"
-      :pending="pending"
       :error="loadError"
-      :empty-title="`No ${presentation.itemLabelPlural.toLowerCase()} here yet`"
+      empty-title="No items in this section yet"
       empty-icon="i-lucide-utensils"
-      :add-label="`Add a ${presentation.itemLabel.toLowerCase()}`"
+      add-label="Add item"
       reorderable
       selectable
       @add="openNew"
@@ -19,6 +18,8 @@
     >
       <template #selection-actions>
         <UButton label="Move" color="neutral" variant="soft" data-testid="product-move-open" @click="moveDialogOpen = true" />
+        <!-- Removing from this section changes this section only: the item stays in the catalog, at its locations and in every other section. -->
+        <UButton label="Remove from section" color="neutral" variant="soft" :loading="removing" data-testid="product-remove-from-section" @click="removeSelected" />
       </template>
 
       <template #item="{ item }">
@@ -38,7 +39,7 @@
          category items belong to, never their order inside one. -->
     <DashboardListItemDialog
       v-model:open="moveDialogOpen"
-      :title="`Move ${selected.length === 1 ? presentation.itemLabel.toLowerCase() : `${selected.length} ${presentation.itemLabelPlural.toLowerCase()}`}`"
+      :title="selected.length === 1 ? 'Move item' : `Move ${selected.length} items`"
       :removable="false"
       :saving="moving"
       :save-disabled="!moveTargetId"
@@ -46,7 +47,7 @@
       :error="moveError"
       @save="moveSelected"
     >
-      <UFormField :label="`Choose a ${presentation.collectionGroupLabel.toLowerCase()}`">
+      <UFormField label="Choose a section">
         <div class="space-y-2">
           <label
             v-for="option in moveTargets"
@@ -58,7 +59,7 @@
             <span class="text-sm text-highlighted">{{ option.name }}</span>
           </label>
           <p v-if="!moveTargets.length" class="text-sm text-muted">
-            There is nowhere else to move these yet. Add another {{ presentation.collectionGroupLabel.toLowerCase() }} first.
+            There is nowhere else to move these yet. Add another section first.
           </p>
         </div>
       </UFormField>
@@ -68,55 +69,32 @@
 </template>
 
 <script setup lang="ts">
-// One category's items. Rendered by `[categoryId].vue`, which owns the frame.
+// One menu section's items. Rendered by `products/menu/[collectionId].vue`, which owns the frame.
 import DashboardListEditor from '~/components/dashboard/DashboardListEditor.vue'
 import DashboardMediaThumb from '~/components/dashboard/DashboardMediaThumb.vue'
 import DashboardListItemDialog from '~/components/dashboard/DashboardListItemDialog.vue'
 import type { Product } from '~/server/types/products'
 import { getErrorMessage } from '~/utils/errors'
-import { formatProductMoney } from '~/utils/product-money'
-import { selectPrice } from '~/shared/prices'
-import { isCurrencyCode } from '~/shared/currencies'
-import { collectionsOnSurface, isCatalogSurface, presentationForSurface, productSurfaceOf } from '~/utils/product-presentation'
 
 
 const route = useRoute()
+const router = useRouter()
 const dashboardApi = useDashboardApi()
 const organizationId = await useDashboardOrganizationId()
-const dashboard = useDashboardOrganization()
-const dashboardLocation = useDashboardLocation()
-
-const vertical = dashboard.organization.value?.vertical
-if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Organization vertical is not configured' })
-// The surface this collection is managed on owns the words: a collection of
-// bookable products reads as experiences, a section of a menu as dishes.
-const segment = String(route.params.surface ?? '')
-if (!isCatalogSurface(vertical, segment)) throw createError({ statusCode: 404, statusMessage: 'Page not found' })
-const presentation = presentationForSurface(vertical, segment)
 const collectionId = computed(() => String(route.params.collectionId ?? route.params.categoryId ?? ''))
-const rawCurrency = dashboard.organization.value?.default_currency
-if (!isCurrencyCode(rawCurrency)) throw createError({ statusCode: 500, statusMessage: 'Unsupported organization currency' })
-const currency = rawCurrency
-const locationId = computed(() => dashboardLocation.currentLocation.value?.id ?? null)
-// The path comes from the route this screen is mounted on, not from the
-// location selector: an unresolved selector left it empty, and an empty path is
-// a link to nowhere and, where it roots the editor frame, a frame rooted at ''.
-const level = useRouteLevel()
+const locationId = useLocationScope()
 
-const catalog = useLocationProductCatalog(organizationId, locationId)
+const catalog = useProductCatalog(organizationId, locationId)
 const collections = catalog.collections
-const pending = catalog.pending
 
 // Reorder is a mode: the local order stands while the edit state is open and
 // commits once when it closes, so it is held apart from the shared catalog.
 const localOrder = ref<Product[] | null>(null)
 /**
- * This surface's products in this collection, in the order the merchant set.
+ * This collection's products, in the order the merchant set.
  *
  * Position is on the membership row, so the same product can sit third here
- * and first in another collection without being copied. A collection holding
- * both dishes and a bookable omakase is one collection on two surfaces, and
- * each shows its own members — the same projection the public pages make.
+ * and first in another collection without being copied.
  */
 const products = computed(() => {
   if (localOrder.value) return localOrder.value
@@ -126,18 +104,8 @@ const products = computed(() => {
     if (membership) positions.set(product.id, membership.sort_order)
   }
   return catalog.products.value
-    .filter(product => positions.has(product.id) && productSurfaceOf(vertical, product) === segment)
+    .filter(product => positions.has(product.id))
     .sort((left, right) => (positions.get(left.id)! - positions.get(right.id)!) || left.name.localeCompare(right.name))
-})
-/** Each collection with the products that are in it, which is what a surface is read from. */
-const collectionsWithProducts = computed(() => {
-  const members = new Map<string, Product[]>()
-  for (const product of catalog.products.value) {
-    for (const membership of product.collections) {
-      members.set(membership.collection_id, [...(members.get(membership.collection_id) ?? []), product])
-    }
-  }
-  return collections.value.map(row => ({ ...row, products: members.get(row.id) ?? [] }))
 })
 
 const editing = ref(false)
@@ -146,29 +114,20 @@ const orderDirty = ref(false)
 const orderError = ref<string | null>(null)
 const moveError = ref<string | null>(null)
 
-// Reached through this surface, so it has to have a member on it. A collection
-// with only bookable products opened under /menu would read as a menu section
-// and offer menu targets to move them into. An empty collection is on every
-// surface until it holds something.
-const collection = computed(() =>
-  collectionsOnSurface(vertical, collectionsWithProducts.value, segment).find(row => row.id === collectionId.value) ?? null)
-const loadError = computed(() => (catalog.error.value ? getErrorMessage(catalog.error.value, `Failed to load ${presentation.itemLabelPlural.toLowerCase()}`) : null))
-const listItems = computed(() => products.value.map(row => ({ id: row.id, title: row.name, to: `${level.path.value}/${row.id}`, row })))
-// Somewhere else on this surface: moving a dish into a collection of bookable
-// experiences would file it where customers never read dishes.
-const moveTargets = computed(() =>
-  collectionsOnSurface(vertical, collectionsWithProducts.value, segment)
-    .filter(row => row.id !== collectionId.value))
+const collection = computed(() => collections.value.find(row => row.id === collectionId.value) ?? null)
+const loadError = computed(() => (catalog.error.value ? getErrorMessage(catalog.error.value, 'Failed to load items') : null))
+// A product's one editor is in Catalog: a collection is a way into it, never
+// its parent, so the row opens the same record Catalog does, in this scope.
+const catalogPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/products`)
+const scoped = (path: string, query: Record<string, string | undefined> = {}) => router.resolve({ path, query: { location_id: locationId.value ?? undefined, ...query } }).fullPath
+const listItems = computed(() => products.value.map(row => ({ id: row.id, title: row.name, to: scoped(`${catalogPath.value}/${row.id}`), row })))
+// Another collection in the same scope: the site-wide ones, or this one's location's.
+const moveTargets = computed(() => collections.value.filter(row => row.id !== collectionId.value && row.location_id === collection.value?.location_id))
 
-useSeoMeta({ title: () => `${collection.value?.name ?? presentation.collectionLabel} | Krabiclaw Dashboard`, robots: 'noindex, nofollow' })
+useSeoMeta({ title: () => `${collection.value?.name ?? 'Section'} | Krabiclaw Dashboard`, robots: 'noindex, nofollow' })
 
-/** The offer this location shows, resolved through the one selection contract. */
-function priceLabel(product: Product) {
-  const selection = { currency, location_id: locationId.value, at: new Date().toISOString() }
-  const offers = product.variants.flatMap(variant => selectPrice(variant.prices, selection) ?? [])
-  const lowest = offers.reduce<typeof offers[number] | null>((best, offer) => (!best || offer.unit_amount < best.unit_amount ? offer : best), null)
-  return formatProductMoney(lowest)
-}
+const { locations } = await useOrganizationLocations()
+const { priceLabel } = useCatalogPrice(locationId, locations)
 
 const load = catalog.refresh
 
@@ -176,7 +135,7 @@ const load = catalog.refresh
 // would be an unhandled rejection rather than the 404 screen, so it is shown.
 watchEffect(() => {
   if (!catalog.pending.value && catalog.collections.value.length && !collection.value) {
-    showError(createError({ statusCode: 404, statusMessage: `${presentation.collectionGroupLabel} not found` }))
+    showError(createError({ statusCode: 404, statusMessage: 'Section not found' }))
   }
 })
 
@@ -202,9 +161,8 @@ function moveProduct(item: { row: Product }, direction: -1 | 1) {
  * failed and the list was reloaded.
  */
 async function commitOrder(): Promise<string[] | null> {
-  const id = locationId.value
   const order = products.value.map(row => row.id)
-  if (!id || !orderDirty.value) return order
+  if (!orderDirty.value) return order
   orderDirty.value = false
   localOrder.value = null
   orderError.value = null
@@ -239,8 +197,7 @@ watch(moveDialogOpen, (open) => {
 })
 
 async function moveSelected() {
-  const id = locationId.value
-  if (!id || !moveTargetId.value || !selected.value.length) return
+  if (!moveTargetId.value || !selected.value.length) return
   moving.value = true
   moveError.value = null
   try {
@@ -271,16 +228,42 @@ async function moveSelected() {
     editing.value = false
     await load()
   } catch (error) {
-    moveError.value = getErrorMessage(error, `Failed to move ${presentation.itemLabelPlural.toLowerCase()}`)
+    moveError.value = getErrorMessage(error, 'Failed to move items')
   } finally {
     moving.value = false
   }
 }
 
+const removing = ref(false)
 
-/** Adding opens the item's own level, the same screen editing uses. */
+/** Takes the selected items out of this section; the section's remaining order is sent whole. */
+async function removeSelected() {
+  if (!selected.value.length) return
+  removing.value = true
+  orderError.value = null
+  try {
+    const committed = await commitOrder()
+    if (!committed) return
+    await dashboardApi(`/api/editor/organizations/${organizationId}/collections/${collectionId.value}/products`, {
+      method: 'PUT', body: { product_ids: committed.filter(productId => !selected.value.includes(productId)) }, validate: isRecord,
+    })
+    selected.value = []
+    editing.value = false
+    await load()
+  } catch (error) {
+    orderError.value = getErrorMessage(error, 'Failed to remove items from this section')
+  } finally {
+    removing.value = false
+  }
+}
+
+
+/**
+ * Adding opens Catalog's own create walk, the same screen every offering is
+ * created on, naming this section so the new item joins it.
+ */
 function openNew() {
-  void navigateTo(`${level.path.value}/new`)
+  void navigateTo(scoped(`${catalogPath.value}/new/kind`, { collection_id: collectionId.value }))
 }
 
 

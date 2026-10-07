@@ -7,6 +7,7 @@ import type { ResolvedMembership } from '~/server/utils/member-access'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { loadOwnerPictures } from '~/server/notifications/hero'
 import { REQUEST_CURRENT_BUYER_SQL } from '~/server/domain/requests'
+import { postEditorPath } from '~/server/utils/dashboard-links'
 
 export const AGENDA_KINDS = ['reservation', 'booking', 'post'] as const
 export type AgendaKind = typeof AGENDA_KINDS[number]
@@ -89,7 +90,6 @@ interface SourceRow {
   organization_id: string
   organization_name: string | null
   location_id: string | null
-  location_slug: string | null
   location_title: string | null
   timezone: string | null
   guest_image_url: string | null
@@ -210,7 +210,7 @@ export async function listAgenda(
     SELECT ${enrichment.assignedMember??'NULL'} assigned_member_id, ${enrichment.assignedMember?`(SELECT u.name FROM member m JOIN user u ON u.id=m.userId WHERE m.id=${enrichment.assignedMember} AND m.organizationId=${alias}.organization_id)`:'NULL'} assigned_member_name, ${alias}.id, '${kind}' AS kind, ${fields}, ${alias}.organization_id,
            s.name AS organization_name,
            ${alias}.location_id,
-           l.slug AS location_slug, l.title AS location_title,
+           l.title AS location_title,
            CASE WHEN ${alias}.location_id IS NULL THEN json_extract(s.settings_json, '$.config.default_timezone') ELSE l.timezone END AS timezone,
            ${kind === 'post' ? 'NULL' : `(SELECT u.image FROM user u WHERE u.id = ${alias}.user_id)`} AS guest_image_url,
            ${(enrichment.pictureOwner ?? locationPictureOwner(alias)).type} AS picture_owner_type,
@@ -257,7 +257,6 @@ export async function listAgenda(
     const loaded = await loadOwnerPictures(db, organizationId, ownerType, owners.map(row => row.picture_owner_id))
     for (const row of owners) pictures.set(`${group}\n${row.picture_owner_id}`, loaded.get(row.picture_owner_id)?.imageUrl ?? null)
   }))
-  const organizationSlug = query.organizationSlug ?? scope.organizationId
   const items = rows.filter(row=>!query.assignedMemberId || row.assigned_member_id===query.assignedMemberId).flatMap<AgendaItem>((row) => {
     const timeZone = row.timezone
     if (!isValidTimezone(timeZone)) throw new Error(`Timezone is not configured for agenda item ${row.id}`)
@@ -265,14 +264,12 @@ export async function listAgenda(
     const startsAt = instantDate(row.starts_at).toISOString()
     const dayKey = localDateAt(instantDate(startsAt), timeZone)
     if (dayKey < query.from || dayKey > query.to) return []
-    const organizationBase = `/dashboard/${organizationSlug}`
-    const locationSegment = row.location_slug ? `/locations/${row.location_slug}` : ''
     // The business reads who is coming; the buyer reads where they are going.
-    const to = scope.buyerUserId
+    const to = scope.buyerUserId !== undefined
       ? `/dashboard/account/bookings/${row.kind}/${encodeURIComponent(row.id)}`
       : row.kind === 'post'
-        ? `${organizationBase}${locationSegment}/posts`
-        : `/dashboard/${organizationSlug}/bookings/${row.kind}/${encodeURIComponent(row.id)}`
+        ? postEditorPath(query.organizationSlug ?? scope.organizationId, row.id)
+        : `/dashboard/${query.organizationSlug ?? scope.organizationId}/bookings/${row.kind}/${encodeURIComponent(row.id)}`
     return [{
       assignedMemberId:row.assigned_member_id,assignedMemberName:row.assigned_member_name,
       id: `${row.kind}:${row.id}`, kind: row.kind, startsAt,

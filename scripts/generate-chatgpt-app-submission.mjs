@@ -23,7 +23,6 @@ const effects = {
   get_payments_usage: 'Reads durable attributable usage delivery state and native Metronome invoices.',
   request_payment_refund: 'Prepares an actor-bound expiring browser financial approval; creates no provider refund.',
   issue_payment_refund: 'Issues an idempotent native connected-account refund only for an existing explicit authenticated browser approval.',
-  create_payment_checkout: 'Freezes an immutable one-time order before creating seller-scoped hosted Stripe Checkout. Bookings use create_product_booking and its canonical guest request and capacity hold; the buyer approves payment in Stripe.',
   open_payments_onboarding: 'Returns the selected merchant authenticated integration URL for Stripe-hosted onboarding; creates no account itself.',
 
   list_product_bookings: 'Reads operational Product bookings and guest snapshots within the selected tenant.',
@@ -134,7 +133,6 @@ const effects = {
 const openWorldEffects = {
   set_member_busy_calendars: 'Reads free/busy intervals from the member’s selected Google calendars using existing granted scopes; writes no Google events.',
   reassign_product_booking: 'Sends the changed-assignment notice through the existing guest delivery lifecycle after the atomic reassignment.',
-  create_payment_checkout: 'The frozen canonical Price and purchase identity are sent to the seller-scoped Stripe Checkout; the buyer authorizes any payment in Stripe.',
   issue_payment_refund: 'The browser-approved amount and connected-account PaymentIntent are sent to Stripe for a native principal refund.',
   get_payment_payouts: 'The seller-scoped Stripe account is queried for native balance and payouts.',
   get_payments_usage: 'The separate operating Metronome customer is queried for native invoices.',

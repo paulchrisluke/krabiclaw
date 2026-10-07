@@ -867,7 +867,6 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   get_payments_usage: { ...R, openWorldHint: true },
   request_payment_refund: W,
   issue_payment_refund: { ...D, openWorldHint: true, idempotentHint: true },
-  create_payment_checkout: { ...W, openWorldHint: true, idempotentHint: true },
   open_payments_onboarding: W,
   set_product_booking_config: W,
   delete_product_booking_config: D,

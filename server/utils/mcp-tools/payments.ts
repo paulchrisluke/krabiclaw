@@ -1,7 +1,6 @@
 import {HTTPError} from 'nitro'
 import {NOT_HANDLED,type McpExecutorContext} from './execution'
 import {authorizePayments,listPayments,paymentSummary,paymentPayouts,requestRefundAuthorization,requirePayment,refundPayment} from '~/server/domain/payments'
-import {createPaymentCheckout} from '~/server/domain/payments/checkout'
 import {paymentsUsageStatus} from '~/server/domain/payments/usage'
 import {createStripeClient} from '~/server/utils/stripe-client'
 import {queryAll} from '~/server/db'
@@ -17,7 +16,6 @@ export const PAYMENTS_TOOLS:McpToolDefinition[]=[
  organizationTool({name:'get_payments_usage',description:'Read Metronome Payments invoices, accrued usage and undelivered provider-cost events separately from Better Auth subscription billing.',domain:'payments',minimumRole:'admin',confirmRequired:false}),
  organizationTool({name:'request_payment_refund',description:'Prepare full or partial direct-charge refund for explicit authenticated browser approval. Returns a bound approval handoff; this request does not refund principal. Never treat model confirm=true as financial authorization.',domain:'payments',minimumRole:'admin',confirmRequired:true,inputSchema:{payment_id:string,amount:{type:'integer',minimum:1,description:'Refund principal in the Payment currency minor units'},note:{type:'string',maxLength:500,description:'What the buyer is told about this refund'}},required:['payment_id','amount']}),
  organizationTool({name:'issue_payment_refund',description:'Execute a seller refund only with an unexpired authorization approved by this operator in the authenticated browser. A model cannot mint the authorization. Uses connected-account native refunds, stable idempotency and current refundable principal.',domain:'payments',minimumRole:'admin',confirmRequired:true,inputSchema:{authorization_id:string},required:['authorization_id']}),
- organizationTool({name:'create_payment_checkout',description:'Create Stripe-hosted one-time order checkout for an active canonical Product/Variant without a booking calendar. Use create_product_booking for bookings and consultations. Operator checkout leaves buyer unclaimed; typed email never proves ownership. Fulfillment remains merchant-arranged.',domain:'payments',minimumRole:'admin',confirmRequired:true,requiredEntitlement:'payments',inputSchema:{product_id:string,variant_id:string,quantity:{type:'integer',minimum:1,maximum:100},idempotency_key:string},required:['product_id','variant_id','quantity','idempotency_key']}),
  organizationTool({name:'open_payments_onboarding',description:'Open authenticated merchant Stripe Payments integration management. Stripe-native onboarding collects KYC and bank details; never collect these in chat.',domain:'payments',minimumRole:'owner',confirmRequired:true}),
 ]
 
@@ -42,11 +40,7 @@ export async function handlePaymentsTools(ctx:McpExecutorContext):Promise<unknow
    return {...prepared,approval_url:`${dashboardUrl}/earnings/refunds/approve?id=${encodeURIComponent(prepared.authorization_id)}`}
   }
   case 'issue_payment_refund':return await refundPayment(db,stripe(),principal,String(args.authorization_id),env)
-  case 'create_payment_checkout':
-   await authorizePayments(principal,'create')
-   if(!env.NUXT_PUBLIC_PLATFORM_DOMAIN) throw new Error('Payments HTTPS platform origin missing')
-   return await createPaymentCheckout(db,stripe(),env,{organizationId,buyerUserId:null,productId:String(args.product_id),variantId:String(args.variant_id),quantity:Number(args.quantity),idempotencyKey:String(args.idempotency_key),returnOrigin:env.NUXT_PUBLIC_PLATFORM_DOMAIN})
-  case 'open_payments_onboarding':await authorizePayments(principal,'integration');return {organization_id:organizationId,onboarding_url:`${dashboard()}/settings/payments?tab=payouts`,source:'Authenticated merchant Stripe-native onboarding handoff'}
+  case 'open_payments_onboarding':await authorizePayments(principal,'integration');return {organization_id:organizationId,onboarding_url:`${dashboard()}/payments?tab=payouts`,source:'Authenticated merchant Stripe-native onboarding handoff'}
   default:return NOT_HANDLED
  }
 }

@@ -8,6 +8,9 @@ export default defineHandler((event) => {
   const path = url.pathname
   // Allow locale query parameter for preview URLs
   if (path.startsWith('/preview/')) return
+  // In the dashboard `locale` names the translation being edited, not the
+  // language the page is shown in, and a reload must keep it.
+  if (path === '/dashboard' || path.startsWith('/dashboard/')) return
   if (!path.startsWith('/api/')) {
     localizationError(400, 'LOCALE_QUERY_UNSUPPORTED', 'Public locale selection must use a locale-prefixed path')
   }

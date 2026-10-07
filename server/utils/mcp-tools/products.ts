@@ -1,5 +1,7 @@
 import type { McpToolDefinition } from './shared'
 import { pageInfoObject, paginationInputSchema, resolvedMediaAssetObject, organizationTool } from './shared'
+import { TENANT_PAGE_BLOCKS_SCHEMA, TENANT_PAGE_METADATA_SCHEMA } from './content'
+import { productEditorPath } from '~/server/utils/dashboard-links'
 import { PRODUCT_LIMITS } from '~/server/utils/product-validation'
 import { SUPPORTED_CURRENCIES } from '~/shared/currencies'
 import { PRODUCT_KINDS, PRODUCT_DETAIL_FIELDS } from '~/shared/product-details'
@@ -189,6 +191,8 @@ const productObject = {
     marketing_features: { type: 'array', items: { type: 'string' } },
     metadata: { type: 'object', additionalProperties: { type: 'string' } },
     booking: bookingConfigObject,
+    page: { type: ['object', 'null'], description: "The source page this product owns, or null. Edit its content with the site-page tools; its binding is the page's product_id.", properties: { id: { type: 'string' }, path: { type: 'string' }, title: { type: 'string' } }, required: ['id', 'path', 'title'] },
+    admin_edit_url: { type: ['string', 'null'], description: 'The dashboard editor for this product, on the platform host.' },
     tax_code: { type: ['string', 'null'] },
     options: { type: 'array', items: optionObject },
     variants: { type: 'array', items: variantObject },
@@ -247,7 +251,7 @@ export const PRODUCTS_TOOLS: McpToolDefinition[] = [
   organizationTool({ name: 'list_products', description: "List products carried by the selected site, published or withheld. Results include products across the site; list_location_products narrows to one location.", domain: 'products', minimumRole: 'admin', confirmRequired: false, inputSchema: { published_only: { type: 'boolean' }, ...paginationInputSchema }, required: [], outputSchema: { type: 'object', properties: { products: { type: 'array', items: productListItemObject }, page_info: pageInfoObject }, required: ['products', 'page_info'] } }),
   organizationTool({ name: 'list_location_products', description: 'List the products offered at one explicit location.', domain: 'products', minimumRole: 'admin', confirmRequired: false, inputSchema: { location_id: { type: 'string' }, published_only: { type: 'boolean' }, ...paginationInputSchema }, required: ['location_id'], outputSchema: { type: 'object', properties: { products: { type: 'array', items: productListItemObject }, page_info: pageInfoObject }, required: ['products', 'page_info'] } }),
   organizationTool({ name: 'get_product', description: "Read one site product before reviewing or editing its options, variants, prices, media, publication, locations, collections, named product facts or booking defaults. Prices belong to variants; booking defaults apply to new sessions.", domain: 'products', minimumRole: 'admin', confirmRequired: false, inputSchema: { product_id: { type: 'string' } }, required: ['product_id'], outputSchema: productResult }),
-  organizationTool({ name: 'create_product', description: "Create a product with options, variants and prices when the user wants to add an item to the selected site’s catalog. The new product is unpublished; use set_product_publication and set_product_location to control website visibility and location offerings.", domain: 'products', minimumRole: 'admin', confirmRequired: false, inputSchema: { ...productWrite }, required: ['name', 'kind'], outputSchema: productResult }),
+  organizationTool({ name: 'create_product', description: "Create a product with options, variants and prices when the user wants to add an item to the selected site’s catalog. To create a service with its own page, send page in this same call: the product, its default variant, the page and their binding commit together, and a service's page without a path gets the first free /services/<slug>. Do not create the page separately and link it afterwards. Send an idempotency_key and repeat it on a retry so a lost response never makes a second product. A product created with its page starts sale-inactive unless active is sent. The new product is unpublished; use set_product_publication and set_product_location to control website visibility and location offerings.", domain: 'products', minimumRole: 'admin', confirmRequired: false, inputSchema: { ...productWrite, page: { type: 'object', description: 'A source page created with this product and bound to it, in the same write. Omit for a product without a page of its own.', properties: { ...TENANT_PAGE_METADATA_SCHEMA, path: { type: 'string', description: "The page's public path. A service may omit it to get the first free /services/<slug>." }, blocks: TENANT_PAGE_BLOCKS_SCHEMA }, required: ['title', 'blocks'], additionalProperties: false }, idempotency_key: { type: 'string', minLength: 1, maxLength: 200, description: 'Repeat the same key with the same request to get the product it created instead of a second one.' } }, required: ['name', 'kind'], outputSchema: productResult }),
   organizationTool({ name: 'update_product', description: "Edit an existing product. Only supplied fields change. A variant restated with its id keeps every field it does not restate, and its prices are merged by id: a price restated with its id keeps its identity and unstated fields, a price without an id is added, and a price left out is kept, so a price change is the variant id, the price id and the new unit_amount. Stop an offer with active false or valid_until_at. Variants left out of a supplied list are removed, which is refused once anything was booked on them. Options and details replace their existing values when supplied. Publication and location offerings use separate tools.", domain: 'products', minimumRole: 'admin', confirmRequired: false, inputSchema: { product_id: { type: 'string' }, ...productPatch }, required: ['product_id'], outputSchema: productResult }),
   organizationTool({ name: 'delete_product', description: "Permanently delete a product and its owned variants, prices, details and placements when the user requests its removal. Refused if the product has booking history or a site page still references it. Withhold publication or disable sale to retain the product.", domain: 'products', minimumRole: 'admin', confirmRequired: true, inputSchema: { product_id: { type: 'string' } }, required: ['product_id'], outputSchema: { type: 'object', properties: { deleted: { type: 'boolean' } }, required: ['deleted'] } }),
   organizationTool({ name: 'set_product_publication', description: "Publish or withhold a product when the user wants to change its visibility on the selected site. This setting is independent of whether the product is available for sale and of visibility at individual locations.", domain: 'products', minimumRole: 'admin', confirmRequired: false, inputSchema: { product_id: { type: 'string' }, published: { type: 'boolean' } }, required: ['product_id', 'published'], outputSchema: productResult }),
@@ -300,7 +304,8 @@ async function resolveCarriedProduct(ctx: McpExecutorContext, productId: string)
 /** Every full MCP product response includes this site's canonical media. */
 async function productResponse(ctx: McpExecutorContext, product: Product) {
   const [hydrated] = await hydrateProductMedia(ctx.organization.db, ctx.organization.organizationId, [product])
-  return { product: hydrated }
+  const slug = ctx.organization.organizationSlug
+  return { product: { ...hydrated!, admin_edit_url: slug ? productEditorPath(slug, hydrated!.id) : null } }
 }
 
 /** One page of products, with the extra row the query asked for removed. */
@@ -374,11 +379,16 @@ export async function handleProductsTools(ctx: McpExecutorContext) {
 
     case 'create_product': {
       // The site carries what it created, withheld until someone publishes it
-      // — written with the product, so the product is loaded once.
+      // — written with the product, so the product is loaded once. A page sent
+      // with it is created and bound in the same batch.
+      const page = args.page === undefined ? undefined : args.page as { title: string; path?: string; summary?: string | null; pageType?: 'custom' | 'recipe' | 'legal' | 'system'; recipe?: string | null; sortOrder?: number; blocks: unknown }
+      const idempotencyKey = args.idempotency_key === undefined ? undefined : requiredString(args, 'idempotency_key')
       const product = await createProduct(organization.db, {
         organizationId: organization.organizationId,
-        product: args as unknown as CreateProductInput, actor,
+        product: omit(args, ['page', 'idempotency_key']) as unknown as CreateProductInput, actor,
         publication: { published: false },
+        ...(page ? { page: { data: page, env: organization.env } } : {}),
+        ...(idempotencyKey !== undefined ? { idempotencyKey } : {}),
       })
       return await productResponse(ctx, product)
     }

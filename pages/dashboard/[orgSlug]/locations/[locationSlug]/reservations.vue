@@ -2,7 +2,6 @@
   <DashboardLeafPanel
     id="location-reservations"
     title="Reservations"
-    :ready="!editor.loading.value"
     :saving="editor.saving.value"
     :disabled="editor.saveDisabled.value"
     :error="editor.editorError.value ?? ''"

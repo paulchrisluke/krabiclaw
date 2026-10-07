@@ -206,12 +206,7 @@
         <UIcon name="i-lucide-chevron-right" class="size-4 shrink-0 text-muted" />
       </NuxtLink>
 
-      <!-- Skeleton only before the first answer; a refresh keeps the rows. -->
-      <div v-if="!data && pending" class="space-y-3 p-4">
-        <USkeleton v-for="i in 5" :key="i" class="h-14 rounded-xl" />
-      </div>
-
-      <div v-else-if="data && threads.length === 0" class="px-6 py-14 text-center">
+      <div v-if="data && threads.length === 0" class="px-6 py-14 text-center">
         <p class="text-base font-medium text-highlighted">{{ emptyTitle }}</p>
         <p class="mt-1 text-sm text-muted">{{ emptyDescription }}</p>
         <UButton

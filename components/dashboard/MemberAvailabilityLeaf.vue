@@ -1,23 +1,26 @@
 <template>
- <DashboardLeafPanel :id="`member-${concern}`" :title="title" :ready="editor.loaded.value" :saving="editor.saving.value" :disabled="!editor.dirty.value || !editor.draft.value.timezone" :error="editor.error.value" @cancel="editor.revert" @save="editor.save">
-  <BookingTimezoneSelect v-if="concern === 'timezone'" v-model="editor.draft.value.timezone" :options="timezoneOptions" />
-  <template v-else-if="day">
-   <SettingRow :model-value="slots.length > 0" label="Available" @update:model-value="setAvailable" />
-   <div v-for="(slot,index) in slots" :key="index" class="flex items-end gap-3 py-6">
-    <UFormField label="Starts at" class="flex-1"><UInput v-model="slot.start" type="time" class="w-full" /></UFormField>
-    <UFormField label="Ends at" class="flex-1"><UInput v-model="slot.end" type="time" class="w-full" /></UFormField>
-    <UButton icon="i-lucide-trash-2" color="neutral" variant="ghost" aria-label="Remove hours" @click="remove(slot)" />
-   </div>
-   <UButton v-if="slots.length" color="neutral" variant="outline" icon="i-lucide-plus" @click="add">Add hours</UButton>
+ <DashboardLeafPanel :id="`member-${concern}`" :title="title" :saving="editor.saving.value" :disabled="!editor.dirty.value || !editor.draft.value.timezone" :error="editor.error.value" @cancel="editor.revert" @save="editor.save">
+  <!-- Nothing to edit until the schedule has been read; a failed read is the error above. -->
+  <template v-if="editor.loaded.value">
+    <BookingTimezoneSelect v-if="concern === 'timezone'" v-model="editor.draft.value.timezone" :options="timezoneOptions" />
+    <template v-else-if="day">
+     <SettingRow :model-value="slots.length > 0" label="Available" @update:model-value="setAvailable" />
+     <div v-for="(slot,index) in slots" :key="index" class="flex items-end gap-3 py-6">
+      <UFormField label="Starts at" class="flex-1"><UInput v-model="slot.start" type="time" class="w-full" /></UFormField>
+      <UFormField label="Ends at" class="flex-1"><UInput v-model="slot.end" type="time" class="w-full" /></UFormField>
+      <UButton icon="i-lucide-trash-2" color="neutral" variant="ghost" aria-label="Remove hours" @click="remove(slot)" />
+     </div>
+     <UButton v-if="slots.length" color="neutral" variant="outline" icon="i-lucide-plus" @click="add">Add hours</UButton>
+    </template>
+    <template v-else-if="concern === 'name'"><p class="mb-2 text-sm text-muted">{{ 100 - editor.draft.value.public_name.length }}/100 available</p><UInput v-model="editor.draft.value.public_name" aria-label="Name" maxlength="100" variant="none" :ui="{ base: 'px-0 text-2xl md:text-2xl' }" class="w-full" /></template>
+    <template v-else-if="concern === 'bio'"><p class="mb-2 text-sm text-muted">{{ 2000 - editor.draft.value.public_bio.length }}/2000 available</p><UTextarea v-model="editor.draft.value.public_bio" aria-label="About you" maxlength="2000" :rows="8" class="w-full" /></template>
+    <template v-else-if="concern === 'photo' && editor.self">
+     <UAvatar :src="editor.draft.value.public_photo_url ?? undefined" icon="i-lucide-user" size="3xl" class="mb-6" />
+     <div class="flex gap-3"><UButton color="neutral" variant="outline" :disabled="!account?.sessionData.value?.user?.image" @click="editor.draft.value.public_photo_url = account?.sessionData.value?.user?.image ?? null">Use your account photo</UButton><UButton v-if="editor.draft.value.public_photo_url" color="neutral" variant="ghost" @click="editor.draft.value.public_photo_url = null">Remove photo</UButton></div>
+    </template>
+    <DashboardCoverPhotoField v-else-if="concern === 'photo'" :organization-id="editor.organizationId" :model-value="photoId" :preview-url="editor.draft.value.public_photo_url" @change="photo" />
+    <SettingRow v-else-if="concern === 'published'" v-model="editor.draft.value.public_approved" label="Publish profile" />
   </template>
-  <template v-else-if="concern === 'name'"><p class="mb-2 text-sm text-muted">{{ 100 - editor.draft.value.public_name.length }}/100 available</p><UInput v-model="editor.draft.value.public_name" aria-label="Name" maxlength="100" variant="none" :ui="{ base: 'px-0 text-2xl md:text-2xl' }" class="w-full" /></template>
-  <template v-else-if="concern === 'bio'"><p class="mb-2 text-sm text-muted">{{ 2000 - editor.draft.value.public_bio.length }}/2000 available</p><UTextarea v-model="editor.draft.value.public_bio" aria-label="About you" maxlength="2000" :rows="8" class="w-full" /></template>
-  <template v-else-if="concern === 'photo' && editor.self">
-   <UAvatar :src="editor.draft.value.public_photo_url ?? undefined" icon="i-lucide-user" size="3xl" class="mb-6" />
-   <div class="flex gap-3"><UButton color="neutral" variant="outline" :disabled="!account?.sessionData.value?.user?.image" @click="editor.draft.value.public_photo_url = account?.sessionData.value?.user?.image ?? null">Use your account photo</UButton><UButton v-if="editor.draft.value.public_photo_url" color="neutral" variant="ghost" @click="editor.draft.value.public_photo_url = null">Remove photo</UButton></div>
-  </template>
-  <DashboardCoverPhotoField v-else-if="concern === 'photo'" :organization-id="editor.organizationId" :model-value="photoId" :preview-url="editor.draft.value.public_photo_url" @change="photo" />
-  <SettingRow v-else-if="concern === 'published'" v-model="editor.draft.value.public_approved" label="Publish profile" />
  </DashboardLeafPanel>
 </template>
 <script setup lang="ts">

@@ -510,7 +510,7 @@ test('a completed onboarding emails each operator once, with a link to that cust
     assert.equal(email!.body.subject, 'Clay Corner is live on KrabiClaw')
     assert.equal(email!.idempotencyKey, `onboarding-complete:org-customer:${hashEmail('ops@krabiclaw.com')}`)
     for (const expected of ['Mina Park (mina@clay-corner.com)', 'https://clay-corner.krabiclaw.com/',
-      'https://krabiclaw.com/dashboard/krabiclaw/settings/people?user=user-owner&amp;organization=org-customer']) {
+      'https://krabiclaw.com/dashboard/krabiclaw/platform-accounts?user=user-owner&amp;organization=org-customer']) {
       assert.ok(email!.body.html.includes(expected), `email carries ${expected}`)
     }
     // The conversion is recorded on its own path, once per organization.

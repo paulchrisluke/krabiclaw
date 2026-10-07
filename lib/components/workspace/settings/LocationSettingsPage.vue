@@ -4,16 +4,12 @@
     setting, each a leaf below. Languages is a row that opens the sheet.
   -->
   <DashboardIndexPanel id="location-settings" title="Settings" :auto-open="editor.navigationGroups.value[0]?.items.find(item => item.to)?.to ?? null">
-    <div v-if="editor.loading.value" class="space-y-4">
-      <USkeleton v-for="index in 6" :key="index" class="h-32 rounded-xl" />
-    </div>
-    <UAlert v-else-if="editor.error.value" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="editor.error.value" />
-    <EditorNavigationList v-else-if="editor.location.value" :groups="editor.navigationGroups.value" :active-item="level.child.value" @act="onRowAction" />
+    <UAlert v-if="editor.error.value" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="editor.error.value" />
+    <EditorNavigationList v-else-if="editor.location.value" :groups="editor.navigationGroups.value" :active-item="level.child.value" />
   </DashboardIndexPanel>
 
   <DashboardResourceLocalization
     v-if="editor.location.value"
-    v-model:open="localizeOpen"
     row-trigger
     :organization-id="organizationId"
     resource-type="business_location"
@@ -91,9 +87,6 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
 
 
 
-  const loading = ref(true)
-  const error = ref<string | null>(null)
-  const location = ref<BusinessLocation | null>(null)
   const originalSignature = ref('')
 
   const isNullableString = (value: unknown): value is string | null => value === null || typeof value === 'string'
@@ -115,7 +108,6 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
   // column on the location, so it loads and saves through its own endpoint. A
   // null row means this location does not take reservations — the absence of the
   // capability, not an empty policy.
-  const reservationConfig = ref<LocationReservationConfig | null>(null)
   const reservationForm = ref<LocationReservationConfigPatch>({})
   const reservationSaving = ref(false)
   const closingReservations = ref(false)
@@ -162,7 +154,7 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
     description: '',
     status: 'active',
   })
-  const organizationLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/website/localization`)
+  const organizationLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/website/localization`)
   const locationLocalizationFields = computed(() => [
     { key: 'title', label: 'Name', source: location.value?.title },
     { key: 'short_description', label: 'Short description', source: location.value?.short_description },
@@ -208,7 +200,7 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
     items: [
       { id: 'status', label: 'Status', summary: statusSummary.value, to: `${settingsBase.value}/status` },
       { id: 'slug', label: 'Link', summary: slugSummary.value, to: `${settingsBase.value}/slug` },
-      { id: 'languages', label: 'Languages', summary: 'Translate the name, description and address', action: { label: 'Localize' } },
+      { id: 'languages', label: 'Languages', summary: 'Translate the name, description and address', to: `${settingsBase.value}?editMode=translations` },
     ],
   }])
 
@@ -377,7 +369,6 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
   const locationSettingsKey = computed(() => `dashboard-location-settings-${organizationId}-${locationId.value}`)
   const {
     data: locationSettingsResource,
-    pending: locationSettingsPending,
     error: locationSettingsError,
     refresh: refreshLocationWorkspace,
   } = await useAsyncData<LocationSettingsResource>(locationSettingsKey, async () => {
@@ -398,35 +389,25 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
     watch: [locationId],
   })
 
-  const watchLocationResource = () => watch(
-    [locationSettingsResource, locationSettingsPending, locationSettingsError],
-    ([resource, pending, resourceError]) => {
-      loading.value = pending
-      error.value = resourceError
-        ? getErrorMessage(resourceError, 'Failed to load location')
-        : null
-      if (!resource) return
-      location.value = resource.location.location
-      reservationConfig.value = resource.reservationConfig.config
-      reservationForm.value = reservationPatchFrom(resource.reservationConfig.config)
-      fillDetailsForm(resource.location.location)
-      originalSignature.value = editorSignature(key)
-    },
-    { immediate: true },
-  )
-  if (scope) scope.run(watchLocationResource)
-  else watchLocationResource()
-
-  const loadLocationWorkspace = async () => {
-    await refreshLocationWorkspace()
-    return !locationSettingsError.value
-  }
+  // The location and its policy are what the request answered; only the drafts
+  // are this editor's own, seeded from each answer.
+  const location = computed(() => locationSettingsResource.value?.location.location ?? null)
+  const reservationConfig = computed(() => locationSettingsResource.value?.reservationConfig.config ?? null)
+  const error = computed(() => locationSettingsError.value ? getErrorMessage(locationSettingsError.value, 'Failed to load location') : null)
+  const seedDrafts = () => watch(locationSettingsResource, (resource) => {
+    if (!resource) return
+    reservationForm.value = reservationPatchFrom(resource.reservationConfig.config)
+    fillDetailsForm(resource.location.location)
+    originalSignature.value = editorSignature(key)
+  }, { immediate: true })
+  if (scope) scope.run(seedDrafts)
+  else seedDrafts()
 
   return {
-    loading, error, location, saving, saveDisabled, validationMessage, editorError, dirty,
+    error, location, saving, saveDisabled, validationMessage, editorError, dirty,
     detailsForm, hoursForm, reservationForm, reservationConfigExists, closingReservations,
     navigationGroups, locationLocalizationFields, localizedLocationPath, organizationLocalizationSettingsPath,
-    revert: resetDraft, save: saveCurrentEditor, closeReservations, loadLocationWorkspace,
+    revert: resetDraft, save: saveCurrentEditor, closeReservations,
   }
 }
 </script>
@@ -439,11 +420,6 @@ const level = useRouteLevel()
 const dashboardLocation = useDashboardLocation()
 const organizationId = await useDashboardOrganizationId()
 const editor = await useLocationEditor(organizationId, dashboardLocation.currentLocationId, null, level.path)
-
-const localizeOpen = ref(false)
-function onRowAction(id: string) {
-  if (id === 'languages') localizeOpen.value = true
-}
 
 useSeoMeta({ title: 'Settings | Krabiclaw', robots: 'noindex, nofollow' })
 </script>

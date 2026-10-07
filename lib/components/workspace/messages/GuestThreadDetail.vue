@@ -16,17 +16,10 @@
       </template>
     </UAlert>
 
-    <!-- Skeleton only before the first answer: a refresh keeps the conversation
-         on screen, so a live update never blanks the thread or loses the scroll. -->
-    <div v-if="!thread && pending" class="flex min-h-0 flex-1 flex-col gap-3 p-4">
-      <USkeleton class="h-20 rounded-lg" />
-      <USkeleton class="min-h-0 flex-1 rounded-lg" />
-    </div>
-
     <!-- A request that failed, or a conversation that is gone, is a state this
          surface shows rather than a blank column. -->
     <UAlert
-      v-else-if="!thread"
+      v-if="!thread && !pending"
       class="m-3"
       color="error"
       variant="soft"
@@ -34,7 +27,7 @@
       :description="isNotFoundError(error) ? 'It may have been deleted, or the link is from another business.' : getErrorMessage(error, 'Guest thread request failed')"
     />
 
-    <template v-else>
+    <template v-else-if="thread">
       <!-- Positioned so UChatMessages' jump-to-latest button sits over the
            stream rather than scrolling away with it. -->
       <div class="relative flex min-h-0 flex-1 flex-col">

@@ -9,15 +9,13 @@
   />
 
   <BlogPostEditor
-    v-else
+    v-else-if="postResource"
     :repository="repository"
-    :initial-post="postResource?.post ?? null"
-    defer-load
+    :initial-post="postResource.post"
     :organization-id="organizationId"
     :back-url="blogPath"
     back-label="Blog"
     panel-id="organization-blog-post"
-    :is-edit="true"
     :media-picker-component="MediaPicker"
   >
     <template #actions>
@@ -55,8 +53,8 @@ const organizationId = await useDashboardOrganizationId()
 const postId = String(route.params.postId || '')
 if (!postId) throw createError({ statusCode: 400, statusMessage: 'Post ID is required' })
 
-const blogPath = `/dashboard/${orgSlug}/blog`
-const organizationLocalizationSettingsPath = `/dashboard/${orgSlug}/settings/website/localization`
+const blogPath = `/dashboard/${orgSlug}/website/blog`
+const organizationLocalizationSettingsPath = `/dashboard/${orgSlug}/website/localization`
 
 const { data: postResource, error: postError } = await useAsyncData(
   `dashboard-blog-post:${organizationId}:${postId}`,
@@ -65,7 +63,6 @@ const { data: postResource, error: postError } = await useAsyncData(
     { orgSlug },
     { validate: isBlogPostResponse },
   ),
-  { lazy: true },
 )
 
 // A post that is not there is not a page. A request that failed is a state this

@@ -2,7 +2,6 @@
  <DashboardIndexPanel id="member-availability" :title="admin ? 'Profile & availability' : 'Your availability'" :auto-open="to('hours')">
   <UAlert v-if="editor.error.value" color="error" :description="editor.error.value" />
   <UButton v-if="!editor.loaded.value && editor.error.value" color="neutral" variant="outline" @click="editor.load">Retry</UButton>
-  <USkeleton v-if="!editor.loaded.value && !editor.error.value" class="h-32 rounded-xl" />
   <EditorNavigationList v-if="editor.loaded.value" :groups="groups" :active-item="level.child.value" />
  </DashboardIndexPanel>
 </template>

@@ -134,7 +134,7 @@ export async function getSocialConnections(env: CloudflareEnv, organizationId: s
       supported_operations: channel === 'facebook' ? ['list', 'read', 'publish', 'delete'] : ['list', 'read', 'publish'],
       deletion_unavailable_reason: channel === 'instagram' ? 'Meta supports media deletion only with Facebook Login; this account uses Instagram Login. Delete it in Instagram.' : null,
       problems,
-      connect_url: `${links.dashboardBase}/settings/integrations/${channel}`,
+      connect_url: `${links.dashboardBase}/integrations/${channel}`,
     }
   }))
   return { website: { channel: 'organization' as const, target_id: organizationId, label: 'Website' }, channels }

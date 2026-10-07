@@ -314,7 +314,7 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
           const failure = failureOf(error)
           const channel = typeof args.channel === 'string' ? args.channel : null
           const record = failure.code === 'connection_error' && channel ? await findOrganizationById(env, organization.organizationId) : null
-          const reconnect = record ? ` Reconnect ${channel} at ${dashboardOrigin(env, { orgSlug: record.slug, locationSlug: null })}/settings/integrations/${channel}.` : ''
+          const reconnect = record ? ` Reconnect ${channel} at ${dashboardOrigin(env, { orgSlug: record.slug, locationSlug: null })}/integrations/${channel}.` : ''
           throw new Error(`${failure.code}: ${failure.message}${reconnect}`, { cause: error })
         }
         throw error

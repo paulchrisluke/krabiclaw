@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { loginAs } from './helpers/auth'
-import { MCP_GROWTH_ORGANIZATION_ID, mcpData, mcpRequest } from './helpers/mcp'
+import { MCP_ORGANIZATION_ID, mcpData, mcpRequest } from './helpers/mcp'
 import { acquireTenantMutationLock } from './helpers/tenant-mutation-lock'
 
 interface PriceRow {
@@ -20,7 +20,7 @@ interface ProductRow {
 // lock, so every test that adds a Product to it takes the same lock.
 let releaseTenantMutationLock: (() => Promise<void>) | undefined
 test.beforeEach(async ({ request: _request }, testInfo) => {
-  releaseTenantMutationLock = await acquireTenantMutationLock(testInfo, MCP_GROWTH_ORGANIZATION_ID)
+  releaseTenantMutationLock = await acquireTenantMutationLock(testInfo, MCP_ORGANIZATION_ID)
 })
 test.afterEach(async () => {
   await releaseTenantMutationLock?.()
@@ -47,7 +47,7 @@ test('deployed MCP transport prices variants, and refuses to invent a missing am
       })]),
     },
   })
-  const organizationId = MCP_GROWTH_ORGANIZATION_ID
+  const organizationId = MCP_ORGANIZATION_ID
   const locationId = 'loc-demo'
 
   const create = await mcpRequest(request, baseURL!, {

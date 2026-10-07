@@ -5,5 +5,5 @@
 <script setup lang="ts">
 import CalendarPage from '~/components/dashboard/CalendarPage.vue'
 
-definePageMeta({ layout: 'dashboard' })
+definePageMeta({ layout: 'dashboard', tab: 'calendar' })
 </script>

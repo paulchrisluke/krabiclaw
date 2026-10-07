@@ -17,7 +17,6 @@
       <h2 class="text-xl font-semibold text-highlighted">Payment methods</h2>
       <p class="mt-1 text-base text-muted">Add and manage your payment methods using our secure payment system.</p>
       <UAlert v-if="error" class="mt-6" color="error" variant="soft" :description="getErrorMessage(error, 'Payment methods could not be loaded')" />
-      <USkeleton v-else-if="pending && !data" class="mt-6 h-24 rounded-2xl" />
       <template v-else-if="data">
         <div v-if="data.payment_methods.length" class="mt-6 divide-y divide-default border-y border-default">
           <div v-for="method in data.payment_methods" :key="method.id" class="flex items-center gap-4 py-5" :data-testid="`payment-method-${method.id}`">
@@ -62,12 +61,12 @@ const config = useRuntimeConfig()
 const organizationId = computed(() => props.personalScope ? null : dashboard.organization.value?.id ?? null)
 const scope = computed(() => organizationId.value ? { organizationId: organizationId.value } : {})
 // The account's history is its ledger leaf; the business's is its invoices, under Plan.
-const paymentsTo = computed(() => props.personalScope ? `${level.path.value}/your-payments` : `/dashboard/${encodeURIComponent(String(route.params.orgSlug))}/settings/payments/invoices`)
+const paymentsTo = computed(() => props.personalScope ? `${level.path.value}/your-payments` : `/dashboard/${encodeURIComponent(String(route.params.orgSlug))}/payments/invoices`)
 
-const { data, pending, error, refresh } = await useAsyncData(
+const { data, error, refresh } = await useAsyncData(
   () => `payment-methods:${props.personalScope ? 'account' : String(route.params.orgSlug)}`,
   () => applicationFetch<Methods>('/api/billing/payment-methods', { query: scope.value, validate: isMethods }),
-  { lazy: true, immediate: !props.personalScope },
+  { immediate: !props.personalScope },
 )
 const failure = ref('')
 const BRANDS: Record<string, string> = { visa: 'Visa', mastercard: 'Mastercard', amex: 'Amex', discover: 'Discover', jcb: 'JCB', unionpay: 'UnionPay', diners: 'Diners' }

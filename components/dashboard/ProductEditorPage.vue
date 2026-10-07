@@ -1,6 +1,6 @@
 <template>
   <!-- One product: its rows are the things it holds, each a leaf below this level. -->
-  <DashboardIndexPanel id="product" :title="form.name || presentation.itemLabel" :auto-open="navigationGroups[0]?.items.find(item => item.to)?.to ?? null">
+  <DashboardIndexPanel id="product" :title="form.name || presentation.itemLabel" :auto-open="autoOpenTarget">
     <template v-if="product" #right>
       <DashboardResourceLocalization
       :organization-id="organizationId"
@@ -33,10 +33,15 @@
 
 <script lang="ts">
 import type { ComputedRef, InjectionKey, Ref } from 'vue'
+import type { Collection, Product } from '~/server/types/products'
+import type { DashboardLocation } from '~/composables/useDashboardOrganization'
 
-export const SECTION_KEYS = ['photo', 'kind', 'name', 'price', 'description', 'options', 'order-url', 'attributes', 'publication', 'booking'] as const
+export const SECTION_KEYS = ['photo', 'kind', 'name', 'price', 'description', 'page', 'options', 'order-url', 'attributes', 'publication', 'booking', 'locations', 'collections'] as const
 export type SectionKey = typeof SECTION_KEYS[number]
-export type BookingConcern = 'enabled' | 'duration' | 'capacity' | 'confirmation' | 'payment' | 'location' | 'calendar' | 'assignment' | 'website' | number
+export type BookingConcern = 'enabled' | 'duration' | 'capacity' | 'confirmation' | 'payment' | 'location' | 'calendar' | 'assignment' | number
+
+/** Where the product is offered and shown, per location, as its Locations leaf edits it. */
+export interface ProductLocationDraft { active: boolean; published: boolean }
 
 export interface ScheduleSlotDraft { weekday: number; start_time: string }
 
@@ -75,8 +80,9 @@ export interface ProductForm {
   details: Record<string, ProductDetailValue>
   active: boolean
   published: boolean
-  location_active: boolean
-  location_published: boolean
+  /** Keyed by location id; a location the product is not offered at has no entry. */
+  locations: Record<string, ProductLocationDraft>
+  collection_ids: string[]
   bookable: boolean
   booking_duration: string
   booking_capacity: string
@@ -87,24 +93,30 @@ export interface ProductForm {
   online_timezone: string
   calendar_group: string
   online_schedule: boolean
-  native_consultations: boolean
-  consultation_mode: 'native' | 'external_url' | 'native_disabled'
   image_asset_id: string | null
 }
 
 /** The product's draft and what its leaves show or do beside their one field. */
 export interface ProductEditor {
   form: ProductForm
-  product: Ref<Product | null>
+  product: ComputedRef<Product | null>
   presentation: ComputedRef<{ itemLabel: string }>
   currency: string
   organizationId: string
+  /** The location this editor is scoped to by its URL, or null for the whole organization. */
   locationId: ComputedRef<string | null>
-  websiteBooking: ComputedRef<boolean>
+  /** The location the scope names, once the organization's locations have loaded. */
+  location: ComputedRef<DashboardLocation | null>
+  organizationLocations: ComputedRef<DashboardLocation[]>
+  organizationLocationsError: ComputedRef<string | null>
+  /** Every collection the organization has, site-wide and per location. */
+  collections: ComputedRef<Collection[]>
+  /** A URL beneath this record that keeps its scope. */
+  sectionPath: (section: string) => string
   definitions: Ref<ProductDetailField[]>
   isNew: ComputedRef<boolean>
-  /** The product this route names has loaded, or it is being created. Until then a leaf has nothing to show or save. */
-  ready: ComputedRef<boolean>
+  /** Why the product this route names could not be read; a leaf shows it and offers nothing to edit. */
+  loadError: ComputedRef<string | null>
   sectionLabels: Record<SectionKey, string>
   saving: Ref<boolean>
   saveError: Ref<string | null>
@@ -112,6 +124,8 @@ export interface ProductEditor {
   saveLabel: Ref<string>
   saveDisabled: Ref<boolean>
   setPrimaryImage: (assetId: string | null) => Promise<void>
+  /** Make the page this product owns, when it has none; opening Page content never does. */
+  createPage: () => Promise<void>
   addOption: () => void
   removeOption: (index: number) => void
   setOptionValues: (index: number, values: string[]) => void
@@ -119,8 +133,7 @@ export interface ProductEditor {
   listValue: (definition: ProductDetailField) => string[]
   textValue: (definition: ProductDetailField) => string
   weekdays: ReadonlyArray<{ value: number; label: string }>
-  scheduleLoading: Ref<boolean>
-  scheduleError: Ref<string | null>
+  scheduleError: ComputedRef<string | null>
   savedSlotsFor: (weekday: number) => ScheduleSlotDraft[]
   slotsFor: (weekday: number) => ScheduleSlotDraft[]
   addSlot: (weekday: number) => void
@@ -140,43 +153,42 @@ export const productEditorKey = Symbol('product-editor') as InjectionKey<Product
 <script setup lang="ts">
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import DashboardResourceLocalization from '~/components/dashboard/DashboardResourceLocalization.vue'
-import type { Collection, Product } from '~/server/types/products'
 import type { ProductDetailField, ProductDetailValue, ProductKind } from '~/shared/product-details'
 import { productDetailFields, PRODUCT_KINDS, PRODUCT_KIND_LABELS, assertProductKind, productDetailKey, PRICING_NOTE_HANDLE } from '~/shared/product-details'
 import { isCurrencyCode } from '~/shared/currencies'
 import { majorAmountToMinor, minorAmountToMajor, selectPrice, type Price } from '~/shared/prices'
 import { formatProductMoney } from '~/utils/product-money'
-import { presentationForProduct, productSurfaceOf, requireProductPresentation } from '~/utils/product-presentation'
+import { presentationForProduct, requireProductPresentation } from '~/utils/product-presentation'
 import { MINUTE_TIME_PATTERN } from '~/utils/timezone'
 import { getErrorMessage, isNotFoundError } from '~/utils/errors'
 
 const route = useRoute()
+const router = useRouter()
 const dashboardApi = useDashboardApi()
-const collectionId = computed(() => String(route.params.collectionId ?? route.params.categoryId ?? ''))
 const productId = computed(() => String(route.params.productId ?? ''))
-const organizationOnly = computed(() => !route.params.locationSlug)
-const locationPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/locations/${String(route.params.locationSlug)}`)
-// The surface is the product's own, not the URL's: a dish saved as bookable is
-// an experience from that moment, and the rows it returns to have moved with
-// it. Until the row has loaded the URL is all there is to go on.
-// Declared above the computeds that read it. `surfacePath` resolves the
-// surface from the product's own row, so evaluating it before this line was
-// reached threw "Cannot access 'product' before initialization" and the
-// whole editor 500d.
-const product = ref<Product | null>(null)
-
-const surfacePath = computed(() => {
-  if (organizationOnly.value) return `/dashboard/${String(route.params.orgSlug)}/products`
-  const surface = product.value ? productSurfaceOf(vertical, product.value) : String(route.params.surface ?? '')
-  return `${locationPath.value}/products/${surface}`
-})
-const collectionPath = computed(() => organizationOnly.value ? surfacePath.value : `${surfacePath.value}/${collectionId.value}`)
-const itemPath = computed(() => `${collectionPath.value}/${productId.value}`)
+// Catalog's explicit scope. No location is the whole organization: its own
+// prices and settings, not whichever location was visited last.
+const locationId = useLocationScope()
+// A product created from a collection joins it; the URL that opened the walk names it.
+const createCollectionId = computed(() => typeof route.query.collection_id === 'string' && route.query.collection_id ? route.query.collection_id : null)
 const level = useRouteLevel()
+/** The record's own URL. It is the route level's, never rebuilt from params. */
+const itemPath = level.path
+const catalogPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/products`)
+/**
+ * A URL beneath this record. An existing product's sections keep its location
+ * scope and nothing else; a product being created keeps the whole walk's query,
+ * which names its kind and the collection it will join.
+ */
+function sectionPath(section: string) {
+  const query = isNew.value ? route.query : { location_id: locationId.value ?? undefined }
+  return router.resolve({ path: `${itemPath.value}/${section}`, query }).fullPath
+}
 
 const organizationId = await useDashboardOrganizationId()
 const dashboard = useDashboardOrganization()
-const dashboardLocation = useDashboardLocation()
+const { locations: organizationLocations, error: locationsError } = await useOrganizationLocations()
+const location = computed(() => organizationLocations.value.find(entry => entry.id === locationId.value) ?? null)
 
 const vertical = dashboard.organization.value?.vertical
 if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Organization vertical is not configured' })
@@ -189,8 +201,6 @@ const rawCurrency = dashboard.organization.value?.default_currency
 if (!isCurrencyCode(rawCurrency)) throw createError({ statusCode: 500, statusMessage: 'Unsupported organization currency' })
 const currency = rawCurrency
 
-const locationId = computed(() => dashboardLocation.currentLocation.value?.id ?? null)
-
 // ── Which leaf is open ──────────────────────────────────
 
 const sectionLabels: Record<SectionKey, string> = {
@@ -199,23 +209,23 @@ const sectionLabels: Record<SectionKey, string> = {
   'name': 'Name',
   'price': 'Price',
   'description': 'Description',
+  'page': 'Page content',
   'options': 'Variants',
   'order-url': 'External link',
   'attributes': 'Details',
   'publication': 'Website',
   'booking': 'Scheduling',
+  'locations': 'Locations',
+  'collections': 'Menu sections',
 }
 
 const detailKey = computed(() => level.child.value)
 const editorKey = computed<SectionKey>(() => (detailKey.value ?? 'photo') as SectionKey)
 
 const isNew = computed(() => productId.value === 'new')
-const ready = computed(() => isNew.value || (product.value?.id === productId.value && !loadError.value))
 
 // ── Load ────────────────────────────────────────────────
-const collections = ref<Collection[]>([])
 const definitions = computed(() => form.kind ? productDetailFields(form.kind) : [])
-const loadError = ref<string | null>(null)
 const saveError = ref<string | null>(null)
 const photoError = ref<string | null>(null)
 const saving = ref(false)
@@ -233,52 +243,74 @@ const isOne = (value: unknown): value is { success: true, product: Product } =>
   isRecord(value) && isRecord(value.product)
 
 
-// What the last successful (or in-flight) load was for. locationId resolves
-// after mount on a cold navigation, so onMounted and the watcher below both
-// fire for the same product; this loads it once.
-//
-// `force` is for the writers. A save or a photo change has just made this row
-// different from what was loaded, so the key matching is exactly the wrong
-// answer there: it left `product` stale, and the photo preview and every index
-// summary read `product`, not the form.
-let loadedKey = ''
-
-async function load(options: { force?: boolean } = {}) {
-  const id = locationId.value
-  if ((!id && !organizationOnly.value) || isNew.value) {
-    if (!isNew.value) return
-    return
-  }
-  const key = `${id}:${productId.value}`
-  if (key === loadedKey && !options.force) return
-  loadedKey = key
-  loadError.value = null
-  try {
-    const [collectionResponse, productResponse, consultationSettings] = await Promise.all([
-      dashboardApi(`/api/editor/organizations/${organizationId}/collections${id ? `?location_id=${encodeURIComponent(id)}` : ''}`, { validate: isCollectionList }),
+// The product in this scope, read before the level renders. Keyed by location
+// and product, so a scope change reads that location's prices and settings.
+const { data: loaded, error: loadFailure, refresh } = await useAsyncData(
+  () => `dashboard-product:${organizationId}:${locationId.value ?? 'organization'}:${productId.value}`,
+  async () => {
+    if (isNew.value) return null
+    const id = locationId.value
+    const [collectionResponse, productResponse] = await Promise.all([
+      // Every collection, site-wide and per location: membership is the
+      // product's, wherever the grouping lives.
+      dashboardApi(`/api/editor/organizations/${organizationId}/collections`, { validate: isCollectionList }),
       dashboardApi(id ? `/api/editor/organizations/${organizationId}/locations/${encodeURIComponent(id)}/products/${encodeURIComponent(productId.value)}` : `/api/editor/organizations/${organizationId}/products/${encodeURIComponent(productId.value)}`, { validate: isOne }),
-      organizationOnly.value && vertical === 'service' ? dashboardApi(`/api/editor/organizations/${organizationId}/consultation`, { validate: isRecord }) : Promise.resolve(null),
     ])
-    collections.value = collectionResponse.collections
-    product.value = productResponse.product
-    loadForm(productResponse.product)
-    if (consultationSettings) {
-      const settings = consultationSettings
-      form.native_consultations = settings.mode === 'native'
-      if (settings.mode === 'native' || settings.mode === 'external_url' || settings.mode === 'native_disabled') form.consultation_mode = settings.mode
-    }
-  } catch (error) {
-    loadedKey = ''
-    if (isNotFoundError(error)) return showError(createError({ statusCode: 404, statusMessage: `${presentation.value.itemLabel} not found` }))
-    loadError.value = getErrorMessage(error, `Failed to load this ${presentation.value.itemLabel.toLowerCase()}`)
-    if (options.force) throw error
-  }
+    return { collections: collectionResponse.collections, product: productResponse.product }
+  },
+)
+const product = computed(() => loaded.value?.product ?? null)
+const collections = computed(() => loaded.value?.collections ?? [])
+// A product that is not there is not a page. A request that failed is a state
+// this level shows, because the product may well still exist.
+watchEffect(() => {
+  if (loadFailure.value && isNotFoundError(loadFailure.value)) showError(createError({ statusCode: 404, statusMessage: `${presentation.value.itemLabel} not found` }))
+})
+const loadError = computed(() => (loadFailure.value && !isNotFoundError(loadFailure.value)
+  ? getErrorMessage(loadFailure.value, `Failed to load this ${presentation.value.itemLabel.toLowerCase()}`)
+  : null))
+
+/**
+ * A writer's re-read. A save or a photo change has just made this row different
+ * from what was loaded; the photo preview and every index summary read
+ * `product`, not the form. A failed re-read fails the write that asked for it.
+ */
+async function reload() {
+  await refresh()
+  if (loadFailure.value) throw loadFailure.value
 }
 
-// Called with no arguments on purpose: `watch` hands its listener
-// (value, oldValue, onCleanup), which would land in `options`.
-onMounted(() => { void load() })
-watch(locationId, () => { void load() })
+// ── The weekly schedule ─────────────────────────────────
+const isRuleList = (value: unknown): value is { success: true; rules: Array<{ weekday: number; start_time: string }> } =>
+  isRecord(value) && Array.isArray(value.rules)
+const scheduleUrl = () => `/api/editor/organizations/${organizationId}/products/${productId.value}/availability`
+/** An online schedule runs in the product's own time zone; until it has one there is no schedule to read. */
+const scheduleUnplaced = computed(() => Boolean(product.value?.booking) && !locationId.value && !product.value?.booking?.online_timezone)
+const scheduleReadable = computed(() => Boolean(product.value?.booking) && !scheduleUnplaced.value)
+// The start times in this scope, read before the level renders, beside the
+// product they belong to. A product without a booking calendar, or an online
+// one without a time zone, has none; the key says which, so the read follows
+// the product into a new scope. Every booking write re-reads it.
+const { data: scheduleData, error: scheduleFailure, refresh: refreshSchedule } = await useAsyncData(
+  () => `dashboard-product-schedule:${organizationId}:${locationId.value ?? 'online'}:${productId.value}:${scheduleReadable.value ? 'readable' : 'none'}`,
+  async () => {
+    if (!scheduleReadable.value) return null
+    const { rules } = await dashboardApi(`${scheduleUrl()}?location_id=${encodeURIComponent(locationId.value ?? 'online')}`, { validate: isRuleList })
+    return rules.map(rule => ({ weekday: rule.weekday, start_time: rule.start_time.slice(0, 5) }))
+  },
+)
+const savedSchedule = computed<ScheduleSlotDraft[]>(() => scheduleData.value ?? [])
+const scheduleError = computed(() => scheduleUnplaced.value
+  ? 'Choose a time zone in Meeting location before adding start times.'
+  : scheduleFailure.value ? getErrorMessage(scheduleFailure.value, 'Could not load the weekly schedule') : null)
+function savedSlotsFor(weekday: number) { return savedSchedule.value.filter(slot => slot.weekday === weekday) }
+// The draft the weekday leaves edit, seeded from every read of the schedule.
+const schedule = ref<ScheduleSlotDraft[]>([])
+watch(savedSchedule, (rows) => { schedule.value = rows.map(slot => ({ ...slot })) }, { immediate: true })
+async function reloadSchedule() {
+  await refreshSchedule()
+  if (scheduleFailure.value) throw scheduleFailure.value
+}
 
 // ── The form ────────────────────────────────────────────
 
@@ -293,14 +325,19 @@ const draft = useState<ProductForm>(draftKey, () => ({
   details: {} as Record<string, ProductDetailValue>,
   active: true,
   published: false,
-  location_active: true,
-  location_published: false,
+  locations: {} as Record<string, ProductLocationDraft>,
+  collection_ids: [] as string[],
   bookable: false,
   booking_duration: '',
-  booking_capacity: '', scheduling_mode: 'legacy', assigned_member_id: '', confirmation_mode: 'instant', online_payment_required: false, online_timezone: '', calendar_group: '', online_schedule: false, native_consultations: false, consultation_mode: 'native_disabled',
+  booking_capacity: '', scheduling_mode: 'legacy', assigned_member_id: '', confirmation_mode: 'instant', online_payment_required: false, online_timezone: '', calendar_group: '', online_schedule: false,
   image_asset_id: null as string | null,
 }))
 const form = reactive(draft.value)
+// One key per product being created, kept across the walk's leaves and retries.
+const createKeyName = `product-create-key:${organizationId}`
+const createKey = useState(createKeyName, () => crypto.randomUUID())
+// A walk opened from a filtered Catalog already knows the kind it is creating.
+if (isNew.value && !form.kind && PRODUCT_KINDS.includes(route.query.kind as ProductKind)) form.kind = route.query.kind as ProductKind
 
 /** What this location and currency pays for one variant, as a major-unit string. */
 function variantPriceMajor(variant: Product['variants'][number]): string {
@@ -310,6 +347,8 @@ function variantPriceMajor(variant: Product['variants'][number]): string {
 
 /** The options, variants and prices as loaded, so a save can tell what changed. */
 const loadedCatalogShape = ref('')
+// The draft is seeded from every read of the row, the first and each writer's re-read.
+watch(product, (row) => { if (row) loadForm(row) }, { immediate: true })
 
 function loadForm(row: Product) {
   form.kind = row.kind
@@ -335,9 +374,8 @@ function loadForm(row: Product) {
   form.details = { ...row.details }
   form.active = row.active
   form.published = row.publications.find(entry => entry.organization_id === organizationId)?.published ?? false
-  const here = row.locations.find(entry => entry.location_id === locationId.value)
-  form.location_active = here?.active ?? true
-  form.location_published = here?.published ?? false
+  form.locations = Object.fromEntries(row.locations.map(entry => [entry.location_id, { active: entry.active, published: entry.published }]))
+  form.collection_ids = row.collections.map(entry => entry.collection_id)
   form.image_asset_id = row.image?.asset_id ?? null
   // The configuration row is the capability, so the checkbox is its existence
   // and the fields are its values. The form used to open every product as "Not
@@ -456,6 +494,22 @@ function listSummary(values: readonly string[], empty: string) {
   return values.length ? values.join(', ') : empty
 }
 
+// Who handles a bookable service's consultations, by name: the same list the
+// assignment concern reads, so it is one request shared by both.
+const { data: schedulingMembers, error: schedulingMembersError } = await useFetch<{ members: { id: string; name: string }[] }>(() => `/api/organizations/${dashboard.organization.value?.id}/members/scheduling`)
+function assignmentSummary(): string {
+  if (!form.assigned_member_id) return 'The business schedule'
+  if (schedulingMembersError.value) return 'Team members could not be loaded'
+  return schedulingMembers.value?.members.find(member => member.id === form.assigned_member_id)?.name ?? 'Assigned team member'
+}
+
+/**
+ * A price opens the editor of the one price it names. One variant has one
+ * price, edited directly; several each have their own, so the row opens the
+ * list of variants rather than choosing one of them.
+ */
+const pricePath = computed(() => product.value && product.value.variants.length > 1 ? sectionPath('options') : sectionPath('price'))
+
 function priceSummary(): string {
   const row = product.value
   if (!row) return ''
@@ -472,80 +526,96 @@ function priceSummary(): string {
 }
 
 function bookingSummary(): string {
-  const minutes = `${form.booking_duration || '?'} minutes`
-  const id = locationId.value
-  if ((!id && !product.value?.booking?.online_timezone) || scheduleLoadedFor.value !== `${productId.value}:${id}`) return minutes
+  // A duration not chosen yet says so; it is never shown as a number.
+  const minutes = form.booking_duration ? `${form.booking_duration} minutes` : 'No duration set'
+  if (!scheduleData.value) return minutes
   const count = schedule.value.filter(slot => slot.start_time.trim()).length
   return count ? `${minutes} · ${count === 1 ? '1 start time' : `${count} start times`} a week` : `${minutes} · No weekly availability set`
 }
 
 function publicationSummary(): string {
   const parts = [form.published ? 'Visible on website' : 'Hidden from website']
-  if (locationId.value && !form.location_published) parts.push('Hidden at this location')
-  if (!form.active || (locationId.value && !form.location_active)) parts.push(form.bookable || form.kind === 'service' ? 'Bookings paused' : 'Orders paused')
+  if (!form.active) parts.push(form.bookable || form.kind === 'service' ? 'Bookings paused' : 'Orders paused')
   return parts.join(' · ')
+}
+
+function locationsSummary(): string {
+  const offered = organizationLocations.value.filter(entry => form.locations[entry.id])
+  return offered.length ? offered.map(entry => entry.title).join(', ') : 'Not offered at a location'
+}
+
+function collectionsSummary(): string {
+  const names = collections.value.filter(row => form.collection_ids.includes(row.id)).map(row => row.name)
+  return names.length ? names.join(', ') : 'Not in a collection'
 }
 
 const navigationGroups = computed<EditorNavigationGroup[]>(() => {
   const image = product.value?.image
   if (isNew.value) return [{
     id: 'item',
-    items: [{ id: 'name', label: 'Name', summary: form.name || 'Not named yet', placeholder: !form.name, to: `${itemPath.value}/name` }, { id: 'kind', label: 'Type', summary: form.kind ? PRODUCT_KIND_LABELS[form.kind] : 'Choose a type', to: `${itemPath.value}/kind` }],
+    items: [
+      { id: 'kind', label: 'Type', summary: form.kind ? PRODUCT_KIND_LABELS[form.kind] : 'Choose a type', to: sectionPath('kind') },
+      { id: 'name', label: 'Name', summary: form.name || 'Not named yet', placeholder: !form.name, to: sectionPath('name') },
+    ],
   }]
-  // Until the row is here there is nothing to summarize. "Not named yet" and
-  // "Not bookable" are statements about a product; shown while loading they
-  // were statements about the network.
-  if (!product.value) return [{
+  // A product that failed to load has nothing to summarize; the level shows the failure.
+  if (!product.value) return []
+  // One flat list, the same for every kind: what the product is, what it costs,
+  // how it is booked, and where it is offered and shown.
+  return [{
     id: 'item',
-    items: [{ id: 'loading', label: 'Loading', summary: `Loading this ${presentation.value.itemLabel.toLowerCase()}…`, placeholder: true }],
+    items: [
+      { id: 'photo', label: 'Photo', summary: image ? '' : 'No photo yet', placeholder: !image, to: sectionPath('photo') },
+      { id: 'name', label: 'Name', summary: form.name || 'Not named yet', placeholder: !form.name, to: sectionPath('name') },
+      { id: 'description', label: 'Description', summary: form.description || 'Nothing written yet', placeholder: !form.description, to: sectionPath('description') },
+      // A service is shown by a page of its own. The page has one editor, in
+      // Pages; this row is a way into it, and a page not made yet is made here.
+      ...(product.value.page || form.kind === 'service'
+        ? [{ id: 'page', label: 'Page content', summary: product.value.page ? product.value.page.path : 'No page', placeholder: !product.value.page, to: product.value.page ? `/dashboard/${String(route.params.orgSlug)}/website/pages/${encodeURIComponent(product.value.page.id)}` : sectionPath('page') }]
+        : []),
+      { id: 'price', label: form.kind === 'service' ? 'Consultation pricing' : 'Price', summary: priceSummary(), placeholder: priceSummary() === 'No price set', to: pricePath.value },
+      // The person a service's consultations are booked with: the existing
+      // assignment concern, reached from the overview. It belongs to bookings,
+      // so until the service takes bookings the row leads there first.
+      ...(form.kind === 'service'
+        ? [product.value.booking
+            ? { id: 'assignment', label: 'Assigned team member', summary: assignmentSummary(), to: `${sectionPath('booking')}/assignment` }
+            : { id: 'assignment', label: 'Assigned team member', summary: 'Set up bookings first', placeholder: true, to: sectionPath('booking') }]
+        : []),
+      { id: 'options', label: 'Variants', summary: product.value.variants.length > 1 ? `${product.value.variants.length} variants` : 'One version', to: sectionPath('options') },
+      {
+        id: 'attributes',
+        label: 'Details',
+        summary: listSummary(definitions.value.filter(definition => form.details[productDetailKey(definition)] !== undefined).map(definition => definition.name), 'None set'),
+        placeholder: !Object.keys(form.details).length,
+        to: sectionPath('attributes'),
+      },
+      { id: 'kind', label: 'Type', summary: form.kind ? PRODUCT_KIND_LABELS[form.kind] : 'Choose a type', to: sectionPath('kind') },
+      { id: 'booking', label: form.kind === 'service' ? 'Bookings' : 'Scheduling', summary: form.bookable ? bookingSummary() : 'Not bookable', placeholder: !form.bookable, to: sectionPath('booking') },
+      { id: 'order-url', label: 'External link', summary: form.order_url || 'No external link', placeholder: !form.order_url, to: sectionPath('order-url') },
+      { id: 'locations', label: 'Locations', summary: locationsSummary(), placeholder: !Object.keys(form.locations).length, to: sectionPath('locations') },
+      { id: 'collections', label: 'Menu sections', summary: collectionsSummary(), placeholder: !form.collection_ids.length, to: sectionPath('collections') },
+      { id: 'publication', label: 'Website visibility', summary: publicationSummary(), to: sectionPath('publication') },
+    ].sort((left, right) => rowRank(left.id) - rowRank(right.id)),
   }]
-  return [
-    {
-      id: 'item',
-      items: [
-        {
-          id: 'photo',
-          label: 'Photo',
-          summary: image ? '' : 'No photo yet',
-          placeholder: !image,
-          to: `${itemPath.value}/photo`,
-        },
-        { id: 'kind', label: 'Type', summary: form.kind ? PRODUCT_KIND_LABELS[form.kind] : 'Choose a type', to: `${itemPath.value}/kind` },
-        { id: 'name', label: 'Name', summary: form.name || 'Not named yet', placeholder: !form.name, to: `${itemPath.value}/name` },
-        { id: 'price', label: 'Price', summary: priceSummary(), placeholder: priceSummary() === 'No price set', to: `${itemPath.value}/price` },
-        {
-          id: 'description',
-          label: 'Description',
-          summary: form.description || 'Nothing written yet',
-          placeholder: !form.description,
-          to: `${itemPath.value}/description`,
-        },
-      ],
-    },
-    {
-      id: 'more',
-      label: 'More',
-      items: [
-        {
-          id: 'options',
-          label: 'Variants',
-          summary: product.value.variants.length > 1 ? `${product.value.variants.length} variants` : 'One version',
-          to: `${itemPath.value}/options`,
-        },
-        { id: 'order-url', label: 'External link', summary: form.order_url || 'No external link', placeholder: !form.order_url, to: `${itemPath.value}/order-url` },
-        {
-          id: 'attributes',
-          label: 'Details',
-          summary: listSummary(definitions.value.filter(definition => form.details[productDetailKey(definition)] !== undefined).map(definition => definition.name), 'None set'),
-          placeholder: !Object.keys(form.details).length,
-          to: `${itemPath.value}/attributes`,
-        },
-        { id: 'publication', label: 'Website', summary: publicationSummary(), to: `${itemPath.value}/publication` },
-        { id: 'booking', label: 'Scheduling', summary: form.bookable ? bookingSummary() : 'Not bookable', placeholder: !form.bookable, to: `${itemPath.value}/booking` },
-      ],
-    },
-  ]
 })
+
+/**
+ * The row the editor opens on a wide screen: the first one that opens a leaf
+ * beside this index. A row that leads into a level of its own — Bookings,
+ * Variants — would open that level too and push this index off the screen.
+ */
+const LEAF_SECTIONS: readonly string[] = ['photo', 'name', 'description', 'price', 'kind', 'order-url']
+const autoOpenTarget = computed(() => navigationGroups.value[0]?.items.find(item => LEAF_SECTIONS.includes(item.id) && item.to === sectionPath(item.id))?.to ?? null)
+
+// A service leads with what is changed most: who handles it, what it costs,
+// how it is booked and what its page says. Every other kind keeps the list as written.
+const SERVICE_ROW_ORDER = ['assignment', 'price', 'booking', 'description', 'page', 'locations', 'publication']
+function rowRank(id: string) {
+  if (form.kind !== 'service') return 0
+  const at = SERVICE_ROW_ORDER.indexOf(id)
+  return at === -1 ? SERVICE_ROW_ORDER.length : at
+}
 
 /**
  * The sections this product actually has, read from the rows it offers rather
@@ -557,9 +627,8 @@ const openSections = computed(() => navigationGroups.value.flatMap(group => grou
 // A section this product does not have 404s. A watcher, not a setup-time check:
 // moving between leaves reuses this component.
 watchEffect(() => {
-  // It does not judge before the record arrives: until then the rows are a
-  // single "Loading" placeholder, and every real section read as unsupported —
-  // a cold load of `…/mi-1/price` 404'd a page that exists.
+  // A product that failed to load has no rows, and every real section would
+  // read as unsupported; the failure is shown instead, never a 404.
   if (!isNew.value && !product.value) return
   if (detailKey.value && !openSections.value.includes(detailKey.value)) {
     showError(createError({ statusCode: 404, statusMessage: 'Page not found' }))
@@ -655,11 +724,12 @@ const { createActionLabel, saveLabel: createSaveLabel, saveDisabled, save: saveC
   isNew,
   openKey: editorKey,
   labels: sectionLabels,
-  order: ['name', 'kind'],
+  order: ['kind', 'name'],
   missing: key => key === 'name' ? !form.name.trim() : !form.kind,
   noun: () => form.kind ? presentationForProduct(vertical, { kind: assertProductKind(form.kind) }, dashboard.organization.value?.theme_id).itemLabel.toLowerCase() : 'product',
   saving,
-  existingBlocked: () => !sectionValid.value,
+  // A product that could not be read has no draft worth writing over it.
+  existingBlocked: () => !product.value || !sectionValid.value,
   commit,
 })
 
@@ -674,27 +744,37 @@ async function save(target?: string, bookingConcern?: BookingConcern) {
 
 async function commit(bookingConcern?: BookingConcern) {
   const id = locationId.value
-  if (!id && !organizationOnly.value) return
   saving.value = true
   saveError.value = null
   try {
     if (isNew.value) {
+      // A service is created with the page that shows it, in one write: the
+      // name is the page's first title, the server gives it a free
+      // /services/<slug>, and nothing else is invented for it. It starts
+      // sale-inactive, the page and the offer drafted before anything is sold.
+      // The key makes a retry after a lost response return this product
+      // rather than a second.
       const created = await dashboardApi(`/api/editor/organizations/${organizationId}/products`, {
-        method: 'POST', body: payload(), validate: isOne,
+        method: 'POST',
+        body: {
+          ...payload(),
+          ...(form.kind === 'service' ? { active: false, page: { title: form.name.trim(), pageType: 'custom', recipe: null, blocks: [] } } : {}),
+          idempotency_key: createKey.value,
+        },
+        validate: isOne,
       })
-      // A newly created product is offered here and added to the collection the
-      // editor was opened from — both explicit writes, neither implied. The
-      // location relationship is not collection membership: without the second
-      // write the product was absent from the very collection it was created
-      // in.
+      // A product created in a location's catalog is offered there, and one
+      // created from a collection joins it — explicit writes, each named by the
+      // URL that opened the walk, neither implied. The location relationship is
+      // not collection membership.
       if (id) await dashboardApi(`/api/editor/organizations/${organizationId}/products/${created.product.id}/locations/${id}`, {
         method: 'PUT', body: { active: true, published: false }, validate: isRecord,
       })
-      if (id) await addToCollection(created.product.id, id)
+      if (createCollectionId.value) await setCollectionMembership(created.product.id, createCollectionId.value, true)
       // The record it became, not the `new` form it was, so Back from a saved
-      // product goes to the collection and never to an empty Add screen.
-      clearNuxtState(draftKey)
-      await navigateTo(`${collectionPath.value}/${created.product.id}`, { replace: true })
+      // product goes to Catalog and never to an empty Add screen.
+      clearNuxtState([draftKey, createKeyName])
+      await navigateTo(router.resolve({ path: `${catalogPath.value}/${created.product.id}`, query: { location_id: id ?? undefined } }).fullPath, { replace: true })
       return
     }
     if (bookingConcern !== undefined) {
@@ -703,9 +783,14 @@ async function commit(bookingConcern?: BookingConcern) {
       await dashboardApi(`/api/editor/organizations/${organizationId}/products/${productId.value}`, {
         method: 'PATCH', body: payload(), validate: isOne,
       })
-      if (editorKey.value === 'publication') await savePublication(id)
+      if (editorKey.value === 'publication') await savePublication()
+      if (editorKey.value === 'locations') await saveLocation()
+      if (editorKey.value === 'collections') await saveCollections()
     }
-    await load({ force: true })
+    await reload()
+    // A booking write changes what the schedule is: its start times, whether the
+    // product has a calendar at all, or the time zone an online one runs in.
+    if (bookingConcern !== undefined) await reloadSchedule()
     await (closeTo.value ? navigateTo(closeTo.value) : level.close())
   } catch (error) {
     saveError.value = getErrorMessage(error, `Failed to save ${presentation.value.itemLabel.toLowerCase()}`)
@@ -715,53 +800,61 @@ async function commit(bookingConcern?: BookingConcern) {
 }
 
 /**
- * Put the new product at the end of the collection it was created in.
+ * Put a product into a collection, at the end, or take it out.
  *
  * Membership is stated whole — the writer replaces the collection with exactly
- * the ids it is sent — so the current members are read first and the new one
- * appended in their existing order.
+ * the ids it is sent — so the current members are read first, across the whole
+ * organization, and their existing order is kept.
  */
-async function addToCollection(newProductId: string, locationId: string) {
-  if (!collectionId.value) return
-  const { products } = await dashboardApi(`/api/editor/organizations/${organizationId}/locations/${locationId}/products`, { validate: isProductList })
+async function setCollectionMembership(memberId: string, collectionId: string, member: boolean) {
+  const { products } = await dashboardApi(`/api/editor/organizations/${organizationId}/products`, { validate: isProductList })
   const members = products
     .flatMap(row => row.collections
-      .filter(entry => entry.collection_id === collectionId.value)
+      .filter(entry => entry.collection_id === collectionId)
       .map(entry => ({ id: row.id, sort_order: entry.sort_order })))
     .sort((left, right) => left.sort_order - right.sort_order)
     .map(entry => entry.id)
-  await dashboardApi(`/api/editor/organizations/${organizationId}/collections/${collectionId.value}/products`, {
+    .filter(existing => existing !== memberId)
+  await dashboardApi(`/api/editor/organizations/${organizationId}/collections/${collectionId}/products`, {
     method: 'PUT',
-    body: { product_ids: [...members.filter(memberId => memberId !== newProductId), newProductId] },
+    body: { product_ids: member ? [...members, memberId] : members },
     validate: isRecord,
   })
 }
 
-/** Three switches, three writes. None of them implies another. */
-async function savePublication(id: string | null) {
+/** Whether the website shows it. The sale and every location are their own writes. */
+async function savePublication() {
   await dashboardApi(`/api/editor/organizations/${organizationId}/products/${productId.value}/publication`, {
     method: 'PUT', body: { published: form.published }, validate: isRecord,
   })
-  if (id) await dashboardApi(`/api/editor/organizations/${organizationId}/products/${productId.value}/locations/${id}`, {
-    method: 'PUT', body: { active: form.location_active, published: form.location_published }, validate: isRecord,
+}
+
+/** The one location the Locations leaf has open: offered there, and shown there. */
+async function saveLocation() {
+  const target = typeof route.params.locationId === 'string' ? route.params.locationId : null
+  if (!target) throw new Error('Choose a location.')
+  const entry = form.locations[target]
+  if (!entry) throw new Error('This location has no settings to save.')
+  await dashboardApi(`/api/editor/organizations/${organizationId}/products/${productId.value}/locations/${encodeURIComponent(target)}`, {
+    method: 'PUT', body: { active: entry.active, published: entry.published }, validate: isRecord,
   })
+}
+
+/** Join the collections that were switched on and leave the ones switched off, each stated whole. */
+async function saveCollections() {
+  const before = new Set(product.value?.collections.map(entry => entry.collection_id) ?? [])
+  const after = new Set(form.collection_ids)
+  for (const collection of collections.value) {
+    if (before.has(collection.id) !== after.has(collection.id)) await setCollectionMembership(productId.value, collection.id, after.has(collection.id))
+  }
 }
 
 /** Each focused editor writes only the setting its caller named. */
 async function saveBooking(concern: BookingConcern) {
   if (typeof concern === 'number') return saveSchedule(concern)
-  if (concern === 'website') {
-    await dashboardApi(`/api/editor/organizations/${organizationId}/consultation`, {
-      method: 'PUT', body: { mode: form.native_consultations ? 'native' : form.consultation_mode === 'native' ? 'native_disabled' : form.consultation_mode }, validate: isRecord,
-    })
-    return
-  }
   const url = `/api/editor/organizations/${organizationId}/products/${productId.value}/booking`
   if (concern === 'enabled' && !form.bookable) {
     await dashboardApi(url, { method: 'DELETE', validate: isRecord })
-    schedule.value = []
-    savedSchedule.value = []
-    scheduleLoadedFor.value = null
     return
   }
   const body = concern === 'duration' ? { duration_minutes: Number(form.booking_duration) }
@@ -775,21 +868,12 @@ async function saveBooking(concern: BookingConcern) {
   await dashboardApi(url, { method: 'PUT', body, validate: isRecord })
 }
 
-// ── The weekly schedule ─────────────────────────────────
+// ── Editing the weekly schedule ─────────────────────────
 // Product owns duration and guest limits; the weekly schedule owns start times.
 const WEEKDAYS = [
   { value: 1, label: 'Monday' }, { value: 2, label: 'Tuesday' }, { value: 3, label: 'Wednesday' },
   { value: 4, label: 'Thursday' }, { value: 5, label: 'Friday' }, { value: 6, label: 'Saturday' }, { value: 0, label: 'Sunday' },
 ]
-const schedule = ref<ScheduleSlotDraft[]>([])
-const savedSchedule = ref<ScheduleSlotDraft[]>([])
-const scheduleError = ref<string | null>(null)
-const scheduleLoading = ref(false)
-function savedSlotsFor(weekday: number) { return savedSchedule.value.filter(slot => slot.weekday === weekday) }
-const scheduleLoadedFor = ref<string | null>(null)
-const isRuleList = (value: unknown): value is { success: true; rules: Array<{ weekday: number; start_time: string }> } =>
-  isRecord(value) && Array.isArray(value.rules)
-
 function slotsFor(weekday: number) {
   return schedule.value.filter(slot => slot.weekday === weekday)
 }
@@ -800,45 +884,15 @@ function removeSlot(slot: ScheduleSlotDraft) {
   schedule.value = schedule.value.filter(entry => entry !== slot)
 }
 
-async function loadSchedule() {
-  const id = locationId.value
-  if (!product.value?.booking) return
-  if (!id && !product.value.booking.online_timezone) {
-    scheduleError.value = 'Choose a time zone in Meeting location before adding start times.'
-    return
-  }
-  const key = `${productId.value}:${id}`
-  if (scheduleLoadedFor.value === key) return
-  scheduleLoading.value = true
-  scheduleError.value = null
-  try {
-    const { rules } = await dashboardApi(`/api/editor/organizations/${organizationId}/products/${productId.value}/availability?location_id=${encodeURIComponent(id ?? 'online')}`, { validate: isRuleList })
-    // The reader moved on while this loaded; that location's own load owns the draft.
-    if (`${productId.value}:${locationId.value}` !== key) return
-    savedSchedule.value = rules.map(rule => ({ weekday: rule.weekday, start_time: rule.start_time.slice(0, 5) }))
-    schedule.value = savedSchedule.value.map(slot => ({ ...slot }))
-    scheduleLoadedFor.value = key
-  } catch (error) {
-    scheduleError.value = getErrorMessage(error, 'Could not load the weekly schedule')
-  } finally {
-    scheduleLoading.value = false
-  }
-}
-watch([editorKey, product, locationId], ([key]) => { if (key === 'booking') void loadSchedule() }, { immediate: true })
-
 /** Replace this weekday while retaining the other days read from the canonical writer. */
 async function saveSchedule(weekday: number) {
   const id = locationId.value
-  if ((!id && !product.value?.booking?.online_timezone) || scheduleLoadedFor.value !== `${productId.value}:${id}`) throw new Error('Load the schedule before saving times.')
+  if (scheduleError.value || !scheduleData.value) throw new Error('Load the schedule before saving times.')
   const times = slotsFor(weekday).map(slot => slot.start_time.trim())
   if (times.some(time => !MINUTE_TIME_PATTERN.test(time)) || new Set(times).size !== times.length) throw new Error('Choose a different, valid start time for each session.')
-  const url = `/api/editor/organizations/${organizationId}/products/${productId.value}/availability`
-  const { rules } = await dashboardApi(`${url}?location_id=${encodeURIComponent(id ?? 'online')}`, { validate: isRuleList })
+  const { rules } = await dashboardApi(`${scheduleUrl()}?location_id=${encodeURIComponent(id ?? 'online')}`, { validate: isRuleList })
   const slots = [...rules.filter(rule => rule.weekday !== weekday).map(rule => ({ weekday: rule.weekday, start_time: rule.start_time.slice(0, 5) })), ...times.map(start_time => ({ weekday, start_time }))]
-  await dashboardApi(url, { method: 'PUT', body: { location_id: id, slots }, validate: isRecord })
-  scheduleLoadedFor.value = null
-  await loadSchedule()
-  if (scheduleError.value) throw new Error(scheduleError.value)
+  await dashboardApi(scheduleUrl(), { method: 'PUT', body: { location_id: id, slots }, validate: isRecord })
 }
 
 /** A cancelled leaf puts the loaded product back before it closes. */
@@ -846,8 +900,33 @@ function revert() {
   saveError.value = null
   photoError.value = null
   if (product.value) loadForm(product.value)
-  form.native_consultations = form.consultation_mode === 'native'
   schedule.value = savedSchedule.value.map(slot => ({ ...slot }))
+}
+
+/**
+ * A service that has no page yet gets one, bound to it in the same write: its
+ * name as the first title and its slug under /services/. The page writer
+ * refuses a path somebody already holds, and that refusal is shown.
+ */
+async function createPage() {
+  const row = product.value
+  if (!row || row.page) return
+  saving.value = true
+  saveError.value = null
+  try {
+    const created = await dashboardApi(`/api/editor/organizations/${organizationId}/pages`, {
+      method: 'POST',
+      body: { productId: row.id, path: `/services/${row.slug}`, title: row.name, pageType: 'custom', recipe: null, blocks: [] },
+      validate: (value: unknown): value is { page: { id: string } } => isRecord(value) && isRecord(value.page) && typeof value.page.id === 'string',
+    })
+    await reload()
+    // The page is edited where every page is.
+    await navigateTo(`/dashboard/${String(route.params.orgSlug)}/website/pages/${encodeURIComponent(created.page.id)}`)
+  } catch (error) {
+    saveError.value = getErrorMessage(error, 'Failed to create the page')
+  } finally {
+    saving.value = false
+  }
 }
 
 async function setPrimaryImage(assetId: string | null) {
@@ -859,7 +938,7 @@ async function setPrimaryImage(assetId: string | null) {
       validate: isRecord,
     })
     form.image_asset_id = assetId
-    await load({ force: true })
+    await reload()
   } catch (error) {
     photoError.value = getErrorMessage(error, 'Failed to update the photo')
   }
@@ -891,7 +970,7 @@ const productLocalizationFields = computed(() => {
   return fields
 })
 
-const organizationLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/website/localization`)
+const organizationLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/website/localization`)
 
 function isProductLocalizationResponse(value: unknown): value is { localization: { values: Record<string, unknown> } } {
   return isRecord(value) && isRecord(value.localization) && isRecord(value.localization.values)
@@ -942,10 +1021,14 @@ provide(productEditorKey, {
   currency,
   organizationId,
   locationId,
-  websiteBooking: computed(() => organizationOnly.value && vertical === 'service'),
+  location,
+  organizationLocations,
+  organizationLocationsError: computed(() => locationsError.value ? getErrorMessage(locationsError.value, 'Locations could not be loaded') : null),
+  collections,
+  sectionPath,
   definitions,
   isNew,
-  ready,
+  loadError,
   sectionLabels,
   saving,
   saveError,
@@ -953,6 +1036,7 @@ provide(productEditorKey, {
   saveLabel,
   saveDisabled,
   setPrimaryImage,
+  createPage,
   addOption,
   removeOption,
   setOptionValues,
@@ -960,7 +1044,6 @@ provide(productEditorKey, {
   listValue,
   textValue,
   weekdays: WEEKDAYS,
-  scheduleLoading,
   scheduleError,
   savedSlotsFor,
   slotsFor,

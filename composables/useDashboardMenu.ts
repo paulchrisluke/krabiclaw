@@ -29,18 +29,34 @@ export function useDashboardPane() {
 export function useDashboardMenu() {
   const route = useRoute()
   const scopeHeaderModel = inject(dashboardScopeHeaderModelKey, null)
-  const organizationSettings = useOrganizationSettingsNavigation()
-  const personal = computed(() => typeof route.name === 'string' && route.name.startsWith('dashboard-account'))
+  const session = authClient.useSession()
+  const organizationsState = authClient.useListOrganizations()
 
-  const orgBase = computed(() => {
-    const slug = route.params.orgSlug
-    return typeof slug === 'string' && slug ? `/dashboard/${slug}` : null
+  /**
+   * The shell — tabs, Menu, where a destination exits to — is the
+   * organization's whenever there is one: the route's, otherwise Better Auth's
+   * active organization. Account settings is one user page at one URL, and a
+   * lawyer who opens it from their firm is still in their firm: its Calendar
+   * and Messages stay the firm's. Personal — the buyer's Today, Calendar and
+   * Messages — is only ever reached by switching to it, which sets the active
+   * organization to none. Opening a page never changes it.
+   */
+  const dashboard = useDashboardOrganization()
+  const activeOrganizationId = computed(() => (session.value.data?.session as { activeOrganizationId?: string | null } | undefined)?.activeOrganizationId ?? null)
+  const organization = computed(() => {
+    const routed = dashboard.organization.value
+    if (routed) return { id: routed.id, slug: routed.slug, name: routed.name }
+    return unref(organizationsState).data?.find(candidate => candidate.id === activeOrganizationId.value) ?? null
   })
+  const personal = computed(() => !organization.value)
+  const organizationSettings = useOrganizationSettingsNavigation(organization)
 
-  /** The Menu tab is the organization's settings level; its rows are the leaves beneath it. */
-  const menuPageTo = computed(() => personal.value ? '/dashboard/account/menu' : orgBase.value ? `${orgBase.value}/settings` : '/dashboard')
+  const orgBase = computed(() => organization.value ? `/dashboard/${encodeURIComponent(organization.value.slug)}` : null)
 
-  const notificationsTo = computed(() => orgBase.value ? `${orgBase.value}/settings/notifications` : null)
+  /** The Menu tab: the organization's launcher, or the account's. */
+  const menuPageTo = computed(() => orgBase.value ? `${orgBase.value}/menu` : '/dashboard/account/menu')
+
+  const notificationsTo = computed(() => orgBase.value ? `${orgBase.value}/notifications` : null)
 
   /** Ends the session and returns here after the next sign-in. */
   async function logOut() {
@@ -49,13 +65,13 @@ export function useDashboardMenu() {
     await navigateTo({ path: '/login', query: { redirect } })
   }
 
-  // Airbnb's "Switch to hosting": one row above Log out. One business switches straight to it;
+  // Airbnb's "Switch to hosting": one row above Log out. One organization switches straight to it;
   // several open the list under Account settings; none offers to start one.
   const switchRow = computed(() => {
-    const businesses = (scopeHeaderModel?.value.peers ?? []).filter(peer => peer.label !== 'Personal')
-    if (businesses.length === 1) return businesses[0]!.to ? { id: 'switch-business', label: `Switch to ${businesses[0]!.label}`, to: businesses[0]!.to } : { id: 'switch-business', label: `Switch to ${businesses[0]!.label}`, action: {} }
-    if (businesses.length > 1) return { id: 'switch-business', label: 'Switch to a business', to: '/dashboard/account/profile/businesses' }
-    return { id: 'switch-business', label: 'Start a business', to: '/dashboard/onboarding' }
+    const organizations = (scopeHeaderModel?.value.peers ?? []).filter(peer => peer.id)
+    if (organizations.length === 1) return organizations[0]!.to ? { id: 'switch-organization', label: `Switch to ${organizations[0]!.label}`, to: organizations[0]!.to } : { id: 'switch-organization', label: `Switch to ${organizations[0]!.label}`, action: {} }
+    if (organizations.length > 1) return { id: 'switch-organization', label: 'Switch to an organization', to: '/dashboard/account/profile/organizations' }
+    return { id: 'switch-organization', label: 'New organization', to: '/dashboard/onboarding' }
   })
   const groups = computed<EditorNavigationGroup[]>(() => personal.value ? [{
     id: 'account', items: [
@@ -69,5 +85,5 @@ export function useDashboardMenu() {
   /** Organization switcher. */
   const scopeModel = computed(() => scopeHeaderModel?.value ?? null)
 
-  return { menuPageTo, notificationsTo, groups, activeItem, scopeModel, logOut, personal }
+  return { menuPageTo, notificationsTo, groups, activeItem, scopeModel, logOut, personal, organization, activeOrganizationId }
 }

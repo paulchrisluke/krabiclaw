@@ -4,7 +4,6 @@
     id="calendar-settings-notice"
     title="Advance notice"
     lead="How much notice do you need between a guest's booking and their arrival?"
-    :ready="!editor.loading.value"
     :saving="editor.saving.value"
     :disabled="editor.saveDisabled.value"
     :error="editor.editorError.value ?? ''"
