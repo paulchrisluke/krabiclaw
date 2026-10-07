@@ -38,6 +38,7 @@
     <DashboardTopNav
       :items="showNavChrome ? primaryNavItems : []"
       :home-to="topNavHomeTo"
+      :menu-active="isMenuPageActive"
       @menu="menuOpen = true"
     />
 

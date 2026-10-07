@@ -80,7 +80,7 @@ theme:
 | Menu | `O/menu` | a launcher |
 
 **Menu is a launcher, not a parent.** It lists the Earnings and Insights cards,
-then Website, Posts, Locations, Team, Integrations, Platform accounts (Better
+then Website, Locations, Team, Integrations, Platform accounts (Better
 Auth admins, inside Krabiclaw's own organization only), Account settings,
 Switch to Personal and Log out. Each row opens a destination of its own; none
 is nested under Menu. The desktop slideover and the narrow Menu page render the
@@ -90,12 +90,12 @@ The destinations are files under `O`, and their URLs are their files:
 
 | Destination | URL |
 | --- | --- |
-| Website | `O/website` — Pages, Blog, Reviews and Q&A, Brand, Status, Domains, Languages, Currency, Search appearance, Website booking |
+| Website | `O/website` — Pages, Blog, Posts, Reviews and Q&A, Brand, Status, Domains, Languages, Currency, Search appearance, Website booking |
 | Pages | `O/website/pages`, a page `O/website/pages/:pageId`, the Links page `O/website/pages/links` |
 | Blog | `O/website/blog` |
 | Reviews and Q&A | `O/website/qa` |
 | Brand | `O/website/brand` and its leaves |
-| Posts | `O/posts` |
+| Posts | `O/website/posts` — short posts to the site and its connected social accounts |
 | Locations | `O/locations`, a location `O/locations/:locationSlug`, `O/locations/new` |
 | Team | `O/team` |
 | Integrations | `O/integrations` |
@@ -105,10 +105,16 @@ The destinations are files under `O`, and their URLs are their files:
 | Notifications | `O/notifications` |
 | Platform accounts | `O/platform-accounts` |
 
-Personal scope (`/dashboard/account/...`) has the same shape: Today, Calendar,
-Messages and a launcher Menu at `/dashboard/account/menu`, whose rows open
-Account settings at `/dashboard/account/profile` and Past activity at
-`/dashboard/account/activity`.
+**The shell is the active organization's.** Tabs, Menu and where a root exits
+follow Better Auth's active organization — the route's, otherwise the
+session's. Account settings (`/dashboard/account/profile`) and Past activity
+(`/dashboard/account/activity`) are one user page each at one URL, and opened
+from an organization they keep that organization's tabs, light its Menu and
+exit to it: a lawyer setting their Google Calendar is still in their firm, and
+its Calendar tab is the firm's. Personal — the buyer's Today, Calendar,
+Messages and a launcher Menu at `/dashboard/account/menu` — is reached only by
+Switch to Personal, which sets the active organization to none. Opening a page
+never changes it.
 
 ### Catalog
 
@@ -160,12 +166,12 @@ Three separate questions, three separate answers. None is derived from another.
   `definePageMeta({ tab })`: `today`, `calendar`, `catalog`, `messages` or
   `menu`. The layout reads the matched root's `tab` and nothing else. A screen
   that declares none lights no tab; nothing is inferred from its URL or exit.
-- **A root's exit** is `meta.back` on a standalone destination root only —
-  Website, Posts, Locations, Team, Integrations, Insights, Notifications,
-  Earnings and Platform accounts exit to Menu; Payments to Earnings; Account
-  settings and Past activity to the account's Menu. Catalog, Today, Calendar,
-  Messages and Menu are primary destinations and have no exit. A nested level
-  never declares one.
+- **A root's exit** is `meta.back` on a standalone destination root only.
+  `menu` names the shell's Menu: Website, Locations, Team, Integrations,
+  Insights, Notifications, Earnings, Platform accounts, Account settings and
+  Past activity exit there. A named route is a specific exit: Payments to
+  Earnings. Catalog, Today, Calendar, Messages and Menu are primary
+  destinations and have no exit. A nested level never declares one.
 
 The booking mounts keep their own affiliation: a booking opened from Today is a
 root that exits to Today and lights it; the same booking under a calendar day
@@ -274,6 +280,15 @@ scatter one decision, so each renders inside one leaf and commits with its Save.
 The article canvas, below, is the only other exception.
 
 ## Controls
+
+**One header rule for every list screen.** The panel's navbar carries Back, the
+title and what you can do to the list — Edit, Add, Manage — and the body
+carries the list, its one-line description and its rows. `DashboardListEditor`
+and `DashboardGridEditor` teleport their controls into the navbar of the index
+panel they are mounted in (`dashboardPanelActionsKey`); a page never draws a
+second header in the body, and never puts Add in one place on one screen and
+another on the next. A list mounted outside an index panel keeps its controls
+at the top of the list.
 
 The inside of a leaf, measured against Airbnb's host tools (see
 `docs/design/airbnb-parity-audit.md`). The theme in
@@ -427,7 +442,7 @@ independent of whether the level contains records, fields, settings, media, or
 another index.
 
 Destination roots stand alone and use the frame: Today, Calendar, Catalog,
-Messages, Menu, and each Menu destination — Website, Posts, Locations, Team,
+Messages, Menu, and each Menu destination — Website, Locations, Team,
 Integrations, Earnings, Payments, Insights, Notifications — as Airbnb's
 `/hosting/listings` grid does. Within a destination, levels pair with their
 parent: Pages, Blog, Reviews and Q&A, and Brand render as `Website | Pages`, and

@@ -11,7 +11,7 @@
 <script setup lang="ts">
 import OrganizationMembersList from '~/components/dashboard/OrganizationMembersList.vue'
 
-definePageMeta({ layout: 'dashboard', tab: 'menu', back: 'dashboard-orgSlug-menu' })
+definePageMeta({ layout: 'dashboard', tab: 'menu', back: 'menu' })
 
 const level = useRouteLevel()
 

@@ -41,7 +41,7 @@ test.describe('dashboard pane hierarchy', () => {
   test('each Menu destination is a root at its own URL, and Website content nests under Website', async ({ page }) => {
     await page.setViewportSize(WIDE)
     await open(page, `${ORG}/menu`)
-    const segments = ['website/pages', 'website/blog', 'website/qa', 'website/brand', 'website/pages/links', 'posts', 'locations', 'team', 'products', 'products/menu', 'products/services']
+    const segments = ['website/pages', 'website/blog', 'website/qa', 'website/brand', 'website/pages/links', 'website/posts', 'locations', 'team', 'products', 'products/menu', 'products/services']
     const resolved = await page.evaluate(({ org, segments }) => {
       const router = (document.querySelector('#__nuxt') as Element & {
         __vue_app__: { config: { globalProperties: { $router: { resolve: (path: string) => { path: string; matched: Array<{ path: string; meta: { tab?: unknown; back?: unknown } }> } } } } }
@@ -57,14 +57,14 @@ test.describe('dashboard pane hierarchy', () => {
     // Menu is a launcher: no destination nests under it. Each declares Menu as
     // its tab and exits to Menu; Catalog is a primary destination with no exit.
     const o = '/dashboard/:orgSlug()'
-    const website = { tab: 'menu', back: 'dashboard-orgSlug-menu' }
+    const website = { tab: 'menu', back: 'menu' }
     expect(resolved).toEqual({
       'website/pages': { path: `${ORG}/website/pages`, levels: [`${o}/website`, `${o}/website/pages`], ...website },
       'website/blog': { path: `${ORG}/website/blog`, levels: [`${o}/website`, `${o}/website/blog`], ...website },
       'website/qa': { path: `${ORG}/website/qa`, levels: [`${o}/website`, `${o}/website/qa`], ...website },
       'website/brand': { path: `${ORG}/website/brand`, levels: [`${o}/website`, `${o}/website/brand`], ...website },
       'website/pages/links': { path: `${ORG}/website/pages/links`, levels: [`${o}/website`, `${o}/website/pages`, `${o}/website/pages/links`], ...website },
-      'posts': { path: `${ORG}/posts`, levels: [`${o}/posts`], ...website },
+      'website/posts': { path: `${ORG}/website/posts`, levels: [`${o}/website`, `${o}/website/posts`], ...website },
       'locations': { path: `${ORG}/locations`, levels: [`${o}/locations`], ...website },
       'team': { path: `${ORG}/team`, levels: [`${o}/team`], ...website },
       'products': { path: `${ORG}/products`, levels: [`${o}/products`], tab: 'catalog', back: null },
@@ -78,6 +78,7 @@ test.describe('dashboard pane hierarchy', () => {
     for (const [path, parent, pane] of [
       ['website/pages', 'organization-website', 'organization-pages'],
       ['website/blog', 'organization-website', 'organization-blog'],
+      ['website/posts', 'organization-website', 'organization-posts'],
     ] as const) {
       await open(page, `${ORG}/${path}`)
       await expectPanes(page, [parent, pane])
@@ -85,7 +86,7 @@ test.describe('dashboard pane hierarchy', () => {
       // The parent names the open row.
       await expect(page.locator(`#dashboard-panel-${parent} [aria-current="page"]`)).toHaveCount(1)
     }
-    for (const [path, pane] of [['posts', 'organization-posts'], ['locations', 'locations'], ['team', 'organization-members']] as const) {
+    for (const [path, pane] of [['locations', 'locations'], ['team', 'organization-members']] as const) {
       await open(page, `${ORG}/${path}`)
       await expectPanes(page, [pane])
       await expect(page).toHaveURL(`${ORG}/${path}`)
@@ -467,7 +468,7 @@ test.describe('dashboard pane hierarchy', () => {
   // Account settings carries no organization in its URL. Better Auth's active
   // organization keeps the shell in it, and a member's own availability —
   // where Google Calendar connects — is that organization's page.
-  test('Account settings is the account\'s destination and acts in the active organization', async ({ page, baseURL }) => {
+  test('Account settings keeps the active organization\'s shell', async ({ page, baseURL }) => {
     const services = '/dashboard/north-carolina-legal-services'
     const availability = '/dashboard/account/profile/calendar/org-ncls-blawby'
     await page.context().clearCookies()
@@ -477,12 +478,14 @@ test.describe('dashboard pane hierarchy', () => {
     await page.setViewportSize({ width: 390, height: 844 })
 
     await open(page, '/dashboard/account/profile')
-    // The account's destination lights the account's Menu and exits to it.
+    // A lawyer in their firm is still in it on their own settings: the firm's
+    // tabs, its Menu lit, and Back to its Menu. Personal is a switch, not a URL.
     const mobileNav = page.getByTestId('dashboard-mobile-nav')
-    await expect(mobileNav.getByRole('link')).toHaveText(['Today', 'Calendar', 'Messages', 'Menu'])
-    await expect(page.getByTestId('dashboard-mobile-nav-menu-link')).toHaveAttribute('href', '/dashboard/account/menu')
+    await expect(mobileNav.getByRole('link')).toHaveText(['Today', 'Calendar', 'Catalog', 'Messages', 'Menu'])
+    await expect(mobileNav.getByRole('link', { name: 'Calendar', exact: true })).toHaveAttribute('href', `${services}/calendar`)
+    await expect(page.getByTestId('dashboard-mobile-nav-menu-link')).toHaveAttribute('href', `${services}/menu`)
     await expect(page.getByTestId('dashboard-mobile-nav-menu-link')).toHaveAttribute('aria-current', 'page')
-    await expect(page.locator('#dashboard-panel-account-profile [data-testid="dashboard-navbar-back"]')).toHaveAttribute('href', '/dashboard/account/menu')
+    await expect(page.locator('#dashboard-panel-account-profile [data-testid="dashboard-navbar-back"]')).toHaveAttribute('href', `${services}/menu`)
     // Opening it changed nothing in Better Auth: availability opens the active organization's own page.
     const session = await page.request.get('/api/auth/get-session', { headers: authRequestHeaders(baseURL!) })
     expect((await session.json() as { session: { activeOrganizationId: string | null } }).session.activeOrganizationId).toBe('org-ncls-blawby')

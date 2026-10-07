@@ -197,6 +197,7 @@ const settingsItems = computed<EditorNavigationItem[]>(() => [
   ...(organizationLinks.organizationPaths.value ? [
     { id: 'pages', label: 'Pages', icon: 'i-lucide-file-text', to: organizationLinks.organizationPaths.value.pages },
     { id: 'blog', label: 'Blog', icon: 'i-lucide-newspaper', to: organizationLinks.organizationPaths.value.blog },
+    { id: 'posts', label: 'Posts', icon: 'i-lucide-megaphone', to: organizationLinks.organizationPaths.value.posts },
     { id: 'qa', label: 'Reviews and Q&A', icon: 'i-lucide-message-circle-question', to: organizationLinks.organizationPaths.value.qa },
     { id: 'brand', label: 'Brand', summary: explicitSummary(loadedSettings.value?.name), icon: 'i-lucide-palette', to: brandPath.value },
   ] : []),

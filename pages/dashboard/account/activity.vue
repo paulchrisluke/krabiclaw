@@ -30,7 +30,7 @@
 <script setup lang="ts">
 import AccountActivityCard from '~/components/dashboard/AccountActivityCard.vue'
 import type { AccountActivityItem } from '~/shared/account-activity'
-definePageMeta({ layout: 'dashboard', tab: 'menu', back: 'dashboard-account-menu' })
+definePageMeta({ layout: 'dashboard', tab: 'menu', back: 'menu' })
 useSeoMeta({ title: 'Past activity | Krabiclaw', robots: 'noindex, nofollow' })
 const level = useRouteLevel()
 const { data, error } = await useAccountActivity()

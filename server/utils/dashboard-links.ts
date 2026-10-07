@@ -102,7 +102,7 @@ export function linksEditorPath(orgSlug: string): string {
 }
 
 export function postEditorPath(orgSlug: string, postId: string, locationId?: string | null): string {
-  return scopedTo(`${organizationBase(orgSlug)}/posts/${encodeURIComponent(postId)}`, locationId)
+  return scopedTo(`${organizationBase(orgSlug)}/website/posts/${encodeURIComponent(postId)}`, locationId)
 }
 
 export function qaEditorPath(orgSlug: string, qaId: string, locationId?: string | null): string {

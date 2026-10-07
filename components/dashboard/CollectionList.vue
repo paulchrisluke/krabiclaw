@@ -104,8 +104,17 @@ const removingId = ref<string | null>(null)
 const deleteError = ref<string | null>(null)
 const orderError = ref<string | null>(null)
 
+/**
+ * The menu's sections: those holding dishes, and empty ones still being filled
+ * — what the public menu shows, since it lists dishes and drops a section with
+ * none. A grouping of only experiences or services is theirs, not the menu's.
+ * It is not shown here, but keeps its place in the scope's stored order.
+ */
+const isMenuSection = (row: CollectionRow) => !row.products.length || row.products.some(product => product.kind === 'dish')
+const sections = computed(() => collections.value.filter(isMenuSection))
+
 // A section opens in its own location's scope; a shared one in the menu's current one.
-const listItems = computed(() => collections.value.map(row => ({ id: row.id, title: row.name, to: router.resolve({ path: `${menuPath.value}/${row.id}`, query: { location_id: props.scope ?? route.query.location_id } }).fullPath, row })))
+const listItems = computed(() => sections.value.map(row => ({ id: row.id, title: row.name, to: router.resolve({ path: `${menuPath.value}/${row.id}`, query: { location_id: props.scope ?? route.query.location_id } }).fullPath, row })))
 const loadError = computed(() => (catalog.error.value ? getErrorMessage(catalog.error.value, 'Failed to load sections') : null))
 
 const load = catalog.refresh
@@ -146,9 +155,13 @@ async function removeCollection(item: { row: CollectionRow }) {
  * The row swaps places with its neighbour in the one order this scope stores.
  */
 function moveCollection(item: { row: CollectionRow }, direction: -1 | 1) {
+  // Swaps with the neighbouring section on screen; a grouping the menu does
+  // not show stays where it is in the complete order the endpoint takes.
+  const visible = sections.value
+  const neighbour = visible[visible.findIndex(row => row.id === item.row.id) + direction]
+  if (!neighbour) return
   const from = collections.value.findIndex(row => row.id === item.row.id)
-  const to = from + direction
-  if (from < 0 || to < 0 || to >= collections.value.length) return
+  const to = collections.value.findIndex(row => row.id === neighbour.id)
   const order = [...collections.value]
   order[from] = collections.value[to]!
   order[to] = collections.value[from]!

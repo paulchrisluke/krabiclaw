@@ -84,7 +84,7 @@ import { paymentMoney } from '~/shared/payment-display'
 import { isEarningsPerformance, isPayoutsView, type EarningsPerformance, type PayoutsView } from '~/shared/earnings-display'
 import { formatCalendarDate } from '~/utils/timezone'
 
-definePageMeta({ layout: 'dashboard', tab: 'menu', back: 'dashboard-orgSlug-menu' })
+definePageMeta({ layout: 'dashboard', tab: 'menu', back: 'menu' })
 useSeoMeta({ title: 'Earnings | Krabiclaw', robots: 'noindex, nofollow' })
 
 const route = useRoute()

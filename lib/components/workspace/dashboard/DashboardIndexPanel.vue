@@ -2,6 +2,7 @@
   <UDashboardPanel
     :id="id"
     :class="level.mode.value === 'yield' ? 'hidden' : pair ? 'hidden lg:flex' : undefined"
+    :data-yield="level.mode.value === 'yield' ? '' : undefined"
     :default-size="pair ? 50 : undefined"
     :ui="ui"
   >
@@ -14,8 +15,10 @@
         <template v-if="$slots.center" #default>
           <slot name="center" />
         </template>
-        <template v-if="$slots.right" #right>
+        <!-- The list's controls land here (dashboardPanelActionsKey), after whatever the page itself puts on the right. -->
+        <template #right>
           <slot name="right" />
+          <span :id="actionsId" class="flex items-center gap-1.5 empty:hidden" />
         </template>
       </UDashboardNavbar>
     </template>
@@ -54,6 +57,7 @@
   choosing a child would leave the mode; it opens one when the mode closes.
 */
 import type { RouteLocationRaw } from 'vue-router'
+import { dashboardPanelActionsKey } from './dashboardPanelContext'
 
 const props = defineProps<{
   id: string
@@ -68,6 +72,11 @@ const props = defineProps<{
 
 const level = useRouteLevel()
 const pair = computed(() => level.mode.value === 'pair')
+// Read through the instance: vue-tsc cannot type `props.id` here (TS2590), and the id is a plain string.
+const instance = getCurrentInstance()
+// Not prefixed `dashboard-panel-`: that prefix names panes, and this is a slot inside one.
+const actionsId = computed(() => `${String(instance?.props.id ?? '')}-list-actions`)
+provide(dashboardPanelActionsKey, actionsId)
 
 const pane = useDashboardPane()
 const route = useRoute()

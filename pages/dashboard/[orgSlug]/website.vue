@@ -3,5 +3,5 @@
 </template>
 
 <script setup lang="ts">
-definePageMeta({ layout: 'dashboard', tab: 'menu', back: 'dashboard-orgSlug-menu' })
+definePageMeta({ layout: 'dashboard', tab: 'menu', back: 'menu' })
 </script>

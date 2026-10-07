@@ -393,7 +393,7 @@ import ActivityFeed from '~/components/dashboard/ActivityFeed.vue'
 import AnalyticsTrendChart from '~/components/dashboard/AnalyticsTrendChart.vue'
 import { CONVERSION_EVENT_CATALOG, ORGANIZATION_CONVERSION_EVENT_NAMES } from '~/utils/organization-conversion-events'
 const dashboardApi = useDashboardApi()
-definePageMeta({ layout: 'dashboard', tab: 'menu', back: 'dashboard-orgSlug-menu' })
+definePageMeta({ layout: 'dashboard', tab: 'menu', back: 'menu' })
 
 import DashboardAnalyticsRow from '~/lib/components/workspace/dashboard/AnalyticsRow.vue'
 import { localDateAt, addLocalDays, formatCalendarDate } from '~/utils/timezone'

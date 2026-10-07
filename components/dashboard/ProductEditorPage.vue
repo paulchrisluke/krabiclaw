@@ -1,6 +1,6 @@
 <template>
   <!-- One product: its rows are the things it holds, each a leaf below this level. -->
-  <DashboardIndexPanel id="product" :title="form.name || presentation.itemLabel" :auto-open="navigationGroups[0]?.items.find(item => item.to)?.to ?? null">
+  <DashboardIndexPanel id="product" :title="form.name || presentation.itemLabel" :auto-open="autoOpenTarget">
     <template v-if="product" #right>
       <DashboardResourceLocalization
       :organization-id="organizationId"
@@ -599,6 +599,14 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => {
     ].sort((left, right) => rowRank(left.id) - rowRank(right.id)),
   }]
 })
+
+/**
+ * The row the editor opens on a wide screen: the first one that opens a leaf
+ * beside this index. A row that leads into a level of its own — Bookings,
+ * Variants — would open that level too and push this index off the screen.
+ */
+const LEAF_SECTIONS: readonly string[] = ['photo', 'name', 'description', 'price', 'kind', 'order-url']
+const autoOpenTarget = computed(() => navigationGroups.value[0]?.items.find(item => LEAF_SECTIONS.includes(item.id) && item.to === sectionPath(item.id))?.to ?? null)
 
 // A service leads with what is changed most: who handles it, what it costs,
 // how it is booked and what its page says. Every other kind keeps the list as written.

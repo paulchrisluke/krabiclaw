@@ -1,18 +1,16 @@
 <template>
   <section class="space-y-6">
+    <!-- The same rule as DashboardListEditor: the panel's navbar carries the grid's controls. -->
     <header>
-      <div class="flex items-center justify-between gap-4">
-        <!-- Omitted where the surface around it already names the grid. -->
-        <h1 v-if="title" class="min-w-0 truncate text-2xl font-semibold text-highlighted">{{ title }}</h1>
-        <span v-else />
-
-        <div class="flex shrink-0 items-center gap-2">
+      <Teleport :to="actionsTarget ? `#${actionsTarget}` : undefined" :disabled="!actionsTarget" defer>
+        <div class="flex shrink-0 items-center gap-2" :class="actionsTarget ? undefined : 'justify-end'">
           <slot name="actions" />
           <UButton
             v-if="items.length"
             label="Manage"
             color="neutral"
             variant="soft"
+            size="sm"
             data-testid="grid-editor-manage"
             @click="openSelection"
           />
@@ -21,14 +19,15 @@
             :aria-label="addLabel"
             color="neutral"
             variant="soft"
+            size="sm"
             square
             data-testid="grid-editor-add"
             @click="$emit('add')"
           />
         </div>
-      </div>
+      </Teleport>
 
-      <p v-if="description" class="mt-2 text-sm text-muted">{{ description }}</p>
+      <p v-if="description" class="text-sm text-muted">{{ description }}</p>
     </header>
 
     <slot name="filters" />
@@ -150,6 +149,10 @@
 // Generic for the same reason the list editor is: a page hangs its own record on
 // the item and reads it off the `#tile` slot, instead of looking it back up by id
 // for every field the tile renders.
+import { dashboardPanelActionsKey } from '~/lib/components/workspace/dashboard/dashboardPanelContext'
+// The navbar slot of the index panel this grid is mounted in, if any.
+const actionsTarget = inject(dashboardPanelActionsKey, null)
+
 const props = defineProps<{
   items: T[]
   title: string

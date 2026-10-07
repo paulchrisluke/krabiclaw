@@ -16,7 +16,7 @@ export function useDashboardOrganizationLinks() {
     return {
       catalog: `${organization}/products`,
       newLocation: `${organization}/locations/new`,
-      posts: `${organization}/posts`,
+      posts: `${organization}/website/posts`,
       pages: `${organization}/website/pages`,
       blog: `${organization}/website/blog`,
       qa: `${organization}/website/qa`,

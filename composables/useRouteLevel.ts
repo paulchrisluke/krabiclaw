@@ -15,8 +15,8 @@ import { matchedRouteKey } from 'vue-router'
  * A directory's `index.vue` is a second record at the same URL — `/links/items`
  * matches both `items` and `items/index` — and it is one level, not two.
  *
- * `meta.back` is a destination root's exit — Website to Menu, Payments to
- * Earnings, Account settings to the account's Menu. A level with a matched
+ * `meta.back` is a destination root's exit: `menu` for the shell's Menu —
+ * Website, Account settings — or a named route, Payments to Earnings. A level with a matched
  * parent that declares one would give Back and the pane layout two different
  * parents, so it is refused. Which tab is lit is a separate declaration,
  * `meta.tab`, read by the layout; it never follows an exit.
@@ -64,6 +64,8 @@ export function useRouteLevel() {
   // is ready (Nuxt's RouteProvider).
   const route = useRoute()
   const router = useRouter()
+  // The shell's Menu, for a root whose exit is `menu`.
+  const menu = useDashboardMenu()
   // The record this level renders, read once: a component is mounted for one
   // record and never becomes another. Vue Router's ref follows the live route,
   // so during a navigation it named the next screen's record while `route`
@@ -130,7 +132,7 @@ export function useRouteLevel() {
     if (parent && declared !== undefined) {
       throw new Error(`Route "${own.path}" declares meta.back but is nested under "${parent.path}"; its route parent is its Back`)
     }
-    const path = parent ? urlOf(parent) : typeof declared === 'string' ? resolveNamed(declared) : null
+    const path = parent ? urlOf(parent) : declared === 'menu' ? menu.menuPageTo.value : typeof declared === 'string' ? resolveNamed(declared) : null
     return path === null ? null : router.resolve({ path, query: route.query }).fullPath
   })
 

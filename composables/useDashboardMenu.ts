@@ -33,13 +33,13 @@ export function useDashboardMenu() {
   const organizationsState = authClient.useListOrganizations()
 
   /**
-   * Two answers, kept apart. The tabs are the destination's: a route under an
-   * organization has that organization's tabs and Menu, and the account's own
-   * destinations — Account settings, Past activity, its Menu — have the
-   * account's, so they light the account's Menu and exit to it. The
-   * organization a page acts in is Better Auth's: the route's, otherwise the
-   * session's active organization, which Your availability opens and switching
-   * changes. Opening Account settings never changes the active organization.
+   * The shell — tabs, Menu, where a destination exits to — is the
+   * organization's whenever there is one: the route's, otherwise Better Auth's
+   * active organization. Account settings is one user page at one URL, and a
+   * lawyer who opens it from their firm is still in their firm: its Calendar
+   * and Messages stay the firm's. Personal — the buyer's Today, Calendar and
+   * Messages — is only ever reached by switching to it, which sets the active
+   * organization to none. Opening a page never changes it.
    */
   const dashboard = useDashboardOrganization()
   const activeOrganizationId = computed(() => (session.value.data?.session as { activeOrganizationId?: string | null } | undefined)?.activeOrganizationId ?? null)
@@ -48,7 +48,7 @@ export function useDashboardMenu() {
     if (routed) return { id: routed.id, slug: routed.slug, name: routed.name }
     return unref(organizationsState).data?.find(candidate => candidate.id === activeOrganizationId.value) ?? null
   })
-  const personal = computed(() => !dashboard.organization.value)
+  const personal = computed(() => !organization.value)
   const organizationSettings = useOrganizationSettingsNavigation(organization)
 
   const orgBase = computed(() => organization.value ? `/dashboard/${encodeURIComponent(organization.value.slug)}` : null)

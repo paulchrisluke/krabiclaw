@@ -58,8 +58,14 @@ const menuTo = computed(() => locations.value.length === 1
   ? `${level.path.value}/menu?location_id=${encodeURIComponent(locations.value[0]!.id)}`
   : `${level.path.value}/menu`)
 
+// The menu's sections, as the Menu lists them: holding dishes, or still empty.
+const menuSectionCount = computed(() => catalog.collections.value.filter((collection) => {
+  const members = catalog.products.value.filter(product => product.collections.some(entry => entry.collection_id === collection.id))
+  return !members.length || members.some(product => product.kind === 'dish')
+}).length)
+
 const entries = computed(() => [
-  { id: 'menu', label: 'Menu', icon: 'i-lucide-utensils', to: menuTo.value, summary: plural(catalog.collections.value.length, 'section', 'sections') },
+  { id: 'menu', label: 'Menu', icon: 'i-lucide-utensils', to: menuTo.value, summary: plural(menuSectionCount.value, 'section', 'sections') },
   { id: 'experiences', label: 'Experiences', icon: 'i-lucide-sparkles', to: `${level.path.value}/experiences`, summary: plural(count('experience'), 'experience', 'experiences') },
   { id: 'services', label: 'Services', icon: 'i-lucide-briefcase', to: `${level.path.value}/services`, summary: plural(count('service'), 'service', 'services') },
 ])

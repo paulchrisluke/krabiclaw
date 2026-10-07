@@ -34,7 +34,6 @@ export function useOrganizationSettingsNavigation(organization: Ref<{ id: string
     if (!base.value) return []
     return [
       { id: 'website', label: 'Website', to: `${base.value}/website` },
-      { id: 'posts', label: 'Posts', to: `${base.value}/posts` },
       { id: 'locations', label: 'Locations', to: `${base.value}/locations` },
       { id: 'team', label: 'Team', to: `${base.value}/team` },
       { id: 'integrations', label: 'Integrations', to: `${base.value}/integrations` },
