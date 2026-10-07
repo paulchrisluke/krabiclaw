@@ -267,9 +267,9 @@
         "destructiveHint": true
       },
       "justifications": {
-        "read_only_justification": "Deletes the selected short post from the website; its Facebook and Instagram posts are left as they are.",
-        "open_world_justification": "Deletes the selected short post from the website; its Facebook and Instagram posts are left as they are. Its scope is the authenticated KrabiClaw workspace, not arbitrary external entities or the public web.",
-        "destructive_justification": "Deletes the selected short post from the website; its Facebook and Instagram posts are left as they are. The result is irreversible or hard to reverse, so the tool requires the user's confirmation."
+        "read_only_justification": "Deletes the selected short post from the website; its Facebook, Instagram and Discord posts are left as they are.",
+        "open_world_justification": "Deletes the selected short post from the website; its Facebook, Instagram and Discord posts are left as they are. Its scope is the authenticated KrabiClaw workspace, not arbitrary external entities or the public web.",
+        "destructive_justification": "Deletes the selected short post from the website; its Facebook, Instagram and Discord posts are left as they are. The result is irreversible or hard to reverse, so the tool requires the user's confirmation."
       }
     },
     "delete_product": {

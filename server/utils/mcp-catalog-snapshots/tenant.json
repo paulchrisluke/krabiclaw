@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:ddfab4e34312dd4bfaa0119aea39fecd96962f45856cfb8cb39d15b805f9b83c",
+  "fingerprint": "sha256:f251d74786b4749cac1cdd4e3029e0a704fda918a218c46fb68441eb85999f4e",
   "tools": [
     {
       "name": "append_content_block",
@@ -2332,7 +2332,7 @@
             "anyOf": [
               {
                 "additionalProperties": false,
-                "description": "A button the author wrote: its label and an http(s) or tel: destination. Sent to Facebook and Instagram as a separate \"label: url\" line under the caption; Instagram shows it as text, not a button.",
+                "description": "A button the author wrote: its label and an http(s) or tel: destination. Sent to Facebook, Instagram and Discord as a separate \"label: url\" line under the caption; Instagram shows it as text, not a button.",
                 "properties": {
                   "label": {
                     "maxLength": 60,
@@ -19908,7 +19908,7 @@
             "anyOf": [
               {
                 "additionalProperties": false,
-                "description": "A button the author wrote: its label and an http(s) or tel: destination. Sent to Facebook and Instagram as a separate \"label: url\" line under the caption; Instagram shows it as text, not a button.",
+                "description": "A button the author wrote: its label and an http(s) or tel: destination. Sent to Facebook, Instagram and Discord as a separate \"label: url\" line under the caption; Instagram shows it as text, not a button.",
                 "properties": {
                   "label": {
                     "maxLength": 60,
