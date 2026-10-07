@@ -396,11 +396,11 @@ const postPublicationObject = {
   description: 'One external publication of this post. Private to the organization.',
   properties: {
     id: { type: 'string', description: 'The publication_id reconcile_post_publication takes.' },
-    channel: { type: 'string', enum: ['facebook', 'instagram'] },
+    channel: { type: 'string', enum: ['facebook', 'instagram', 'discord'] },
     target_id: { type: 'string' },
     state: { type: 'string', enum: ['preparing', 'publishing', 'published', 'failed', 'unknown', 'removed'] },
     provider_post_id: { type: ['string', 'null'] },
-    public_url: { type: ['string', 'null'], description: 'The provider\'s own permalink, when it returned one.' },
+    public_url: { type: ['string', 'null'], description: 'The provider\'s own permalink, when it returned one. A Discord message link opens only for members of that channel.' },
     code: { type: ['string', 'null'] },
     message: { type: ['string', 'null'] },
     published_at: { type: ['string', 'null'] },
@@ -472,7 +472,7 @@ export const postMutationResultObject = {
 const publishOutcomeObject = {
   type: 'object',
   properties: {
-    channel: { type: 'string', enum: ['organization', 'facebook', 'instagram'] },
+    channel: { type: 'string', enum: ['organization', 'facebook', 'instagram', 'discord'] },
     target_id: { type: 'string' },
     status: { type: 'string', enum: ['published', 'already_published', 'processing', 'failed', 'unknown', 'skipped'] },
     publication_id: { type: 'string' },

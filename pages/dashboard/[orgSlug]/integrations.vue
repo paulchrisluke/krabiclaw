@@ -13,11 +13,14 @@
 <script lang="ts">
 import type { InjectionKey, Ref } from 'vue'
 
-/** A connected Page, account, property or site, as the settings payload names it. */
+/** A connected Page, account, property, site or Discord channel, as the settings payload names it. */
 export interface ConnectedIntegration {
-  account_id: string
+  account_id: string | null
   target_id: string
   target_name: string
+  webhook_id: string | null
+  guild_id: string | null
+  revision: string
   measurement_id: string | null
   verified: boolean | null
   connected_at: string
@@ -42,6 +45,7 @@ export interface IntegrationsSummary {
   google_search_console: ConnectedIntegration | null
   facebook: ConnectedIntegration | null
   instagram: ConnectedIntegration | null
+  discord: ConnectedIntegration | null
 }
 
 /** The summary the list shows, and what a leaf refreshes after it changes a connection. */
@@ -98,6 +102,8 @@ const items = computed<EditorNavigationItem[]>(() => {
       ...connection(s?.facebook ?? null) },
     { id: 'instagram', label: 'Instagram', lead: { icon: 'i-skill-icons-instagram' }, to: `${base.value}/instagram`,
       ...connection(s?.instagram ?? null, s?.instagram ? `@${s.instagram.target_name}` : undefined) },
+    { id: 'discord', label: 'Discord', lead: { icon: 'i-logos-discord-icon' }, to: `${base.value}/discord`,
+      ...connection(s?.discord ?? null, s?.discord ? `#${s.discord.target_name}` : undefined) },
   ]
 })
 

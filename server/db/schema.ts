@@ -1068,9 +1068,13 @@ export const inventory_levels = sqliteTable("inventory_levels", {
 
 // ---------------------------------------------------------------------------
 // What an organization connected: one per provider, and each provider resource
-// (Page, professional account, GA4 property, Search Console site) on at most
-// one organization. The credential is the connecting person's Better Auth
-// linked account, named by `account_id`; no token is stored here. Unlinking
+// (Page, professional account, GA4 property, Search Console site, Discord
+// channel) on at most one organization. For OAuth providers the credential is
+// the connecting person's Better Auth linked account, named by `account_id`,
+// and no token is stored here. A Discord incoming webhook is not an OAuth
+// account: its token is the organization's own credential, kept in
+// `credential` encrypted with Better Auth's secret, beside the webhook and
+// guild ids Discord returned for it. Unlinking
 // that account does not remove the row: a release has work of its own (Zaraz
 // stops serving a measurement id), so it goes through releaseIntegration.
 // Read/write: server/utils/organization-integrations.ts.
@@ -1079,11 +1083,15 @@ export const organization_integrations = sqliteTable("organization_integrations"
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
 	provider: text().$type<typeof INTEGRATION_PROVIDERS[number]>().notNull(),
-	account_id: text().notNull(),
-	// Page id, Instagram professional account id, GA4 property id or Search Console site URL.
+	account_id: text(),
+	// Page id, Instagram professional account id, GA4 property id, Search Console site URL or Discord channel id.
 	target_id: text().notNull(),
-	// Page name, Instagram username, GA4 property name or Search Console site URL.
+	// Page name, Instagram username, GA4 property name, Search Console site URL or the Discord destination's label.
 	target_name: text().notNull(),
+	// Discord only: the incoming webhook, its guild, and its encrypted token.
+	webhook_id: text(),
+	guild_id: text(),
+	credential: text(),
 	// Google Analytics only: the property's web stream, which Zaraz serves.
 	measurement_id: text(),
 	// Search Console only: whether Google confirmed ownership, and the meta tag
@@ -1101,7 +1109,8 @@ export const organization_integrations = sqliteTable("organization_integrations"
 	unique("organization_integrations_target_unique").on(table.provider, table.target_id),
 	index("organization_integrations_account_idx").on(table.provider, table.account_id),
 	check("organization_integrations_provider_check", sql`provider IN (${sql.raw(INTEGRATION_PROVIDERS.map(value => `'${value}'`).join(', '))})`),
-	check("organization_integrations_values_check", sql`trim(account_id) <> '' AND trim(target_id) <> '' AND trim(target_name) <> '' AND trim(revision) <> ''`),
+	check("organization_integrations_values_check", sql`(account_id IS NULL OR trim(account_id) <> '') AND trim(target_id) <> '' AND trim(target_name) <> '' AND trim(revision) <> ''`),
+	check("organization_integrations_discord_check", sql`(provider = 'discord') = (account_id IS NULL) AND (provider = 'discord') = (webhook_id IS NOT NULL) AND (provider = 'discord') = (guild_id IS NOT NULL) AND (provider = 'discord') = (credential IS NOT NULL) AND (webhook_id IS NULL OR (trim(webhook_id) <> '' AND trim(guild_id) <> '' AND trim(credential) <> ''))`),
 	check("organization_integrations_measurement_check", sql`(provider = 'google_analytics') = (measurement_id IS NOT NULL)`),
 	check("organization_integrations_verification_check", sql`(provider = 'google_search_console') = (verified IS NOT NULL) AND (verification_token IS NULL OR provider = 'google_search_console') AND (verified IS NULL OR verified IN (0, 1))`),
 	check("organization_integrations_calendar_check", sql`(provider = 'google_calendar') = (status IS NOT NULL) AND (status IS NULL OR status IN ('active', 'disabled', 'error')) AND (provider = 'google_calendar' OR (status IS NULL AND last_error IS NULL))`),
@@ -1875,12 +1884,14 @@ export const content_documents = sqliteTable("content_documents", {
 	check("content_documents_social_source_check", sql`kind <> 'social_post' OR row_role <> 'root' OR (source IN ('manual','template')) IS 1`),
 ]);
 
-// One local social post and one actual Facebook or Instagram object.
+// One local social post and one actual Facebook, Instagram or Discord object.
 // Row meaning: this post was published to this provider
 //   target, and this is what the provider has said about it. It is not a job
 //   queue and not a delivery log: there is one row per post and channel, and
-//   it carries the provider's identifiers, never its credentials. Tokens stay
-//   on the Better Auth account that `provider_subject_id` names.
+//   it carries the provider's identifiers, never its credentials. For Meta,
+//   tokens stay on the Better Auth account that `provider_subject_id` names
+//   under `provider_app_id`. A Discord message has no OAuth application: its
+//   subject is the incoming webhook that sent it and its target the channel.
 // `state`: `preparing` holds native containers/uploads that are not public;
 //   `publishing` is committed immediately before the irreversible final call,
 //   so a crash after it reads `unknown`, never a retryable failure; `failed`
@@ -1899,8 +1910,8 @@ export const post_publications = sqliteTable("post_publications", {
 	// independently editable state.
 	post_row_role: text().$type<'root'>().default("root").notNull(),
 	post_kind: text().$type<'social_post'>().default("social_post").notNull(),
-	channel: text().$type<'facebook' | 'instagram'>().notNull(),
-	provider_app_id: text().notNull(),
+	channel: text().$type<'facebook' | 'instagram' | 'discord'>().notNull(),
+	provider_app_id: text(),
 	provider_subject_id: text().notNull(),
 	provider_target_id: text().notNull(),
 	state: text().$type<'preparing' | 'publishing' | 'published' | 'failed' | 'unknown' | 'removed'>().notNull(),
@@ -1921,13 +1932,13 @@ export const post_publications = sqliteTable("post_publications", {
 	foreignKey({ columns: [table.organization_id, table.post_id, table.post_row_role, table.post_kind], foreignColumns: [content_documents.organization_id, content_documents.id, content_documents.row_role, content_documents.kind], name: "post_publications_post_scope_fk" }).onDelete("no action"),
 	unique("post_publications_org_id_unique").on(table.organization_id, table.id),
 	uniqueIndex("post_publications_post_channel_unique").on(table.organization_id, table.post_id, table.channel).where(sql`post_id IS NOT NULL`),
-	uniqueIndex("post_publications_provider_post_unique").on(table.organization_id, table.channel, table.provider_app_id, table.provider_post_id).where(sql`provider_post_id IS NOT NULL`),
+	uniqueIndex("post_publications_provider_post_unique").on(table.organization_id, table.channel, table.provider_post_id).where(sql`provider_post_id IS NOT NULL`),
 	index("post_publications_subject_idx").on(table.channel, table.provider_app_id, table.provider_subject_id),
 	index("post_publications_target_state_idx").on(table.organization_id, table.channel, table.provider_target_id, table.state),
 	check("post_publications_constants_check", sql`post_row_role = 'root' AND post_kind = 'social_post'`),
-	check("post_publications_channel_check", sql`channel IN ('facebook', 'instagram')`),
+	check("post_publications_channel_check", sql`channel IN ('facebook', 'instagram', 'discord')`),
 	check("post_publications_state_check", sql`state IN ('preparing', 'publishing', 'published', 'failed', 'unknown', 'removed')`),
-	check("post_publications_identity_check", sql`length(trim(provider_app_id)) > 0 AND length(trim(provider_subject_id)) > 0 AND length(trim(provider_target_id)) > 0 AND (provider_post_id IS NULL OR length(trim(provider_post_id)) > 0)`),
+	check("post_publications_identity_check", sql`(channel = 'discord') = (provider_app_id IS NULL) AND (provider_app_id IS NULL OR length(trim(provider_app_id)) > 0) AND length(trim(provider_subject_id)) > 0 AND length(trim(provider_target_id)) > 0 AND (provider_post_id IS NULL OR length(trim(provider_post_id)) > 0)`),
 	check("post_publications_handles_check", sql`json_valid(provider_handles_json) AND json_type(provider_handles_json) IS 'object'`),
 	check("post_publications_permalink_check", sql`provider_permalink IS NULL OR provider_permalink LIKE 'https://%'`),
 	// Published needs provider evidence: the final identity, or an Instagram

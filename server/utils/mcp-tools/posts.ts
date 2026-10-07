@@ -6,8 +6,9 @@ import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import { HTTPError } from 'nitro'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { createPost, deletePost, getPost, listPosts, updatePost, type Post } from '~/server/utils/post-management'
-import { failureOf, getSocialConnections, parsePublishTargets, publishPost, reconcilePostPublication } from '~/server/utils/social-publication'
+import { failureOf, getSocialConnections, parsePublishTargets, publishPost, reconcilePostPublication, SOCIAL_CHANNELS } from '~/server/utils/social-publication'
 import { MetaGraphError } from '~/server/utils/meta-graph'
+import { DiscordError } from '~/server/utils/discord-webhooks'
 import { listChannelPosts, getChannelPost, deleteChannelPost, parseChannelTarget } from '~/server/utils/social-channel-posts'
 import { dashboardOrigin } from '~/server/utils/dashboard-notification-links'
 import { findOrganizationById } from '~/server/utils/member-access'
@@ -23,8 +24,8 @@ const publishTargetSchema = {
     {
       type: 'object', additionalProperties: false,
       properties: {
-        channel: { enum: ['facebook', 'instagram'] },
-        target_id: { type: 'string', description: 'The Page or professional account id from get_social_connections.' },
+        channel: { enum: [...SOCIAL_CHANNELS] },
+        target_id: { type: 'string', description: 'The Page, professional account or Discord channel id from get_social_connections.' },
         connection_revision: { type: 'string', description: 'The connection_revision get_social_connections returned with it.' },
       },
       required: ['channel', 'target_id', 'connection_revision'],
@@ -35,7 +36,7 @@ const publishTargetSchema = {
 const socialConnectionObject = {
   type: 'object',
   properties: {
-    channel: { type: 'string', enum: ['facebook', 'instagram'] },
+    channel: { type: 'string', enum: [...SOCIAL_CHANNELS] },
     connected: { type: 'boolean' },
     target_id: { type: ['string', 'null'] },
     target_name: { type: ['string', 'null'] },
@@ -44,13 +45,14 @@ const socialConnectionObject = {
     problems: { type: 'array', items: { type: 'object', properties: { code: { type: 'string' }, message: { type: 'string' } }, required: ['code', 'message'] } },
     supported_operations: { type: 'array', items: { type: 'string', enum: ['list', 'read', 'publish', 'delete'] } },
     deletion_unavailable_reason: { type: ['string', 'null'] },
+    listing_unavailable_reason: { type: ['string', 'null'], description: 'Why list_channel_posts is not available for this channel.' },
     connect_url: { type: 'string', description: 'Where a person connects or changes this account in the dashboard.' },
   },
-  required: ['channel', 'connected', 'target_id', 'target_name', 'connection_revision', 'supported_formats', 'problems', 'supported_operations', 'deletion_unavailable_reason', 'connect_url'],
+  required: ['channel', 'connected', 'target_id', 'target_name', 'connection_revision', 'supported_formats', 'problems', 'supported_operations', 'deletion_unavailable_reason', 'listing_unavailable_reason', 'connect_url'],
 }
 
 const channelTargetProperties = {
-  channel: { type: 'string', enum: ['facebook', 'instagram'] },
+  channel: { type: 'string', enum: [...SOCIAL_CHANNELS] },
   target_id: { type: 'string', description: 'The exact target_id returned by get_social_connections.' },
   connection_revision: { type: 'string', description: 'The connection_revision returned with that target.' },
 } as const
@@ -58,11 +60,11 @@ const channelTargetRequired = ['channel', 'target_id', 'connection_revision']
 const channelPostObject = {
   type: 'object', additionalProperties: false,
   properties: {
-    channel: { type: 'string', enum: ['facebook', 'instagram'] },
+    channel: { type: 'string', enum: [...SOCIAL_CHANNELS] },
     target_id: { type: 'string' },
     provider_post_id: { type: 'string', description: 'Native provider identity, not a website post_id.' },
     body: { type: ['string', 'null'] },
-    public_url: { type: ['string', 'null'] },
+    public_url: { type: ['string', 'null'], description: 'The provider link. A Discord message link opens only for members of that channel.' },
     published_at: { type: 'string' },
     media: { type: 'array', items: { type: 'object', additionalProperties: false, properties: {
       provider_media_id: { type: ['string', 'null'] }, kind: { type: 'string', enum: ['image', 'video'] },
@@ -75,7 +77,7 @@ const channelPostObject = {
 export const POSTS_TOOLS: McpToolDefinition[] = [
   organizationTool({
     name: 'get_social_connections',
-    description: "Read the site’s website, Facebook Page and Instagram publishing connections before selecting a publication target. Returns target_id, connection_revision, supported formats and operations, setup links, and problems, including whether Meta currently accepts each connection’s access; a rejected one names Meta’s error code. Credentials are not returned.",
+    description: "Read the site’s website, Facebook Page, Instagram and Discord channel publishing connections before selecting a publication target. Returns target_id, connection_revision, supported formats and operations, setup links, and problems, including whether Meta or Discord currently accepts each connection and whether a Discord webhook still posts to the connected channel. Credentials are not returned.",
     domain: 'posts',
     minimumRole: 'admin',
     confirmRequired: false,
@@ -91,7 +93,7 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
   }),
   organizationTool({
     name: 'list_channel_posts',
-    description: 'Read live posts directly from the explicitly selected connected Facebook Page or Instagram professional account. Does not import website posts or media. Read get_social_connections first and supply the exact channel, target_id and connection_revision. next_after is Meta\'s cursor; pass it as after for the next page.',
+    description: 'Read live posts directly from the explicitly selected connected Facebook Page or Instagram professional account. Does not import website posts or media. Read get_social_connections first and supply the exact channel, target_id and connection_revision. next_after is Meta\'s cursor; pass it as after for the next page. Discord is not listable: an incoming webhook cannot read channel history; read a Discord message with get_channel_post instead.',
     domain: 'posts', minimumRole: 'admin', confirmRequired: false,
     inputSchema: { ...channelTargetProperties, after: { type: 'string' }, limit: { type: 'integer', minimum: 1, maximum: 100, default: 25 } },
     required: channelTargetRequired,
@@ -99,7 +101,7 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
   }),
   organizationTool({
     name: 'get_channel_post',
-    description: "Read one post from the selected connected Facebook Page or Instagram professional account when the user wants its current caption, media or public link. Use provider_post_id from list_channel_posts and the exact target from get_social_connections. Website content is unchanged.",
+    description: "Read one post from the selected connected Facebook Page, Instagram professional account or Discord channel when the user wants its current caption, media or link. Use provider_post_id from list_channel_posts, or for Discord the provider_post_id of a confirmed publication receipt or a message id the connected webhook sent, with the exact target from get_social_connections. Website content is unchanged.",
     domain: 'posts', minimumRole: 'admin', confirmRequired: false,
     inputSchema: { ...channelTargetProperties, provider_post_id: { type: 'string' } },
     required: [...channelTargetRequired, 'provider_post_id'],
@@ -107,12 +109,12 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
   }),
   organizationTool({
     name: 'delete_channel_post',
-    description: 'Permanently delete exactly the provider_post_id on the explicitly selected connected Facebook Page. Keeps the website post and marks its publication receipt removed. Read get_social_connections and list_channel_posts first. Instagram deletion is unavailable with this app\'s Instagram Login connection; delete Instagram posts in Instagram. Use delete_post to remove website content separately.',
+    description: 'Permanently delete exactly the provider_post_id on the explicitly selected connected Facebook Page, or a Discord message the connected webhook sent to the connected channel. Keeps the website post and marks its publication receipt removed. Read get_social_connections first, then identify the post with list_channel_posts or, for Discord, a confirmed receipt or verified message id. Instagram deletion is unavailable with this app\'s Instagram Login connection; delete Instagram posts in Instagram. Use delete_post to remove website content separately.',
     domain: 'posts', minimumRole: 'admin', confirmRequired: true,
     inputSchema: { ...channelTargetProperties, provider_post_id: { type: 'string' } },
     required: [...channelTargetRequired, 'provider_post_id'],
     outputSchema: { type: 'object', properties: {
-      channel: { type: 'string', enum: ['facebook'] }, target_id: { type: 'string' }, provider_post_id: { type: 'string' }, deleted: { type: 'boolean' },
+      channel: { type: 'string', enum: ['facebook', 'discord'] }, target_id: { type: 'string' }, provider_post_id: { type: 'string' }, deleted: { type: 'boolean' },
       publication: { type: ['object', 'null'], properties: { id: { type: 'string' }, state: { type: 'string', enum: ['removed'] } }, required: ['id', 'state'] },
     }, required: ['channel', 'target_id', 'provider_post_id', 'deleted', 'publication'] },
   }),
@@ -135,7 +137,7 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
   }),
   organizationTool({
     name: 'get_post',
-    description: "Read a short website post before editing or publishing it. Returns its caption, call to action, ordered media, website status, draft preview link and stored Facebook or Instagram publication receipts. Use get_channel_post for current provider content.",
+    description: "Read a short website post before editing or publishing it. Returns its caption, call to action, ordered media, website status, draft preview link and stored Facebook, Instagram or Discord publication receipts. Use get_channel_post for current provider content.",
     domain: 'posts',
     minimumRole: 'admin',
     confirmRequired: false,
@@ -159,7 +161,7 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
   }),
   organizationTool({
     name: 'update_post',
-    description: 'Change a post\'s title, body, call_to_action, location, visibility or (while a draft) slug. Only the fields sent change. expected_updated_at is the updated_at you last read; a stale one conflicts. Media changes go through set_media, attach_media, remove_media and reorder_media on the post. Words and media cannot change while a Facebook or Instagram publication of this post is in progress or unresolved. Editing a published post changes the website only; nothing already sent to Facebook or Instagram is edited.',
+    description: 'Change a post\'s title, body, call_to_action, location, visibility or (while a draft) slug. Only the fields sent change. expected_updated_at is the updated_at you last read; a stale one conflicts. Media changes go through set_media, attach_media, remove_media and reorder_media on the post. Words and media cannot change while a Facebook, Instagram or Discord publication of this post is in progress or unresolved. Editing a published post changes the website only; nothing already sent to Facebook, Instagram or Discord is edited.',
     domain: 'posts',
     minimumRole: 'admin',
     confirmRequired: false,
@@ -169,27 +171,27 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
   }),
   organizationTool({
     name: 'publish_post',
-    description: 'Publish a post to exactly the targets listed, and nowhere else: {"channel":"organization"} for the website, and {"channel":"facebook"|"instagram","target_id","connection_revision"} from get_social_connections. Returns one outcome per target; ok is true only when every target is published. Repeating the call returns the existing receipts and never posts twice. processing means Meta is still preparing the media: call publish_post again to finish the same post. unknown means the final step was not confirmed: resolve it with reconcile_post_publication, never by publishing again. A post is published once per channel; publish a new post for another Page or account. Facebook takes text, a link, photos or one video; Instagram takes one JPEG image, a carousel of up to ten items, or one video as a Reel, and shows the call to action as text.',
+    description: 'Publish a post to exactly the targets listed, and nowhere else: {"channel":"organization"} for the website, and {"channel":"facebook"|"instagram"|"discord","target_id","connection_revision"} from get_social_connections. Returns one outcome per target; ok is true only when every target is published. Repeating the call returns the existing receipts and never posts twice. processing means Meta is still preparing the media, or Discord rate limited the send: call publish_post again to finish the same post. unknown means the final step was not confirmed: resolve it with reconcile_post_publication, never by publishing again. A post is published once per channel; publish a new post for another Page, account or channel. Facebook takes text, a link, photos or one video; Instagram takes one JPEG image, a carousel of up to ten items, or one video as a Reel, and shows the call to action as text. Discord takes up to 2000 characters of text and call to action, never truncated, with up to ten JPEG, PNG, GIF, WebP, MP4, MOV or WebM attachments of at most 20 MiB each and 25 MiB together; mentions are not pinged; forum and media channels are refused.',
     domain: 'posts',
     minimumRole: 'admin',
     confirmRequired: true,
     inputSchema: {
       post_id: { type: 'string' },
       expected_updated_at: { type: 'string', description: 'The post\'s updated_at as you last read it.' },
-      targets: { type: 'array', minItems: 1, maxItems: 3, items: publishTargetSchema, description: 'One entry per destination, each channel at most once.' },
+      targets: { type: 'array', minItems: 1, maxItems: 1 + SOCIAL_CHANNELS.length, items: publishTargetSchema, description: 'One entry per destination, each channel at most once.' },
     },
     required: ['post_id', 'expected_updated_at', 'targets'],
     outputSchema: postPublishResultObject,
   }),
   organizationTool({
     name: 'reconcile_post_publication',
-    description: "Check an unknown or existing Facebook or Instagram publication when the user wants to resolve or refresh its outcome. Reads the connected provider and updates the stored publication receipt; it does not publish. Supply provider_post_id only when the exact post is known and belongs to that connected Page or account. An unproven outcome remains unknown.",
+    description: "Check an unknown or existing Facebook, Instagram or Discord publication when the user wants to resolve or refresh its outcome. Reads the connected provider and updates the stored publication receipt; it does not publish. Supply provider_post_id only when the exact post is known and belongs to that connected Page, account or channel. Discord cannot be searched: an unknown Discord publication needs the message id, and is resolved only when that message was sent by the connected webhook with this post's exact text and media during the attempt. An unproven outcome remains unknown.",
     domain: 'posts',
     minimumRole: 'admin',
     confirmRequired: false,
     inputSchema: {
       publication_id: { type: 'string', description: 'The publication id from get_post or a publish_post outcome.' },
-      provider_post_id: { type: 'string', description: 'Optional: the Facebook post id or Instagram media id it became.' },
+      provider_post_id: { type: 'string', description: 'Optional: the Facebook post id, Instagram media id or Discord message id it became. Required for an unknown Discord publication.' },
     },
     required: ['publication_id'],
     outputSchema: {
@@ -200,7 +202,7 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
   }),
   organizationTool({
     name: 'delete_post',
-    description: 'Delete a post from the website. Its Facebook and Instagram posts are not deleted; use delete_channel_post for an explicit supported channel deletion. Refused while a publication of it is in progress or unresolved.',
+    description: 'Delete a post from the website. Its Facebook, Instagram and Discord posts are not deleted; use delete_channel_post for an explicit supported channel deletion. Refused while a publication of it is in progress or unresolved.',
     domain: 'posts',
     minimumRole: 'admin',
     confirmRequired: true,
@@ -308,9 +310,9 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
         return await deleteChannelPost(env, organization.organizationId, target, requiredString(args, 'provider_post_id'), organization.userId)
       } catch (error) {
         if (error instanceof HTTPError && error.statusCode === 400) throw mcpProtocolError(MCP_ERROR.invalidParams, error.message)
-        // Meta's own refusal, named the way publish_post names it, with the
-        // place to reconnect when the connection itself is what failed.
-        if (error instanceof MetaGraphError) {
+        // The provider's own refusal, named the way publish_post names it, with
+        // the place to reconnect when the connection itself is what failed.
+        if (error instanceof MetaGraphError || error instanceof DiscordError) {
           const failure = failureOf(error)
           const channel = typeof args.channel === 'string' ? args.channel : null
           const record = failure.code === 'connection_error' && channel ? await findOrganizationById(env, organization.organizationId) : null

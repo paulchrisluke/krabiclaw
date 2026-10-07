@@ -193,7 +193,7 @@ export default defineNuxtConfig({
     },
     customCollections: [
       pickIcons('simple-icons', ['claude', 'facebook', 'google', 'googlemaps', 'instagram', 'modelcontextprotocol', 'openai', 'whatsapp']),
-      pickIcons('logos', ['facebook', 'google-analytics', 'google-icon', 'google-maps', 'google-search-console', 'whatsapp-icon']),
+      pickIcons('logos', ['discord-icon', 'facebook', 'google-analytics', 'google-icon', 'google-maps', 'google-search-console', 'whatsapp-icon']),
       pickIcons('skill-icons', ['instagram']),
     ],
   },

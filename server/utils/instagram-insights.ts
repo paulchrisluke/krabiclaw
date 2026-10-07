@@ -22,7 +22,9 @@ export async function loadInstagramInsights(env: CloudflareEnv, organizationId: 
   if (!(await hasOrganizationEntitlement(env, organizationId, 'managed_service'))) return { status: 'growth_plan_required', message: 'Instagram insights require the Growth plan.' }
   const connection = await readIntegration(env.DB, organizationId, 'instagram')
   if (!connection) return { status: 'not_connected', message: 'No Instagram professional account is connected. Connect one in Settings → Integrations → Instagram.' }
-  const account = await readLinkedAccount(env, connection.account_id)
+  const accountId = connection.account_id
+  if (!accountId) throw new Error('The Instagram connection names no linked account')
+  const account = await readLinkedAccount(env, accountId)
   if (!account) return { status: 'account_unlinked', message: 'The Instagram login this connection was made through is no longer linked. Connect Instagram again.' }
   if (!account.scopes.includes(INSIGHTS_SCOPE)) return { status: 'permission_missing', message: 'Instagram has not granted access to insights for this account. Connect Instagram again and allow insights.' }
 
@@ -32,7 +34,7 @@ export async function loadInstagramInsights(env: CloudflareEnv, organizationId: 
   const until = new Date(localDateBounds(range.endDate, context.timezone).end)
   const deadline = new MetaDeadline(25_000)
   try {
-    const target: InstagramTarget = { userId: connection.target_id, accessToken: await instagramAccessToken(env, connection.account_id) }
+    const target: InstagramTarget = { userId: connection.target_id, accessToken: await instagramAccessToken(env, accountId) }
     const [totals, posted] = await Promise.all([readAccountInsights(target, { since, until }, deadline), mediaPostedIn(target, since, until, deadline)])
     const media = await inBatches(posted.items, 10, async (item) => {
       const carousel = item.media_type === 'CAROUSEL_ALBUM'

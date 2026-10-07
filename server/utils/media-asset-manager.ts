@@ -548,7 +548,7 @@ export async function updateMediaAssetAlt(db: DbClient, id: string, organization
 }
 
 /**
- * An asset a Facebook or Instagram publication is sending, or may already
+ * An asset a Facebook, Instagram or Discord publication is sending, or may already
  * have sent, is pinned: its revision is part of what the publication
  * fingerprinted, so it is not changed or deleted until that is resolved.
  */
