@@ -3,6 +3,7 @@ import { loginAs } from './helpers/auth'
 import { openTenantPage, waitForNuxtHydration } from './helpers'
 import { mcpData, mcpRequest } from './helpers/mcp'
 import { blawbyTestExtraHeaders } from './test-env'
+import type { Product } from '../../server/types/products'
 
 test.use({ timezoneId: 'America/New_York' })
 
@@ -30,7 +31,7 @@ test('native online review uses canonical Products, holds capacity, and releases
     expect((await response.json()).page.product_id).toBe(productId)
   }
   const stamp = Date.now()
-  const products: Array<{ id: string; name: string; slug: string; variants: Array<{ id: string }> }> = []
+  const products: Product[] = []
   const tomorrow = new Date(Date.now() + 86400000)
   const day = tomorrow.toISOString().slice(0, 10)
   const headers = blawbyTestExtraHeaders()
@@ -467,7 +468,15 @@ test('native online review uses canonical Products, holds capacity, and releases
     await page.getByRole('link', { name: 'Message guest', exact: true }).click()
     await expect(page).toHaveURL(`/dashboard/north-carolina-legal-services/messages/${browserBooking.request_id}`)
     await expect(page.getByRole('heading', { name: 'Browser review guest', exact: true })).toBeVisible()
-    const paid = await page.request.patch(`${editor}/products/${products[0]!.id}`, { data: { variants: [{ id: products[0]!.variants[0]!.id, name: 'Online', prices: [{ unit_amount: 7500, currency: 'USD' }] }] } })
+    const currentProductResponse = await page.request.get(`${editor}/products/${products[0]!.id}`)
+    expect(currentProductResponse.status(), await currentProductResponse.text()).toBe(200)
+    const currentProduct = (await currentProductResponse.json() as { product: Product }).product
+    expect(currentProduct.variants).toHaveLength(1)
+    const onlineVariant = currentProduct.variants[0]!
+    expect(onlineVariant.prices).toHaveLength(1)
+    const onlinePrice = onlineVariant.prices[0]!
+    expect(onlinePrice).toMatchObject({ currency: 'USD', unit_amount: 0 })
+    const paid = await page.request.patch(`${editor}/products/${products[0]!.id}`, { data: { variants: [{ id: onlineVariant.id, prices: [{ id: onlinePrice.id, unit_amount: 7500 }] }] } })
     expect(paid.status(), await paid.text()).toBe(200)
     const blocked = await book(0)
     expect(blocked.status(), await blocked.text()).toBe(409)

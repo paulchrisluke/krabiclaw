@@ -186,7 +186,7 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
     description: "Check an unknown or existing Facebook or Instagram publication when the user wants to resolve or refresh its outcome. Reads the connected provider and updates the stored publication receipt; it does not publish. Supply provider_post_id only when the exact post is known and belongs to that connected Page or account. An unproven outcome remains unknown.",
     domain: 'posts',
     minimumRole: 'admin',
-    confirmRequired: true,
+    confirmRequired: false,
     inputSchema: {
       publication_id: { type: 'string', description: 'The publication id from get_post or a publish_post outcome.' },
       provider_post_id: { type: 'string', description: 'Optional: the Facebook post id or Instagram media id it became.' },

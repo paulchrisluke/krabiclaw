@@ -233,9 +233,14 @@ Primary contracts: [Managed Risk](https://docs.stripe.com/connect/risk-managemen
 
 ## Durable boundaries
 
-`createProductBooking` is shared by public and MCP creation. Required positive
-collection reserves an expiring hold and waiting-on-guest request in one D1 batch
-before creating Stripe Checkout. The hold uses the canonical allocator predicate,
+`createProductBooking` is shared by public and MCP creation. Public booking
+creation with required positive collection reserves an expiring hold and
+waiting-on-guest request in one D1 batch before creating Stripe Checkout. MCP
+passes the explicit no-financial-writes boundary and returns
+`financial_action_required` with the authenticated product booking dashboard URL
+before creating any Booking, hold, request, Checkout, Payment or authorization;
+required collection and the product payment configuration stay unchanged.
+The public booking hold uses the canonical allocator predicate,
 including tenant/calendar-group half-open overlap exclusion. Holds expire after
 60 minutes. Review-pending Bookings have no Checkout TTL and consume capacity.
 Only authenticated native capture converts the hold to the canonical pending or
@@ -256,9 +261,16 @@ Tax settings/registrations. No registration or service taxability is invented.
 
 Financial read, refund, dispute, payout and integration permissions are
 separate. Refund and paid-review rejection require an actor-bound, expiring explicit
-same-origin browser approval. MCP gets a browser handoff, not an approval boolean.
-Paid rejection commits cancellation, allocation release and full refund intent in
-one guarded D1 batch; provider retry is durable. Ordinary cancellation is distinct.
+same-origin browser approval. MCP cancellation or rejection requiring a refund
+returns an incomplete `financial_action_required` result and the existing booking
+dashboard URL before changing state or preparing an authorization. Repeating that
+handoff creates no financial records. MCP exposes only payment, summary, payout
+history and operating-usage reads, plus `get_payments_dashboard_link` for a setup
+URL lookup. Refund preparation/execution and Checkout creation are dashboard/public
+booking operations. After authenticated browser approval, paid rejection commits
+cancellation, allocation release and full refund intent in one guarded D1 batch;
+provider retry and interrupted-refund recovery remain durable. Ordinary cancellation
+is distinct.
 
 Buyer ownership uses Better Auth identity. Signing in on any device reads the same
 owned purchases. A guest acts on a business's own site as an anonymous Better Auth

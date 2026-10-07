@@ -18,7 +18,7 @@ import { ensureInteractionUser, type CloudflareEnv } from '~/server/utils/auth'
 import { getGuestRequest, getThreadOperationalRecord, requestInsertQueries, threadPayloadForGuest } from '~/server/domain/requests'
 import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 import { resolveBookingPresentation } from '~/utils/booking-presentation'
-import type { H3Event } from 'nitro'
+import { HTTPError, type H3Event } from 'nitro'
 import { createPaymentCheckout } from '~/server/domain/payments/checkout'
 import { createStripeClient } from '~/server/utils/stripe-client'
 import { hasOrganizationEntitlement } from '~/server/utils/billing'
@@ -27,6 +27,7 @@ export interface BookingCreationContext {
   organizationId: string
   slug: string
   body: Record<string, unknown>
+  financialWritesAllowed?: boolean
   operator?: { userId: string; idempotencyKey: string; source: string; externalReference: string | null; guestAcknowledgement: boolean }
 }
 
@@ -84,7 +85,7 @@ export async function createProductBooking(event: H3Event, context: BookingCreat
   const db = env.DB
   if (!db) return creationResult({ error: 'Database not available' }, { status: 500 })
 
-  const organization = await queryFirst<{ id: string; name: string | null; default_currency: string; vertical: string | null; public_url: string | null }>(db, `SELECT id, name, default_currency, vertical, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active') AS public_url FROM organization WHERE id = ? AND status = 'active' LIMIT 1`, [organizationId])
+  const organization = await queryFirst<{ id: string; slug: string; name: string | null; default_currency: string; vertical: string | null; public_url: string | null }>(db, `SELECT id, slug, name, default_currency, vertical, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active') AS public_url FROM organization WHERE id = ? AND status = 'active' LIMIT 1`, [organizationId])
   if (!organization) return creationResult({ error: 'Organization not found' }, { status: 404 })
 
   const guestName = cleanString(body.guest_name, 100)
@@ -189,7 +190,11 @@ export async function createProductBooking(event: H3Event, context: BookingCreat
     if (!price) return creationResult({ error: 'A valid Price is required for this offering', code: 'price_unavailable' }, { status: 409 })
     requiresPayment = Boolean(config.online_payment_required && price.unit_amount > 0)
   }
-
+  if (requiresPayment && context.financialWritesAllowed === false) {
+    throw new HTTPError({ statusCode: 409, statusMessage: 'This booking requires online payment. Review the offering in the dashboard and complete its payment workflow before a booking can be created.', data: {
+      code: 'financial_action_required', dashboard_url: `/dashboard/${encodeURIComponent(organization.slug)}/products/${encodeURIComponent(product.id)}/booking`,
+    } })
+  }
 
   const clientIp = getClientIp(event)
   const ipHash = await hashClientIp(clientIp)

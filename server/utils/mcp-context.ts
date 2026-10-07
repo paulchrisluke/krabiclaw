@@ -172,9 +172,13 @@ export async function resolveMcpWorkspace(
     : []
 
   const requestedLocationId = normalizeId(options.locationId)
-  const location = requestedLocationId
-    ? locations.find((entry) => entry.id === requestedLocationId) ??
-      locations.find((entry) => entry.slug === requestedLocationId) ??
+  const preferredLocationId = organization?.id === preferredOrganizationId
+    ? normalizeId(preference?.location_id)
+    : null
+  const selectedLocationId = requestedLocationId ?? preferredLocationId
+  const location = selectedLocationId
+    ? locations.find((entry) => entry.id === selectedLocationId) ??
+      locations.find((entry) => entry.slug === selectedLocationId) ??
       null
     : null
 

@@ -169,27 +169,17 @@ Durable logging of ChatGPT MCP protocol requests for understanding tool discover
 
 MCP requests against `server/api/mcp.post.ts` write rows to `mcp_tool_call_events` (`server/db/schema.ts`) via `logMcpToolCallEvent()` in `server/utils/mcp-telemetry.ts`. Writes are fire-and-forget — wrapped in Cloudflare's `waitUntil` when available, or a detached promise otherwise — so telemetry can never add latency to, or fail, an MCP response.
 
-Captured per row: surface, organization/site/location/user id (best-effort), request id, method, tool name + domain, HTTP status, JSON-RPC error code/message, protocol version, hashed session id, hashed OAuth client id, user agent, Cloudflare ray id, catalog fingerprint, redacted summaries of arguments and result, unknown-tool fields, status (`success` / `error` / `auth_required` / `blocked`), and duration in ms.
+Captured per row: surface, authorized organization/location/user id, request id, method, tool name + domain, HTTP status, JSON-RPC error code/message, protocol version, hashed session id, hashed OAuth client id, Cloudflare ray id, catalog fingerprint, operational summaries of arguments and result, unknown-tool fields, status (`success` / `error` / `auth_required` / `blocked`), and duration in ms.
 
 Rows are deleted 180 days after `created_at` by `cleanupMcpToolCallEvents()`, which the daily `analytics-aggregate-daily` task (`0 3 * * *`) runs beside the pageview cleanup. This is the limit the Privacy Policy states.
 
 Each `tools/call` with an organization also writes a `usage_events` row (`resource = 'mcp_operation'`). Its `provider` is `mcp_client` for every external MCP client and `krabiclaw` for the public help agent. Rows written before this change say `krabiclaw` for external clients too, because the surface default was applied after the provider was chosen.
 
-### Redaction
+### Operational summaries
 
-`summarizeForTelemetry()` in `server/utils/mcp-telemetry.ts` is a single generic redactor applied uniformly to every tool's arguments and result. It:
-- Replaces any field whose **key** matches a sensitive pattern (token, secret, password, credential, cookie, base64/file/image data, download URLs) with `[redacted]`
-- Replaces PII-shaped keys (email, phone, address, guest_name, full_name, first_name, last_name) with a length marker, e.g. `[redacted:len=23]`
-- Detects base64-shaped strings by content and stores only their length
-- Truncates any other string over 200 characters to a short excerpt plus a length marker
-- Caps array length and object depth to bound row size
-- Caps the final JSON at 4000 characters
+`summarizeForTelemetry()` records only an explicit set of typed operational fields: finite counts/amounts, confirmation/completion flags, and known status values. Only named result, pagination, booking, reservation and payment containers are traversed, with bounded depth. Unknown fields and free text are omitted, including customer names, messages, booking notes, emails, attachment URLs, tokens and passwords. Error-message columns contain a fixed failure label; unknown tool names are hashed and user-agent text is omitted. Full conversational text and tool outputs are not stored in these summaries.
 
-Error messages are separately truncated to 500 characters before storage, since DB/validation error messages can otherwise leak argument values verbatim.
-
-### Important limitation: no raw user message
-
-ChatGPT's `tools/call` payload contains only the tool name and its structured arguments — the natural-language sentence the user actually typed is generally **not** present, unless the model happens to pass it through as a free-text argument value on a specific tool. Do not assume this telemetry can answer "what did the user type" for fuzzy-intent analysis.
+Tenant-scoped calls are attributed to the organization authorized by the executor, including when it resolves a saved workspace for a bearer token. Location attribution uses the validated selected location. Global discovery/context calls are not assigned to a guessed organization. These events still carry the operation, status, error code, duration, and catalog fingerprint needed to investigate failures.
 
 ### Querying
 

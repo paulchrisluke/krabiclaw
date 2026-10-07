@@ -115,10 +115,10 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'replace_content_block',
-      description: 'Replace one block\'s data and media in place, keeping its position. Requires the block\'s own updated_at from the last read; a stale token is rejected with a conflict.',
+      description: 'Replace one selected block’s complete data and any supplied media in an article or site page, keeping its ID and position. Omitted data fields are removed; omitted media is preserved. Read the block first and keep fields outside the requested change. Requires its own updated_at; a stale token conflicts. Returns the whole updated document. Published content changes immediately.',
       domain: 'content',
       minimumRole: 'admin',
-      confirmRequired: false,
+      confirmRequired: true,
       inputSchema: {
         block_id: { type: 'string' },
         expected_updated_at: { type: 'string', description: 'The block\'s updated_at from the last read.' },
@@ -130,7 +130,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'delete_content_block',
-      description: 'Delete one block, and any blocks nested under it, from a blog article or site page. Requires the block\'s own updated_at from the last read.',
+      description: 'Permanently delete the selected content block and all blocks nested under it from an article or site page. Requires the block’s own updated_at from the latest read; stale tokens conflict. Returns the remaining document and timestamps. Published content changes immediately.',
       domain: 'content',
       minimumRole: 'admin',
       confirmRequired: true,
@@ -162,7 +162,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'create_site_page',
-      description: "Create an authored site-page language variant. For a secondary language, page_id must name an existing source-language page. Content must be supplied for that language; this tool does not translate it.",
+      description: "Create an authored site page in the named language, returning its document, blocks and editor information. A secondary language must name an existing source page. Supply the actual content for that language; no translation is generated. Pages on a live site can become public immediately; blog articles and short announcements use their own tools.",
       domain: 'content',
       minimumRole: 'admin',
       confirmRequired: true,
@@ -222,7 +222,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'get_reservation_policy',
-      description: 'Get the reservation policy for one location. A null policy means the location does not take reservations; there is no site-level policy underneath it.',
+      description: 'Read one location’s table reservation settings and guest-facing policy summary, including capacity, advance notice and cancellation terms. A null policy means this location does not take reservations. Product session bookings use get_product for their separate configuration.',
       domain: 'content',
       minimumRole: 'admin',
       confirmRequired: false,
