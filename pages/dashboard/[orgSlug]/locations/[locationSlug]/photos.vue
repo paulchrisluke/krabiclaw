@@ -9,8 +9,7 @@
         title="Photos"
         description="Upload images or videos here, or attach existing media to this location."
         :items="gridItems"
-        :pending="loading"
-        :error="loadError"
+        :error="photosError ? getErrorMessage(photosError, 'Failed to load photos') : null"
         empty-title="No location media yet"
         empty-icon="i-lucide-image"
         add-label="Add photos"
@@ -153,10 +152,7 @@ const dashboardLocation = useDashboardLocation()
 const organizationId = await useDashboardOrganizationId()
 const organizationApiBase = `/api/editor/organizations/${organizationId}`
 const locationId = computed(() => dashboardLocation.currentLocationId.value)
-const assets = ref<MediaAsset[]>([])
 const attachableAssets = ref<MediaAsset[]>([])
-const loading = ref(true)
-const loadError = ref<string | null>(null)
 const attachOpen = ref(false)
 const attachLoading = ref(false)
 const categoryFilter = ref('all')
@@ -179,6 +175,19 @@ const isMediaResponse = (value: unknown): value is { media: MediaAsset[] } =>
     && typeof asset.id === 'string'
     && typeof asset.kind === 'string',
   )
+
+const photosKey = computed(() => `dashboard-location-photos:${organizationId}:${locationId.value ?? 'missing'}`)
+const { data: photosResource, error: photosError, refresh: loadPhotos } = await useAsyncData(
+  photosKey,
+  async () => {
+    if (!locationId.value) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
+    const params = new URLSearchParams({ ownerType: 'business_location', ownerId: locationId.value, slot: 'gallery', limit: '100' })
+    return await dashboardApi<{ media: MediaAsset[] }>(`${organizationApiBase}/media?${params}`, {
+      validate: isMediaResponse,
+    })
+  },
+)
+const assets = computed(() => photosResource.value?.media ?? [])
 
 // The categories this business has, not every category the column can store:
 // a law firm was being offered Food and Menu.
@@ -237,27 +246,6 @@ async function detachOpenPhoto() {
 
 function categoryLabel(category: string | null) {
   return categoryItems.value.find(item => item.id === (category || 'other'))?.label ?? 'Other'
-}
-
-async function loadPhotos() {
-  if (!locationId.value) {
-    assets.value = []
-    loading.value = false
-    return
-  }
-  loading.value = true
-  loadError.value = null
-  try {
-    const params = new URLSearchParams({ ownerType: 'business_location', ownerId: locationId.value, slot: 'gallery', limit: '100' })
-    const res = await dashboardApi<{ media: MediaAsset[] }>(`${organizationApiBase}/media?${params}`, {
-      validate: isMediaResponse,
-    })
-    assets.value = res.media
-  } catch (error) {
-    loadError.value = error instanceof Error ? error.message : 'Failed to load photos'
-  } finally {
-    loading.value = false
-  }
 }
 
 function openUploadPicker() {
@@ -390,32 +378,6 @@ async function detachMany(ids: string[]) {
     await loadPhotos()
   }
 }
-
-
-const photosKey = computed(() => `dashboard-location-photos:${organizationId}:${locationId.value ?? 'missing'}`)
-const { data: photosResource, pending: photosPending, error: photosError } = await useAsyncData(
-  photosKey,
-  async () => {
-    if (!locationId.value) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
-    const params = new URLSearchParams({ ownerType: 'business_location', ownerId: locationId.value, slot: 'gallery', limit: '100' })
-    return await dashboardApi<{ media: MediaAsset[] }>(`${organizationApiBase}/media?${params}`, {
-      validate: isMediaResponse,
-    })
-  },
-  { lazy: true },
-)
-
-watch([photosResource, photosPending, photosError], ([resource, pending, error]) => {
-  loading.value = pending
-  if (error) {
-    loadError.value = error instanceof Error ? error.message : 'Failed to load photos'
-    return
-  }
-  if (resource) {
-    assets.value = resource.media as MediaAsset[]
-    loadError.value = null
-  }
-}, { immediate: true })
 
 useSeoMeta({ title: 'Photos | Krabiclaw Dashboard', robots: 'noindex, nofollow' })
 </script>

@@ -39,7 +39,8 @@ import {
 } from '~/server/notifications/events'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { createCanonicalNotification } from '~/server/utils/notification-center'
-import { buildOwnerThreadInboxUrl, dashboardOrigin, getPlatformDomain, resolveDashboardSlugs } from '~/server/utils/dashboard-notification-links'
+import { buildOwnerThreadInboxUrl, getPlatformDomain, platformOrigin, resolveDashboardSlugs } from '~/server/utils/dashboard-notification-links'
+import { reviewEditorPath } from '~/server/utils/dashboard-links'
 import { createDeliveryReceipt, isDeliverySent, recordDeliveryOutcome } from '~/server/domain/guest-threads/deliveries'
 import { appendEntry, findEntryByDedupeKey } from '~/server/domain/guest-threads/entries'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
@@ -232,8 +233,7 @@ async function buildOwnerReviewsUrl(
   if (!slugs) return null
 
   // The review's own level, beside the Reviews tab it is a row of.
-  const base = dashboardOrigin(env, slugs)
-  return `${slugs.locationSlug ? `${base}/locations/${slugs.locationSlug}` : base}/qa/reviews/${encodeURIComponent(opts.reviewId)}`
+  return `${platformOrigin(env)}${reviewEditorPath(slugs.orgSlug, opts.reviewId, opts.locationId)}`
 }
 
 /**

@@ -2,37 +2,19 @@
   <!-- Airbnb's Payouts tab: How you get paid, the bank rows with Edit, Add payout method, and a Need help card. -->
   <div class="space-y-8">
     <UAlert
-      v-if="errorMessage"
+      v-if="failure"
       color="error"
       variant="soft"
       icon="i-lucide-triangle-alert"
       title="Stripe Connect is unavailable"
-      :description="errorMessage"
+      :description="failure"
     />
 
     <section>
       <h2 class="text-2xl font-semibold text-highlighted">How you get paid</h2>
       <p class="mt-2 text-base text-muted">Your money goes to the bank account on file with Stripe. To change it, use Edit next to the account.</p>
 
-      <div v-if="loading" class="mt-6 space-y-3" aria-label="Loading payout method">
-        <USkeleton class="h-5 w-48" />
-        <USkeleton class="h-10 w-full" />
-      </div>
-
-      <template v-else-if="!account && !errorMessage">
-        <UFormField class="mt-6" label="Business country" hint="This cannot be changed after the Stripe account is created">
-          <USelectMenu
-            v-model="selectedCountry"
-            :items="countryOptions"
-            value-key="value"
-            label-key="label"
-            :loading="countriesLoading"
-            placeholder="Select a country"
-            class="w-full sm:max-w-sm"
-          />
-        </UFormField>
-        <UButton class="mt-6" size="xl" :disabled="!selectedCountry" :loading="starting" label="Add payout method" @click="startOnboarding" />
-      </template>
+      <UButton v-if="!account && !connectError" class="mt-6" size="xl" :loading="starting" label="Add payout method" @click="startOnboarding" />
 
       <template v-else-if="account">
         <div v-if="payout" class="mt-6 flex items-center gap-4 py-4">
@@ -100,7 +82,7 @@ interface ConnectedAccount {
   id: string
   organizationId: string
   stripeAccountId: string | null
-  country: string
+  country: string | null
   livemode: boolean
   status: ConnectStatus
   cardPaymentsStatus: CapabilityStatus | null
@@ -128,7 +110,7 @@ function isConnectedAccount(value: unknown): value is ConnectedAccount {
     && typeof value.id === 'string'
     && typeof value.organizationId === 'string'
     && (value.stripeAccountId === null || typeof value.stripeAccountId === 'string')
-    && typeof value.country === 'string'
+    && (value.country === null || typeof value.country === 'string')
     && typeof value.livemode === 'boolean'
     && typeof value.status === 'string'
     && CONNECT_STATUSES.has(value.status as ConnectStatus)
@@ -146,36 +128,31 @@ const isAccountResponse = (value: unknown): value is { success: true; account: C
   isRecord(value) && value.success === true && (value.account === null || isConnectedAccount(value.account)) && isPayoutMethod(value.payout)
 const isOnboardingResponse = (value: unknown): value is { success: true; account: ConnectedAccount; onboardingUrl: string } =>
   isRecord(value) && value.success === true && isConnectedAccount(value.account) && typeof value.onboardingUrl === 'string'
-const isCountriesResponse = (value: unknown): value is { success: true; countries: string[] } =>
-  isRecord(value)
-  && value.success === true
-  && Array.isArray(value.countries)
-  && value.countries.every(country => typeof country === 'string')
 
 const dashboardApi = useDashboardApi()
 const route = useRoute()
 const router = useRouter()
-const account = ref<ConnectedAccount | null>(null)
-const payout = ref<PayoutMethod | null>(null)
+const { data: connect, error: connectError } = await useAsyncData(
+  `dashboard-connect:${String(route.params.orgSlug)}`,
+  () => dashboardApi<{ success: true; account: ConnectedAccount | null; payout: PayoutMethod | null }>('/api/dashboard/connect', { validate: isAccountResponse }),
+)
+const account = computed(() => connect.value?.account ?? null)
+const payout = computed(() => connect.value?.payout ?? null)
+/** Keeps the payout row and replaces the account Stripe just reported. */
+function setAccount(next: ConnectedAccount) {
+  connect.value = { success: true, account: next, payout: payout.value }
+}
 const scheduleLabel = computed(() => {
   const schedule = payout.value?.schedule
   if (!schedule) return ''
   const when = schedule.interval === 'daily' ? 'Sent daily' : schedule.interval === 'weekly' ? 'Sent weekly' : schedule.interval === 'monthly' ? 'Sent monthly' : 'Sent when you ask'
   return schedule.delayDays ? `${when}, ${schedule.delayDays} days after a payment` : when
 })
-const countries = ref<string[]>([])
-const selectedCountry = ref<string | undefined>(undefined)
-const loading = ref(true)
-const countriesLoading = ref(false)
 const starting = ref(false)
-const refreshing = ref(false)
 const openingDashboard = ref(false)
 const errorMessage = ref<string | null>(null)
+const failure = computed(() => (connectError.value ? getErrorMessage(connectError.value, 'Stripe Connect status could not be loaded') : errorMessage.value))
 
-const countryNames = new Intl.DisplayNames(['en'], { type: 'region' })
-const countryOptions = computed(() => countries.value
-  .map(code => ({ label: countryNames.of(code) === undefined ? code : countryNames.of(code)!, value: code }))
-  .sort((left, right) => left.label.localeCompare(right.label)))
 const canContinueOnboarding = computed(() => account.value !== null && account.value.status !== 'ready')
 const statusPresentation = computed<{ label: string; description: string; color: 'success' | 'warning' | 'error' | 'neutral' }>(() => {
   switch (account.value?.status) {
@@ -198,45 +175,15 @@ async function openDashboard() {
   finally {openingDashboard.value=false}
 }
 
-async function loadCountries() {
-  countriesLoading.value = true
-  try {
-    const response = await dashboardApi<{ success: true; countries: string[] }>('/api/dashboard/connect/countries', { validate: isCountriesResponse })
-    countries.value = response.countries
-  } catch (error) {
-    errorMessage.value = getErrorMessage(error, 'Stripe countries could not be loaded')
-  } finally {
-    countriesLoading.value = false
-  }
-}
-
-async function loadAccount() {
-  loading.value = true
-  errorMessage.value = null
-  try {
-    const response = await dashboardApi<{ success: true; account: ConnectedAccount | null; payout: PayoutMethod | null }>('/api/dashboard/connect', { validate: isAccountResponse })
-    account.value = response.account
-    payout.value = response.payout
-    if (response.account === null) await loadCountries()
-  } catch (error) {
-    errorMessage.value = getErrorMessage(error, 'Stripe Connect status could not be loaded')
-  } finally {
-    loading.value = false
-  }
-}
-
 async function startOnboarding() {
-  if (account.value === null && selectedCountry.value === undefined) return
   starting.value = true
   errorMessage.value = null
   try {
-    const body = account.value === null ? { country: selectedCountry.value } : {}
     const response = await dashboardApi<{ success: true; account: ConnectedAccount; onboardingUrl: string }>('/api/dashboard/connect', {
       method: 'POST',
-      body,
       validate: isOnboardingResponse,
     })
-    account.value = response.account
+    setAccount(response.account)
     await navigateTo(response.onboardingUrl, { external: true })
   } catch (error) {
     errorMessage.value = getErrorMessage(error, 'Stripe onboarding could not be started')
@@ -247,23 +194,19 @@ async function startOnboarding() {
 
 async function refreshStatus() {
   if (account.value === null || account.value.stripeAccountId === null) return
-  refreshing.value = true
   errorMessage.value = null
   try {
     const response = await dashboardApi<{ success: true; account: ConnectedAccount }>('/api/dashboard/connect/status', {
       method: 'POST',
       validate: (value): value is { success: true; account: ConnectedAccount } => isRecord(value) && value.success === true && isConnectedAccount(value.account),
     })
-    account.value = response.account
+    setAccount(response.account)
   } catch (error) {
     errorMessage.value = getErrorMessage(error, 'Stripe Connect status could not be refreshed')
-  } finally {
-    refreshing.value = false
   }
 }
 
 onMounted(async () => {
-  await loadAccount()
   // Stripe's own state is asked for whenever setup is still open, not on a button: the status is read, not managed.
   if (account.value?.stripeAccountId && (route.query.stripe_connect === 'returned' || account.value.status !== 'ready')) {
     await refreshStatus()

@@ -3,12 +3,12 @@
 // (server/utils/chowbot-agent.ts) — two otherwise-separate tool-calling
 // implementations that should still produce identical dashboard URLs.
 export const DASHBOARD_DESTINATIONS = {
-  'settings.billing': 'settings/payments?tab=plan',
-  'settings.members': 'settings/members',
+  'settings.billing': 'payments?tab=plan',
+  'settings.members': 'team',
   'organization.overview': '',
   'organization.locations.new': 'locations/new',
-  'organization.domains': 'settings/website/domains',
-  'organization.settings': 'settings',
+  'organization.domains': 'website/domains',
+  'organization.settings': 'menu',
   'location.overview': 'locations/:locationSlug',
   'location.settings': 'locations/:locationSlug/settings',
   support: 'support',
@@ -51,4 +51,69 @@ export function buildDashboardUrl(organization: DashboardLinkOrgContext, destina
 
 function pathRequiresLocationSlug(destination: DashboardDestination): boolean {
   return DASHBOARD_DESTINATIONS[destination].includes(':locationSlug')
+}
+
+// ---------------------------------------------------------------------------
+// One editor URL per record, relative to the platform host. Dashboard search,
+// MCP's edit URLs and the dashboard's own cross-workspace links all build them
+// here, so every entry point opens the same record in the same editor.
+// ---------------------------------------------------------------------------
+
+function organizationBase(orgSlug: string): string {
+  return `/dashboard/${encodeURIComponent(orgSlug)}`
+}
+
+/** A location's scope on a shared manager, which it reaches by its id. */
+function scopedTo(path: string, locationId: string | null | undefined): string {
+  return locationId ? `${path}?location_id=${encodeURIComponent(locationId)}` : path
+}
+
+export function catalogPath(orgSlug: string, locationId?: string | null): string {
+  return scopedTo(`${organizationBase(orgSlug)}/products`, locationId)
+}
+
+export function productEditorPath(orgSlug: string, productId: string, locationId?: string | null): string {
+  return scopedTo(`${organizationBase(orgSlug)}/products/${encodeURIComponent(productId)}`, locationId)
+}
+
+export function collectionEditorPath(orgSlug: string, collectionId: string, locationId?: string | null): string {
+  return scopedTo(`${organizationBase(orgSlug)}/products/menu/${encodeURIComponent(collectionId)}`, locationId)
+}
+
+/** Every page is edited in Pages, including the page a Product owns. */
+export function pageEditorPath(orgSlug: string, page: { id: string }): string {
+  return `${organizationBase(orgSlug)}/website/pages/${encodeURIComponent(page.id)}`
+}
+
+export function blogEditorPath(orgSlug: string, articleId: string): string {
+  return `${organizationBase(orgSlug)}/website/blog/${encodeURIComponent(articleId)}`
+}
+
+export function articleCategoryEditorPath(orgSlug: string, categoryId: string): string {
+  return `${organizationBase(orgSlug)}/website/blog/categories/${encodeURIComponent(categoryId)}`
+}
+
+export function brandEditorPath(orgSlug: string): string {
+  return `${organizationBase(orgSlug)}/website/brand`
+}
+
+export function linksEditorPath(orgSlug: string): string {
+  return `${organizationBase(orgSlug)}/website/pages/links`
+}
+
+export function postEditorPath(orgSlug: string, postId: string, locationId?: string | null): string {
+  return scopedTo(`${organizationBase(orgSlug)}/website/posts/${encodeURIComponent(postId)}`, locationId)
+}
+
+export function qaEditorPath(orgSlug: string, qaId: string, locationId?: string | null): string {
+  return scopedTo(`${organizationBase(orgSlug)}/website/qa/${encodeURIComponent(qaId)}`, locationId)
+}
+
+/** A review is a row of the Reviews tab beside Q&A, listed per scope, so its location rides along. */
+export function reviewEditorPath(orgSlug: string, reviewId: string, locationId?: string | null): string {
+  return scopedTo(`${organizationBase(orgSlug)}/website/qa/reviews/${encodeURIComponent(reviewId)}`, locationId)
+}
+
+export function locationEditorPath(orgSlug: string, locationSlug: string): string {
+  return `${organizationBase(orgSlug)}/locations/${encodeURIComponent(locationSlug)}`
 }

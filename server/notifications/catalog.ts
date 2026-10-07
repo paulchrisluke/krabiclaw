@@ -1,4 +1,5 @@
 import type { WhatsAppTemplate } from '~/server/utils/whatsapp'
+import { reviewEditorPath } from '~/server/utils/dashboard-links'
 import type { NotificationMessage } from './messages'
 import { guestPaymentMessage, ownerPaymentMessage } from './payment-events'
 import type { GuestPaymentNotificationEvent, PaymentNotificationEvent } from './payment-events'
@@ -192,7 +193,7 @@ export const NOTIFICATION_CATALOG: CatalogEntry[] = [
     message: ownerAlert(reviewReceivedMessage({
       authorName: 'Alex Carter', rating: 5,
       content: 'The wood-fired pizza was outstanding and the team could not have been kinder.',
-      organizationName: restaurant, reviewsUrl: 'https://demo.krabiclaw.com/dashboard/ember-slice/reviews',
+      organizationName: restaurant, reviewsUrl: `https://demo.krabiclaw.com${reviewEditorPath('ember-slice', 'review-ember-alex')}`,
     })),
   },
   {
@@ -224,7 +225,7 @@ export const NOTIFICATION_CATALOG: CatalogEntry[] = [
     message: domainUpdateMessage({
       headline: 'emberslice.com is live', message: 'Your custom domain is verified and serving traffic.',
       domain: 'emberslice.com', status: 'active',
-      dashboardUrl: 'https://demo.krabiclaw.com/dashboard/ember-slice/settings/website/domains',
+      dashboardUrl: 'https://demo.krabiclaw.com/dashboard/ember-slice/website/domains',
     }),
   },
 
@@ -235,7 +236,7 @@ export const NOTIFICATION_CATALOG: CatalogEntry[] = [
     message: onboardingCompletedMessage({
       organizationName: studio, ownerName: 'Priya Shah', ownerEmail: 'priya@example.com',
       siteUrl: 'https://pottery-house.krabiclaw.com/',
-      viewCustomerUrl: 'https://krabiclaw.com/dashboard/krabiclaw/settings/people?user=preview-user&organization=preview-organization',
+      viewCustomerUrl: 'https://krabiclaw.com/dashboard/krabiclaw/platform-accounts?user=preview-user&organization=preview-organization',
     }),
   },
 

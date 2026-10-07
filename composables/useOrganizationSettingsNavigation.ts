@@ -1,73 +1,63 @@
 import type { EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
-import { resolvePublicTemplate } from '~/utils/template-registry'
-import { requireProductPresentation } from '~/utils/product-presentation'
+import { authClient } from '~/lib/auth-client'
+import { canOpenPlatformAccounts } from '~/utils/platform-admin-access'
 
-// The rows on Menu. Every organization is one business with one site, so the
-// site's own things sit here beside the team and the billing: Menu is the
-// business's page. The settings level renders this list as its index column
-// and names the open leaf from it, and the desktop slideover renders the same
-// list, so a row exists in one place.
-export function useOrganizationSettingsNavigation() {
+// The rows on Menu. Menu is a launcher: every row is a destination of its own
+// — Website, Posts, Locations, Team — or an action, with no headings. The Menu
+// page and the desktop slideover render this one list, so a row exists in one
+// place. A destination is not nested under Menu; it names Menu as its tab.
+//
+// The organization is the shell's (useDashboardMenu): the route's, otherwise
+// Better Auth's active one, so Account settings opened from inside an
+// organization keeps that organization's Menu.
+export function useOrganizationSettingsNavigation(organization: Ref<{ id: string; slug: string } | null>) {
   const route = useRoute()
   const router = useRouter()
-  const { orgPaths, businessPaths } = useDashboardOrganizationLinks()
   const dashboard = useDashboardOrganization()
+  const session = authClient.useSession()
 
-  const settingsPath = computed(() => orgPaths.value.settings)
+  const base = computed(() => organization.value ? `/dashboard/${encodeURIComponent(organization.value.slug)}` : null)
 
   /**
-   * Krabiclaw runs on Krabiclaw, so its own business's Menu carries the one
-   * tool no tenant has: every account on the platform, and impersonation.
-   * Airbnb has no equivalent — internal admin tooling is not in the host's
-   * dashboard — so this row is a deliberate addition, not parity.
+   * Every account on the platform, and impersonation: Krabiclaw runs on
+   * Krabiclaw, so only its own organization's Menu carries this row, and only
+   * for a Better Auth admin. The template is read off the route's loaded
+   * organization context, the same reading the page itself gates on. Airbnb
+   * has no equivalent; internal admin tooling is not in the host's dashboard.
    */
-  const isPlatformOrganization = computed(() => {
-    const organization = dashboard.organization.value
-    if (!organization) return false
-    return resolvePublicTemplate({ themeId: organization.theme_id, vertical: organization.vertical }).slug === 'platform'
+  const showPlatformAccounts = computed(() => {
+    const loaded = dashboard.organization.value
+    return Boolean(loaded && canOpenPlatformAccounts(loaded, (session.value.data?.user as { role?: string | null } | undefined)?.role))
   })
 
   const items = computed(() => {
-    const business = businessPaths.value
+    if (!base.value) return []
     return [
-      ...(business
-        ? [
-            ...(dashboard.organization.value?.vertical === 'service'
-              ? [{ id: 'products', label: requireProductPresentation('service', dashboard.organization.value.theme_id).collectionLabel, to: `${business.organization}/products` }]
-              : []),
-            { id: 'pages', label: 'Pages', to: business.pages },
-            { id: 'blog', label: 'Blog', to: business.blog },
-            { id: 'qa', label: 'Reviews and Q&A', to: business.qa },
-            { id: 'brand', label: 'Brand', to: business.brand },
-            { id: 'website', label: 'Website', to: `${settingsPath.value}/website` },
-            { id: 'integrations', label: 'Integrations', to: `${settingsPath.value}/integrations` },
-          ]
-        : []),
-      { id: 'members', label: 'Team', to: `${settingsPath.value}/members` },
+      { id: 'website', label: 'Website', to: `${base.value}/website` },
+      { id: 'locations', label: 'Locations', to: `${base.value}/locations` },
+      { id: 'team', label: 'Team', to: `${base.value}/team` },
+      { id: 'integrations', label: 'Integrations', to: `${base.value}/integrations` },
       // "Team" is this organization's members; this is every account there is.
-      ...(isPlatformOrganization.value
-        ? [{ id: 'people', label: 'Platform accounts', to: `${settingsPath.value}/people` }]
+      ...(showPlatformAccounts.value
+        ? [{ id: 'platform-accounts', label: 'Platform accounts', to: `${base.value}/platform-accounts` }]
         : []),
       // The way to the account on a phone, where there is no header to carry an
       // avatar. Airbnb's mobile Menu lists "Account settings" in the same place,
       // second from last, above Log out (measured 2026-09-22).
-      { id: 'account', label: 'Account settings', to: orgPaths.value.accountProfile },
+      { id: 'account', label: 'Account settings', to: '/dashboard/account/profile' },
       // Airbnb's "Switch to travelling": the last row before Log out.
       { id: 'switch-personal', label: 'Switch to Personal', action: {} },
       { id: 'log-out', label: 'Log out', action: {} },
     ]
   })
 
-  const groups = computed<EditorNavigationGroup[]>(() => [{ id: 'business', items: items.value }])
+  const groups = computed<EditorNavigationGroup[]>(() => [{ id: 'organization', items: items.value }])
 
-  /** The row whose level is open, read off the matched hierarchy: Pages lives at `/pages` but is nested under Menu. */
+  /** The row whose destination is open, for the slideover's current row. */
   const activeItem = computed(() => {
     const open = new Set(route.matched.map(record => routeRecordPath(router, record, route.params)))
     return items.value.find(item => item.to && open.has(item.to))?.id ?? null
   })
 
-  /** The open leaf's title, from the row that opened it. */
-  const activeLabel = computed(() => items.value.find(item => item.id === activeItem.value)?.label)
-
-  return { settingsPath, groups, activeItem, activeLabel }
+  return { groups, activeItem }
 }

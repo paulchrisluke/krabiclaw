@@ -41,7 +41,7 @@ interface ContentDocumentInputFields {
 
 export type ContentDocumentInput = ContentDocumentInputFields & (
   | { rowRole: 'representation'; rootId: string; locale: string }
-  | { rowRole: 'root'; locale: 'en'; locationId?: string | null; scopePath?: string | null;
+  | { rowRole: 'root'; locale: 'en'; locationId?: string | null; productId?: string | null; scopePath?: string | null;
       status?: string | null; visibility?: string | null; sortOrder?: number; source?: string | null;
       authorId?: string | null; publishedAt?: string | null; firstPublishedAt?: string | null }
 )
@@ -479,15 +479,15 @@ export function prepareContentDocumentWithBlocks(
     query: `INSERT INTO content_documents
       (id, organization_id, kind, row_role, root_id, root_role, locale, title, slug, path, summary,
        seo_keywords, metadata_json, created_by, updated_by,
-       location_id, scope_path, status, visibility, sort_order, source, author_id, published_at, first_published_at,
+       location_id, product_id, scope_path, status, visibility, sort_order, source, author_id, published_at, first_published_at,
        created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     params: [document.id, input.organizationId, input.kind, input.rowRole, document.root_id,
       input.rowRole === 'representation' ? 'root' : null, input.locale,
       input.title ?? null, input.slug ?? null, input.path ?? null, input.summary ?? null,
       input.seoKeywords ?? null, JSON.stringify(input.metadata ?? {}),
       input.createdBy ?? null, input.updatedBy ?? null,
-      root?.locationId ?? null, root?.scopePath ?? null, root?.status ?? null, root?.visibility ?? null,
+      root?.locationId ?? null, root?.productId ?? null, root?.scopePath ?? null, root?.status ?? null, root?.visibility ?? null,
       root?.sortOrder ?? 0, root?.source ?? null, root?.authorId ?? null,
       root?.publishedAt ?? null, root?.firstPublishedAt ?? null, now, now],
   }

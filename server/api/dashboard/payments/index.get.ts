@@ -3,7 +3,6 @@ import {getQuery} from 'nitro/h3'
 import {getDashboardContext} from '~/server/utils/dashboard-context'
 import {jsonResponse} from '~/server/utils/api-response'
 import {listPayments,paymentSummary,paymentPayouts,readPaymentDetails,authorizePayments} from '~/server/domain/payments'
-import {paymentsBillingPricing} from '~/server/domain/payments/usage'
 import {connectedStripe,paymentPayoutDetail,paymentPerformance,paymentTransactions,payoutItems} from '~/server/domain/payments/earnings'
 import {queryAll,queryFirst} from '~/server/db'
 export default defineHandler(async event=>{
@@ -44,6 +43,5 @@ export default defineHandler(async event=>{
   const rows=await queryAll<{id:string}>(db,`SELECT r.*,p.currency,p.subject_type,p.subject_id FROM ${table} r JOIN payments p ON p.id=r.payment_id WHERE p.organization_id=?${cursor?' AND (r.updated_at<? OR (r.updated_at=? AND r.id<?))':''} ORDER BY r.updated_at DESC,r.id DESC LIMIT 101`,[organization.id,...(cursor?[cursor.updated_at,cursor.updated_at,cursor.id]:[])])
   return jsonResponse({rows:rows.slice(0,100),next_cursor:rows.length>100?rows[99]!.id:null,source:'Stripe authenticated projections',refreshed_at:new Date().toISOString()})
  }
- const pricing=query.view==='overview'?(await paymentsBillingPricing(db,env,organization.id)).pricing:undefined
- return jsonResponse({summary:await paymentSummary(db,principal,from,to),...await listPayments(db,principal,{from,to,after}),...(query.view==='overview'?{pricing}:{})})
+ return jsonResponse({summary:await paymentSummary(db,principal,from,to),...await listPayments(db,principal,{from,to,after})})
 })

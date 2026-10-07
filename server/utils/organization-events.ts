@@ -72,8 +72,13 @@ export function organizationEventQuery(event: OrganizationEvent): BatchQuery {
 }
 
 /** The scoped key a creation's audit row carries for its caller's idempotency key. */
-export function creationDedupeKey(kind: 'social_post' | 'article', organizationId: string, idempotencyKey: string): string {
+export function creationDedupeKey(kind: 'social_post' | 'article' | 'product', organizationId: string, idempotencyKey: string): string {
   return `create:${kind}:${organizationId}:${idempotencyKey}`
+}
+
+/** True when a batch failed because its creation record's key was already taken: the same request committed concurrently. */
+export function isUniqueDedupeConflict(error: unknown): boolean {
+  return /UNIQUE constraint failed: activity_entries\.dedupe_key/.test(error instanceof Error ? error.message : String(error))
 }
 
 /** A canonical hash of what a creation request asked for, to tell a retry from a different request under one key. */

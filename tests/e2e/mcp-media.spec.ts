@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { loginAs } from './helpers/auth'
-import { MCP_VERSION, MCP_GROWTH_ORGANIZATION_ID, mcpRequest, mcpData } from './helpers/mcp'
+import { MCP_VERSION, MCP_ORGANIZATION_ID, mcpRequest, mcpData } from './helpers/mcp'
 import { acquireTenantMutationLock } from './helpers/tenant-mutation-lock'
 
 test.describe('stateless MCP server', () => {
@@ -56,7 +56,7 @@ test.describe('stateless MCP server', () => {
     const locations = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'list_locations',
-      args: { organization_id: MCP_GROWTH_ORGANIZATION_ID },
+      args: { organization_id: MCP_ORGANIZATION_ID },
     })
     expect(locations.status()).toBe(200)
     const locationId = mcpData<{ locations: Array<{ id: string }> }>(await locations.json()).locations[0]?.id
@@ -65,9 +65,9 @@ test.describe('stateless MCP server', () => {
     const mismatchedTarget = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'set_media',
-      organizationId: MCP_GROWTH_ORGANIZATION_ID,
+      organizationId: MCP_ORGANIZATION_ID,
       args: {
-        organization_id: MCP_GROWTH_ORGANIZATION_ID,
+        organization_id: MCP_ORGANIZATION_ID,
         placement: { owner_type: 'business_location', owner_id: locationId, slot: 'hero' },
         location_id: locationId,
         asset_id: 'media-does-not-matter-for-this-check',
@@ -80,9 +80,9 @@ test.describe('stateless MCP server', () => {
   })
 
   test('a gallery reorder moves the fixture gallery and get_location reads the new order', async ({ request, baseURL }, testInfo) => {
-    const releaseTenantMutationLock = await acquireTenantMutationLock(testInfo, MCP_GROWTH_ORGANIZATION_ID)
+    const releaseTenantMutationLock = await acquireTenantMutationLock(testInfo, MCP_ORGANIZATION_ID)
     const call = async <T>(toolName: string, args: Record<string, unknown>) => mcpData<T>(await (await mcpRequest(request, baseURL!, {
-      method: 'tools/call', toolName, args: { organization_id: MCP_GROWTH_ORGANIZATION_ID, ...args },
+      method: 'tools/call', toolName, args: { organization_id: MCP_ORGANIZATION_ID, ...args },
     })).json())
     const locationId = 'loc-demo-2'
     const placement = { owner_type: 'business_location', owner_id: locationId, slot: 'gallery' }
@@ -110,11 +110,11 @@ test.describe('stateless MCP server', () => {
     }
   })
   test('product mutation responses preserve the canonical image and gallery', async ({ request, baseURL }, testInfo) => {
-    const releaseTenantMutationLock = await acquireTenantMutationLock(testInfo, MCP_GROWTH_ORGANIZATION_ID)
+    const releaseTenantMutationLock = await acquireTenantMutationLock(testInfo, MCP_ORGANIZATION_ID)
     type MediaItem = { asset_id: string }
     type Product = { id: string; name: string; image: MediaItem | null; gallery: MediaItem[]; media: MediaItem[] }
     const call = async <T>(toolName: string, args: Record<string, unknown>) => mcpData<T>(await (await mcpRequest(request, baseURL!, {
-      method: 'tools/call', toolName, args: { organization_id: MCP_GROWTH_ORGANIZATION_ID, ...args },
+      method: 'tools/call', toolName, args: { organization_id: MCP_ORGANIZATION_ID, ...args },
     })).json())
     // The seeded Margherita carries one image, also its only gallery item.
     const productId = 'mi-1'

@@ -4,7 +4,10 @@ import { MAX_D1_BATCH_STATEMENTS } from '~/server/db/d1-limits'
 import { resourceLocalizationDeletionQueries } from '~/server/utils/localization'
 import { loadPublicSocialMedia } from '~/server/utils/public-social-image'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
-import { organizationEventQuery } from '~/server/utils/organization-events'
+import { creationDedupeKey, creationRequestHash, isUniqueDedupeConflict, organizationEventQuery, readCreationRecord } from '~/server/utils/organization-events'
+import { assertTenantPagePathAvailable, isProductPageConflict, prepareTenantPageCreate, refreshTenantPageCard, type TenantPageEditorInput } from '~/server/utils/content/pages'
+import { loadOrganizationTemplate } from '~/server/utils/content/publishing'
+import type { CloudflareEnv } from '~/server/utils/auth'
 import { isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
 import {
   assertNoConflictingPrices,
@@ -112,6 +115,7 @@ function mapProductRow(row: Row): Product {
     locations: [],
     collections: [],
     booking: null,
+    page: null,
     image: null,
     gallery: [],
     media: [],
@@ -184,7 +188,9 @@ async function hydrate(db: DbClient, organizationId: string, products: Product[]
       WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?)) ORDER BY collection_id`, params: [organizationId, ids] },
     { query: `SELECT product_id, duration_minutes, default_capacity, confirmation_mode, online_payment_required, online_timezone, calendar_group, scheduling_mode, assigned_member_id FROM product_booking_configs
       WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?))`, params: [organizationId, ids] },
-
+    // The page each product owns: the source row that carries its product_id.
+    { query: `SELECT product_id, id, path, title FROM content_documents
+      WHERE organization_id = ? AND row_role = 'root' AND kind = 'page' AND product_id IN (SELECT value FROM json_each(?))`, params: [organizationId, ids] },
   ], { operation: 'Hydrate products' })
   const rowsAt = (index: number): Row[] => (batched[index] as { results?: Row[] })?.results ?? []
   const optionRows = rowsAt(0)
@@ -196,6 +202,11 @@ async function hydrate(db: DbClient, organizationId: string, products: Product[]
   const locationRows = rowsAt(6)
   const collectionRows = rowsAt(7)
   const bookingRows = rowsAt(8)
+  const pageRows = rowsAt(9)
+  for (const row of pageRows) {
+    const product = byId.get(String(row.product_id))
+    if (product) product.page = { id: String(row.id), path: String(row.path), title: String(row.title) }
+  }
 
   // The row's existence is the capability, so a product with no row keeps the
   // null it was mapped with.
@@ -892,17 +903,69 @@ function assertVariantPricesConsistent(planned: PlannedProduct): void {
   }
 }
 
+/**
+ * Create one product, and — when the caller asks — the source page it owns,
+ * in one batch: the product, its default variant, its publication, the page
+ * and the binding commit together or not at all.
+ *
+ * `idempotencyKey` makes a retry of the same request return what it created:
+ * the record is the creation's audit row, written in the same batch under a
+ * unique key, so a lost response or a concurrent duplicate never makes a
+ * second product. The same key with a different request conflicts.
+ */
 export async function createProduct(db: DbClient, input: {
   organizationId: string
   product: CreateProductInput
   actor: Actor
   /** Publish it on `organizationId` in the same batch — see planProductCreateWrites. */
   publication?: { published: boolean }
+  /**
+   * A source page created with the product and bound to it, through the one
+   * page writer. A service's page may omit its path: it is given the first
+   * free `/services/<slug>`, once, and keeps it when the product is renamed.
+   */
+  page?: { data: Omit<TenantPageEditorInput, 'productId' | 'pageId' | 'locale' | 'path'> & { path?: string }; env: CloudflareEnv }
+  idempotencyKey?: string
 }): Promise<Product> {
-  const planned = await planProduct(db, input.organizationId, input.product, { organizationId: input.organizationId })
+  const key = input.idempotencyKey?.trim()
+  if (input.idempotencyKey !== undefined && (!key || key.length > 200)) invalid('idempotency_key must be 1 to 200 characters')
+  // A product made with its page starts sale-inactive unless the caller says
+  // otherwise: the page and the offer are drafted before anything is sold.
+  const product = input.page && input.product.active === undefined ? { ...input.product, active: false } : input.product
+  const dedupeKey = key ? creationDedupeKey('product', input.organizationId, key) : null
+  const requestHash = dedupeKey ? await creationRequestHash({ product, page: input.page?.data ?? null, publication: input.publication ?? null }) : null
+  const replay = async (): Promise<Product | null> => {
+    if (!dedupeKey) return null
+    const record = await readCreationRecord(db, dedupeKey)
+    if (!record) return null
+    if (record.requestHash !== requestHash) conflict('This idempotency_key was already used for a different product')
+    const existing = await queryFirst<{ id: string }>(db, 'SELECT id FROM products WHERE organization_id = ? AND id = ?', [input.organizationId, record.entityId])
+    if (!existing) throw new HTTPError({ statusCode: 410, statusMessage: 'The product this idempotency_key created has been deleted; it is not created again' })
+    return getProduct(db, input.organizationId, record.entityId)
+  }
+  const earlier = await replay()
+  if (earlier) return earlier
+
+  const planned = await planProduct(db, input.organizationId, product, { organizationId: input.organizationId })
   assertVariantPricesConsistent(planned)
   const now = new Date().toISOString()
   const writes = productWrites(input.organizationId, planned, input.actor, now, 'insert')
+  const page = input.page
+    ? await prepareTenantPageCreate(db, {
+        organizationId: input.organizationId,
+        userId: input.actor.actorId,
+        data: {
+          ...input.page.data,
+          path: input.page.data.path ?? (planned.kind === 'service'
+            ? await availableServicePagePath(db, input.organizationId, planned.slug)
+            : invalid('page.path is required for this kind of product')),
+          productId: planned.id,
+        },
+        env: input.page.env,
+        productInSameBatch: true,
+      })
+    : null
+  if (page) writes.push(...page.queries)
   if (input.publication && input.organizationId) {
     writes.push({
       query: `INSERT INTO product_publications (organization_id, product_id, published, created_at, updated_at, created_by, updated_by)
@@ -911,9 +974,42 @@ export async function createProduct(db: DbClient, input: {
     })
     writes.push(publicResourceCacheInvalidationQuery(input.organizationId, 'product_created'))
   }
-  writes.push(organizationEventQuery({ organizationId: input.organizationId, actorId: input.actor.actorId, eventType: 'product.created', entityType: 'product', entityId: planned.id }))
-  await executeBatch(db, writes, { operation: 'Create product' })
+  writes.push(organizationEventQuery({
+    organizationId: input.organizationId, actorId: input.actor.actorId, eventType: 'product.created', entityType: 'product', entityId: planned.id,
+    ...(dedupeKey ? { metadata: { request_hash: requestHash, page_id: page?.variantId ?? null }, dedupeKey } : {}),
+  }))
+  try {
+    await executeBatch(db, writes, { operation: 'Create product' })
+  } catch (error) {
+    if (isUniqueDedupeConflict(error)) {
+      const concurrent = await replay()
+      if (concurrent) return concurrent
+    }
+    if (isProductPageConflict(error)) conflict('Product already has a canonical page')
+    throw error
+  }
+  // The product and its page are committed. The page's social card is drawn
+  // after, and a failure there is reported as itself; a retry under the same
+  // key returns this product rather than making another.
+  if (page && input.page) await refreshTenantPageCard(db, input.page.env, page, input.actor.actorId)
   return getProduct(db, input.organizationId, planned.id)
+}
+
+/**
+ * The first `/services/<slug>` no page or redirect holds, by the same rule the
+ * page writer enforces. A taken candidate is the reason to try the next one;
+ * running out is a conflict the caller sees.
+ */
+async function availableServicePagePath(db: DbClient, organizationId: string, slug: string): Promise<string> {
+  const { template } = await loadOrganizationTemplate(db, organizationId)
+  for (let attempt = 0; attempt < MAX_SLUG_SUFFIX_ATTEMPTS; attempt += 1) {
+    try {
+      return await assertTenantPagePathAvailable(db, { organizationId, locale: 'en', path: `/services/${slugCandidate(slug, attempt)}`, template })
+    } catch (error) {
+      if ((error as { statusCode?: number }).statusCode !== 409) throw error
+    }
+  }
+  conflict('Could not find a free page path for this service')
 }
 
 /**

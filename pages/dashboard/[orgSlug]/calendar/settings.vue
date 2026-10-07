@@ -7,10 +7,7 @@
     by name. Closures are the calendar's own: block a day on it.
   -->
   <DashboardIndexPanel id="calendar-settings" title="Settings" :auto-open="groups[0]?.items[0]?.to ?? null">
-    <div v-if="editor?.loading.value" class="space-y-4">
-      <USkeleton v-for="index in 4" :key="index" class="h-32 rounded-xl" />
-    </div>
-    <UAlert v-else-if="editor?.error.value" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="editor?.error.value" />
+    <UAlert v-if="editor?.error.value" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="editor?.error.value" />
     <EditorNavigationList v-else :groups="groups" :active-item="level.child.value" />
   </DashboardIndexPanel>
 </template>

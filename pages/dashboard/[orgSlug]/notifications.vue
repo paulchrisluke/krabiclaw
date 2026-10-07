@@ -1,0 +1,12 @@
+<template>
+  <DashboardIndexPanel id="organization-notifications" title="Notifications">
+    <NotificationList />
+  </DashboardIndexPanel>
+</template>
+
+<script setup lang="ts">
+import NotificationList from '~/components/dashboard/NotificationList.vue'
+
+definePageMeta({ layout: 'dashboard', tab: 'menu', back: 'menu' })
+useSeoMeta({ title: 'Notifications | Krabiclaw Dashboard', robots: 'noindex, nofollow' })
+</script>

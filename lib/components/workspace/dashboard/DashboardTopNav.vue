@@ -61,14 +61,16 @@
         header is the only chrome there is, so the avatar stays at every width.
       -->
       <DashboardAccountMenu :class="items.length ? 'hidden md:inline-flex' : undefined" />
+      <!-- Lit like a tab when the screen's tab is Menu, the same declaration the bottom bar reads. -->
       <UButton
         v-if="items.length"
-        color="neutral"
+        :color="menuActive ? 'primary' : 'neutral'"
         variant="soft"
         square
         class="rounded-full"
         icon="i-lucide-menu"
         aria-label="Open menu"
+        :aria-current="menuActive ? 'page' : undefined"
         data-testid="dashboard-top-nav-menu-button"
         @click="$emit('menu')"
       />
@@ -96,6 +98,8 @@ export interface DashboardTopNavItem {
 defineProps<{
   items: readonly DashboardTopNavItem[]
   homeTo: string
+  /** The screen's declared tab is Menu. */
+  menuActive?: boolean
 }>()
 
 defineEmits<{ menu: [] }>()

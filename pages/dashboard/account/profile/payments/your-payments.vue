@@ -6,7 +6,6 @@
   -->
   <DashboardLeafPanel id="account-payments-your-payments" title="Your payments" :footer="false">
     <UAlert v-if="error" color="error" title="Payments could not be loaded" :description="getErrorMessage(error, 'Payments request failed.')" />
-    <div v-else-if="pending" class="space-y-4"><USkeleton v-for="index in 4" :key="index" class="h-20 rounded-2xl" /></div>
     <template v-else-if="years.length">
       <section v-for="year in years" :key="year.label" class="mb-8">
         <h2 class="text-xl font-semibold text-highlighted">{{ year.label }}</h2>
@@ -47,10 +46,9 @@ useSeoMeta({ title: 'Your payments | Krabiclaw', robots: 'noindex, nofollow' })
 const PAGE = 10
 const shown = ref(PAGE)
 const session = authClient.useSession()
-const { data, pending, error } = await useAsyncData(
+const { data, error } = await useAsyncData(
   () => `account-payments:${session.value.data?.user.id}`,
   () => applicationFetch<{ entries: BuyerPaymentEntry[] }>('/api/account/payments', { validate: (value): value is { entries: BuyerPaymentEntry[] } => isRecord(value) && Array.isArray(value.entries) && value.entries.every(isBuyerPaymentEntry) }),
-  { server: false },
 )
 const entries = computed(() => data.value?.entries ?? [])
 // Airbnb heads the current year "Completed" and each past year by its number.

@@ -2,7 +2,6 @@
   <DashboardLeafPanel
     id="location-hours-exception"
     :title="entry ? exceptionLabel(entry) : ''"
-    :ready="!editor.loading.value && Boolean(entry)"
     :saving="editor.saving.value"
     :disabled="editor.saveDisabled.value"
     :error="editor.editorError.value ?? editor.validationMessage.value ?? ''"
@@ -37,8 +36,7 @@ const entry = computed(() => index.value === null ? null : editor.hoursForm.valu
 const removing = ref(false)
 
 // A new exception is a draft entry until Save; an existing one is named by its position.
-watch([() => editor.loading.value, param], ([loading]) => {
-  if (loading) return
+watch(param, () => {
   if (!creating.value) {
     index.value = Number(param.value)
     return
@@ -56,7 +54,7 @@ watch([() => editor.loading.value, param], ([loading]) => {
 
 // A date the location does not have is not a page (DESIGN.md).
 watchEffect(() => {
-  if (!editor.loading.value && index.value !== null && !entry.value && !removing.value) showError(createError({ statusCode: 404, statusMessage: 'Page not found' }))
+  if (index.value !== null && !entry.value && !removing.value) showError(createError({ statusCode: 404, statusMessage: 'Page not found' }))
 })
 
 async function save() {

@@ -20,7 +20,6 @@
       </div>
 
       <UAlert v-if="error" class="mt-6" color="error" :description="error.message" />
-      <div v-else-if="pending && !data" class="mt-6 space-y-4"><USkeleton v-for="index in 4" :key="index" class="h-20 rounded-2xl" /></div>
       <template v-else-if="data">
         <p v-if="!rows.length" class="mt-6 text-base text-muted">No transactions in this period.</p>
         <div v-else class="mt-6 space-y-6">
@@ -105,7 +104,7 @@ const periodLabel = computed(() => !from.value
 type LocationPill = { id: string; title: string; imageUrl: string | null }
 const isLocationList = (value: unknown): value is { locations: LocationPill[] } => isRecord(value) && Array.isArray(value.locations)
   && value.locations.every(row => isRecord(row) && typeof row.id === 'string' && typeof row.title === 'string' && (row.imageUrl === null || typeof row.imageUrl === 'string'))
-const { data: locationData } = await useAsyncData(() => `earnings-transaction-locations:${route.params.orgSlug}`, () => api<{ locations: LocationPill[] }>('/api/dashboard/locations', { validate: isLocationList }), { lazy: true })
+const { data: locationData } = await useAsyncData(() => `earnings-transaction-locations:${route.params.orgSlug}`, () => api<{ locations: LocationPill[] }>('/api/dashboard/locations', { validate: isLocationList }))
 const locations = computed(() => locationData.value?.locations ?? [])
 const locationItems = computed(() => [[
   { label: 'All locations', type: 'checkbox' as const, checked: !locationId.value, onSelect: () => { locationId.value = '' } },
@@ -123,7 +122,7 @@ const TYPES = [{ value: '' as const, label: 'All earnings types' }, { value: 'pa
 const typeItems = computed(() => [TYPES.map(type => ({ label: type.label, type: 'checkbox' as const, checked: earningsType.value === type.value, onSelect: () => { earningsType.value = type.value } }))])
 const typeLabel = computed(() => TYPES.find(type => type.value === earningsType.value)!.label)
 
-const { data, pending, error } = await useAsyncData(
+const { data, error } = await useAsyncData(
   () => `earnings-transactions:${route.params.orgSlug}:${from.value}:${through.value}:${locationId.value}:${earningsType.value}:${after.value ?? ''}`,
   async () => {
     // "All dates" is the last twelve months, the span the month list offers.
@@ -143,7 +142,7 @@ const { data, pending, error } = await useAsyncData(
     loaded.value = after.value ? [...loaded.value, ...page.payments] : page.payments
     return page
   },
-  { lazy: true, watch: [from, through, locationId, earningsType, after] },
+  { watch: [from, through, locationId, earningsType, after] },
 )
 // Newest first, as Airbnb lists them.
 const rows = computed(() => [...loaded.value].sort((a, b) => b.created_at.localeCompare(a.created_at)))

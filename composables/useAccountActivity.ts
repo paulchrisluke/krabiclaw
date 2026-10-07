@@ -6,6 +6,5 @@ export function useAccountActivity() {
   return useAsyncData(
     () => `account-activity:${session.value.data?.user.id}`,
     () => applicationFetch<AccountActivityResponse>('/api/account', { validate: isAccountActivityResponse }),
-    { server: false },
   )
 }

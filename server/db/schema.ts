@@ -1132,7 +1132,9 @@ export const stripe_connected_accounts = sqliteTable("stripe_connected_accounts"
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
 	stripe_account_id: text().unique(),
-	country: text().notNull(),
+	// The country Stripe reports for the account. Stripe's hosted onboarding has
+	// the owner choose it, so it is null until Stripe has one.
+	country: text(),
 	livemode: integer({ mode: "boolean" }).notNull(),
 	// 'creating' | 'creation_failed' | 'action_required' | 'pending_review' |
 	// 'restricted' | 'ready'. Derived only from an Accounts v2 retrieval.
@@ -1149,7 +1151,7 @@ export const stripe_connected_accounts = sqliteTable("stripe_connected_accounts"
 }, (table) => [
 	unique("stripe_connected_accounts_org_unique").on(table.organization_id),
 	index("stripe_connected_accounts_status_idx").on(table.status, table.updated_at),
-	check("stripe_connected_accounts_country_check", sql`length(country) = 2 AND country = upper(country) AND country NOT GLOB '*[^A-Z]*'`),
+	check("stripe_connected_accounts_country_check", sql`country IS NULL OR (length(country) = 2 AND country = upper(country) AND country NOT GLOB '*[^A-Z]*')`),
 	check("stripe_connected_accounts_livemode_check", sql`livemode IN (0, 1)`),
 	check("stripe_connected_accounts_status_check", sql`status IN ('creating', 'creation_failed', 'action_required', 'pending_review', 'restricted', 'ready')`),
 	check("stripe_connected_accounts_capability_check", sql`card_payments_status IS NULL OR card_payments_status IN ('active', 'pending', 'restricted', 'unsupported')`),

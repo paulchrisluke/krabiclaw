@@ -11,10 +11,7 @@
     the thread's drawer there is no column to own, so it is the body alone.
   -->
   <component :is="embedded ? 'div' : DashboardIndexPanel" v-bind="chrome">
-    <div v-if="pending && !booking" class="space-y-4 p-5 sm:p-8">
-      <USkeleton v-for="index in 4" :key="index" class="h-40 rounded-2xl" />
-    </div>
-    <div v-else-if="error" class="p-5 sm:p-8">
+    <div v-if="error" class="p-5 sm:p-8">
       <UAlert color="error" variant="soft" title="Booking details could not be loaded" :description="getErrorMessage(error, 'Booking request failed')" />
     </div>
     <template v-else>
@@ -317,7 +314,7 @@ const chrome = computed(() => (props.embedded
 const openNoteId = ref<string | null>(null)
 const selectedNote = computed(() => booking.value?.notes.find(note => note.id === openNoteId.value))
 
-const { resource, booking, pending, error, presentation, noun, pageTitle, orgSlug, purchase, refresh: refreshDetails } = await useBookingDetails(props.bookingType, props.bookingId, props.personalScope)
+const { resource, booking, error, presentation, noun, pageTitle, orgSlug, purchase, refresh: refreshDetails } = await useBookingDetails(props.bookingType, props.bookingId, props.personalScope)
 
 const formattedDate = computed(() => booking.value ? formatCalendarDate(booking.value.bookingDate, 'en') : '')
 const formattedTime = computed(() => {

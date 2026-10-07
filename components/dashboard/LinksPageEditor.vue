@@ -39,9 +39,14 @@
       />
     </template>
 
-    <div v-if="!editorReady" class="space-y-3">
-      <USkeleton v-for="index in 5" :key="index" class="h-20 rounded-2xl" />
-    </div>
+    <UAlert
+      v-if="loadError"
+      color="error"
+      variant="soft"
+      icon="i-lucide-triangle-alert"
+      title="Links page could not be loaded"
+      :description="loadError"
+    />
     <EditorNavigationList v-else :groups="navigationGroups" :active-item="openSection" />
   </DashboardIndexPanel>
 </template>
@@ -75,7 +80,8 @@ export interface LinksEditor {
   organizationId: string
   saving: Ref<boolean>
   errorMessage: Ref<string>
-  editorReady: Ref<boolean>
+  /** Why the page could not be read. A leaf shows it instead of fields that would edit nothing. */
+  loadError: Ref<string | null>
   /** Sends the page and the links as they stand; returns the document as stored. */
   persist: (items: Array<Omit<LinkItem, 'id'> & { id?: string }>) => Promise<{ page: unknown; items: LinkItem[]; created_item_ids: string[] }>
   /** Saves the page and returns to it, which is what every page-level leaf does. */
@@ -97,6 +103,7 @@ export const LINK_STATUS_OPTIONS = [
 <script setup lang="ts">
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import DashboardResourceLocalization from '~/components/dashboard/DashboardResourceLocalization.vue'
+import { getErrorMessage } from '~/utils/errors'
 
 const dashboardApi = useDashboardApi()
 const route = useRoute()
@@ -133,7 +140,7 @@ let copyTimer: ReturnType<typeof setTimeout> | undefined
 const saving = ref(false)
 const errorMessage = ref('')
 
-const linksPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/links`)
+const linksPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/website/pages/links`)
 const itemsPath = computed(() => `${linksPath.value}/items`)
 
 const form = reactive<LinksPage>({
@@ -145,18 +152,17 @@ const items = ref<LinkItem[]>([])
 const linksPageLocalizationFields = computed(() => [
   { key: 'title', label: 'Title', source: data.value?.page.title },
 ])
-const organizationLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/website/localization`)
+const organizationLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/website/localization`)
 function localizedLinksPath(locale: string): string {
   return `/${locale}/links`
 }
 
-const { data, pending } = await useAsyncData(
+const { data, error } = await useAsyncData(
   `links-page-editor-${organizationId}`,
   () => dashboardApi<{ page: ApiLinksPage; items: LinkItem[] }>(
     `/api/editor/organizations/${organizationId}/links-page`,
     { validate: isLinksResponse },
   ),
-  { server: false },
 )
 
 interface LinksTranslation {
@@ -215,23 +221,11 @@ function loadForm(value: { page: ApiLinksPage; items: LinkItem[] }) {
   items.value = value.items
 }
 
-let openedLocalizationTarget = ''
 watch(data, (value) => {
-  if (!value) return
-  loadForm(value)
-  const target = typeof route.query.localize === 'string' ? route.query.localize : ''
-  if (target.startsWith('content_block:') && target !== openedLocalizationTarget) {
-    const item = value.items.find(row => target === `content_block:${row.id}`)
-    if (item) {
-      openedLocalizationTarget = target
-      void navigateTo(`${itemsPath.value}/${item.id}`)
-    }
-  }
+  if (value) loadForm(value)
 }, { immediate: true })
 
-// `pending` is the only signal needed: the fetch is client-only, so it is true
-// through SSR and the first paint and false once the rows have data.
-const editorReady = computed(() => !pending.value)
+const loadError = computed(() => (error.value ? getErrorMessage(error.value, 'Links page request failed') : null))
 const publicLinksUrl = computed(() => {
   const base = dashboard.organization.value?.public_url || ''
   return base ? `${base.replace(/\/+$/, '')}/links` : ''
@@ -331,7 +325,7 @@ provide(linksEditorKey, {
   organizationId,
   saving,
   errorMessage,
-  editorReady,
+  loadError,
   persist,
   save,
   revert,

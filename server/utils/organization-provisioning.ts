@@ -238,7 +238,7 @@ async function emailOperatorOnboardingComplete(env: SetupEnv, db: D1Database, or
     ownerName: owner.name,
     ownerEmail: owner.email,
     siteUrl,
-    viewCustomerUrl: `https://${platformDomain}/dashboard/${platform.slug}/settings/people?${query}`,
+    viewCustomerUrl: `https://${platformDomain}/dashboard/${platform.slug}/platform-accounts?${query}`,
   })
   const email = await renderNotificationEmail(message, { platformDomain })
 

@@ -43,11 +43,7 @@
         />
 
         <div class="mt-8">
-          <div v-if="!ready" class="space-y-4">
-            <USkeleton class="h-11" />
-            <USkeleton class="h-11" />
-          </div>
-          <slot v-else />
+          <slot />
         </div>
       </div>
     </template>
@@ -57,7 +53,7 @@
       <DashboardPanelFooter
         :save-label="saveLabel"
         :loading="saving"
-        :disabled="!ready || disabled"
+        :disabled="disabled"
         leaf
         @cancel="cancel"
         @save="$emit('save')"
@@ -71,7 +67,7 @@
   A leaf: one thing, its own column, Cancel and Save in the panel's footer —
   Airbnb's editor-leaf shape, and on a phone the sheet that covers the list it
   came from. Every leaf in the dashboard is this component with a field in the
-  slot, so the header, the loading state, the error and the footer are written
+  slot, so the header, the error and the footer are written
   once rather than re-drawn per screen.
 
   Cancel is the leaf's own Back: a push to the level that contains it, which is
@@ -89,14 +85,13 @@ withDefaults(defineProps<{
   icon?: string
   /** One muted sentence under the title: the only explanation a leaf carries. */
   lead?: string
-  ready?: boolean
   saving?: boolean
   disabled?: boolean
   error?: string
   saveLabel?: string | null
   /** Off for a leaf whose controls act at once and has nothing to Save. */
   footer?: boolean
-}>(), { ready: true, saving: false, disabled: false, error: '', saveLabel: 'Save', footer: true })
+}>(), { saving: false, disabled: false, error: '', saveLabel: 'Save', footer: true })
 
 const emit = defineEmits<{ save: []; cancel: [] }>()
 

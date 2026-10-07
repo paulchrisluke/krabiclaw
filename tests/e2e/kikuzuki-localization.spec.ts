@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type APIResponse, type Page } from '@playwright/test'
-import { openTenantPage } from './helpers'
+import { openTenantPage, waitForNuxtHydration } from './helpers'
 import { loginAs } from './helpers/auth'
 import { mcpRequest } from './helpers/mcp'
 import { E2E_KIKUZUKI_ORGANIZATION_ID, kikuzukiTestBaseUrl, kikuzukiTestExtraHeaders, testBaseUrl } from './test-env'
@@ -169,6 +169,36 @@ test('Kikuzuki keeps its Thai shell and collection translations on a hard load',
 })
 
 
+// Brand's Translations row is a link to the Brand's translations mode, and the
+// mode reads the organization's own localization, the type the registry knows.
+test('Kikuzuki Brand translations open from their URL in the stored language', async ({ browser, playwright }) => {
+  const baseURL = testBaseUrl()
+  const owner = await playwright.request.newContext({ baseURL })
+  try {
+    await loginAs(owner, baseURL)
+    const dashboardContext = await browser.newContext({ baseURL, storageState: await owner.storageState() })
+    const cms = await dashboardContext.newPage()
+    try {
+      const brandPath = `/dashboard/${organizationId}/website/brand`
+      await openTenantPage(cms, `${baseURL}${brandPath}`, {})
+      await expect(cms.locator('#dashboard-panel-organization-brand').getByRole('link', { name: /^Translations/ })).toHaveAttribute('href', `${brandPath}?editMode=translations`)
+      const loaded = cms.waitForResponse(response => response.request().method() === 'GET'
+        && new URL(response.url()).pathname === `/api/editor/organizations/${organizationId}/localization/organization/${organizationId}/${locale}`)
+      // A plain load: openTenantPage dismisses whatever dialog is open, which here is the mode under test.
+      await cms.goto(`${baseURL}${brandPath}?editMode=translations&locale=${locale}`)
+      await waitForNuxtHydration(cms)
+      expect((await loaded).status()).toBe(200)
+      await expect(cms.getByTestId('localize-field-name')).toHaveValue('Kikuzuki กระบี่ ประเทศไทย')
+      await expect(cms.getByTestId('localize-field-brand_description')).toHaveValue('อาหารญี่ปุ่นต้นตำรับในกระบี่')
+    } finally {
+      await cms.close()
+      await dashboardContext.close()
+    }
+  } finally {
+    await owner.dispose()
+  }
+})
+
 test('Kikuzuki Localize preserves its translated address', async ({ browser, playwright }) => {
   const baseURL = testBaseUrl()
   const owner = await playwright.request.newContext({ baseURL })
@@ -177,11 +207,18 @@ test('Kikuzuki Localize preserves its translated address', async ({ browser, pla
     const dashboardContext = await browser.newContext({ baseURL, storageState: await owner.storageState() })
     const cms = await dashboardContext.newPage()
     try {
-      // Languages is a row on the location's settings list; its control opens the sheet.
-      await openTenantPage(cms, `${baseURL}/dashboard/${organizationId}/locations/kikuzuki-japanese-robatayaki-izakaya/settings`, {})
-      await cms.getByRole('button', { name: 'Localize' }).click()
+      // Languages is a row on the location's settings list; it opens the
+      // location's translations mode, which its URL holds with the language.
+      const settingsPath = `/dashboard/${organizationId}/locations/kikuzuki-japanese-robatayaki-izakaya/settings`
+      await openTenantPage(cms, `${baseURL}${settingsPath}`, {})
+      await cms.getByRole('link', { name: /^Languages/ }).click()
+      await expect(cms).toHaveURL(`${baseURL}${settingsPath}?editMode=translations`)
       await cms.getByTestId('localize-language').click()
       await cms.getByRole('option', { name: /ไทย \(th\)/ }).click()
+      await expect(cms).toHaveURL(`${baseURL}${settingsPath}?editMode=translations&locale=th`)
+      // A reload reconstructs the same record, mode and language from the URL.
+      await cms.reload()
+      await expect(cms.getByTestId('localize-language')).toContainText('ไทย (th)')
       await expect(cms.getByTestId('localize-field-address.addressLines')).toHaveValue('325')
       await expect(cms.getByTestId('localize-field-address.sublocality')).toHaveValue('ตำบลอ่าวนาง')
       const saveResponse = await Promise.all([
@@ -191,6 +228,9 @@ test('Kikuzuki Localize preserves its translated address', async ({ browser, pla
       expect(saveResponse.status()).toBe(200)
       const payload = saveResponse.request().postDataJSON() as { values: { address: unknown } }
       expect(payload.values.address).toEqual({ addressLines: ['325'], sublocality: 'ตำบลอ่าวนาง', locality: 'กระบี่' })
+      // Saving leaves the mode, so the URL no longer reopens it.
+      await expect(cms).not.toHaveURL(/editMode=/)
+      await expect(cms.getByTestId('localize-language')).toHaveCount(0)
     } finally {
       await cms.close()
       await dashboardContext.close()

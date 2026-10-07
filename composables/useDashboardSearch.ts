@@ -35,6 +35,8 @@ export function useDashboardSearch() {
   const menu = useDashboardMenu()
   const searchTerm = ref('')
   const loading = ref(false)
+  /** Why the last search failed; the palette shows it in place of results. */
+  const error = ref<string | null>(null)
   const results = shallowRef<PaletteGroup[]>([])
 
   // The Menu's rows, for the palette's own filter to work through.
@@ -92,6 +94,7 @@ export function useDashboardSearch() {
     if (!normalized || !organization?.subdomain) {
       requestSequence += 1
       results.value = []
+      error.value = null
       loading.value = false
       return
     }
@@ -100,6 +103,7 @@ export function useDashboardSearch() {
     const controller = new AbortController()
     activeController = controller
     loading.value = true
+    error.value = null
     try {
       const response = await dashboardApi<SearchResponse>('/api/dashboard/search', {
         signal: controller.signal,
@@ -108,10 +112,11 @@ export function useDashboardSearch() {
       })
       if (requestId !== requestSequence) return
       results.value = groupResults(response.results ?? [])
-    } catch (error) {
-      if (requestId !== requestSequence) return
-      console.error('Dashboard search failed:', error)
+    } catch (failure) {
+      // A search the next keystroke cancelled was replaced, not failed.
+      if (requestId !== requestSequence || controller.signal.aborted) return
       results.value = []
+      error.value = getErrorMessage(failure, 'Search failed')
     } finally {
       if (activeController === controller) activeController = null
       if (requestId === requestSequence) loading.value = false
@@ -130,5 +135,5 @@ export function useDashboardSearch() {
     activeController = null
   })
 
-  return { searchTerm, loading, groups }
+  return { searchTerm, loading, error, groups }
 }

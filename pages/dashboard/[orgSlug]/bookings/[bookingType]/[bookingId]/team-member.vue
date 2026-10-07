@@ -1,5 +1,5 @@
 <template>
- <DashboardLeafPanel id="booking-team-member" title="Team member" lead="The time stays the same. Your guest and both team members are told." :ready="Boolean(data) || Boolean(loadError)" :saving="saving" :disabled="!selected || selected === b.booking.value?.assignedMemberId || b.booking.value?.complete || !['pending','confirmed'].includes(b.booking.value?.status ?? '')" :error="error || (loadError ? getErrorMessage(loadError,'Team members could not be loaded.') : '')" @cancel="reset" @save="save">
+ <DashboardLeafPanel id="booking-team-member" title="Team member" lead="The time stays the same. Your guest and both team members are told." :saving="saving" :disabled="!selected || selected === b.booking.value?.assignedMemberId || b.booking.value?.complete || !['pending','confirmed'].includes(b.booking.value?.status ?? '')" :error="error || (loadError ? getErrorMessage(loadError,'Team members could not be loaded.') : '')" @cancel="reset" @save="save">
   <URadioGroup v-if="data?.members.length" v-model="selected" :items="items" variant="card" />
   <UAlert v-else-if="data" color="warning" description="Add working hours for a team member before moving this booking." />
  </DashboardLeafPanel>
@@ -18,7 +18,7 @@ const {data,error:loadError}=await useAsyncData(()=>`booking-team:${b.booking.va
  const booking=b.booking.value
  if(!booking?.operationalBookingId)return null
  return await api(`/api/dashboard/bookings/booking/${booking.operationalBookingId}/provider`,{validate:(v):v is {members:Member[]}=>isRecord(v)&&Array.isArray(v.members)&&v.members.every(m=>isRecord(m)&&typeof m.id==='string'&&typeof m.name==='string'&&(m.image===null||typeof m.image==='string')&&typeof m.current==='boolean'&&typeof m.available==='boolean')})
-},{server:false,watch:[b.booking]})
+},{watch:[b.booking]})
 const items=computed(()=>(data.value?.members??[]).map(member=>({label:member.name,value:member.id,description:member.current?'Current':member.available?'Free at this time':'Not free at this time',disabled:!member.current&&!member.available})))
 async function save(){const booking=b.booking.value;if(!booking)return;saving.value=true;error.value='';key.value??=crypto.randomUUID();try{await api(`/api/dashboard/bookings/booking/${booking.operationalBookingId}/provider`,{method:'POST',body:{member_id:selected.value,expected_updated_at:booking.operationalUpdatedAt,idempotency_key:key.value},validate:(v):v is {session_id:string;assigned_member_id:string}=>isRecord(v)&&typeof v.session_id==='string'&&v.assigned_member_id===selected.value});await b.refresh();await navigateTo(level.to.value??'/dashboard')}catch(cause){error.value=getErrorMessage(cause,'The team member could not be changed.')}finally{saving.value=false}}
 </script>

@@ -1,5 +1,4 @@
 import { matchedRouteKey } from 'vue-router'
-import { dashboardOrganizationParentKey } from '~/lib/components/workspace/dashboard/dashboardScopeHeaderContext'
 
 /**
  * Which level of the route tree the caller is, what is open below it, and
@@ -8,20 +7,19 @@ import { dashboardOrganizationParentKey } from '~/lib/components/workspace/dashb
  * The nested route tree is the one parent graph. A level's parent pane and its
  * Back are the same record: the nearest level above it in `route.matched`, found
  * from the record the `<RouterView>` rendering the caller provides through
- * `matchedRouteKey`. A level that must keep a URL its parent does not prefix —
- * Pages at `/pages` under Menu at `/settings` — is still nested as a file and
- * names its URL with an absolute `definePageMeta({ path })`, so the router keeps
- * it in `matched` beside its parent. Levels are counted in matched records, not
- * URL segments, for that reason.
+ * `matchedRouteKey`. A level's URL is its place in the file tree, so the URL,
+ * the panes and Back all name the same parent. Levels are counted in matched
+ * records, not URL segments, because a directory's `index.vue` adds a record
+ * without adding a level.
  *
  * A directory's `index.vue` is a second record at the same URL — `/links/items`
  * matches both `items` and `items/index` — and it is one level, not two.
  *
- * `meta.back` exists only for a workspace root that leaves for another root
- * which is not a pane beside it — Account settings returning to Menu, a
- * location editor returning to Locations. A level with a matched parent that
- * declares one would give Back and the pane layout two different parents, so
- * it is refused.
+ * `meta.back` is a destination root's exit: `menu` for the shell's Menu —
+ * Website, Account settings — or a named route, Payments to Earnings. A level with a matched
+ * parent that declares one would give Back and the pane layout two different
+ * parents, so it is refused. Which tab is lit is a separate declaration,
+ * `meta.tab`, read by the layout; it never follows an exit.
  *
  * Back is a push to the parent, never `history.back()`. Measured on a live
  * Airbnb host account on 2026-09-21: their in-app Back went to
@@ -61,31 +59,35 @@ export function routeRecordPath(router: AppRouter, record: RouteRecord, params: 
 }
 
 export function useRouteLevel() {
+  // Nuxt's page route: while a page is on its way out, it keeps the route that
+  // page rendered for, so the screen being left stays whole until the next one
+  // is ready (Nuxt's RouteProvider).
   const route = useRoute()
   const router = useRouter()
-  const ownRecord = inject(matchedRouteKey, null)
-  // The layout's answer to "which organization" for a route that carries none, such as Account settings.
-  const organizationParent = inject(dashboardOrganizationParentKey, null)
+  // The shell's Menu, for a root whose exit is `menu`.
+  const menu = useDashboardMenu()
+  // The record this level renders, read once: a component is mounted for one
+  // record and never becomes another. Vue Router's ref follows the live route,
+  // so during a navigation it named the next screen's record while `route`
+  // still named this one — the level found itself nowhere, yielded, and its
+  // pane vanished while its open child stayed on screen.
+  const ownRecord = inject(matchedRouteKey, null)?.value ?? null
 
   const levels = computed(() => levelsOf(route.matched))
 
   /**
    * Where this level sits among the matched levels, or `-1` once it sits nowhere.
    *
-   * A component whose own record has left `route.matched` is being torn down
-   * after a navigation, and it is not a level any more. Answering with the
-   * deepest level instead makes every question below report for somebody
-   * else's level: a location index unmounting on the way to Pages read its path
-   * off the new route and its `autoOpen` replaced the URL with a child of it,
-   * which took the tenant to a URL nothing matches.
+   * A component whose own record is not in its route is not a level any more.
+   * Answering with the deepest level instead makes every question below report
+   * for somebody else's level.
    *
    * A component mounted outside a page has no record to find and takes the
    * deepest level, which is the one it is drawn inside.
    */
   const index = computed(() => {
-    const record = ownRecord?.value
-    if (!record) return levels.value.length - 1
-    return levels.value.findIndex(level => level.path === record.path)
+    if (!ownRecord) return levels.value.length - 1
+    return levels.value.findIndex(level => level.path === ownRecord.path)
   })
 
   /**
@@ -130,7 +132,7 @@ export function useRouteLevel() {
     if (parent && declared !== undefined) {
       throw new Error(`Route "${own.path}" declares meta.back but is nested under "${parent.path}"; its route parent is its Back`)
     }
-    const path = parent ? urlOf(parent) : typeof declared === 'string' ? resolveNamed(declared) : null
+    const path = parent ? urlOf(parent) : declared === 'menu' ? menu.menuPageTo.value : typeof declared === 'string' ? resolveNamed(declared) : null
     return path === null ? null : router.resolve({ path, query: route.query }).fullPath
   })
 
@@ -139,9 +141,8 @@ export function useRouteLevel() {
     const target = router.getRoutes().find(candidate => candidate.name === name)
     if (!target) throw new Error(`Route "${name}" named in meta.back does not exist`)
     const keys = [...target.path.matchAll(/:(\w+)/g)].map(match => match[1]!)
-    // Account settings names Menu as its parent but carries no organization in
-    // its URL; the layout knows which organization the session is in.
-    if (keys.some(key => route.params[key] === undefined)) return organizationParent?.value?.to ?? null
+    const missing = keys.find(key => route.params[key] === undefined)
+    if (missing) throw new Error(`Route "${name}" named in meta.back needs the "${missing}" param, which "${route.path}" does not carry`)
     return routeRecordPath(router, target, route.params)
   }
 

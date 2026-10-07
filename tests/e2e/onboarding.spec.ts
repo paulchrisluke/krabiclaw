@@ -400,7 +400,7 @@ test('add-location and Settings connect a location through the same business pic
   expect(added, `no location connected to ${placeId}`).toBeTruthy()
 
   // Settings: choosing another prediction is the confirmation, and connects it.
-  await page.goto(`/dashboard/${org}/settings/integrations/google-maps/${added!.slug}`)
+  await page.goto(`/dashboard/${org}/integrations/google-maps/${added!.slug}`)
   await expect(page.getByText('Connected to Google Maps')).toBeVisible()
   await page.getByRole('button', { name: 'Connect a different place' }).click()
   const search = page.getByPlaceholder('Search for your business on Google Maps')

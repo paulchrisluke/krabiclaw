@@ -1,0 +1,35 @@
+<template>
+  <DashboardLeafPanel
+    id="location-product-category-name"
+    title="Name"
+    :saving="c.saving.value"
+    :disabled="c.saveDisabled.value"
+    :save-label="c.saveLabel.value"
+    :error="c.errorMessage.value"
+    @cancel="c.revert"
+    @save="c.save"
+  >
+    <UFormField label="Name" required>
+      <UInput v-model="c.form.name" placeholder="Starters" autofocus class="w-full" />
+    </UFormField>
+    <DashboardResourceLocalization
+      v-if="!c.isNew.value && c.hasRecord.value"
+      class="mt-6"
+      :organization-id="c.organizationId"
+      resource-type="collection"
+      :resource-id="c.collectionId.value"
+      resource-label="section"
+      :fields="c.localizationFields.value"
+      :language-settings-path="c.organizationLocalizationSettingsPath.value"
+    />
+  </DashboardLeafPanel>
+</template>
+
+<script setup lang="ts">
+import DashboardResourceLocalization from '~/components/dashboard/DashboardResourceLocalization.vue'
+import { collectionEditorKey } from '../[collectionId].vue'
+
+definePageMeta({ layout: 'dashboard' })
+
+const c = inject(collectionEditorKey)!
+</script>

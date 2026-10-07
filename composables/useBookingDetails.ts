@@ -33,14 +33,11 @@ export async function useBookingDetails(bookingType: DashboardRecordType, bookin
   const orgSlug = computed(() => personalScope ? 'account' : String(route.params.orgSlug || ''))
 
   const key = computed(() => `dashboard-booking:${orgSlug.value}:${bookingType}:${bookingId}`)
-  const { data: resource, pending, error } = await useAsyncData<{ booking: DashboardBookingDetails }>(
+  const { data: resource, error, refresh: reread } = await useAsyncData<{ booking: DashboardBookingDetails }>(
     key,
     () => dashboardApi(endpoint, {
       validate: isBookingDetailsResponse,
     }),
-    // Awaiting this blocks the navigation into the booking, and every surface
-    // that reads it already renders `pending`.
-    { lazy: true },
   )
 
   const booking = computed(() => resource.value?.booking ?? null)
@@ -65,9 +62,11 @@ export async function useBookingDetails(bookingType: DashboardRecordType, bookin
     return `Past ${noun.value}`
   })
 
+  /** A writer's re-read; a failed one fails the write that asked for it. */
   async function refresh() {
-    resource.value = await dashboardApi<{ booking: DashboardBookingDetails }>(endpoint, { validate: isBookingDetailsResponse })
+    await reread()
+    if (error.value) throw error.value
   }
 
-  return { resource, booking, pending, error, presentation, noun, pageTitle, orgSlug, purchase, refresh }
+  return { resource, booking, error, presentation, noun, pageTitle, orgSlug, purchase, refresh }
 }

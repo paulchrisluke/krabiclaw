@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:bda3befcbb42243f74129e4110c026bcf4bbe85ab08a1e5d713fdd4501530eb7",
+  "fingerprint": "sha256:83f53877ff7e3969681138392ebbb844ca1ceecbaa08724d99506770db22ba97",
   "tools": [
     {
       "name": "append_content_block",
@@ -757,6 +757,13 @@
                   "description": "The merchant sale switch. Not visibility and not stock: a disabled product is not sold out.",
                   "type": "boolean"
                 },
+                "admin_edit_url": {
+                  "description": "The dashboard editor for this product, on the platform host.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
                 "booking": {
                   "properties": {
                     "assigned_member_id": {
@@ -1205,6 +1212,29 @@
                 "order_url": {
                   "type": [
                     "string",
+                    "null"
+                  ]
+                },
+                "page": {
+                  "description": "The source page this product owns, or null. Edit its content with the site-page tools; its binding is the page's product_id.",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "path",
+                    "title"
+                  ],
+                  "type": [
+                    "object",
                     "null"
                   ]
                 },
@@ -2281,43 +2311,6 @@
       }
     },
     {
-      "name": "create_payment_checkout",
-      "description": "Create Stripe-hosted one-time order checkout for an active canonical Product/Variant without a booking calendar. Use create_product_booking for bookings and consultations. Operator checkout leaves buyer unclaimed; typed email never proves ownership. Fulfillment remains merchant-arranged.",
-      "inputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "idempotency_key": {
-            "type": "string"
-          },
-          "organization_id": {
-            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
-            "type": "string"
-          },
-          "product_id": {
-            "type": "string"
-          },
-          "quantity": {
-            "maximum": 100,
-            "minimum": 1,
-            "type": "integer"
-          },
-          "variant_id": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "product_id",
-          "variant_id",
-          "quantity",
-          "idempotency_key"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "type": "object"
-      }
-    },
-    {
       "name": "create_post",
       "description": "Create a draft short post when the user wants an announcement, event notice or offer. Supports a plain-text caption, ordered media, optional title, location and call to action. It stays private until publish_post. Use a new idempotency_key for each post and reuse it only for retries of that request. Long-form articles use create_blog_post.",
       "inputSchema": {
@@ -2753,7 +2746,7 @@
     },
     {
       "name": "create_product",
-      "description": "Create a product with options, variants and prices when the user wants to add an item to the selected site’s catalog. The new product is unpublished; use set_product_publication and set_product_location to control website visibility and location offerings.",
+      "description": "Create a product with options, variants and prices when the user wants to add an item to the selected site’s catalog. To create a service with its own page, send page in this same call: the product, its default variant, the page and their binding commit together, and a service's page without a path gets the first free /services/<slug>. Do not create the page separately and link it afterwards. Send an idempotency_key and repeat it on a retry so a lost response never makes a second product. A product created with its page starts sale-inactive unless active is sent. The new product is unpublished; use set_product_publication and set_product_location to control website visibility and location offerings.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -2869,6 +2862,12 @@
             },
             "type": "object"
           },
+          "idempotency_key": {
+            "description": "Repeat the same key with the same request to get the product it created instead of a second one.",
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
           "kind": {
             "description": "The customer-facing kind: dish, experience, service or item. Determines the allowed descriptive fields; booking and stock remain separate capabilities.",
             "enum": [
@@ -2954,6 +2953,170 @@
           "organization_id": {
             "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
+          },
+          "page": {
+            "additionalProperties": false,
+            "description": "A source page created with this product and bound to it, in the same write. Omit for a product without a page of its own.",
+            "properties": {
+              "blocks": {
+                "description": "Complete canonical block array. Each existing block must retain its id unless its removal is explicitly confirmed. Block data never contains asset IDs or delivery URLs. Omit media to preserve that block's current placements; provide media explicitly to replace them, or call set_media with owner_type \"content_block\", the block id, and the intended slot.",
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "description": "Typed block payload. Plain-text fields are rendered literally, so markdown syntax written into one reaches the reader as raw characters — a heading of \"**Title**\" publishes with the asterisks showing. Only the fields listed as markdown are parsed. A markdown field also requires editor_mode alongside it: \"rich\" for prose the visual editor can handle, \"source\" for tables or raw HTML. Asset IDs and delivery URLs belong in the block media array, never in data. Fields by block type — heading block: literal — text. Also level (one of 1, 2, 3, 4, 5, 6). markdown block: parsed as markdown — markdown. Also editor_mode (one of rich, source). image block: literal — caption. gallery block: literal — caption. video block: literal — title, caption. Also url (url), upload_date (Upload date (YYYY-MM-DD)). faq block: literal — title. Also source (one of page_qa, organization_qa). how_to block: literal — title, label, estimated_time, tool_items.*, supply_items.*, steps.*.name, steps.*.text. divider block: no text fields. cta block: literal — title, accent, description, label, secondary_label. Also url (url), secondary_url (url). contact_cta block: literal — title, accent, description, label, secondary_label. Also url (url), secondary_url (url). booking_cta block: literal — title, accent, description, label, secondary_label, price_line, notice. Also url (url), secondary_url (url). callout block: literal — title, body, badge, buttons.*.label. Also tone (one of neutral, info, success, warning, danger). hero block: literal — title, accent, rotating_accents.*, eyebrow, subtitle, cta_label, secondary_label. Also cta_url (url), secondary_url (url). button_group block: literal — buttons.*.label. feature_grid block: literal — title, description, items.*.title, items.*.description, items.*.value, items.*.label, cta_label; parsed as markdown — items.*.body. Also source (one of manual, organization_posts, calculator, billing_plans, billing_features), layout (one of cards, pictures), cta_url (url). comparison block: literal — title, description, problem_title, problem_label, problem_items.*.title, problem_items.*.description, solution_title, solution_label, solution_items.*.title, solution_items.*.description. stat_grid block: literal — title, description, label, items.*.value, items.*.title. workflow_grid block: literal — title, description, label, prompt_heading, cta_label, items.*.title, items.*.prompt, items.*.description. Also cta_url (url). showcase block: literal — items.*.title. language_reach block: literal — title, subtitle, description, pin_label, items.*.title. steps block: literal — title, items.*.title, cta_label. Also cta_url (url). video_feature block: literal — title, description, video_title, items.*.title, items.*.description. Also video_url (url), upload_date (Upload date (YYYY-MM-DD)). media_text block: literal — title, body, label, eyebrow, caption, items.*.title. Also url (url), example_type (one of websites, posts). contact_form block: no text fields. team_grid block: literal — title, description, items.*.first_name, items.*.last_name, items.*.title, items.*.bio. testimonial_grid block: literal — title, description. donation_choices block: literal — title, description, tiers.*.title, tiers.*.description. Also destination (url). page_grid block: literal — title, accent, description. Also page_ids (page ids). product_grid block: literal — title, description. Also collection_id (collection id), product_ids (product ids). location_grid block: literal — title, description. Also location_ids (location ids). social_posts block: literal — title, description, call_to_action.label. Also limit (whole number 1–12, default 6), location_id (location id), call_to_action.url (url). ai_assistance block: literal — label, intro, prompts.*.title, prompts.*.prompt, prompts.*.description, prompts.*.copy_label.",
+                      "type": "object"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "level": {
+                      "maximum": 6,
+                      "minimum": 1,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "media": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "alt_text": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "asset_id": {
+                            "type": "string"
+                          },
+                          "file_name": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "height": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "kind": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "public_url": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "slot": {
+                            "type": "string"
+                          },
+                          "sort_order": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "thumbnail_url": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "width": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "asset_id",
+                          "slot"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "parent_block_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "source_block_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "type": {
+                      "type": "string"
+                    },
+                    "updated_at": {
+                      "description": "As read. Ignored on a whole-document write.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "data"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "pageType": {
+                "description": "The page's type. Send the page_type from the last read unless you are changing it.",
+                "enum": [
+                  "custom",
+                  "recipe",
+                  "legal",
+                  "system"
+                ],
+                "type": "string"
+              },
+              "path": {
+                "description": "The page's public path. A service may omit it to get the first free /services/<slug>.",
+                "type": "string"
+              },
+              "recipe": {
+                "description": "The template section this page fills, or null for a page that fills none. Send the recipe from the last read unless you are changing it; an omitted recipe is not kept.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sortOrder": {
+                "description": "The page's position in the site's page list. Send the sort_order from the last read unless you are reordering.",
+                "type": "number"
+              },
+              "summary": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "title": {
+                "description": "The page title to write. Always sent in full — an omitted title is not kept.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "title",
+              "blocks"
+            ],
+            "type": "object"
           },
           "tax_code": {
             "type": [
@@ -3131,6 +3294,13 @@
               "active": {
                 "description": "The merchant sale switch. Not visibility and not stock: a disabled product is not sold out.",
                 "type": "boolean"
+              },
+              "admin_edit_url": {
+                "description": "The dashboard editor for this product, on the platform host.",
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "booking": {
                 "properties": {
@@ -3580,6 +3750,29 @@
               "order_url": {
                 "type": [
                   "string",
+                  "null"
+                ]
+              },
+              "page": {
+                "description": "The source page this product owns, or null. Edit its content with the site-page tools; its binding is the page's product_id.",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "path",
+                  "title"
+                ],
+                "type": [
+                  "object",
                   "null"
                 ]
               },
@@ -7619,6 +7812,13 @@
                 "description": "The merchant sale switch. Not visibility and not stock: a disabled product is not sold out.",
                 "type": "boolean"
               },
+              "admin_edit_url": {
+                "description": "The dashboard editor for this product, on the platform host.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "booking": {
                 "properties": {
                   "assigned_member_id": {
@@ -8067,6 +8267,29 @@
               "order_url": {
                 "type": [
                   "string",
+                  "null"
+                ]
+              },
+              "page": {
+                "description": "The source page this product owns, or null. Edit its content with the site-page tools; its binding is the page's product_id.",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "path",
+                  "title"
+                ],
+                "type": [
+                  "object",
                   "null"
                 ]
               },
@@ -13022,6 +13245,13 @@
                   "description": "The merchant sale switch. Not visibility and not stock: a disabled product is not sold out.",
                   "type": "boolean"
                 },
+                "admin_edit_url": {
+                  "description": "The dashboard editor for this product, on the platform host.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
                 "booking": {
                   "properties": {
                     "assigned_member_id": {
@@ -13470,6 +13700,29 @@
                 "order_url": {
                   "type": [
                     "string",
+                    "null"
+                  ]
+                },
+                "page": {
+                  "description": "The source page this product owns, or null. Edit its content with the site-page tools; its binding is the page's product_id.",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "path",
+                    "title"
+                  ],
+                  "type": [
+                    "object",
                     "null"
                   ]
                 },
@@ -13930,6 +14183,13 @@
                 "description": "The merchant sale switch. Not visibility and not stock: a disabled product is not sold out.",
                 "type": "boolean"
               },
+              "admin_edit_url": {
+                "description": "The dashboard editor for this product, on the platform host.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "booking": {
                 "properties": {
                   "assigned_member_id": {
@@ -14378,6 +14638,29 @@
               "order_url": {
                 "type": [
                   "string",
+                  "null"
+                ]
+              },
+              "page": {
+                "description": "The source page this product owns, or null. Edit its content with the site-page tools; its binding is the page's product_id.",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "path",
+                  "title"
+                ],
+                "type": [
+                  "object",
                   "null"
                 ]
               },
@@ -16594,6 +16877,13 @@
                 "description": "The merchant sale switch. Not visibility and not stock: a disabled product is not sold out.",
                 "type": "boolean"
               },
+              "admin_edit_url": {
+                "description": "The dashboard editor for this product, on the platform host.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "booking": {
                 "properties": {
                   "assigned_member_id": {
@@ -17042,6 +17332,29 @@
               "order_url": {
                 "type": [
                   "string",
+                  "null"
+                ]
+              },
+              "page": {
+                "description": "The source page this product owns, or null. Edit its content with the site-page tools; its binding is the page's product_id.",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "path",
+                  "title"
+                ],
+                "type": [
+                  "object",
                   "null"
                 ]
               },
@@ -17283,6 +17596,13 @@
                 "description": "The merchant sale switch. Not visibility and not stock: a disabled product is not sold out.",
                 "type": "boolean"
               },
+              "admin_edit_url": {
+                "description": "The dashboard editor for this product, on the platform host.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "booking": {
                 "properties": {
                   "assigned_member_id": {
@@ -17731,6 +18051,29 @@
               "order_url": {
                 "type": [
                   "string",
+                  "null"
+                ]
+              },
+              "page": {
+                "description": "The source page this product owns, or null. Edit its content with the site-page tools; its binding is the page's product_id.",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "path",
+                  "title"
+                ],
+                "type": [
+                  "object",
                   "null"
                 ]
               },
@@ -20311,6 +20654,13 @@
                 "description": "The merchant sale switch. Not visibility and not stock: a disabled product is not sold out.",
                 "type": "boolean"
               },
+              "admin_edit_url": {
+                "description": "The dashboard editor for this product, on the platform host.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "booking": {
                 "properties": {
                   "assigned_member_id": {
@@ -20759,6 +21109,29 @@
               "order_url": {
                 "type": [
                   "string",
+                  "null"
+                ]
+              },
+              "page": {
+                "description": "The source page this product owns, or null. Edit its content with the site-page tools; its binding is the page's product_id.",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "path",
+                  "title"
+                ],
+                "type": [
+                  "object",
                   "null"
                 ]
               },

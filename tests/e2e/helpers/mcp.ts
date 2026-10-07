@@ -37,9 +37,9 @@ function withMcpJson(response: APIResponse): APIResponse {
 
 export const MCP_VERSION = '2025-06-18'
 // Ember & Slice, the demo organization the production snapshot carries with the
-// Growth plan active. Every MCP spec drives this tenant and its loc-demo
+// Commerce plan active. Every MCP spec drives this tenant and its loc-demo
 // location; a spec never provisions an organization or location of its own.
-export const MCP_GROWTH_ORGANIZATION_ID = E2E_DEMO_ORGANIZATION_ID
+export const MCP_ORGANIZATION_ID = E2E_DEMO_ORGANIZATION_ID
 
 export async function mcpRequest(
   request: APIRequestContext,

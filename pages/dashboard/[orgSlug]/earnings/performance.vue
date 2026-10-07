@@ -18,8 +18,7 @@
             <UButton icon="i-lucide-chevron-right" color="neutral" variant="ghost" square aria-label="Next year" :disabled="year >= thisYear" @click="year += 1" />
           </div>
         </div>
-        <USkeleton v-if="pending && !data" class="mt-6 h-56 w-full" />
-        <EarningsBars v-else-if="data" class="mt-6" :months="data.months" :selected="month" :currency="data.currency" @select="month = $event" />
+        <EarningsBars v-if="data" class="mt-6" :months="data.months" :selected="month" :currency="data.currency" @select="month = $event" />
       </section>
 
       <section v-if="data" class="mt-8 rounded-3xl ring ring-default">
@@ -64,7 +63,6 @@
         <h2 class="text-xl font-semibold text-highlighted">Checkouts</h2>
         <p class="text-sm text-muted">{{ monthTitle }}</p>
         <UAlert v-if="conversionError" class="mt-4" color="error" variant="soft" :description="getErrorMessage(conversionError, 'Checkouts could not be loaded')" />
-        <USkeleton v-else-if="conversionPending && !conversion" class="mt-4 h-32 w-full" />
         <template v-else-if="conversion">
           <p v-if="!conversion.byOffering.length" class="mt-4 text-sm text-muted">No checkouts in {{ monthTitle }}.</p>
           <div v-for="group in conversionGroups" v-else :key="group.title" class="mt-6">
@@ -124,16 +122,6 @@ const year = ref(Number(initial.slice(0, 4)))
 watch(year, (next) => { month.value = `${next}-${month.value.slice(5)}` })
 watch(month, (next) => { year.value = Number(next.slice(0, 4)); void router.replace({ query: { ...route.query, month: next } }) })
 
-const { data, pending, error } = await useAsyncData(
-  () => `earnings-performance:${route.params.orgSlug}:${year.value}:${month.value}`,
-  () => api<EarningsPerformance>('/api/dashboard/payments', { query: { view: 'performance', year: year.value, month: month.value }, validate: isEarningsPerformance }),
-  { lazy: true, watch: [month] },
-)
-const money = (amount: number) => paymentMoney(amount, data.value?.currency ?? 'USD')
-const selected = computed(() => data.value?.months.find(row => row.month === month.value) ?? { month: month.value, paid: 0, refunded: 0 })
-const monthTitle = computed(() => formatCalendarDate(`${month.value}-01`, 'en', { month: 'long', year: 'numeric' }))
-const monthTotal = computed(() => data.value?.items.reduce((sum, item) => sum + item.paid, 0) ?? 0)
-const share = (paid: number) => `${monthTotal.value ? Math.round((paid / monthTotal.value) * 1000) / 10 : 0}%`
 type Breakdown = { rows: Array<{ dimensions: Record<string, string | null>; metrics: Record<string, number | null> }> }
 const isBreakdown = (dimension: string) => (value: unknown): value is Breakdown => isRecord(value) && Array.isArray(value.rows)
   && value.rows.every(row => isRecord(row) && isRecord(row.dimensions) && (row.dimensions[dimension] === null || typeof row.dimensions[dimension] === 'string') && isRecord(row.metrics)
@@ -141,7 +129,12 @@ const isBreakdown = (dimension: string) => (value: unknown): value is Breakdown 
     && ['checkout_conversion_rate', 'refund_rate'].every(name => { const metric = (row.metrics as Record<string, unknown>)[name]; return metric === null || typeof metric === 'number' }))
 type Named = { id: string; name: string }
 const dashboard = useDashboardOrganization()
-const { data: conversion, pending: conversionPending, error: conversionError } = await useAsyncData(
+// The month's earnings and its checkouts load together before the page shows.
+const [{ data, error }, { data: conversion, error: conversionError }] = await Promise.all([useAsyncData(
+  () => `earnings-performance:${route.params.orgSlug}:${year.value}:${month.value}`,
+  () => api<EarningsPerformance>('/api/dashboard/payments', { query: { view: 'performance', year: year.value, month: month.value }, validate: isEarningsPerformance }),
+  { watch: [month] },
+), useAsyncData(
   () => `earnings-conversion:${route.params.orgSlug}:${month.value}`,
   async () => {
     const organizationId = dashboard.organization.value?.id
@@ -164,8 +157,13 @@ const { data: conversion, pending: conversionPending, error: conversionError } =
       })
     return { byOffering: rows(offerings, 'product_id', products.products, 'Other'), byMember: rows(members, 'member_id', team.members, 'Not assigned') }
   },
-  { lazy: true, watch: [month] },
-)
+  { watch: [month] },
+)])
+const money = (amount: number) => paymentMoney(amount, data.value?.currency ?? 'USD')
+const selected = computed(() => data.value?.months.find(row => row.month === month.value) ?? { month: month.value, paid: 0, refunded: 0 })
+const monthTitle = computed(() => formatCalendarDate(`${month.value}-01`, 'en', { month: 'long', year: 'numeric' }))
+const monthTotal = computed(() => data.value?.items.reduce((sum, item) => sum + item.paid, 0) ?? 0)
+const share = (paid: number) => `${monthTotal.value ? Math.round((paid / monthTotal.value) * 1000) / 10 : 0}%`
 const conversionGroups = computed(() => conversion.value ? [
   { title: 'By offering', label: 'Offering', rows: conversion.value.byOffering },
   { title: 'By team member', label: 'Team member', rows: conversion.value.byMember },

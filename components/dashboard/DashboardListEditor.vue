@@ -1,19 +1,14 @@
 <template>
   <section class="space-y-6">
     <!--
-      The heading and its controls live in the body, not the navbar. The navbar
-      carries the way out of the level; this row carries what you can do to the
-      list. Keeping them apart is what lets one component own every list without
-      each page wiring its own header.
+      One rule for every list: the panel's navbar carries Back, the title and
+      the list's controls — Edit, Add — and the body carries the list. Inside
+      an index panel the controls teleport into its navbar; a list mounted
+      anywhere else keeps them at the top of the list.
     -->
     <header>
-      <!--
-        The panel's own navbar names this column, so the list does not repeat
-        the name underneath it. What is left here is the controls and the line
-        that says what the list is for.
-      -->
-      <div class="flex items-center justify-end gap-4">
-        <div class="flex shrink-0 items-center gap-2">
+      <Teleport :to="actionsTarget ? `#${actionsTarget}` : undefined" :disabled="!actionsTarget" defer>
+        <div class="flex shrink-0 items-center gap-2" :class="actionsTarget ? undefined : 'justify-end'">
           <slot name="actions" />
           <slot v-if="!readOnly && editing && selected.length" name="selection-actions" :selected="selected" />
           <UButton
@@ -21,6 +16,7 @@
             :label="editing ? 'Done' : 'Edit'"
             color="neutral"
             :variant="editing ? 'solid' : 'soft'"
+            size="sm"
             data-testid="list-editor-toggle"
             @click="editing = !editing"
           />
@@ -30,21 +26,22 @@
             :aria-label="addLabel"
             color="neutral"
             variant="soft"
+            size="sm"
             square
             data-testid="list-editor-add"
             @click="$emit('add')"
           />
         </div>
-      </div>
+      </Teleport>
 
       <!--
         In the edit state the description gives way to the selection count, so
         the row that told you what the list is tells you what you are acting on.
       -->
-      <p v-if="!readOnly && editing && selectable" class="mt-2 text-sm text-muted" data-testid="list-editor-selection-count">
+      <p v-if="!readOnly && editing && selectable" class="text-sm text-muted" data-testid="list-editor-selection-count">
         {{ selected.length ? `${selected.length} selected` : 'Select items to move them' }}
       </p>
-      <p v-else-if="description" class="mt-2 text-sm text-muted">{{ description }}</p>
+      <p v-else-if="description" class="text-sm text-muted">{{ description }}</p>
     </header>
 
     <!--
@@ -61,10 +58,6 @@
       :title="`${title} could not be loaded`"
       :description="error"
     />
-
-    <div v-else-if="pending" class="space-y-3">
-      <USkeleton v-for="i in 3" :key="i" class="h-20 rounded-lg" />
-    </div>
 
     <div
       v-else-if="!items.length"
@@ -170,6 +163,7 @@
 </template>
 
 <script setup lang="ts" generic="T extends ListEditorItem">
+import { dashboardPanelActionsKey } from '~/lib/components/workspace/dashboard/dashboardPanelContext'
 // Generic so a caller can hang its own row on the item and read it straight off
 // the `#item` slot. Without it every custom row had to look its record back up
 // by id for each field it rendered, which is both noisy and quadratic.
@@ -182,7 +176,6 @@ const props = defineProps<{
   /** Names the add control for screen readers, e.g. "Add a question". */
   addLabel?: string
   readOnly?: boolean
-  pending?: boolean
   error?: string | null
   /** Lists with a persisted order gain move controls in the edit state. */
   reorderable?: boolean
@@ -207,6 +200,9 @@ const NuxtLink = resolveComponent('NuxtLink')
  * the row is the thing being acted on, and its pencil is the way in.
  */
 const rowLink = (item: T) => Boolean(item.to) && !(editing.value && !props.readOnly)
+
+// The navbar slot of the index panel this list is mounted in, if any.
+const actionsTarget = inject(dashboardPanelActionsKey, null)
 
 const editing = defineModel<boolean>('editing', { default: false })
 const selected = defineModel<string[]>('selected', { default: () => [] })

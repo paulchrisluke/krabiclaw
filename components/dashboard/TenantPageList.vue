@@ -6,7 +6,6 @@
     empty-title="No pages yet"
     empty-icon="i-lucide-file-text"
     add-label="Add a page"
-    :pending="pending"
     :error="loadError"
     :removing-id="removingId"
     @add="navigateTo(`${level.path.value}/new`)"
@@ -34,14 +33,13 @@ const level = useRouteLevel()
  * assembling the organization's path a second time.
  */
 const linksPath = computed(() => router.resolve({
-  name: 'dashboard-orgSlug-settings-pages-links',
+  name: 'dashboard-orgSlug-website-pages-links',
   params: { orgSlug: route.params.orgSlug },
 }).path)
 
-const { data, pending, error, refresh } = await useAsyncData(
+const { data, error, refresh } = await useAsyncData(
   `tenant-pages-${organizationId}`,
   () => dashboardApi<{ pages: TenantPageListRow[] }>(`/api/editor/organizations/${organizationId}/pages`, { validate: isTenantPageListResponse }),
-  { lazy: true },
 )
 
 const loadError = computed(() => (error.value ? getErrorMessage(error.value, 'Failed to load pages') : null))

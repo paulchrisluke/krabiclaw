@@ -19,25 +19,25 @@ export interface CheckoutInput {
   buyerUserId: string | null
   productId: string
   variantId: string
-  sessionId?: string
-  requestId?: string
-  requestFingerprint?: string
+  sessionId: string
+  requestId: string
+  requestFingerprint: string
   quantity: number
   idempotencyKey: string
   returnOrigin: string
-  following?: (paymentId: string) => BatchQuery[]
+  following: (paymentId: string) => BatchQuery[]
 }
+/** A booked session's Stripe Checkout: the guest request, its seat hold and its Payment are written together. */
 export async function createPaymentCheckout(db: DbClient, stripe: Stripe, env: CloudflareEnv, input: CheckoutInput, retry = false) {
   assertMinorAmount(input.quantity)
   if (input.quantity > 100 || !/^[a-zA-Z0-9_-]{8,128}$/u.test(input.idempotencyKey)) throw new HTTPError({statusCode:400,statusMessage:'Invalid checkout quantity or idempotency key'})
-  if(input.sessionId&&(!input.requestId||!input.requestFingerprint||!input.following))throw new HTTPError({statusCode:400,statusMessage:'Booking Checkout requires its canonical guest request'})
   if (!await hasOrganizationEntitlement(env,input.organizationId,'payments')) throw new HTTPError({statusCode:403,statusMessage:'Payments entitlement is required for new acceptance'})
   if (!env.STRIPE_SECRET_KEY || !env.STRIPE_PAYMENTS_METHOD_CONFIGURATION) throw new HTTPError({statusCode:503,statusMessage:'Stripe Payments synchronous-method configuration is required'})
   if(await queryFirst(db,'SELECT stripe_account_id FROM payment_servicing_tenants WHERE organization_id=? LIMIT 1',[input.organizationId]))throw new HTTPError({statusCode:409,statusMessage:'Tenant deletion servicing prevents new payment acceptance'})
   const origin = new URL(input.returnOrigin)
   if (origin.protocol !== 'https:' || origin.username || origin.password || origin.pathname !== '/' || origin.search || origin.hash) throw new Error('Payments return origin must be an HTTPS origin')
   const connected = await getStripeConnectedAccount(db,input.organizationId)
-  if (!connected?.stripeAccountId || connected.status !== 'ready' || connected.country !== 'US' || connected.livemode !== stripeLivemodeFromKey(env.STRIPE_SECRET_KEY)) throw new HTTPError({statusCode:409,statusMessage:'Supported US Stripe account is not ready'})
+  if (!connected?.stripeAccountId || connected.status !== 'ready' || connected.livemode !== stripeLivemodeFromKey(env.STRIPE_SECRET_KEY)) throw new HTTPError({statusCode:409,statusMessage:'Stripe account is not ready'})
   const account = await stripe.v2.core.accounts.retrieve(connected.stripeAccountId,{include:['defaults','configuration.merchant','identity']})
   if (account.dashboard !== 'express' || account.livemode !== connected.livemode || account.defaults?.responsibilities?.fees_collector !== 'application' || account.defaults.responsibilities.losses_collector !== 'stripe' || account.configuration?.merchant?.capabilities?.card_payments?.status !== 'active') throw new HTTPError({statusCode:409,statusMessage:'Stripe financial responsibilities or capability do not match Payments requirements'})
   const configurations=await stripe.paymentMethodConfigurations.list({limit:100},{stripeAccount:connected.stripeAccountId})
@@ -58,13 +58,12 @@ export async function createPaymentCheckout(db: DbClient, stripe: Stripe, env: C
   const product = await queryFirst<{name:string;tax_code:string|null;currency:string}>(db,`SELECT p.name,p.tax_code,o.default_currency AS currency FROM products p JOIN organization o ON o.id=p.organization_id JOIN product_variants v ON v.product_id=p.id AND v.organization_id=p.organization_id WHERE p.organization_id=? AND p.id=? AND v.id=? AND p.active=1 AND v.active=1`,[input.organizationId,input.productId,input.variantId])
   if (!product || product.currency !== 'USD') throw new HTTPError({statusCode:409,statusMessage:'An active USD offering is required'})
   let projectionTitle=product.name,projectionTaxCode=product.tax_code
-  const session = input.sessionId ? await queryFirst<{id:string;location_id:string|null;starts_at:string;ends_at:string;calendar_group:string|null;online_payment_required:number}>(db,`SELECT s.*,c.calendar_group,c.online_payment_required FROM product_sessions s JOIN product_booking_configs c ON c.product_id=s.product_id AND c.organization_id=s.organization_id WHERE s.organization_id=? AND s.id=? AND s.product_id=?`,[input.organizationId,input.sessionId,input.productId]) : null
-  if (input.sessionId && !session) throw new HTTPError({statusCode:404,statusMessage:'Session not found'})
-  if (session && !session.online_payment_required) throw new HTTPError({statusCode:409,statusMessage:'This offering uses pay-later booking'})
-  if(!input.sessionId&&await queryFirst(db,'SELECT product_id FROM product_booking_configs WHERE product_id=? AND organization_id=?',[input.productId,input.organizationId]))throw new HTTPError({statusCode:409,statusMessage:'A configured booking offering requires a real session, not a physical order checkout'})
+  const session = await queryFirst<{id:string;location_id:string|null;starts_at:string;ends_at:string;calendar_group:string|null;online_payment_required:number}>(db,`SELECT s.*,c.calendar_group,c.online_payment_required FROM product_sessions s JOIN product_booking_configs c ON c.product_id=s.product_id AND c.organization_id=s.organization_id WHERE s.organization_id=? AND s.id=? AND s.product_id=?`,[input.organizationId,input.sessionId,input.productId])
+  if (!session) throw new HTTPError({statusCode:404,statusMessage:'Session not found'})
+  if (!session.online_payment_required) throw new HTTPError({statusCode:409,statusMessage:'This offering uses pay-later booking'})
   const rawPrices = await queryAll<Price>(db,'SELECT * FROM prices WHERE organization_id=? AND product_variant_id=?',[input.organizationId,input.variantId])
   const now = new Date().toISOString()
-  let price = selectPrice(rawPrices.map(p=>({...p,active:Boolean(p.active)})),{currency:'USD',location_id:session?.location_id ?? null,at:now,billing:{type:'one_time'}})
+  let price = selectPrice(rawPrices.map(p=>({...p,active:Boolean(p.active)})),{currency:'USD',location_id:session.location_id,at:now,billing:{type:'one_time'}})
   if (!price && !previous) throw new HTTPError({statusCode:409,statusMessage:'Offering has no current one-time price'})
   if (price?.unit_amount === 0 && !previous) throw new HTTPError({statusCode:409,statusMessage:'Free offerings use the canonical booking flow without checkout'})
   if (previous) {
@@ -89,7 +88,7 @@ export async function createPaymentCheckout(db: DbClient, stripe: Stripe, env: C
     assertPriceShape(frozenPrice)
     if (frozenPrice.unit_amount * input.quantity !== frozen.amount || frozenPrice.currency !== frozen.currency) throw new HTTPError({statusCode:409,statusMessage:'Stored checkout snapshot does not match its payment'})
     if (input.buyerUserId !== null && frozen.buyer_user_id !== input.buyerUserId) throw new HTTPError({statusCode:403,statusMessage:'Checkout belongs to another buyer'})
-    if (snapshot.product_id!==input.productId || snapshot.variant_id!==input.variantId || snapshot.quantity!==input.quantity || snapshot.session_id!==(input.sessionId??null) || snapshot.request_fingerprint!==input.requestFingerprint) throw new HTTPError({statusCode:409,statusMessage:'Checkout retry does not match its immutable purchase'})
+    if (snapshot.product_id!==input.productId || snapshot.variant_id!==input.variantId || snapshot.quantity!==input.quantity || snapshot.session_id!==input.sessionId || snapshot.request_fingerprint!==input.requestFingerprint) throw new HTTPError({statusCode:409,statusMessage:'Checkout retry does not match its immutable purchase'})
     projectionTitle=snapshot.title
     projectionTaxCode=snapshot.tax_code
     price = frozenPrice
@@ -99,7 +98,7 @@ export async function createPaymentCheckout(db: DbClient, stripe: Stripe, env: C
   if(!price)throw new Error('Immutable checkout price is missing')
   const amount = price.unit_amount*input.quantity
   assertMinorAmount(amount)
-  const id = previous?.payment_id ?? crypto.randomUUID(), attemptId = previous?.id ?? crypto.randomUUID(), holdId = crypto.randomUUID(), orderId = crypto.randomUUID()
+  const id = previous?.payment_id ?? crypto.randomUUID(), attemptId = previous?.id ?? crypto.randomUUID(), holdId = crypto.randomUUID()
   const returnToken=previous?.return_token ?? crypto.randomUUID()+crypto.randomUUID()
   const returnHash=await tokenHash(returnToken)
   const expiresAt = previous?.expires_at ?? new Date(Date.now()+60*60*1000).toISOString()
@@ -110,17 +109,14 @@ export async function createPaymentCheckout(db: DbClient, stripe: Stripe, env: C
     return {payment_id:previous.payment_id,checkout_url:previous.checkout_url,expires_at:expiresAt}
   }
   if (!previous) {
-    if(session) await refreshProductBusy(db,env,input.organizationId,input.productId)
+    await refreshProductBusy(db,env,input.organizationId,input.productId)
     try { await executeBatch(db,[
-      {query:`INSERT INTO payments(id,organization_id,buyer_user_id,stripe_account_id,livemode,subject_type,subject_id,location_id,currency,amount,price_snapshot_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`,params:[id,input.organizationId,input.buyerUserId,connected.stripeAccountId,Number(connected.livemode),session?'booking':'order',session?null:orderId,session?.location_id??null,price.currency,amount,JSON.stringify({title:projectionTitle,tax_code:projectionTaxCode,price,product_id:input.productId,variant_id:input.variantId,quantity:input.quantity,session_id:input.sessionId??null,automatic_tax:automaticTax,method_configuration_id:methodConfigurationId,request_fingerprint:input.requestFingerprint}),now,now]},
-      ...(session ? [{query:`INSERT INTO payment_checkout_holds(id,organization_id,product_id,variant_id,price_id,session_id,buyer_user_id,request_id,payment_id,quantity,amount,currency,calendar_group,starts_at,ends_at,status,expires_at,created_at,assigned_member_id)
-        SELECT ?,?,?,?,?,?,?,?,?,?,?,?,c.calendar_group,s.starts_at,s.ends_at,'active',?,?,${sessionMemberSql('s')} FROM product_sessions s JOIN product_booking_configs c ON c.product_id=s.product_id AND c.organization_id=s.organization_id WHERE s.id=? AND s.organization_id=? AND s.product_id=? AND ${sessionAllocationPredicate({organizationId:input.organizationId,productId:input.productId,sessionId:session.id,partySize:input.quantity,now}).query}`,params:[holdId,input.organizationId,input.productId,input.variantId,price.id,session.id,input.buyerUserId,input.requestId??null,id,input.quantity,amount,price.currency,expiresAt,now,session.id,input.organizationId,input.productId,...sessionAllocationPredicate({organizationId:input.organizationId,productId:input.productId,sessionId:session.id,partySize:input.quantity,now}).params!]}] : [
-        {query:'INSERT INTO payment_orders(id,organization_id,buyer_user_id,payment_id,currency,amount,created_at) VALUES(?,?,?,?,?,?,?)',params:[orderId,input.organizationId,input.buyerUserId,id,price.currency,amount,now]},
-        {query:'INSERT INTO payment_order_lines(id,order_id,product_id,variant_id,price_id,title,unit_amount,quantity,currency,tax_behavior) VALUES(?,?,?,?,?,?,?,?,?,?)',params:[crypto.randomUUID(),orderId,input.productId,input.variantId,price.id,product.name,price.unit_amount,input.quantity,price.currency,price.tax_behavior]},
-      ]),
-      ...(session ? [{query:'UPDATE product_sessions SET assigned_member_id=(SELECT assigned_member_id FROM payment_checkout_holds WHERE payment_id=?) WHERE id=? AND EXISTS(SELECT 1 FROM payment_checkout_holds WHERE payment_id=? AND status=\'active\')',params:[id,session.id,id]}]:[]),
-      {query:`INSERT INTO payment_attempts(id,payment_id,idempotency_key,return_token,status,expires_at,created_at,updated_at) SELECT ?,?,?,?,'creating',?,?,? WHERE ?=0 OR EXISTS(SELECT 1 FROM payment_checkout_holds WHERE payment_id=? AND status='active')`,params:[attemptId,id,key,returnToken,expiresAt,now,now,Number(Boolean(session)),id]},
-      ...(input.following?.(id) ?? []),
+      {query:`INSERT INTO payments(id,organization_id,buyer_user_id,stripe_account_id,livemode,subject_type,subject_id,location_id,currency,amount,price_snapshot_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`,params:[id,input.organizationId,input.buyerUserId,connected.stripeAccountId,Number(connected.livemode),'booking',null,session.location_id,price.currency,amount,JSON.stringify({title:projectionTitle,tax_code:projectionTaxCode,price,product_id:input.productId,variant_id:input.variantId,quantity:input.quantity,session_id:input.sessionId,automatic_tax:automaticTax,method_configuration_id:methodConfigurationId,request_fingerprint:input.requestFingerprint}),now,now]},
+      {query:`INSERT INTO payment_checkout_holds(id,organization_id,product_id,variant_id,price_id,session_id,buyer_user_id,request_id,payment_id,quantity,amount,currency,calendar_group,starts_at,ends_at,status,expires_at,created_at,assigned_member_id)
+        SELECT ?,?,?,?,?,?,?,?,?,?,?,?,c.calendar_group,s.starts_at,s.ends_at,'active',?,?,${sessionMemberSql('s')} FROM product_sessions s JOIN product_booking_configs c ON c.product_id=s.product_id AND c.organization_id=s.organization_id WHERE s.id=? AND s.organization_id=? AND s.product_id=? AND ${sessionAllocationPredicate({organizationId:input.organizationId,productId:input.productId,sessionId:session.id,partySize:input.quantity,now}).query}`,params:[holdId,input.organizationId,input.productId,input.variantId,price.id,session.id,input.buyerUserId,input.requestId,id,input.quantity,amount,price.currency,expiresAt,now,session.id,input.organizationId,input.productId,...sessionAllocationPredicate({organizationId:input.organizationId,productId:input.productId,sessionId:session.id,partySize:input.quantity,now}).params!]},
+      {query:'UPDATE product_sessions SET assigned_member_id=(SELECT assigned_member_id FROM payment_checkout_holds WHERE payment_id=?) WHERE id=? AND EXISTS(SELECT 1 FROM payment_checkout_holds WHERE payment_id=? AND status=\'active\')',params:[id,session.id,id]},
+      {query:`INSERT INTO payment_attempts(id,payment_id,idempotency_key,return_token,status,expires_at,created_at,updated_at) SELECT ?,?,?,?,'creating',?,?,? WHERE EXISTS(SELECT 1 FROM payment_checkout_holds WHERE payment_id=? AND status='active')`,params:[attemptId,id,key,returnToken,expiresAt,now,now,id]},
+      ...input.following(id),
       {query:'INSERT INTO payment_claims(token_hash,payment_id,expires_at) SELECT ?,?,? WHERE EXISTS(SELECT 1 FROM payment_attempts WHERE id=?)',params:[returnHash,id,new Date(Date.now()+86400000).toISOString(),attemptId]},
     ],{operation:'Reserve payment checkout'})
     } catch(error) {

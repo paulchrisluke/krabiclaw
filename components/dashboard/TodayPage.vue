@@ -51,45 +51,39 @@
         {{ heading }}
       </h1>
 
-      <div v-if="pending && !todayData" class="mt-6 space-y-4" aria-label="Loading today">
-        <USkeleton v-for="index in 4" :key="index" class="h-36 w-full rounded-2xl sm:h-40" />
+      <div v-if="visibleItems.length" class="mt-6 space-y-4">
+        <TodayAgendaCard
+          v-for="item in visibleItems"
+          :key="item.id"
+          :item="item"
+          :reference-day="referenceDay(item)"
+          :personal="personalScope"
+        />
       </div>
 
-      <template v-else>
-        <div v-if="visibleItems.length" class="mt-6 space-y-4">
-          <TodayAgendaCard
-            v-for="item in visibleItems"
-            :key="item.id"
-            :item="item"
-            :reference-day="referenceDay(item)"
-            :personal="personalScope"
-          />
-        </div>
-
-        <div v-else-if="!activeLoading && !activeError" class="py-24 text-center">
-          <img
-            src="https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/0b7e08d0-6b7d-471b-2957-9845392cc200/w=224"
-            alt=""
-            aria-hidden="true"
-            width="112"
-            height="112"
-            class="mx-auto size-28 object-contain"
-          >
-          <p class="mt-6 text-base font-semibold text-highlighted">{{ emptyTitle }}</p>
-          <p class="mt-1 text-sm text-muted">{{ emptyDescription }}</p>
-        </div>
-
-        <div
-          v-if="hasMore"
-          :key="`${activeRange}-${filterSignature}`"
-          ref="loadMoreSentinel"
-          class="flex min-h-24 items-center justify-center"
-          aria-live="polite"
+      <div v-else-if="!activeLoading && !activeError" class="py-24 text-center">
+        <img
+          src="https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/0b7e08d0-6b7d-471b-2957-9845392cc200/w=224"
+          alt=""
+          aria-hidden="true"
+          width="112"
+          height="112"
+          class="mx-auto size-28 object-contain"
         >
-          <UIcon v-if="activeLoading" name="i-lucide-loader-circle" class="size-6 animate-spin text-muted" />
-          <span v-else class="sr-only">Scroll to load more</span>
-        </div>
-      </template>
+        <p class="mt-6 text-base font-semibold text-highlighted">{{ emptyTitle }}</p>
+        <p class="mt-1 text-sm text-muted">{{ emptyDescription }}</p>
+      </div>
+
+      <div
+        v-if="hasMore"
+        :key="`${activeRange}-${filterSignature}`"
+        ref="loadMoreSentinel"
+        class="flex min-h-24 items-center justify-center"
+        aria-live="polite"
+      >
+        <UIcon v-if="activeLoading" name="i-lucide-loader-circle" class="size-6 animate-spin text-muted" />
+        <span v-else class="sr-only">Scroll to load more</span>
+      </div>
 
       <!--
         Triage is a band, not a badge on every row. Marking each card with its
@@ -179,7 +173,6 @@ const isAgendaPayload = (value: unknown): value is AgendaPayload =>
 const { data: todayData, pending, error: todayError, refresh: refreshToday } = await useAsyncData<TodayAgendaPayload>(
   todayKey,
   () => dashboardApi<TodayAgendaPayload>(`${apiBase}/today`, { validate: isTodayResponse }),
-  { lazy: true },
 )
 
 const activeRange = ref<TodayRange>('today')
