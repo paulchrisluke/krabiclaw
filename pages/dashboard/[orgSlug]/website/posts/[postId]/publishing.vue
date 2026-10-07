@@ -23,8 +23,7 @@
             <p v-if="row.detail" class="mt-1 text-xs text-muted">{{ row.detail }}</p>
             <div class="mt-2 flex flex-wrap gap-2">
               <UButton v-if="row.url" :to="row.url" target="_blank" size="xs" color="neutral" variant="soft" icon="i-lucide-external-link">View</UButton>
-              <UInput v-if="row.reconcileId && row.channel === 'discord'" v-model="messageId" size="xs" placeholder="Discord message id" aria-label="Discord message id" class="w-44" />
-              <UButton v-if="row.reconcileId" size="xs" color="neutral" variant="outline" :disabled="row.channel === 'discord' && !messageId.trim()" :loading="reconciling === row.reconcileId" @click="reconcile(row.reconcileId, row.channel === 'discord' ? messageId.trim() : undefined)">Check with {{ row.name }}</UButton>
+              <UButton v-if="row.reconcileId" size="xs" color="neutral" variant="outline" :loading="reconciling === row.reconcileId" @click="reconcile(row.reconcileId)">Check with {{ row.name }}</UButton>
               <UButton v-if="row.connectUrl" :to="row.connectUrl" size="xs" color="neutral" variant="link">Connect</UButton>
             </div>
           </div>
@@ -64,7 +63,6 @@ const connectionsError = computed(() => (error.value ? getErrorMessage(error.val
 const lastOutcomes = ref<PublishOutcome[]>([])
 const selected = ref<Array<'organization' | SocialChannel>>([])
 const reconciling = ref<string | null>(null)
-const messageId = ref('')
 
 const CHANNELS: Record<SocialChannel, { name: string; icon: string }> = {
   facebook: { name: 'Facebook', icon: 'i-logos-facebook' },
@@ -101,8 +99,7 @@ const rows = computed(() => {
       state: state ? STATE_WORDS[state] ?? state : blocked ? channel.problems.map(problem => problem.message).join(' ') || 'Not connected' : 'Not published there',
       tone: state === 'published' ? 'text-success' : state === 'failed' || state === 'unknown' ? 'text-warning' : 'text-muted',
       detail: outcome(channel.channel)?.message ?? (publication?.message ? String(publication.message) : null)
-        ?? (publication?.local_content_changed ? 'The website post changed after this was sent; the post there was not edited.' : null)
-        ?? (state === 'unknown' && channel.channel === 'discord' ? 'Discord cannot be searched for it. If the message is in the channel, copy its id (Copy Message ID) and check it here.' : null),
+        ?? (publication?.local_content_changed ? 'The website post changed after this was sent; the post there was not edited.' : null),
       url: typeof publication?.public_url === 'string' ? publication.public_url : null,
       reconcileId: state === 'unknown' ? String(publication!.id) : null,
       connectUrl: channel.connected ? null : channel.connect_url,
@@ -127,10 +124,8 @@ async function publish() {
   selected.value = []
 }
 
-async function reconcile(publicationId: string, providerPostId?: string) {
+async function reconcile(publicationId: string) {
   reconciling.value = publicationId
-  try {
-    if (await post.editor.reconcile(post.postId.value, publicationId, providerPostId)) messageId.value = ''
-  } finally { reconciling.value = null }
+  try { await post.editor.reconcile(post.postId.value, publicationId) } finally { reconciling.value = null }
 }
 </script>

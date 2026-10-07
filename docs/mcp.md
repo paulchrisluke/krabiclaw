@@ -15,9 +15,8 @@ through it with the same tools.
   availability and financial reads
 - Site creation and location creation, copying, and deletion are CMS-only. MCP
   retains daily content operations, including media asset and experience deletion.
-- Google Places lookup and domain setup are CMS-only. Connecting a Facebook Page or
-  Instagram account is a Better Auth sign-in in the dashboard, and a Discord channel is
-  connected there by its incoming webhook URL ([Discord setup](integrations/discord.md));
+- Google Places lookup and domain setup are CMS-only. Connecting a Facebook Page,
+  Instagram account or Discord channel is a Better Auth sign-in in the dashboard;
   `get_social_connections` returns the `connect_url`. Manual locale management remains available as ordinary content editing.
 - Posts: `create_post` makes a draft (pass a new `idempotency_key`); `publish_post` publishes to
   exactly the `targets` named — `{"channel":"organization"}` and the `target_id` and

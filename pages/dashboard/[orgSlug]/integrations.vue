@@ -13,14 +13,11 @@
 <script lang="ts">
 import type { InjectionKey, Ref } from 'vue'
 
-/** A connected Page, account, property, site or Discord channel, as the settings payload names it. */
+/** A connected Page, account, property, site or channel, as the settings payload names it. */
 export interface ConnectedIntegration {
-  account_id: string | null
+  account_id: string
   target_id: string
   target_name: string
-  webhook_id: string | null
-  guild_id: string | null
-  revision: string
   measurement_id: string | null
   verified: boolean | null
   connected_at: string
