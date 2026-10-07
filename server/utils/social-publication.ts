@@ -1014,12 +1014,24 @@ async function reconcileDiscordPublication(env: CloudflareEnv, organizationId: s
     }
     const caption = providerCaption(post.body, post.call_to_action)
     const since = Date.parse(publication.created_at)
-    const sent = (await listMessages(env, target.channelId, { before: null, limit: 100 }, deadline)).filter(candidate =>
-      !discordMessageMismatch(env, candidate, target.channelId) && Date.parse(candidate.timestamp) >= since && candidate.content === caption
-      && candidate.attachments.length === post.media.length && candidate.attachments.every((attachment, index) => attachment.filename.startsWith(`${index + 1}-${post.media[index]!.asset_id}.`)))
-    message = sent.length === 1 ? sent[0]! : null
+    const matches = (candidate: DiscordMessage) => !discordMessageMismatch(env, candidate, target.channelId) && Date.parse(candidate.timestamp) >= since
+      && candidate.content === caption && candidate.attachments.length === post.media.length
+      && candidate.attachments.every((attachment, index) => attachment.filename.startsWith(`${index + 1}-${post.media[index]!.asset_id}.`))
+    // Newest first, page by page, back to when the publication began.
+    const sent: DiscordMessage[] = []
+    let before: string | null = null
+    let complete = false
+    while (deadline.remaining() > 5_000) {
+      const page = await listMessages(env, target.channelId, { before, limit: 100 }, deadline)
+      sent.push(...page.filter(matches))
+      if (page.length < 100 || Date.parse(page.at(-1)!.timestamp) < since) { complete = true; break }
+      before = page.at(-1)!.id
+    }
+    message = complete && sent.length === 1 ? sent[0]! : null
     if (!message) {
-      return { publication: receipt(publication), state: publication.state, message: sent.length ? `${sent.length} messages match this post; supply the Discord message id.` : 'No message of this post is in the channel; it stays unknown.' }
+      return { publication: receipt(publication), state: publication.state, message: !complete
+        ? 'The channel has more messages since this attempt than one check can read; check again.'
+        : sent.length ? `${sent.length} messages match this post; supply the Discord message id.` : 'No message of this post is in the channel; it stays unknown.' }
     }
   }
   const result = await execute(db, `UPDATE post_publications SET state = 'published', attempt_id = NULL, provider_post_id = ?, provider_permalink = ?,
