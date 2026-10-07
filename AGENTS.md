@@ -273,6 +273,12 @@ its rule for admitting a new concern. Read the generated route tree and the
 existing editor and domain operation before adding a file, and remove what the
 change replaces in the same change.
 
+## Customer documentation
+
+When creating or editing customer help articles, read
+`.agents/skills/write-help-docs/SKILL.md`. Relevant workflow sections require
+screenshots captured from the running application and published with the article.
+
 ## Local development
 
 Follow `docs/local-development.md`.
