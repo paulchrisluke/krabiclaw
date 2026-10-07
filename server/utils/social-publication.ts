@@ -617,12 +617,25 @@ async function discordFiles(post: Post, deadline: MetaDeadline): Promise<Discord
     if (!response.ok) throw new Error(`Asset ${item.asset_id} could not be read from ${item.public_url}: HTTP ${response.status}`)
     const type = (response.headers.get('content-type') ?? '').split(';')[0]!.trim().toLowerCase()
     if (DISCORD_MEDIA_TYPES[type] !== item.kind) return { code: 'unsupported_media_type', message: `Asset ${item.asset_id} is served as ${type || 'an unknown type'}, which is not a Discord ${item.kind} format here` }
-    const bytes = await response.arrayBuffer()
-    if (bytes.byteLength > DISCORD_FILE_LIMIT_BYTES) return { code: 'media_too_large', message: `Discord accepts files up to 20 MiB; asset ${item.asset_id} is ${(bytes.byteLength / 1024 / 1024).toFixed(1)} MiB` }
-    total += bytes.byteLength
-    if (total > DISCORD_REQUEST_LIMIT_BYTES) return { code: 'media_too_large', message: `One Discord message carries at most 25 MiB of attachments; this post's media exceeds it at asset ${item.asset_id}` }
+    // Never more than the file limit, nor the message's remaining allowance, is held in memory.
+    const cap = Math.min(DISCORD_FILE_LIMIT_BYTES, DISCORD_REQUEST_LIMIT_BYTES - total)
+    const tooLarge = { code: 'media_too_large', message: `Asset ${item.asset_id} is larger than Discord's 20 MiB file limit or the 25 MiB this message carries in all` }
+    if (Number(response.headers.get('content-length') ?? 0) > cap) { await response.body?.cancel(); return tooLarge }
+    if (!response.body) throw new Error(`Asset ${item.asset_id} answered without a body`)
+    const chunks: Uint8Array[] = []
+    let size = 0
+    const reader = response.body.getReader()
+    for (let read = await reader.read(); !read.done; read = await reader.read()) {
+      size += read.value.byteLength
+      if (size > cap) { await reader.cancel(); return tooLarge }
+      chunks.push(read.value)
+    }
+    const bytes = new Uint8Array(size)
+    let offset = 0
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength }
+    total += size
     const extension = type.split('/')[1]!.replace('jpeg', 'jpg').replace('quicktime', 'mov')
-    files.push({ name: `${index + 1}-${item.asset_id}.${extension}`, type, bytes, description: item.alt_text })
+    files.push({ name: `${index + 1}-${item.asset_id}.${extension}`, type, bytes: bytes.buffer, description: item.alt_text })
   }
   return files
 }
