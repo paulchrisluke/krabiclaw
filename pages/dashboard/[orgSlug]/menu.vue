@@ -33,7 +33,7 @@
 import DashboardMenuContent from '~/lib/components/workspace/dashboard/DashboardMenuContent.vue'
 import DashboardNotificationBell from '~/lib/components/workspace/dashboard/DashboardNotificationBell.vue'
 
-definePageMeta({ layout: 'dashboard' })
+definePageMeta({ layout: 'dashboard', tab: 'menu' })
 useSeoMeta({ title: 'Menu | Krabiclaw Dashboard', robots: 'noindex, nofollow' })
 
 const nuxtApp = useNuxtApp()

@@ -15,7 +15,7 @@
         :resource-id="category.id"
         resource-label="category"
         :fields="localizationFields"
-        :language-settings-path="`/dashboard/${route.params.orgSlug}/settings/website/localization`"
+        :language-settings-path="`/dashboard/${route.params.orgSlug}/website/localization`"
       />
     </template>
     <div v-if="category" class="space-y-6">

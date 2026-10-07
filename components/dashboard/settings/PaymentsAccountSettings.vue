@@ -61,7 +61,7 @@ const config = useRuntimeConfig()
 const organizationId = computed(() => props.personalScope ? null : dashboard.organization.value?.id ?? null)
 const scope = computed(() => organizationId.value ? { organizationId: organizationId.value } : {})
 // The account's history is its ledger leaf; the business's is its invoices, under Plan.
-const paymentsTo = computed(() => props.personalScope ? `${level.path.value}/your-payments` : `/dashboard/${encodeURIComponent(String(route.params.orgSlug))}/settings/payments/invoices`)
+const paymentsTo = computed(() => props.personalScope ? `${level.path.value}/your-payments` : `/dashboard/${encodeURIComponent(String(route.params.orgSlug))}/payments/invoices`)
 
 const { data, error, refresh } = await useAsyncData(
   () => `payment-methods:${props.personalScope ? 'account' : String(route.params.orgSlug)}`,

@@ -140,7 +140,7 @@ let copyTimer: ReturnType<typeof setTimeout> | undefined
 const saving = ref(false)
 const errorMessage = ref('')
 
-const linksPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/settings/website/pages/links`)
+const linksPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/website/pages/links`)
 const itemsPath = computed(() => `${linksPath.value}/items`)
 
 const form = reactive<LinksPage>({
@@ -152,7 +152,7 @@ const items = ref<LinkItem[]>([])
 const linksPageLocalizationFields = computed(() => [
   { key: 'title', label: 'Title', source: data.value?.page.title },
 ])
-const organizationLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/website/localization`)
+const organizationLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/website/localization`)
 function localizedLinksPath(locale: string): string {
   return `/${locale}/links`
 }

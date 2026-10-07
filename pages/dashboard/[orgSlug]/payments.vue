@@ -19,7 +19,7 @@ import PayoutMethodSettings from '~/components/dashboard/settings/PayoutMethodSe
 import PlanSettings from '~/components/dashboard/settings/PlanSettings.vue'
 import PaymentsAccountSettings from '~/components/dashboard/settings/PaymentsAccountSettings.vue'
 
-definePageMeta({ layout: 'dashboard' })
+definePageMeta({ layout: 'dashboard', tab: 'menu', back: 'dashboard-orgSlug-earnings' })
 useSeoMeta({ title: 'Payments | Krabiclaw', robots: 'noindex, nofollow' })
 
 const route = useRoute()

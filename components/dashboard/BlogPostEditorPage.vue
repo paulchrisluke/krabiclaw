@@ -53,8 +53,8 @@ const organizationId = await useDashboardOrganizationId()
 const postId = String(route.params.postId || '')
 if (!postId) throw createError({ statusCode: 400, statusMessage: 'Post ID is required' })
 
-const blogPath = `/dashboard/${orgSlug}/settings/website/blog`
-const organizationLocalizationSettingsPath = `/dashboard/${orgSlug}/settings/website/localization`
+const blogPath = `/dashboard/${orgSlug}/website/blog`
+const organizationLocalizationSettingsPath = `/dashboard/${orgSlug}/website/localization`
 
 const { data: postResource, error: postError } = await useAsyncData(
   `dashboard-blog-post:${organizationId}:${postId}`,

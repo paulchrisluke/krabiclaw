@@ -136,7 +136,7 @@
 import DashboardTopNav from '~/lib/components/workspace/dashboard/DashboardTopNav.vue'
 import DashboardMenuSlideover from '~/lib/components/workspace/dashboard/DashboardMenuSlideover.vue'
 import type { DashboardScopeHeaderModel } from '~/lib/components/workspace/dashboard/DashboardScopeHeader.vue'
-import { dashboardOrganizationParentKey, dashboardScopeHeaderModelKey } from '~/lib/components/workspace/dashboard/dashboardScopeHeaderContext'
+import { dashboardScopeHeaderModelKey } from '~/lib/components/workspace/dashboard/dashboardScopeHeaderContext'
 import { authClient } from '~/lib/auth-client'
 import { reconcileAnalyticsConsent } from '~/composables/useAnalyticsConsentReconciliation'
 import { useAnalytics } from '~/composables/useAnalytics'
@@ -357,10 +357,6 @@ async function activateOrganization(org: { id: string, slug: string } | null) {
 }
 
 provide(dashboardScopeHeaderModelKey, scopeHeaderModel)
-provide(dashboardOrganizationParentKey, computed(() => {
-  const target = scopeOrganization.value
-  return target ? { label: target.name, to: `/dashboard/${encodeURIComponent(target.slug)}/settings` } : null
-}))
 
 interface DashboardMobileNavItem {
   key: string
@@ -371,46 +367,15 @@ interface DashboardMobileNavItem {
 }
 
 /**
- * Which tab the current route belongs to: the root of its nested route tree,
- * or where that root's declared `meta.back` leads when the root is a workspace
- * reached from a tab — adding a location from Menu, a booking from Today.
- *
- * Prefix matching cannot answer this. Pages lives at `/pages` but is nested
- * under Menu, so the URL says nothing about Menu while every way out of it
- * leads there. Reading the same tree Back reads means the lit tab is always
- * the one the walk ends at.
+ * The tab a screen belongs to is declared by its destination root as
+ * `definePageMeta({ tab })` — Today, Calendar, Catalog, Messages or Menu. It
+ * is read, never inferred: not from the URL, not from where Back leads. A
+ * screen that declares none lights no tab rather than borrowing one.
  */
-function tabRootPath(stops: readonly string[]): string | null {
-  let location = router.resolve(route.fullPath)
-  const seen = new Set<string>()
-  while (location.matched[0]) {
-    const root = location.matched[0]
-    const path = routeRecordPath(router, root, location.params)
-    if (stops.includes(path)) return path
-    if (seen.has(path)) return null
-    seen.add(path)
-    const declared = root.meta?.back
-    if (typeof declared !== 'string') return null
-    const target = router.getRoutes().find(candidate => candidate.name === declared)
-    if (!target) throw new Error(`Route "${declared}" named in meta.back does not exist`)
-    // Account settings carries no organization and has no tab lit.
-    const keys = [...target.path.matchAll(/:(\w+)/g)].map(match => match[1]!)
-    if (keys.some(key => location.params[key] === undefined)) return null
-    location = router.resolve(routeRecordPath(router, target, location.params))
-  }
-  return null
-}
-
-
-
-/**
- * A tab is active when the walk above ends at it. Two tabs could otherwise
- * claim one route, because a level can keep a URL its tab does not prefix:
- * Locations lives at `/locations` under Menu.
- */
-function withActiveItem<T extends { to?: string }>(items: T[], root: string | null): Array<T & { active: boolean }> {
-  return items.map(item => ({ ...item, active: Boolean(item.to) && item.to === root }))
-}
+const activeTab = computed(() => {
+  const tab = route.matched[0]?.meta.tab
+  return typeof tab === 'string' ? tab : null
+})
 
 /** The tabs themselves; which one is lit is answered after they are known. */
 const navTargets = computed<DashboardMobileNavItem[]>(() => {
@@ -438,13 +403,7 @@ const navTargets = computed<DashboardMobileNavItem[]>(() => {
 // it, because a slideover is the wrong control on a phone.
 const menuOpen = ref(false)
 
-/** Every tab the walk may end at, Menu included. */
-const tabStops = computed(() => [
-  ...navTargets.value.map(item => item.to).filter((to): to is string => Boolean(to)),
-  menuPageTo.value,
-])
-const activeTabPath = computed(() => tabRootPath(tabStops.value))
-const primaryNavItems = computed(() => withActiveItem(navTargets.value, activeTabPath.value))
+const primaryNavItems = computed(() => navTargets.value.map(item => ({ ...item, active: item.key === activeTab.value })))
 // A signed-in owner always gets the header: the wordmark and the account menu
 // are user-scoped and need no organization. Only the nav links and the bottom
 // bar wait for an organization, because Today, Calendar, Catalog and Messages do not
@@ -459,9 +418,7 @@ const topNavHomeTo = computed(() => {
   if (personal.value) return '/dashboard/account'
   return scopeOrganization.value ? `/dashboard/${encodeURIComponent(scopeOrganization.value.slug)}` : '/dashboard'
 })
-// Menu is lit by the same walk as the other tabs, so a page reached through it
-// — Pages, Blog, Website, and every level under them — lights Menu and nothing else.
-const isMenuPageActive = computed(() => activeTabPath.value === menuPageTo.value)
+const isMenuPageActive = computed(() => activeTab.value === 'menu')
 
 
 

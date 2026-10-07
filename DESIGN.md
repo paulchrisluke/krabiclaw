@@ -75,24 +75,101 @@ theme:
 | --- | --- | --- |
 | Today | `O` | the day's agenda |
 | Calendar | `O/calendar` | bookings and availability by day |
-| Catalog | `O/products` | every Product the organization carries, of every kind |
+| Catalog | `O/products` | what the organization offers |
 | Messages | `O/messages` | guest conversations |
-| Menu | `O/settings` | everything else, flat |
+| Menu | `O/menu` | a launcher |
 
-Catalog is a root: it has no Back to Menu, and its label does not change with
-the theme or with what the catalog holds. Personal scope
-(`/dashboard/account/...`) has its own navigation and never shows Catalog.
+**Menu is a launcher, not a parent.** It lists the Earnings and Insights cards,
+then Website, Posts, Locations, Team, Integrations, Platform accounts (Better
+Auth admins, inside Krabiclaw's own organization only), Account settings,
+Switch to Personal and Log out. Each row opens a destination of its own; none
+is nested under Menu. The desktop slideover and the narrow Menu page render the
+one model in `useOrganizationSettingsNavigation`.
 
-**Menu** is flat: the Earnings and Insights cards, then Website, Posts,
-Locations, Team, Integrations, Platform accounts, Account settings, Switch to
-Personal and Log out. The desktop panel and the narrow Menu page render the one
-model in `useOrganizationSettingsNavigation`. Earnings is the way to the
-organization's payment settings, so Menu has no Payments row.
+The destinations are files under `O`, and their URLs are their files:
 
-**Website** (`O/settings/website`) is a real index: Pages, Blog, Reviews and
-Q&A, Brand, Status, Domains, Languages, Currency, Search appearance, and Website
-booking where the organization has a booking mode. On desktop it opens Pages,
-and Pages chooses no page.
+| Destination | URL |
+| --- | --- |
+| Website | `O/website` — Pages, Blog, Reviews and Q&A, Brand, Status, Domains, Languages, Currency, Search appearance, Website booking |
+| Pages | `O/website/pages`, a page `O/website/pages/:pageId`, the Links page `O/website/pages/links` |
+| Blog | `O/website/blog` |
+| Reviews and Q&A | `O/website/qa` |
+| Brand | `O/website/brand` and its leaves |
+| Posts | `O/posts` |
+| Locations | `O/locations`, a location `O/locations/:locationSlug`, `O/locations/new` |
+| Team | `O/team` |
+| Integrations | `O/integrations` |
+| Earnings | `O/earnings` |
+| Payments | `O/payments` — the organization's own Stripe account, payouts and plan |
+| Insights | `O/insights` |
+| Notifications | `O/notifications` |
+| Platform accounts | `O/platform-accounts` |
+
+Personal scope (`/dashboard/account/...`) has the same shape: Today, Calendar,
+Messages and a launcher Menu at `/dashboard/account/menu`, whose rows open
+Account settings at `/dashboard/account/profile` and Past activity at
+`/dashboard/account/activity`.
+
+### Catalog
+
+**Catalog opens on three entries — Menu, Experiences, Services — and All
+items.** They are ways into the catalog, not groupings anyone creates, and
+every organization has all three whatever its template. Each opens a view
+suited to its task; every offering, from anywhere, opens the one Product
+editor at `O/products/:productId`.
+
+| Entry | URL | First working screen |
+| --- | --- | --- |
+| Menu | `O/products/menu?location_id=` | the chosen location's sections, in the order guests see them |
+| A section | `O/products/menu/:collectionId?location_id=` | its items, in order |
+| Experiences | `O/products/experiences` | every experience; location is an optional filter |
+| Services | `O/products/services` | every service; location is an optional filter |
+| All items | `O/products/all` | everything, of every kind, filtered by `?kind` |
+
+**A menu belongs to a location.** With one location the Menu opens on it and
+names it. With several, a location must be chosen before its sections can be
+reordered or added to; with none chosen, every location's sections read side by
+side, each with a way into editing it, and no single reorderable list is
+assembled from several locations. Sections every location shares are their
+own list, edited with no location chosen, and never silently merged into a
+location's.
+
+In the menu workflow a collection is always a **section**: Add section, Edit
+menu (section order), Edit section (item order). Collection stays the name of
+the model. **Remove from section**, **stop offering at a location** and
+**delete the item** are three different actions: removing an item from a
+section changes that section's membership and nothing else, and deleting a
+section never deletes what was in it.
+
+Services and Experiences have no grouping step. A service's overview leads
+with Assigned team member (the booking assignment concern: who guests' bookable
+consultations are with — not case ownership, and changing it never reassigns
+existing appointments), Consultation pricing, Bookings, Description, Page
+content, Locations and Website visibility. A price row opens the price it
+names: one variant's price directly, several variants' list rather than the
+first of them.
+
+### Tabs, parents and exits
+
+Three separate questions, three separate answers. None is derived from another.
+
+- **Ancestry** — the panes beside a level and its Back — is the real nested
+  route parent. A file's place in the tree is its URL; there are no
+  `definePageMeta({ path })` overrides.
+- **The lit tab** is declared by each destination root as
+  `definePageMeta({ tab })`: `today`, `calendar`, `catalog`, `messages` or
+  `menu`. The layout reads the matched root's `tab` and nothing else. A screen
+  that declares none lights no tab; nothing is inferred from its URL or exit.
+- **A root's exit** is `meta.back` on a standalone destination root only —
+  Website, Posts, Locations, Team, Integrations, Insights, Notifications,
+  Earnings and Platform accounts exit to Menu; Payments to Earnings; Account
+  settings and Past activity to the account's Menu. Catalog, Today, Calendar,
+  Messages and Menu are primary destinations and have no exit. A nested level
+  never declares one.
+
+The booking mounts keep their own affiliation: a booking opened from Today is a
+root that exits to Today and lights it; the same booking under a calendar day
+is a child of the calendar, which lights Calendar.
 
 ### Who owns what
 
@@ -112,7 +189,7 @@ editor or writer, and it never grants or hides an authorization.
 
 | Airbnb | KrabiClaw |
 | --- | --- |
-| Listings holds homes, experiences and services | Catalog holds menu items, experiences, services and products in one list, filtered by `?kind` |
+| Listings holds homes, experiences and services | Catalog opens on Menu, Experiences and Services, plus All items; each is a view of the same Products |
 | Homes and experiences have different editors | One Product editor at `O/products/:productId` for every kind: kind changes wording and rows, not the route or the editor |
 | Listing editor rows preview their values and open one concern | Product, location, page, post and member records do the same |
 | Pricing and availability link to the calendar; Earnings links to payouts | Catalog links to Calendar and member availability; Earnings links to the organization's Payments |
@@ -125,9 +202,10 @@ none of them forks its route, draft, writer or data source.
 
 | From | To |
 | --- | --- |
-| A location | `O/products?location_id=`, `O/posts?location_id=`, `O/qa?location_id=`: the same lists, scoped |
-| A collection | the Product's own `O/products/:productId` |
-| A Product | its Page content at `O/products/:productId/page`, its location relationships, member availability, Calendar |
+| A location | `O/products?location_id=`, `O/posts?location_id=`, `O/website/qa?location_id=`: the same lists, scoped |
+| A menu section | the Product's own `O/products/:productId` |
+| A Product | its page in Pages at `O/website/pages/:pageId`, its location relationships, member availability, Calendar |
+| A page a Product owns | that Product, from the page editor's Offering row |
 | Search, MCP `admin_edit_url`, notifications, the agenda, Languages | the record's editor, built by `server/utils/dashboard-links.ts` and nowhere else |
 
 `location_id` is a scope and `locale` an identity. Both are URL state,
@@ -137,12 +215,13 @@ and never guessed from a previous screen. A scope never becomes a global write.
 ### Products and their pages
 
 A Product may own one page, bound by the page root's `product_id`; a locale
-representation inherits the binding through its root. Pages lists only the
-pages no Product owns. A Product's page is edited as that Product's Page content
-at `O/products/:productId/page`, with the same levels Pages uses, mounted a
-second time under it (see *Nesting a level without changing its URL*). A
-Product with no page shows No page and Create page; nothing infers a binding
-from a `/services/` path, a matching title or the only candidate.
+representation inherits the binding through its root. **Every page is edited in
+Pages**, at `O/website/pages/:pageId`, including a page a Product owns: Pages
+lists it, the Product's Page content row opens it there, and the page editor's
+Offering row leads back to the Product — one document, one editor URL, two ways
+in. A service with no page shows No page and Create page under its Page
+content; nothing infers a binding from a `/services/` path, a matching title or
+the only candidate.
 
 Creating a service creates the Product, its default variant, its page at a free
 `/services/<slug>` and the binding in one batch, under an idempotency key, so a
@@ -298,10 +377,8 @@ kinds, and each has exactly one shell:
 
 Adding a screen is therefore: drop the file in its parent's directory, pick the
 shell, and if it lists, its rows link to `` `${level.path.value}/<child>` ``; if
-it edits, it injects the parent's draft key. A screen that belongs under a
-parent whose URL does not prefix its own is still nested as a file there, and
-names its URL with an absolute `path` (see *Nesting a level without changing its
-URL*). Nothing else is required, and a screen that needs something else is a gap
+it edits, it injects the parent's draft key. A screen's URL is its place in the
+file tree. Nothing else is required, and a screen that needs something else is a gap
 in this document rather than a one-off.
 
 ### How a level knows which column is its own
@@ -310,15 +387,15 @@ in this document rather than a one-off.
 source for a level's depth, its mode, its parent, and where its Back goes.
 Nested pages already say what contains what, so `route.matched` is the chain and
 a level finds its own place in it through `matchedRouteKey` — the record the
-`<RouterView>` rendering it provides. Nothing assembles a base path out of route
+`<RouterView>` rendering it provides, read once: a component is mounted for one
+record, and Vue Router's ref follows the live route, which during a navigation
+already names the next screen. Nothing assembles a base path out of route
 params and slices the URL against it, and no level counts a depth that is not
 its own: the index column and the leaf beside it ask the same composable and get
 two different answers.
 
-Depth is counted in matched records, not URL segments, because a nested level
-may keep a URL its parent does not prefix — Pages is at `/:orgSlug/pages` under
-Website at `/:orgSlug/settings/website`. A directory's `index.vue` is a second record at the
-same URL and is one level, not two.
+Depth is counted in matched records, not URL segments: a directory's
+`index.vue` is a second record at the same URL and is one level, not two.
 
 | Mode | When | What the level renders |
 | --- | --- | --- |
@@ -326,7 +403,8 @@ same URL and is one level, not two.
 | `pair` | one of my children is open | my content as the index column, the child as the detail |
 | `yield` | something deeper than my child is open | nothing but the route beneath me |
 
-**A level in `yield` renders no rail.** An ancestor that kept drawing its own
+**A level in `yield` renders no rail.** It is hidden, not unmounted, so going
+back to it shows it as it was rather than loading it again. An ancestor that kept drawing its own
 index while a grandchild drew another pair put three columns on screen and left
 the leaf 348px of a 1280px window.
 
@@ -348,12 +426,12 @@ parent. The logical parent is the same parent Back uses. Pane topology is
 independent of whether the level contains records, fields, settings, media, or
 another index.
 
-True workspace roots stand alone and use the frame: Today, Calendar, Catalog,
-Messages, and Menu itself, as Airbnb's `/hosting/listings` grid does. A list of
-records is not a root merely because its rows are records — Website, Posts,
-Locations and Team are rows on Menu, so each renders as `Menu | Locations`, and
-Pages, Blog, Reviews and Q&A, and Brand are rows on Website, so each renders as
-`Website | Pages`.
+Destination roots stand alone and use the frame: Today, Calendar, Catalog,
+Messages, Menu, and each Menu destination — Website, Posts, Locations, Team,
+Integrations, Earnings, Payments, Insights, Notifications — as Airbnb's
+`/hosting/listings` grid does. Within a destination, levels pair with their
+parent: Pages, Blog, Reviews and Q&A, and Brand render as `Website | Pages`, and
+a Catalog entry renders beside Catalog.
 
 **Auto-selection.** Auto-selection answers whether an index may choose one of
 its own children on arrival. It does not determine whether the index has a
@@ -362,7 +440,7 @@ parent pane.
 | The index's own children | `autoOpen` | Examples |
 | --- | --- | --- |
 | deterministic leaves or settings sections | its first available child | page editor, product, post, Q&A, Brand, Website, Integrations, location settings, Account settings, booking Change |
-| arbitrary records | none | Catalog, Pages, Blog posts, Posts, Locations, collections, products in a collection, Q&A, Team, Google Maps locations |
+| arbitrary records | none | Catalog, Pages, Blog posts, Posts, Locations, menu sections, items in a section, Services, Experiences, Q&A, Team, Google Maps locations |
 
 Which record a tenant meant to open is not something the screen can guess, and
 a record is a place, not a field. So `Website | Pages` is correct with no page
@@ -373,7 +451,8 @@ arrival and keeps a half-width column of rows beside it. The pair splits down
 the middle, as Airbnb's does (80–660 of 1332).
 
 `autoOpen` navigates with `replace`, so Back still leaves the index rather than
-landing on it again. It opens only while the index is bare, the `index` mode:
+landing on it again. It opens only on arrival — the router is at the index's own
+URL — and only while the index is bare, the `index` mode:
 opening the child makes the level a `pair`, which is what stops it. There is no
 "already opened" state, so returning from a child to the bare index — Back from
 deeper — opens the first child again. It is ignored when the target is the
@@ -394,6 +473,10 @@ popover, a filter chip, a confirmation — is not in it.
   item a saved URL edits.
 - **Views keep their query.** Blog or Docs is `?collection=`, Q&A or Reviews
   is `?tab=`, a catalog kind is `?kind=`.
+- **Data is awaited, not lazy.** A level's data is `await useAsyncData` in its
+  setup, so Nuxt's `<NuxtPage>` keeps the screen being left until the next one
+  can render complete. No skeleton stands in for a level's first paint, and a
+  refresh keeps what is on screen.
 - **A substantive mode is a query on its record's own URL.** Translations are
   `?editMode=translations&locale=<locale>`. `DashboardResourceLocalization`
   opens on arrival, and writes the URL as it opens, changes language and closes;
@@ -429,53 +512,28 @@ exist in the nested route tree and therefore appear in `route.matched`. Back
 and pane layout read the same hierarchy: a level's parent is the nearest
 shallower matched level, and Back goes to that level's URL.
 
-`meta.back` exists only for a workspace root that leaves for another root which
-is not a persistent pane beside it — Account settings returning to the
-account's Menu, Earnings returning to the organization's Menu, a new location
-returning to Locations, a booking returning to Today. It is never used to model
-CMS pane ancestry, and `useRouteLevel()` throws when a level that has a matched
-parent declares one. The pages declare theirs with `definePageMeta`; the
-booking's is set where `build/booking-routes.ts` mounts it, because the same
-files have a different parent under the calendar day.
+A root's exit and its lit tab are separate declarations (see *Tabs, parents
+and exits*). `meta.back` is the exit of a standalone destination root and is
+never used to model pane ancestry; `useRouteLevel()` throws when a level that
+has a matched parent declares one. `meta.tab` is read by the layout from the
+matched root alone. The booking's are set where `build/booking-routes.ts` mounts
+it, because the same files have a different parent under the calendar day.
 
-A tab root has nothing above it, so it renders no Back at all.
-
-**The lit tab is the root of the matched tree**, or where that root's `meta.back`
-leads. Matching a tab's path as a prefix of the URL cannot answer it: the links
-page lives at `/:orgSlug/links` under Menu, so the URL says nothing about Menu
-while every way out of it leads there.
-
-### Nesting a level without changing its URL
-
-A level whose URL must not change when it moves under its logical parent is
-nested as a file and given an absolute path:
-
-1. put the page file under its logical parent — `settings/website/pages.vue`,
-   `settings/website/pages/**`;
-2. give the moved route an absolute `path` with `definePageMeta`, e.g.
-   `definePageMeta({ path: '/dashboard/:orgSlug/pages' })`;
-3. the browser URL stays what it was, and Vue Router keeps the component nesting
-   in `route.matched`.
-
-Its children keep relative paths and extend its URL as before. This is how
-Pages, Blog, Brand, and Reviews and Q&A sit under Website, Posts and Locations
-sit under Menu, and Links sits under Pages. There is no layout registry,
-redirect, or URL-prefix rule; the route tree is the whole hierarchy.
+A primary destination has nothing above it, so it renders no Back at all.
 
 **One subtree, two parents, is mounted twice.** A file sits in one place in the
 tree, so where the same levels must render under a second parent, the
 `pages:extend` hook in `nuxt.config.ts` mounts them again: the same files, a
 second set of records with their own names. `build/booking-routes.ts` mounts a
-booking under its calendar day, and `build/page-editor-routes.ts` mounts the
-page editor's levels under a Product's Page content. Those levels read which
-page they edit from the editor above them, never from a route param. The
-generated router, not the filesystem, is the complete tree.
+booking under its calendar day and the account's own record under its calendar
+day and Today. Nothing else is mounted twice: a page a Product owns is edited
+in Pages, and the Product links to it. The generated router, not the
+filesystem, is the complete tree.
 
-**A level whose own record has left `route.matched` is `stale`** — it is being
-torn down after a navigation elsewhere — and it answers nothing: no parent, no
-mode but `yield`, and no `autoOpen`. A guard that raises a 404 asks `stale`
-first. Reading the new route from an old level is what made a location index,
-unmounting on the way to Pages, replace the URL with a child of itself.
+**A level on its way out reads the route it rendered for.** Nuxt keeps an
+outgoing page's route, and the level's own record is read once, so the screen
+being left stays whole until the next is ready, and its `autoOpen`, which only
+fires on arrival, opens nothing.
 
 ## Creating
 
@@ -548,10 +606,10 @@ parent. Overloading one control with both is what forced single-item moves.
 Airbnb has Move and no Reorder at all — room order is fixed by room type. Menu
 sections must be orderable, so Reorder is a deliberate addition, not parity.
 
-**Membership is a navigable row, not a field.** A Product's collections render
+**Membership is a navigable row, not a field.** A Product's menu sections render
 as rows and open the same Move flow used for bulk selection. The free-text box
 they replaced silently forked a new grouping on a typo. Membership is plural:
-one Product can sit in several collections, so the row states which ones rather
+one Product can sit in several sections, so the row states which ones rather
 than implying a single parent.
 
 **A control must not be able to build an invalid state.** If the server rejects
@@ -587,8 +645,8 @@ like a broken editor, sitting in a frame with a rail, a navbar and a commit bar
 for something that does not exist. `isNotFoundError` in `utils/errors.ts` is the
 one place that tells them apart.
 
-**Empty is a state, not a bug.** A collection with no Products, or a location
-with no collections, renders its own empty state. Containers that cannot be
+**Empty is a state, not a bug.** A section with no items, or a location with
+no sections, renders its own empty state. Containers that cannot be
 empty are a modelling error.
 
 ## Parity is page-level, and a screen is built once
@@ -660,7 +718,10 @@ items, tabs and some modes their own URLs (`house-rules?feature=checkInOut`,
 
 ## Naming
 
-Use the tenant's vocabulary, not the schema's. `ProductPresentation` maps the
-vertical onto what the owner calls things — a restaurant reads Menu, Section,
-Dish where the database says products and collections. Plurals live there too;
-appending `s` produces "dishs".
+Use the owner's vocabulary, not the schema's. The catalog's words are fixed,
+whatever the template: Catalog; Menu, Experiences, Services; a menu's
+**sections** and its **items**; a **variant** is a purchasable version of one
+offering, never a section. Collection is the model's name and never appears in
+the menu workflow; blog categories classify articles and are not part of the
+catalog. `ProductPresentation` names a kind of item for public pages; plurals
+live there too, because appending `s` produces "dishs".

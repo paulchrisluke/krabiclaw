@@ -2,12 +2,10 @@ import type { EditorNavigationGroup } from '~/components/dashboard/EditorNavigat
 import { authClient } from '~/lib/auth-client'
 import { canOpenPlatformAccounts } from '~/utils/platform-admin-access'
 
-// The rows on Menu. Every organization is one organization with one website,
-// so the website, its posts and its places sit here beside the team: Menu is
-// the organization's page. Every row is a destination or an action; there are
-// no headings. The settings level renders this list as its index column and
-// names the open leaf from it, and the desktop slideover renders the same
-// list, so a row exists in one place.
+// The rows on Menu. Menu is a launcher: every row is a destination of its own
+// — Website, Posts, Locations, Team — or an action, with no headings. The Menu
+// page and the desktop slideover render this one list, so a row exists in one
+// place. A destination is not nested under Menu; it names Menu as its tab.
 //
 // The organization is the shell's (useDashboardMenu): the route's, otherwise
 // Better Auth's active one, so Account settings opened from inside an
@@ -19,7 +17,6 @@ export function useOrganizationSettingsNavigation(organization: Ref<{ id: string
   const session = authClient.useSession()
 
   const base = computed(() => organization.value ? `/dashboard/${encodeURIComponent(organization.value.slug)}` : null)
-  const settingsPath = computed(() => base.value ? `${base.value}/settings` : null)
 
   /**
    * Every account on the platform, and impersonation: Krabiclaw runs on
@@ -34,16 +31,16 @@ export function useOrganizationSettingsNavigation(organization: Ref<{ id: string
   })
 
   const items = computed(() => {
-    if (!base.value || !settingsPath.value) return []
+    if (!base.value) return []
     return [
-      { id: 'website', label: 'Website', to: `${settingsPath.value}/website` },
-      { id: 'posts', label: 'Posts', to: `${base.value}/settings/posts` },
-      { id: 'locations', label: 'Locations', to: `${base.value}/settings/locations` },
-      { id: 'members', label: 'Team', to: `${settingsPath.value}/members` },
-      { id: 'integrations', label: 'Integrations', to: `${settingsPath.value}/integrations` },
+      { id: 'website', label: 'Website', to: `${base.value}/website` },
+      { id: 'posts', label: 'Posts', to: `${base.value}/posts` },
+      { id: 'locations', label: 'Locations', to: `${base.value}/locations` },
+      { id: 'team', label: 'Team', to: `${base.value}/team` },
+      { id: 'integrations', label: 'Integrations', to: `${base.value}/integrations` },
       // "Team" is this organization's members; this is every account there is.
       ...(showPlatformAccounts.value
-        ? [{ id: 'people', label: 'Platform accounts', to: `${settingsPath.value}/people` }]
+        ? [{ id: 'platform-accounts', label: 'Platform accounts', to: `${base.value}/platform-accounts` }]
         : []),
       // The way to the account on a phone, where there is no header to carry an
       // avatar. Airbnb's mobile Menu lists "Account settings" in the same place,
@@ -57,7 +54,7 @@ export function useOrganizationSettingsNavigation(organization: Ref<{ id: string
 
   const groups = computed<EditorNavigationGroup[]>(() => [{ id: 'organization', items: items.value }])
 
-  /** The row whose level is open, read off the matched hierarchy: Locations lives at `/locations` but is nested under Menu. */
+  /** The row whose destination is open, for the slideover's current row. */
   const activeItem = computed(() => {
     const open = new Set(route.matched.map(record => routeRecordPath(router, record, route.params)))
     return items.value.find(item => item.to && open.has(item.to))?.id ?? null

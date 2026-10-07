@@ -1,12 +1,16 @@
 <template>
   <!--
-    The page this product owns, edited by the same page editor Pages uses: its
-    sections, title, summary and URL. A product with no page of its own says so
-    and offers to make one; nothing is created by opening this.
+    Page content for a service that has no page yet. A page is edited in one
+    place, Pages; once this product has one, its Page content row opens it
+    there. Nothing is created by opening this.
   -->
-  <TenantPageEditorPage v-if="p.product.value?.page" :page-id="p.product.value.page.id" />
-  <DashboardIndexPanel v-else id="product-page" :title="p.sectionLabels['page']">
+  <DashboardIndexPanel id="product-page" :title="p.sectionLabels['page']">
     <UAlert v-if="p.loadError.value" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="p.loadError.value" />
+    <div v-else-if="p.product.value?.page" class="rounded-2xl border border-default bg-elevated px-6 py-20 text-center">
+      <UIcon name="i-lucide-file-text" class="mx-auto size-6 text-muted" />
+      <h2 class="mt-5 text-base font-semibold text-highlighted">{{ p.product.value.page.path }}</h2>
+      <UButton class="mt-6" label="Edit page content" :to="`/dashboard/${String(route.params.orgSlug)}/website/pages/${encodeURIComponent(p.product.value.page.id)}`" />
+    </div>
     <div v-else class="rounded-2xl border border-default bg-elevated px-6 py-20 text-center">
       <UIcon name="i-lucide-file-text" class="mx-auto size-6 text-muted" />
       <h2 class="mt-5 text-base font-semibold text-highlighted">No page</h2>
@@ -17,15 +21,10 @@
 </template>
 
 <script setup lang="ts">
-import TenantPageEditorPage from '~/components/dashboard/TenantPageEditorPage.vue'
 import { productEditorKey } from '~/components/dashboard/ProductEditorPage.vue'
 
 definePageMeta({ layout: 'dashboard' })
 
 const p = inject(productEditorKey)!
-const level = useRouteLevel()
-// A section of a page this product does not have is not a page.
-watchEffect(() => {
-  if (p.product.value && !p.loadError.value && !p.product.value.page && level.child.value) showError(createError({ statusCode: 404, statusMessage: 'Page not found' }))
-})
+const route = useRoute()
 </script>

@@ -171,13 +171,13 @@ test('native online review uses canonical Products, holds capacity, and releases
     const content = (blocks: Array<Record<string, unknown>>) => blocks.map(block => Object.fromEntries(Object.entries(block).filter(([key]) => key !== 'updated_at')))
     expect(content(preserved.blocks)).toEqual(content(service.blocks))
     expect(preserved.summary).toBe(service.summary)
-    // A bound page is its Product's Page content: edited there, and no longer a row of Pages.
-    await page.goto(`/dashboard/north-carolina-legal-services/products/${products[0]!.id}/page`)
-    await expect(page.locator('#dashboard-panel-organization-page')).toContainText(service.title)
-    await page.goto('/dashboard/north-carolina-legal-services/settings/website/pages')
+    // A bound page is edited where every page is: it is a row of Pages, and opens the one page editor.
+    await page.goto('/dashboard/north-carolina-legal-services/website/pages')
     const pagesList = page.locator('#dashboard-panel-organization-pages')
     await expect(pagesList.getByText('About', { exact: true })).toBeVisible()
-    await expect(pagesList.getByText(service.title, { exact: true })).toHaveCount(0)
+    await expect(pagesList.getByText(service.title, { exact: true })).toBeVisible()
+    await page.goto(`/dashboard/north-carolina-legal-services/website/pages/${service.id}`)
+    await expect(page.locator('#dashboard-panel-organization-page')).toContainText(service.title)
     await page.setExtraHTTPHeaders(headers)
     const wrongRoute = await request.get(`/experiences/${products[0]!.slug}`, { headers })
     expect(wrongRoute.status()).toBe(404)

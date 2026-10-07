@@ -6,5 +6,5 @@
 import AccountProfilePage from '~/components/dashboard/AccountProfilePage.vue'
 
 // Account settings is a row on Menu, which is where Back goes.
-definePageMeta({ layout: 'dashboard', back: 'dashboard-account-menu' })
+definePageMeta({ layout: 'dashboard', tab: 'menu', back: 'dashboard-account-menu' })
 </script>

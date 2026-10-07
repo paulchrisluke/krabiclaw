@@ -36,7 +36,7 @@ definePageMeta({ layout: 'dashboard' })
 
 const editor = inject(blogEditorKey)!
 const route = useRoute()
-const categoriesPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/settings/website/blog/categories`)
+const categoriesPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/website/blog/categories`)
 // A nested category reads with the categories above it: "Integrations › Google".
 const categoryOptions = computed(() => {
   const all = editor.categories.value ?? []

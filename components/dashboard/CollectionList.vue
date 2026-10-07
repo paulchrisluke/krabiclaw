@@ -2,13 +2,14 @@
   <div class="space-y-6">
   <DashboardListEditor
     v-model:editing="editing"
-    :title="title"
+    title="Sections"
     :description="description"
     :items="listItems"
     :error="loadError"
-    :empty-title="`No ${presentation.collectionGroupLabelPlural.toLowerCase()} yet`"
+    :read-only="readOnly"
+    empty-title="No sections yet"
     empty-icon="i-lucide-layout-list"
-    :add-label="`Add a ${presentation.collectionGroupLabel.toLowerCase()}`"
+    add-label="Add section"
     reorderable
     :removing-id="removingId"
     @add="openNew"
@@ -24,7 +25,7 @@
         <DashboardMediaThumb :asset="item.row.cover" :label="item.row.name" fallback-icon="i-lucide-layout-list" />
         <span class="min-w-0 flex-1">
         <p class="truncate text-sm font-semibold text-highlighted">{{ item.row.name }}</p>
-        <p class="mt-1 text-sm text-muted">{{ item.row.product_count === 1 ? `1 ${presentation.itemLabel.toLowerCase()}` : `${item.row.product_count} ${presentation.itemLabelPlural.toLowerCase()}` }}</p>
+        <p class="mt-1 text-sm text-muted">{{ item.row.product_count === 1 ? '1 item' : `${item.row.product_count} items` }}</p>
         </span>
       </span>
     </template>
@@ -36,36 +37,31 @@
 </template>
 
 <script setup lang="ts">
-// One scope's collections — the site-wide ones, or one location's own — in the
-// order customers see them. Catalog renders one of these per scope it shows,
-// because order, Add and reorder each belong to exactly one scope.
+// One scope's menu sections — the shared ones, or one location's own — in the
+// order guests see them. The Menu renders one of these per scope it shows,
+// because order, Add and reorder each belong to exactly one scope. A section is
+// the menu's word for a collection; this list never calls it anything else.
 import DashboardListEditor from '~/components/dashboard/DashboardListEditor.vue'
 import DashboardMediaThumb from '~/components/dashboard/DashboardMediaThumb.vue'
 import type { Collection, Product } from '~/server/types/products'
 import type { ResolvedMediaAsset } from '~/server/utils/media-asset-manager'
 import { getErrorMessage } from '~/utils/errors'
-import { requireProductPresentation } from '~/utils/product-presentation'
 
 const dashboardApi = useDashboardApi()
 const route = useRoute()
 const router = useRouter()
 const organizationId = await useDashboardOrganizationId()
-const dashboard = useDashboardOrganization()
-
-const vertical = dashboard.organization.value?.vertical
-if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Organization vertical is not configured' })
-// The organization's own words for a grouping: a restaurant's Sections, everyone else's Collections.
-const presentation = computed(() => requireProductPresentation(vertical, dashboard.organization.value?.theme_id))
 
 const props = defineProps<{
-  /** The location these collections belong to, or null for the site-wide ones. */
+  /** The location these sections belong to, or null for the ones every location shares. */
   scope: string | null
-  title: string
   description?: string
+  /** Read beside an editable scope; reordered and added to only where it is that scope. */
+  readOnly?: boolean
 }>()
 
 const locationId = useLocationScope()
-const catalogPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/products`)
+const menuPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/products/menu`)
 
 // The cover is the first Product in the collection that has a photo, which is
 // how the collection reads on the public site too.
@@ -108,10 +104,9 @@ const removingId = ref<string | null>(null)
 const deleteError = ref<string | null>(null)
 const orderError = ref<string | null>(null)
 
-/** A path in Catalog's scope: the explicit location rides along. */
-const scoped = (path: string) => router.resolve({ path, query: { location_id: route.query.location_id } }).fullPath
-const listItems = computed(() => collections.value.map(row => ({ id: row.id, title: row.name, to: scoped(`${catalogPath.value}/collections/${row.id}`), row })))
-const loadError = computed(() => (catalog.error.value ? getErrorMessage(catalog.error.value, `Failed to load ${presentation.value.collectionGroupLabelPlural.toLowerCase()}`) : null))
+// A section opens in its own location's scope; a shared one in the menu's current one.
+const listItems = computed(() => collections.value.map(row => ({ id: row.id, title: row.name, to: router.resolve({ path: `${menuPath.value}/${row.id}`, query: { location_id: props.scope ?? route.query.location_id } }).fullPath, row })))
+const loadError = computed(() => (catalog.error.value ? getErrorMessage(catalog.error.value, 'Failed to load sections') : null))
 
 const load = catalog.refresh
 
@@ -119,17 +114,17 @@ const load = catalog.refresh
 // A collection is a record with its own level: adding opens `new` in this
 // list's scope, and the row opens the record, whose Name leaf is one of its rows.
 function openNew() {
-  void navigateTo(router.resolve({ path: `${catalogPath.value}/collections/new`, query: { location_id: props.scope ?? undefined } }).fullPath)
+  void navigateTo(router.resolve({ path: `${menuPath.value}/new`, query: { location_id: props.scope ?? undefined } }).fullPath)
 }
 
 
 
 async function removeCollection(item: { row: CollectionRow }) {
   const count = item.row.product_count
-  const words = presentation.value
+  // Deleting a section never deletes what was in it; the items stay in the catalog.
   const warning = count
-    ? `Delete "${item.row.name}" and its ${count} ${count === 1 ? words.itemLabel.toLowerCase() : words.itemLabelPlural.toLowerCase()}?`
-    : `Delete "${item.row.name}"?`
+    ? `Delete the section "${item.row.name}"? Its ${count === 1 ? 'item stays' : `${count} items stay`} in your catalog.`
+    : `Delete the section "${item.row.name}"?`
   if (!confirm(warning)) return
   removingId.value = item.row.id
   deleteError.value = null
@@ -137,7 +132,7 @@ async function removeCollection(item: { row: CollectionRow }) {
     await dashboardApi(`/api/editor/organizations/${organizationId}/collections/${item.row.id}`, { method: 'DELETE', validate: isRecord })
     await load()
   } catch (error) {
-    deleteError.value = getErrorMessage(error, `Failed to delete ${words.collectionGroupLabel.toLowerCase()}`)
+    deleteError.value = getErrorMessage(error, 'Failed to delete section')
   } finally {
     removingId.value = null
   }

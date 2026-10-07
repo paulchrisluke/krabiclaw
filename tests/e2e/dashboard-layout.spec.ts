@@ -38,46 +38,46 @@ test.describe('dashboard pane hierarchy', () => {
     await loginAs(page.request, baseURL!)
   })
 
-  test('Menu and Website rows sit at the URLs of their place in the route tree', async ({ page }) => {
+  test('each Menu destination is a root at its own URL, and Website content nests under Website', async ({ page }) => {
     await page.setViewportSize(WIDE)
-    await open(page, `${ORG}/settings`)
-    const segments = ['settings/website/pages', 'settings/website/blog', 'settings/website/qa', 'settings/website/brand', 'settings/website/pages/links', 'settings/posts', 'settings/locations', 'products']
+    await open(page, `${ORG}/menu`)
+    const segments = ['website/pages', 'website/blog', 'website/qa', 'website/brand', 'website/pages/links', 'posts', 'locations', 'team', 'products', 'products/menu', 'products/services']
     const resolved = await page.evaluate(({ org, segments }) => {
       const router = (document.querySelector('#__nuxt') as Element & {
-        __vue_app__: { config: { globalProperties: { $router: { resolve: (path: string) => { path: string; matched: Array<{ path: string }> } } } } }
+        __vue_app__: { config: { globalProperties: { $router: { resolve: (path: string) => { path: string; matched: Array<{ path: string; meta: { tab?: unknown; back?: unknown } }> } } } } }
       }).__vue_app__.config.globalProperties.$router
       return Object.fromEntries(segments.map((segment) => {
         const location = router.resolve(`${org}/${segment}`)
         // A directory's index.vue shares its parent's path; it is one level.
         const levels = location.matched.map(record => record.path).filter((path, at, all) => at === 0 || path !== all[at - 1])
-        return [segment, { path: location.path, levels }]
+        return [segment, { path: location.path, levels, tab: location.matched[0]?.meta.tab ?? null, back: location.matched[0]?.meta.back ?? null }]
       }))
     }, { org: ORG, segments })
 
-    // Website's content and Brand sit under Website, Posts and Locations under
-    // Menu, and Catalog is a root of its own — each at the URL of that place.
-    const menu = '/dashboard/:orgSlug()/settings'
-    const website = [menu, `${menu}/website`]
+    // Menu is a launcher: no destination nests under it. Each declares Menu as
+    // its tab and exits to Menu; Catalog is a primary destination with no exit.
+    const o = '/dashboard/:orgSlug()'
+    const website = { tab: 'menu', back: 'dashboard-orgSlug-menu' }
     expect(resolved).toEqual({
-      'settings/website/pages': { path: `${ORG}/settings/website/pages`, levels: [...website, `${menu}/website/pages`] },
-      'settings/website/blog': { path: `${ORG}/settings/website/blog`, levels: [...website, `${menu}/website/blog`] },
-      'settings/website/qa': { path: `${ORG}/settings/website/qa`, levels: [...website, `${menu}/website/qa`] },
-      'settings/website/brand': { path: `${ORG}/settings/website/brand`, levels: [...website, `${menu}/website/brand`] },
-      'settings/website/pages/links': { path: `${ORG}/settings/website/pages/links`, levels: [...website, `${menu}/website/pages`, `${menu}/website/pages/links`] },
-      'settings/posts': { path: `${ORG}/settings/posts`, levels: [menu, `${menu}/posts`] },
-      'settings/locations': { path: `${ORG}/settings/locations`, levels: [menu, `${menu}/locations`] },
-      'products': { path: `${ORG}/products`, levels: ['/dashboard/:orgSlug()/products'] },
+      'website/pages': { path: `${ORG}/website/pages`, levels: [`${o}/website`, `${o}/website/pages`], ...website },
+      'website/blog': { path: `${ORG}/website/blog`, levels: [`${o}/website`, `${o}/website/blog`], ...website },
+      'website/qa': { path: `${ORG}/website/qa`, levels: [`${o}/website`, `${o}/website/qa`], ...website },
+      'website/brand': { path: `${ORG}/website/brand`, levels: [`${o}/website`, `${o}/website/brand`], ...website },
+      'website/pages/links': { path: `${ORG}/website/pages/links`, levels: [`${o}/website`, `${o}/website/pages`, `${o}/website/pages/links`], ...website },
+      'posts': { path: `${ORG}/posts`, levels: [`${o}/posts`], ...website },
+      'locations': { path: `${ORG}/locations`, levels: [`${o}/locations`], ...website },
+      'team': { path: `${ORG}/team`, levels: [`${o}/team`], ...website },
+      'products': { path: `${ORG}/products`, levels: [`${o}/products`], tab: 'catalog', back: null },
+      'products/menu': { path: `${ORG}/products/menu`, levels: [`${o}/products`, `${o}/products/menu`], tab: 'catalog', back: null },
+      'products/services': { path: `${ORG}/products/services`, levels: [`${o}/products`, `${o}/products/services`], tab: 'catalog', back: null },
     })
   })
 
-  test('a record list renders beside its parent and selects nothing', async ({ page }) => {
+  test('a record list renders beside its parent and selects nothing; a Menu destination stands alone', async ({ page }) => {
     await page.setViewportSize(WIDE)
     for (const [path, parent, pane] of [
-      ['settings/website/pages', 'organization-website', 'organization-pages'],
-      ['settings/website/blog', 'organization-website', 'organization-blog'],
-      ['settings/posts', 'organization-settings', 'organization-posts'],
-      ['settings/locations', 'organization-settings', 'locations'],
-      ['settings/members', 'organization-settings', 'organization-members'],
+      ['website/pages', 'organization-website', 'organization-pages'],
+      ['website/blog', 'organization-website', 'organization-blog'],
     ] as const) {
       await open(page, `${ORG}/${path}`)
       await expectPanes(page, [parent, pane])
@@ -85,12 +85,19 @@ test.describe('dashboard pane hierarchy', () => {
       // The parent names the open row.
       await expect(page.locator(`#dashboard-panel-${parent} [aria-current="page"]`)).toHaveCount(1)
     }
+    for (const [path, pane] of [['posts', 'organization-posts'], ['locations', 'locations'], ['team', 'organization-members']] as const) {
+      await open(page, `${ORG}/${path}`)
+      await expectPanes(page, [pane])
+      await expect(page).toHaveURL(`${ORG}/${path}`)
+      // Its exit is Menu: a way out, not a pane beside it.
+      await expect(page.locator(`#dashboard-panel-${pane} [data-testid="dashboard-navbar-back"]`)).toHaveAttribute('href', `${ORG}/menu`)
+    }
   })
 
   test('Website opens Pages, and Catalog is a root that selects nothing', async ({ page }) => {
     await page.setViewportSize(WIDE)
-    await open(page, `${ORG}/settings/website`)
-    await expect(page).toHaveURL(`${ORG}/settings/website/pages`)
+    await open(page, `${ORG}/website`)
+    await expect(page).toHaveURL(`${ORG}/website/pages`)
     await expectPanes(page, ['organization-website', 'organization-pages'])
     await open(page, `${ORG}/products`)
     await expectPanes(page, ['catalog'])
@@ -99,58 +106,58 @@ test.describe('dashboard pane hierarchy', () => {
 
   test('the deepest two levels of the page editor own the frame', async ({ page }) => {
     await page.setViewportSize(WIDE)
-    await open(page, `${ORG}/settings/website/pages`)
+    await open(page, `${ORG}/website/pages`)
     await expectPanes(page, ['organization-website', 'organization-pages'])
 
     // A page's editor opens its first section, so the frame re-roots onto the page.
     await page.locator('#dashboard-panel-organization-pages').getByRole('link', { name: /^Home/ }).click()
-    await expect(page).toHaveURL(new RegExp(`${ORG}/settings/website/pages/[^/]+/sections$`))
+    await expect(page).toHaveURL(new RegExp(`${ORG}/website/pages/[^/]+/sections$`))
     await expectPanes(page, ['organization-page', 'organization-page-sections'])
 
     // A section opens its first field: the section and that field own the frame.
     await page.locator('#dashboard-panel-organization-page-sections a[href*="/sections/"]').first().click()
-    await expect(page).toHaveURL(new RegExp(`${ORG}/settings/website/pages/[^/]+/sections/[^/]+/[^/]+$`))
+    await expect(page).toHaveURL(new RegExp(`${ORG}/website/pages/[^/]+/sections/[^/]+/[^/]+$`))
     await expectPanes(page, ['organization-page-block', 'organization-page-block-section'])
   })
 
   test('Back to an auto-opening index opens its first child again', async ({ page }) => {
     await page.setViewportSize(WIDE)
-    await open(page, `${ORG}/settings/integrations`)
+    await open(page, `${ORG}/integrations`)
     // Integrations is an index of deterministic rows: it opens the first one.
-    await expect(page).toHaveURL(`${ORG}/settings/integrations/google-maps`)
+    await expect(page).toHaveURL(`${ORG}/integrations/google-maps`)
     await expectPanes(page, ['organization-integrations', 'integration-google-maps'])
 
     // Deeper: one location's connection. Google Maps and that location own the frame.
     const location = page.locator('#dashboard-panel-integration-google-maps a[href*="/google-maps/"]').first()
     const locationSlug = (await location.getAttribute('href'))!.split('/').at(-1)!
     await location.click()
-    await expect(page).toHaveURL(`${ORG}/settings/integrations/google-maps/${locationSlug}`)
+    await expect(page).toHaveURL(`${ORG}/integrations/google-maps/${locationSlug}`)
     await expectPanes(page, ['integration-google-maps', `integration-google-maps-${locationSlug}`])
 
     // In-app Back leads to the bare Integrations index, which must not stay
     // alone at full width: it opens the first row again.
     const back = page.locator('#dashboard-panel-integration-google-maps [data-testid="dashboard-navbar-back"]')
-    await expect(back).toHaveAttribute('href', `${ORG}/settings/integrations`)
+    await expect(back).toHaveAttribute('href', `${ORG}/integrations`)
     await back.click()
-    await expect(page).toHaveURL(`${ORG}/settings/integrations/google-maps`)
+    await expect(page).toHaveURL(`${ORG}/integrations/google-maps`)
     await expectPanes(page, ['organization-integrations', 'integration-google-maps'])
 
     // Payments is one page with Airbnb's tabs, reached from the Earnings cog; Payments is the first tab.
-    await open(page, `${ORG}/settings/payments?tab=payouts`)
+    await open(page, `${ORG}/payments?tab=payouts`)
     await expect(page.getByRole('heading', { name: 'How you get paid', exact: true })).toBeVisible()
     await page.getByRole('tab', { name: 'Plan', exact: true }).click()
-    await expect(page).toHaveURL(`${ORG}/settings/payments?tab=plan`)
+    await expect(page).toHaveURL(`${ORG}/payments?tab=plan`)
   })
 
   test('five destinations keep tenant management in Menu and personal activity in its own context', async ({ page }) => {
     await page.setViewportSize(WIDE)
-    await open(page, `${ORG}/settings`)
+    await open(page, `${ORG}/menu`)
     await expect(page.getByTestId('dashboard-top-nav').getByRole('navigation', { name: 'Dashboard' }).getByRole('link')).toHaveText(['Today', 'Calendar', 'Catalog', 'Messages'])
     await page.getByTestId('dashboard-top-nav-menu-button').click()
     // Earnings is a card on Menu, as Airbnb's is; it shows the month and leads to payouts, transactions and refunds.
     await page.getByRole('dialog', { name: 'Menu', exact: true }).getByTestId('dashboard-menu-earnings').click()
     await expect(page).toHaveURL(`${ORG}/earnings`)
-    await expect(page.locator('#dashboard-panel-earnings [data-testid="dashboard-navbar-back"]')).toHaveAttribute('href', `${ORG}/settings`)
+    await expect(page.locator('#dashboard-panel-earnings [data-testid="dashboard-navbar-back"]')).toHaveAttribute('href', `${ORG}/menu`)
     await expect(page.getByRole('heading', { name: 'Earnings', exact: true })).toBeVisible()
     await open(page, `${ORG}/earnings/transactions`)
     await expect(page.getByText('No transactions in this period.', { exact: true })).toBeVisible()
@@ -164,14 +171,14 @@ test.describe('dashboard pane hierarchy', () => {
     await expect(mobileNav.getByRole('link')).toHaveText(['Today', 'Calendar', 'Catalog', 'Messages', 'Menu'])
     await expect(page.getByTestId('dashboard-mobile-nav-menu-link')).toHaveAttribute('aria-current', 'page')
     await page.locator('#dashboard-panel-earnings [data-testid="dashboard-navbar-back"]').click()
-    await expect(page).toHaveURL(`${ORG}/settings`)
+    await expect(page).toHaveURL(`${ORG}/menu`)
     await page.locator('#dashboard-panel-organization-settings').getByTestId('dashboard-menu-earnings').click()
     await expect(page).toHaveURL(`${ORG}/earnings`)
 
     // A service organization has the same five destinations: its services are
     // in Catalog, a root with no Back, and Menu carries no second entry for them.
     const services = '/dashboard/north-carolina-legal-services'
-    await open(page, `${services}/settings`)
+    await open(page, `${services}/menu`)
     await expect(mobileNav.getByRole('link')).toHaveText(['Today', 'Calendar', 'Catalog', 'Messages', 'Menu'])
     await expect(page.locator('#dashboard-panel-organization-settings').getByRole('link', { name: 'Website', exact: true })).toBeVisible()
     await expect(page.locator('#dashboard-panel-organization-settings').getByRole('link', { name: 'Services', exact: true })).toHaveCount(0)
@@ -180,9 +187,9 @@ test.describe('dashboard pane hierarchy', () => {
     await expect(mobileNav.getByRole('link', { name: 'Catalog', exact: true })).toHaveAttribute('aria-current', 'page')
     await expect(page.locator('#dashboard-panel-catalog [data-testid="dashboard-navbar-back"]')).toHaveCount(0)
 
-    await open(page, `${ORG}/settings/payments`)
+    await open(page, `${ORG}/payments`)
     await expect(page.getByRole('heading', { name: 'Payment methods', exact: true })).toBeVisible()
-    await open(page, `${ORG}/settings/payments?tab=plan`)
+    await open(page, `${ORG}/payments?tab=plan`)
     await expect(page.getByText(/^(Manage|Choose a plan)$/)).toBeVisible()
     await open(page, '/account')
     await expect(page).toHaveURL('/dashboard/account')
@@ -333,18 +340,18 @@ test.describe('dashboard pane hierarchy', () => {
 
   test('below lg every level is one screen and nothing opens itself', async ({ page }) => {
     await page.setViewportSize(NARROW)
-    for (const [path, pane] of [['settings/website', 'organization-website'], ['pages', 'organization-pages'], ['brand', 'organization-brand'], ['products', 'catalog'], ['settings/integrations', 'organization-integrations']] as const) {
+    for (const [path, pane] of [['website', 'organization-website'], ['website/pages', 'organization-pages'], ['website/brand', 'organization-brand'], ['products', 'catalog'], ['integrations', 'organization-integrations']] as const) {
       await open(page, `${ORG}/${path}`)
       await expectPanes(page, [pane])
       await expect(page).toHaveURL(`${ORG}/${path}`)
     }
 
     // A leaf is a sheet whose Close goes to the level that contains it.
-    await open(page, `${ORG}/settings/website/pages/links/title`)
+    await open(page, `${ORG}/website/pages/links/title`)
     await expectPanes(page, ['organization-links-title'])
-    await expect(page.getByTestId('dashboard-navbar-close')).toHaveAttribute('href', `${ORG}/settings/website/pages/links`)
+    await expect(page.getByTestId('dashboard-navbar-close')).toHaveAttribute('href', `${ORG}/website/pages/links`)
     await page.getByTestId('dashboard-navbar-close').click()
-    await expect(page).toHaveURL(`${ORG}/settings/website/pages/links`)
+    await expect(page).toHaveURL(`${ORG}/website/pages/links`)
     await expectPanes(page, ['organization-links'])
   })
 
@@ -356,10 +363,12 @@ test.describe('dashboard pane hierarchy', () => {
     await page.setViewportSize(WIDE)
     await page.context().clearCookies()
     await loginAs(page.request, baseURL!, 'user-e2e-ncls-owner')
-    await open(page, `${services}/products?kind=service`)
+    await open(page, `${services}/products`)
     await expectPanes(page, ['catalog'])
-    await expect(page.locator('#dashboard-panel-catalog').getByRole('link', { name: 'Services', exact: true })).toHaveAttribute('aria-pressed', 'true')
-    await page.getByTestId('catalog-add').click()
+    await page.getByTestId('catalog-entry-services').click()
+    await expect(page).toHaveURL(`${services}/products/services`)
+    await expectPanes(page, ['catalog', 'catalog-services'])
+    await page.locator('#dashboard-panel-catalog-services').getByTestId('catalog-add').click()
     await expect(page).toHaveURL(`${services}/products/new/name?kind=service`)
     const name = `E2E Service ${Date.now().toString(36)}`
     await page.getByRole('textbox', { name: 'Name' }).fill(name)
@@ -392,9 +401,9 @@ test.describe('dashboard pane hierarchy', () => {
       await open(page, viaMcp.admin_edit_url!)
       await expect(page.locator('#dashboard-panel-product')).toContainText(name)
 
-      // Its page is edited as the Product's Page content.
+      // Its Page content row opens the page in Pages, the one page editor.
       await page.locator('#dashboard-panel-product').getByRole('link', { name: new RegExp(`^Page content ${product.page!.path.replaceAll('/', '\\/')}`) }).click()
-      await expect(page).toHaveURL(new RegExp(`${services}/products/${productId}/page`))
+      await expect(page).toHaveURL(new RegExp(`${services}/website/pages/${pageId}`))
       await expect(page.locator('#dashboard-panel-organization-page')).toContainText(name)
     } finally {
       if (pageId) {
@@ -419,10 +428,10 @@ test.describe('dashboard pane hierarchy', () => {
       expect(response.status(), await response.text()).toBe(200)
     }
     const expectNoPlatformAccounts = async () => {
-      await open(page, `${services}/settings`)
+      await open(page, `${services}/menu`)
       await expect(menu.getByRole('link', { name: 'Team', exact: true })).toBeVisible()
       await expect(menu.getByRole('link', { name: 'Platform accounts', exact: true })).toHaveCount(0)
-      await page.goto(`${services}/settings/people`)
+      await page.goto(`${services}/platform-accounts`)
       await expect(page.getByRole('heading', { name: 'Page not found', exact: true })).toBeVisible()
     }
     let elevated = false
@@ -447,8 +456,8 @@ test.describe('dashboard pane hierarchy', () => {
       await loginAs(page.request, baseURL!)
       const signedIn = await (await page.request.get('/api/auth/get-session')).json() as { user: { role?: string | null } }
       expect(signedIn.user.role, 'the canary account is a Better Auth admin').toBe('admin')
-      await open(page, `${krabiclaw}/settings`)
-      await expect(menu.getByRole('link', { name: 'Platform accounts', exact: true })).toHaveAttribute('href', `${krabiclaw}/settings/people`)
+      await open(page, `${krabiclaw}/menu`)
+      await expect(menu.getByRole('link', { name: 'Platform accounts', exact: true })).toHaveAttribute('href', `${krabiclaw}/platform-accounts`)
     } finally {
       if (elevated) await setRole('user')
       await admin.dispose()
@@ -458,7 +467,7 @@ test.describe('dashboard pane hierarchy', () => {
   // Account settings carries no organization in its URL. Better Auth's active
   // organization keeps the shell in it, and a member's own availability —
   // where Google Calendar connects — is that organization's page.
-  test('Account settings opened inside an organization stays in that organization', async ({ page, baseURL }) => {
+  test('Account settings is the account\'s destination and acts in the active organization', async ({ page, baseURL }) => {
     const services = '/dashboard/north-carolina-legal-services'
     const availability = '/dashboard/account/profile/calendar/org-ncls-blawby'
     await page.context().clearCookies()
@@ -468,16 +477,21 @@ test.describe('dashboard pane hierarchy', () => {
     await page.setViewportSize({ width: 390, height: 844 })
 
     await open(page, '/dashboard/account/profile')
+    // The account's destination lights the account's Menu and exits to it.
     const mobileNav = page.getByTestId('dashboard-mobile-nav')
-    await expect(mobileNav.getByRole('link')).toHaveText(['Today', 'Calendar', 'Catalog', 'Messages', 'Menu'])
-    await expect(mobileNav.getByRole('link', { name: 'Catalog', exact: true })).toHaveAttribute('href', `${services}/products`)
-    await expect(page.getByTestId('dashboard-mobile-nav-menu-link')).toHaveAttribute('href', `${services}/settings`)
+    await expect(mobileNav.getByRole('link')).toHaveText(['Today', 'Calendar', 'Messages', 'Menu'])
+    await expect(page.getByTestId('dashboard-mobile-nav-menu-link')).toHaveAttribute('href', '/dashboard/account/menu')
+    await expect(page.getByTestId('dashboard-mobile-nav-menu-link')).toHaveAttribute('aria-current', 'page')
+    await expect(page.locator('#dashboard-panel-account-profile [data-testid="dashboard-navbar-back"]')).toHaveAttribute('href', '/dashboard/account/menu')
+    // Opening it changed nothing in Better Auth: availability opens the active organization's own page.
+    const session = await page.request.get('/api/auth/get-session', { headers: authRequestHeaders(baseURL!) })
+    expect((await session.json() as { session: { activeOrganizationId: string | null } }).session.activeOrganizationId).toBe('org-ncls-blawby')
     await page.getByRole('link', { name: /^Your availability/ }).click()
     await expect(page).toHaveURL(availability)
     await expect(page.getByRole('link', { name: /^Google Calendar/ })).toBeVisible()
 
     // On the team, your own row opens the same page; the admin view is for everyone else.
-    await open(page, `${services}/settings/members`)
+    await open(page, `${services}/team`)
     const ownRow = page.getByRole('listitem').filter({ hasText: 'ncls-owner@playwright.example' })
     await expect(ownRow.getByRole('link', { name: 'Profile, hours & Calendar', exact: true })).toHaveAttribute('href', availability)
   })

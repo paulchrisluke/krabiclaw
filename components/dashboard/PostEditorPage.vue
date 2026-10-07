@@ -204,7 +204,7 @@ const viewUrl = computed(() => {
   return record.status === 'published' ? record.canonical_url : record.preview_url
 })
 
-const organizationLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/website/localization`)
+const organizationLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/website/localization`)
 const postLocalizationFields = computed(() => [
   { key: 'title', label: 'Title', source: post.value?.title },
   { key: 'summary', label: 'Caption', source: post.value?.body, multiline: true, rows: 6 },

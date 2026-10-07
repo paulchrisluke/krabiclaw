@@ -26,7 +26,7 @@ const groups = computed<EditorNavigationGroup[]>(() => {
     row('capacity', 'Guest limit', config.default_capacity === null ? 'No guest limit' : config.default_capacity === 1 ? 'One guest per session' : config.default_capacity === 0 ? 'Closed to new guests' : `Up to ${config.default_capacity} guests per session`),
     row('assignment', 'Who guests meet', config.assigned_member_id ? 'Assigned team member' : 'Tenant organization'),
     row('confirmation', 'Confirmation', config.confirmation_mode === 'instant' ? 'Confirm automatically' : 'Review each request'),
-    row('schedule', 'Weekly schedule', p.scheduleError.value ? 'Could not load times' : p.weekdays.filter(day => p.savedSlotsFor(day.value).length).map(day => day.label).join(', ') || 'No weekly times set'),
+    row('schedule', 'Weekly schedule', p.scheduleError.value ? p.scheduleError.value : p.weekdays.filter(day => p.savedSlotsFor(day.value).length).map(day => day.label).join(', ') || 'No weekly times set'),
   )
   // One flat list. Whether guests book on the website at all is the
   // organization's setting, under Website, not this product's.

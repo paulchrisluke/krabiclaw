@@ -70,7 +70,7 @@ const router = useRouter()
 const dashboardApi = useDashboardApi()
 
 const qaId = computed(() => String(route.params.qaId ?? ''))
-const qaPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/settings/website/qa`)
+const qaPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/website/qa`)
 const recordPath = computed(() => `${qaPath.value}/${qaId.value}`)
 const sectionUrl = (section: SectionKey) => router.resolve({ path: `${recordPath.value}/${section}`, query: route.query }).fullPath
 const level = useRouteLevel()
@@ -129,7 +129,7 @@ const qaLocalizationFields = computed(() => [
   { key: 'title', label: 'Question', source: record.value?.question },
   { key: 'summary', label: 'Answer', source: record.value?.answer, multiline: true, rows: 4 },
 ])
-const organizationLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/website/localization`)
+const organizationLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/website/localization`)
 
 const navigationGroups = computed<EditorNavigationGroup[]>(() => [
   {

@@ -40,7 +40,7 @@ export async function handlePaymentsTools(ctx:McpExecutorContext):Promise<unknow
    return {...prepared,approval_url:`${dashboardUrl}/earnings/refunds/approve?id=${encodeURIComponent(prepared.authorization_id)}`}
   }
   case 'issue_payment_refund':return await refundPayment(db,stripe(),principal,String(args.authorization_id),env)
-  case 'open_payments_onboarding':await authorizePayments(principal,'integration');return {organization_id:organizationId,onboarding_url:`${dashboard()}/settings/payments?tab=payouts`,source:'Authenticated merchant Stripe-native onboarding handoff'}
+  case 'open_payments_onboarding':await authorizePayments(principal,'integration');return {organization_id:organizationId,onboarding_url:`${dashboard()}/payments?tab=payouts`,source:'Authenticated merchant Stripe-native onboarding handoff'}
   default:return NOT_HANDLED
  }
 }

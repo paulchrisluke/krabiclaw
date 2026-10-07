@@ -5,5 +5,5 @@
 <script setup lang="ts">
 import TodayPage from '~/components/dashboard/TodayPage.vue'
 
-definePageMeta({ layout: 'dashboard' })
+definePageMeta({ layout: 'dashboard', tab: 'today' })
 </script>

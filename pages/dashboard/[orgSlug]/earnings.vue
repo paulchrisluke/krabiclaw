@@ -84,7 +84,7 @@ import { paymentMoney } from '~/shared/payment-display'
 import { isEarningsPerformance, isPayoutsView, type EarningsPerformance, type PayoutsView } from '~/shared/earnings-display'
 import { formatCalendarDate } from '~/utils/timezone'
 
-definePageMeta({ layout: 'dashboard', back: 'dashboard-orgSlug-settings' })
+definePageMeta({ layout: 'dashboard', tab: 'menu', back: 'dashboard-orgSlug-menu' })
 useSeoMeta({ title: 'Earnings | Krabiclaw', robots: 'noindex, nofollow' })
 
 const route = useRoute()
@@ -132,8 +132,8 @@ const reports = computed(() => [1, 2, 3].map((offset) => {
 
 // Airbnb's cog: "Settings and documents" — the Payments page's tabs.
 const settingsItems = computed(() => [[
-  { label: 'Payments', icon: 'i-lucide-credit-card', to: `/dashboard/${route.params.orgSlug}/settings/payments` },
-  { label: 'Payout settings', icon: 'i-lucide-landmark', to: `/dashboard/${route.params.orgSlug}/settings/payments?tab=payouts` },
-  { label: 'Plan', icon: 'i-lucide-badge-check', to: `/dashboard/${route.params.orgSlug}/settings/payments?tab=plan` },
+  { label: 'Payments', icon: 'i-lucide-credit-card', to: `/dashboard/${route.params.orgSlug}/payments` },
+  { label: 'Payout settings', icon: 'i-lucide-landmark', to: `/dashboard/${route.params.orgSlug}/payments?tab=payouts` },
+  { label: 'Plan', icon: 'i-lucide-badge-check', to: `/dashboard/${route.params.orgSlug}/payments?tab=plan` },
 ]])
 </script>

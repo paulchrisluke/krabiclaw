@@ -10,7 +10,7 @@
     @save="c.save"
   >
     <UFormField label="Name" required>
-      <UInput v-model="c.form.name" :placeholder="c.groupLabel === 'Section' ? 'Appetizers' : 'Accessories'" autofocus class="w-full" />
+      <UInput v-model="c.form.name" placeholder="Starters" autofocus class="w-full" />
     </UFormField>
     <DashboardResourceLocalization
       v-if="!c.isNew.value && c.hasRecord.value"
@@ -18,7 +18,7 @@
       :organization-id="c.organizationId"
       resource-type="collection"
       :resource-id="c.collectionId.value"
-      :resource-label="c.groupLabel.toLowerCase()"
+      resource-label="section"
       :fields="c.localizationFields.value"
       :language-settings-path="c.organizationLocalizationSettingsPath.value"
     />

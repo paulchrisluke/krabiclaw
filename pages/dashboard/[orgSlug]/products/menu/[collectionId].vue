@@ -4,7 +4,7 @@
     its name to give. Either way the level below is a leaf or a product.
   -->
   <CollectionProductList v-if="!isNew" />
-  <DashboardIndexPanel v-else id="location-product-category" :title="`New ${presentation.collectionGroupLabel.toLowerCase()}`" :auto-open="collectionNavigation[0]?.items.find(item => item.to)?.to ?? null">
+  <DashboardIndexPanel v-else id="menu-section-new" title="New section" :auto-open="collectionNavigation[0]?.items.find(item => item.to)?.to ?? null">
     <UAlert v-if="errorMessage" class="mb-6" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="errorMessage" />
     <div class="mb-6 flex justify-end">
       <UButton :label="createActionLabel" :loading="saving" @click="startOrCreate" />
@@ -22,7 +22,6 @@ export interface CollectionEditor {
   isNew: ComputedRef<boolean>
   collectionId: ComputedRef<string>
   organizationId: string
-  groupLabel: string
   hasRecord: ComputedRef<boolean>
   saving: Ref<boolean>
   errorMessage: Ref<string>
@@ -41,20 +40,14 @@ export const collectionEditorKey = Symbol('collection-editor') as InjectionKey<C
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import CollectionProductList from '~/components/dashboard/CollectionProductList.vue'
 import { getErrorMessage } from '~/utils/errors'
-import { requireProductPresentation } from '~/utils/product-presentation'
 
 definePageMeta({ layout: 'dashboard' })
 
 const route = useRoute()
 const router = useRouter()
 const dashboardApi = useDashboardApi()
-const dashboard = useDashboardOrganization()
 const collectionId = computed(() => String(route.params.collectionId ?? ''))
 
-const vertical = dashboard.organization.value?.vertical
-if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Organization vertical is not configured' })
-// The organization's own words for a grouping: a restaurant's Sections, everyone else's Collections.
-const presentation = requireProductPresentation(vertical, dashboard.organization.value?.theme_id)
 
 const level = useRouteLevel()
 const collectionPath = level.path
@@ -98,7 +91,7 @@ const collectionNavigation = computed<EditorNavigationGroup[]>(() => [{
   items: [{ id: 'name', label: 'Name', summary: form.name.trim() || 'Not named yet', placeholder: !form.name.trim(), to: `${collectionPath.value}/name` }],
 }])
 const collectionLocalizationFields = computed(() => [{ key: 'name', label: 'Name', source: collection.value?.name }])
-const organizationLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/website/localization`)
+const organizationLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/website/localization`)
 
 const { createActionLabel, saveLabel, saveDisabled, save: saveLeaf, startOrCreate } = useCreateWalk({
   recordPath: collectionPath,
@@ -107,7 +100,7 @@ const { createActionLabel, saveLabel, saveDisabled, save: saveLeaf, startOrCreat
   labels: COLLECTION_LABELS,
   order: ['name'],
   missing: () => !form.name.trim(),
-  noun: presentation.collectionGroupLabel.toLowerCase(),
+  noun: 'section',
   saving,
   commit,
 })
@@ -131,7 +124,7 @@ async function commit() {
       await dashboardApi(`${endpoint}/${collectionId.value}`, { method: 'PATCH', body: { name: form.name.trim() }, validate: isRecord })
     }
   } catch (error) {
-    errorMessage.value = getErrorMessage(error, `Failed to save ${presentation.collectionGroupLabel.toLowerCase()}`)
+    errorMessage.value = getErrorMessage(error, 'Failed to save section')
     return
   } finally {
     saving.value = false
@@ -159,7 +152,6 @@ provide(collectionEditorKey, {
   isNew,
   collectionId,
   organizationId,
-  groupLabel: presentation.collectionGroupLabel,
   hasRecord: computed(() => Boolean(collection.value)),
   saving,
   errorMessage,

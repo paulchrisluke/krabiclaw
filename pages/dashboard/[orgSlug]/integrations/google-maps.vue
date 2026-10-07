@@ -34,6 +34,6 @@ const items = computed<EditorNavigationItem[]>(() => (integrations.summary.value
         ].filter(Boolean).join(' · '),
       }
     : { summary: 'Not connected', status: 'neutral' as const }),
-  to: `/dashboard/${String(route.params.orgSlug)}/settings/integrations/google-maps/${location.slug}`,
+  to: `/dashboard/${String(route.params.orgSlug)}/integrations/google-maps/${location.slug}`,
 })))
 </script>

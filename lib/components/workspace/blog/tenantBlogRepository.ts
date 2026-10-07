@@ -13,7 +13,7 @@ interface TenantBlogRepositoryOptions {
 
 export function tenantBlogRepository({ organizationId, orgSlug }: TenantBlogRepositoryOptions & { orgSlug: string }): BlogPostRepository {
   const baseUrl = `/api/editor/organizations/${organizationId}/blog`
-  const dashboardBaseUrl = `/dashboard/${orgSlug}/settings/website/blog`
+  const dashboardBaseUrl = `/dashboard/${orgSlug}/website/blog`
   const scope = { orgSlug }
   return {
     listUrl: dashboardBaseUrl,

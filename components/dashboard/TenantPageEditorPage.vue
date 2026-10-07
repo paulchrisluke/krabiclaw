@@ -81,21 +81,10 @@ export interface TenantPageEditor {
 
 export const tenantPageEditorKey = Symbol('tenant-page-editor') as InjectionKey<TenantPageEditor>
 
-/**
- * Which page document this editor and every level beneath it edit. Pages names
- * it in its URL; a Product's Page content names the page the Product owns. The
- * levels below read it here rather than from a route parameter, so the same
- * section, block and field editors serve both.
- */
-export const tenantPageIdKey = Symbol('tenant-page-id') as InjectionKey<ComputedRef<string>>
-
+/** Which page document this editor and every level beneath it edit: the one its URL names. */
 export function useTenantPageId(): ComputedRef<string> {
-  const pageId = inject(tenantPageIdKey, null)
-  if (pageId) return pageId
-  // Only a Product with no page renders these levels without an editor above
-  // them, and a section of a page that does not exist is not a page.
-  showError(createError({ statusCode: 404, statusMessage: 'Page not found' }))
-  return computed(() => '')
+  const route = useRoute()
+  return computed(() => String(route.params.pageId ?? ''))
 }
 </script>
 
@@ -114,18 +103,12 @@ import {
   type TenantPageBlock,
 } from '~/utils/tenant-page-blocks'
 
-const props = defineProps<{
-  /** The page a parent record names, such as the page a Product owns. Without it, the URL's. */
-  pageId?: string
-}>()
-
 // The level runs while setup is still synchronous: it injects the record the
 // `<RouterView>` above rendered, and an `await` before it would bind nothing.
 const level = useRouteLevel()
 const route = useRoute()
 const router = useRouter()
-const pageId = computed(() => props.pageId ?? String(route.params.pageId ?? ''))
-provide(tenantPageIdKey, pageId)
+const pageId = useTenantPageId()
 const recordPath = level.path
 /** A level below this page, keeping whatever scope the URL carries. */
 const sectionUrl = (section: string) => router.resolve({ path: `${recordPath.value}/${section}`, query: route.query }).fullPath
@@ -154,7 +137,7 @@ const saving = ref(false)
 const errorMessage = ref('')
 
 const navigablePreviewUrl = computed(() => previewHrefForTenantPage(dirty.value, previewUrl.value))
-const organizationLocalizationSettingsPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/settings/website/localization`)
+const organizationLocalizationSettingsPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/website/localization`)
 
 function preview(value: string, empty: string) {
   return value.trim() || empty
@@ -201,6 +184,11 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => {
         { id: 'url', label: 'URL', summary: draft.value.path, to: sectionUrl('url') },
       ],
     },
+    // A page a product owns says which, and leads back to it: one page, two ways in.
+    ...(draft.value.product_id ? [{
+      id: 'offering',
+      items: [{ id: 'offering', label: 'Offering', summary: 'The product this page shows', lead: { icon: 'i-lucide-briefcase' }, to: `/dashboard/${String(route.params.orgSlug)}/products/${encodeURIComponent(draft.value.product_id)}` }],
+    }] : []),
   ]
 })
 

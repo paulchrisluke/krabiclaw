@@ -5,7 +5,7 @@
     experiences. Every row opens the one Product editor.
   -->
   <div>
-    <div class="mb-6 flex flex-wrap items-center gap-2">
+    <div v-if="!fixedKind" class="mb-6 flex flex-wrap items-center gap-2">
       <UButton
         v-for="filter in kindFilters"
         :key="filter.value"
@@ -40,6 +40,8 @@ const props = defineProps<{
   /** What one product costs in this scope. */
   priceLabel: (product: Product) => string
   activeItem?: string | null
+  /** A list of one kind — Experiences, Services — with no kind filters of its own. */
+  fixedKind?: ProductKind
 }>()
 
 const route = useRoute()
@@ -49,7 +51,7 @@ const catalogPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/p
 // Kind is the product's own, so the filters are kinds, named the same on every
 // template. `item` is the generic kind and reads as Products.
 const KIND_FILTER_LABELS: Record<ProductKind, string> = { dish: 'Menu items', experience: 'Experiences', service: 'Services', item: 'Products' }
-const kind = computed<ProductKind | 'all'>(() => PRODUCT_KINDS.includes(route.query.kind as ProductKind) ? route.query.kind as ProductKind : 'all')
+const kind = computed<ProductKind | 'all'>(() => props.fixedKind ?? (PRODUCT_KINDS.includes(route.query.kind as ProductKind) ? route.query.kind as ProductKind : 'all'))
 // A filter for every kind this catalog holds; a kind nobody sells is not a choice.
 const kindFilters = computed(() => [
   { value: 'all' as const, label: 'All' },

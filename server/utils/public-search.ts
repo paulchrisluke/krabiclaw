@@ -620,7 +620,7 @@ export async function buildWorkspaceDocuments(db: DbClient, organizationId?: str
     for (const organization of organizations) {
       if (organization.id !== row.organization_id) continue
       records.push(doc(organization, 'member', row.id, {
-        title: row.name?.trim() || row.email, path: `${base(organization)}/settings/members`, snippet: `${row.email} · ${row.role}`,
+        title: row.name?.trim() || row.email, path: `${base(organization)}/team`, snippet: `${row.email} · ${row.role}`,
         section: 'Team', icon: 'users', body: joinWords(row.name, row.email, row.role),
       }))
     }

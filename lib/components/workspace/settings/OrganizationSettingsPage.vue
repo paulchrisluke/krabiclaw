@@ -124,8 +124,8 @@ const route = useRoute()
 const editorError = ref<string | null>(null)
 const dashboard = useDashboardOrganization()
 const organizationDashboardPath = computed(() => `/dashboard/${String(route.params.orgSlug)}`)
-const brandPath = computed(() => `${organizationDashboardPath.value}/settings/website/brand`)
-const settingsPath = computed(() => `${organizationDashboardPath.value}/settings/website`)
+const brandPath = computed(() => `${organizationDashboardPath.value}/website/brand`)
+const settingsPath = computed(() => `${organizationDashboardPath.value}/website`)
 // The level runs while setup is still synchronous: it injects the record the
 // `<RouterView>` above rendered, and an `await` before it would bind nothing.
 const level = useRouteLevel()

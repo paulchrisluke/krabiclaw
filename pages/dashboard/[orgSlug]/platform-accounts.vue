@@ -75,7 +75,7 @@ import { canOpenPlatformAccounts } from '~/utils/platform-admin-access'
 // read as "this site's people", which it has never been. It exists only inside
 // Krabiclaw's own organization and only for a Better Auth admin; anywhere else
 // it is not a page, the same rule that decides Menu's row.
-definePageMeta({ layout: 'dashboard' })
+definePageMeta({ layout: 'dashboard', tab: 'menu', back: 'dashboard-orgSlug-menu' })
 
 const dashboard = useDashboardOrganization()
 const session = authClient.useSession()

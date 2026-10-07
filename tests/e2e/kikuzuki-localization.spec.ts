@@ -179,7 +179,7 @@ test('Kikuzuki Brand translations open from their URL in the stored language', a
     const dashboardContext = await browser.newContext({ baseURL, storageState: await owner.storageState() })
     const cms = await dashboardContext.newPage()
     try {
-      const brandPath = `/dashboard/${organizationId}/settings/website/brand`
+      const brandPath = `/dashboard/${organizationId}/website/brand`
       await openTenantPage(cms, `${baseURL}${brandPath}`, {})
       await expect(cms.locator('#dashboard-panel-organization-brand').getByRole('link', { name: /^Translations/ })).toHaveAttribute('href', `${brandPath}?editMode=translations`)
       const loaded = cms.waitForResponse(response => response.request().method() === 'GET'
@@ -209,7 +209,7 @@ test('Kikuzuki Localize preserves its translated address', async ({ browser, pla
     try {
       // Languages is a row on the location's settings list; it opens the
       // location's translations mode, which its URL holds with the language.
-      const settingsPath = `/dashboard/${organizationId}/settings/locations/kikuzuki-japanese-robatayaki-izakaya/settings`
+      const settingsPath = `/dashboard/${organizationId}/locations/kikuzuki-japanese-robatayaki-izakaya/settings`
       await openTenantPage(cms, `${baseURL}${settingsPath}`, {})
       await cms.getByRole('link', { name: /^Languages/ }).click()
       await expect(cms).toHaveURL(`${baseURL}${settingsPath}?editMode=translations`)

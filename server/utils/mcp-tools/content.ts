@@ -303,7 +303,7 @@ function withoutPosition<T extends { position?: number }>(block: T): Omit<T, 'po
 
 /** The dashboard editor for a page: a page a Product owns opens as that Product's Page content. */
 function pageEditUrl(organizationSlug: string | undefined, page: { id: string; product_id?: string | null }): string | null {
-  return organizationSlug ? pageEditorPath(organizationSlug, { id: page.id, product_id: page.product_id ?? null }) : null
+  return organizationSlug ? pageEditorPath(organizationSlug, { id: page.id }) : null
 }
 
 function tenantPageLifecycleResponse(action: string, result: unknown, organizationSlug?: string) {

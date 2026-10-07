@@ -216,7 +216,7 @@ const sectionLabels: Record<SectionKey, string> = {
   'publication': 'Website',
   'booking': 'Scheduling',
   'locations': 'Locations',
-  'collections': 'Collections',
+  'collections': 'Menu sections',
 }
 
 const detailKey = computed(() => level.child.value)
@@ -494,6 +494,22 @@ function listSummary(values: readonly string[], empty: string) {
   return values.length ? values.join(', ') : empty
 }
 
+// Who handles a bookable service's consultations, by name: the same list the
+// assignment concern reads, so it is one request shared by both.
+const { data: schedulingMembers, error: schedulingMembersError } = await useFetch<{ members: { id: string; name: string }[] }>(() => `/api/organizations/${dashboard.organization.value?.id}/members/scheduling`)
+function assignmentSummary(): string {
+  if (!form.assigned_member_id) return 'The business schedule'
+  if (schedulingMembersError.value) return 'Team members could not be loaded'
+  return schedulingMembers.value?.members.find(member => member.id === form.assigned_member_id)?.name ?? 'Assigned team member'
+}
+
+/**
+ * A price opens the editor of the one price it names. One variant has one
+ * price, edited directly; several each have their own, so the row opens the
+ * list of variants rather than choosing one of them.
+ */
+const pricePath = computed(() => product.value && product.value.variants.length > 1 ? sectionPath('options') : sectionPath('price'))
+
 function priceSummary(): string {
   const row = product.value
   if (!row) return ''
@@ -510,7 +526,8 @@ function priceSummary(): string {
 }
 
 function bookingSummary(): string {
-  const minutes = `${form.booking_duration || '?'} minutes`
+  // A duration not chosen yet says so; it is never shown as a number.
+  const minutes = form.booking_duration ? `${form.booking_duration} minutes` : 'No duration set'
   if (!scheduleData.value) return minutes
   const count = schedule.value.filter(slot => slot.start_time.trim()).length
   return count ? `${minutes} · ${count === 1 ? '1 start time' : `${count} start times`} a week` : `${minutes} · No weekly availability set`
@@ -551,11 +568,20 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => {
       { id: 'photo', label: 'Photo', summary: image ? '' : 'No photo yet', placeholder: !image, to: sectionPath('photo') },
       { id: 'name', label: 'Name', summary: form.name || 'Not named yet', placeholder: !form.name, to: sectionPath('name') },
       { id: 'description', label: 'Description', summary: form.description || 'Nothing written yet', placeholder: !form.description, to: sectionPath('description') },
-      // A service is shown by a page of its own; any product that already owns one edits it here.
+      // A service is shown by a page of its own. The page has one editor, in
+      // Pages; this row is a way into it, and a page not made yet is made here.
       ...(product.value.page || form.kind === 'service'
-        ? [{ id: 'page', label: 'Page content', summary: product.value.page ? product.value.page.path : 'No page', placeholder: !product.value.page, to: sectionPath('page') }]
+        ? [{ id: 'page', label: 'Page content', summary: product.value.page ? product.value.page.path : 'No page', placeholder: !product.value.page, to: product.value.page ? `/dashboard/${String(route.params.orgSlug)}/website/pages/${encodeURIComponent(product.value.page.id)}` : sectionPath('page') }]
         : []),
-      { id: 'price', label: 'Price', summary: priceSummary(), placeholder: priceSummary() === 'No price set', to: sectionPath('price') },
+      { id: 'price', label: form.kind === 'service' ? 'Consultation pricing' : 'Price', summary: priceSummary(), placeholder: priceSummary() === 'No price set', to: pricePath.value },
+      // The person a service's consultations are booked with: the existing
+      // assignment concern, reached from the overview. It belongs to bookings,
+      // so until the service takes bookings the row leads there first.
+      ...(form.kind === 'service'
+        ? [product.value.booking
+            ? { id: 'assignment', label: 'Assigned team member', summary: assignmentSummary(), to: `${sectionPath('booking')}/assignment` }
+            : { id: 'assignment', label: 'Assigned team member', summary: 'Set up bookings first', placeholder: true, to: sectionPath('booking') }]
+        : []),
       { id: 'options', label: 'Variants', summary: product.value.variants.length > 1 ? `${product.value.variants.length} variants` : 'One version', to: sectionPath('options') },
       {
         id: 'attributes',
@@ -565,14 +591,23 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => {
         to: sectionPath('attributes'),
       },
       { id: 'kind', label: 'Type', summary: form.kind ? PRODUCT_KIND_LABELS[form.kind] : 'Choose a type', to: sectionPath('kind') },
-      { id: 'booking', label: 'Scheduling', summary: form.bookable ? bookingSummary() : 'Not bookable', placeholder: !form.bookable, to: sectionPath('booking') },
+      { id: 'booking', label: form.kind === 'service' ? 'Bookings' : 'Scheduling', summary: form.bookable ? bookingSummary() : 'Not bookable', placeholder: !form.bookable, to: sectionPath('booking') },
       { id: 'order-url', label: 'External link', summary: form.order_url || 'No external link', placeholder: !form.order_url, to: sectionPath('order-url') },
       { id: 'locations', label: 'Locations', summary: locationsSummary(), placeholder: !Object.keys(form.locations).length, to: sectionPath('locations') },
-      { id: 'collections', label: 'Collections', summary: collectionsSummary(), placeholder: !form.collection_ids.length, to: sectionPath('collections') },
-      { id: 'publication', label: 'Website', summary: publicationSummary(), to: sectionPath('publication') },
-    ],
+      { id: 'collections', label: 'Menu sections', summary: collectionsSummary(), placeholder: !form.collection_ids.length, to: sectionPath('collections') },
+      { id: 'publication', label: 'Website visibility', summary: publicationSummary(), to: sectionPath('publication') },
+    ].sort((left, right) => rowRank(left.id) - rowRank(right.id)),
   }]
 })
+
+// A service leads with what is changed most: who handles it, what it costs,
+// how it is booked and what its page says. Every other kind keeps the list as written.
+const SERVICE_ROW_ORDER = ['assignment', 'price', 'booking', 'description', 'page', 'locations', 'publication']
+function rowRank(id: string) {
+  if (form.kind !== 'service') return 0
+  const at = SERVICE_ROW_ORDER.indexOf(id)
+  return at === -1 ? SERVICE_ROW_ORDER.length : at
+}
 
 /**
  * The sections this product actually has, read from the rows it offers rather
@@ -871,12 +906,14 @@ async function createPage() {
   saving.value = true
   saveError.value = null
   try {
-    await dashboardApi(`/api/editor/organizations/${organizationId}/pages`, {
+    const created = await dashboardApi(`/api/editor/organizations/${organizationId}/pages`, {
       method: 'POST',
       body: { productId: row.id, path: `/services/${row.slug}`, title: row.name, pageType: 'custom', recipe: null, blocks: [] },
-      validate: isRecord,
+      validate: (value: unknown): value is { page: { id: string } } => isRecord(value) && isRecord(value.page) && typeof value.page.id === 'string',
     })
     await reload()
+    // The page is edited where every page is.
+    await navigateTo(`/dashboard/${String(route.params.orgSlug)}/website/pages/${encodeURIComponent(created.page.id)}`)
   } catch (error) {
     saveError.value = getErrorMessage(error, 'Failed to create the page')
   } finally {
@@ -925,7 +962,7 @@ const productLocalizationFields = computed(() => {
   return fields
 })
 
-const organizationLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/website/localization`)
+const organizationLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/website/localization`)
 
 function isProductLocalizationResponse(value: unknown): value is { localization: { values: Record<string, unknown> } } {
   return isRecord(value) && isRecord(value.localization) && isRecord(value.localization.values)

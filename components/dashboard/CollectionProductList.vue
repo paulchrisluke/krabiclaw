@@ -1,16 +1,16 @@
 <template>
   <!-- One collection: its products, in the order customers see them. Each opens its one editor in Catalog. -->
-  <DashboardIndexPanel id="location-collection" :title="collection?.name ?? presentation.collectionLabel">
+  <DashboardIndexPanel id="menu-section" :title="collection?.name ?? 'Section'">
     <DashboardListEditor
       v-model:editing="editing"
       v-model:selected="selected"
-      :title="collection?.name ?? presentation.collectionLabel"
-      :description="`Customers see ${presentation.itemLabelPlural.toLowerCase()} in this order.`"
+      :title="collection?.name ?? 'Section'"
+      description="Guests see items in this order."
       :items="listItems"
       :error="loadError"
-      :empty-title="`No ${presentation.itemLabelPlural.toLowerCase()} here yet`"
+      empty-title="No items in this section yet"
       empty-icon="i-lucide-utensils"
-      :add-label="`Add a ${presentation.itemLabel.toLowerCase()}`"
+      add-label="Add item"
       reorderable
       selectable
       @add="openNew"
@@ -18,6 +18,8 @@
     >
       <template #selection-actions>
         <UButton label="Move" color="neutral" variant="soft" data-testid="product-move-open" @click="moveDialogOpen = true" />
+        <!-- Removing from this section changes this section only: the item stays in the catalog, at its locations and in every other section. -->
+        <UButton label="Remove from section" color="neutral" variant="soft" :loading="removing" data-testid="product-remove-from-section" @click="removeSelected" />
       </template>
 
       <template #item="{ item }">
@@ -37,7 +39,7 @@
          category items belong to, never their order inside one. -->
     <DashboardListItemDialog
       v-model:open="moveDialogOpen"
-      :title="`Move ${selected.length === 1 ? presentation.itemLabel.toLowerCase() : `${selected.length} ${presentation.itemLabelPlural.toLowerCase()}`}`"
+      :title="selected.length === 1 ? 'Move item' : `Move ${selected.length} items`"
       :removable="false"
       :saving="moving"
       :save-disabled="!moveTargetId"
@@ -45,7 +47,7 @@
       :error="moveError"
       @save="moveSelected"
     >
-      <UFormField :label="`Choose a ${presentation.collectionGroupLabel.toLowerCase()}`">
+      <UFormField label="Choose a section">
         <div class="space-y-2">
           <label
             v-for="option in moveTargets"
@@ -57,7 +59,7 @@
             <span class="text-sm text-highlighted">{{ option.name }}</span>
           </label>
           <p v-if="!moveTargets.length" class="text-sm text-muted">
-            There is nowhere else to move these yet. Add another {{ presentation.collectionGroupLabel.toLowerCase() }} first.
+            There is nowhere else to move these yet. Add another section first.
           </p>
         </div>
       </UFormField>
@@ -67,25 +69,18 @@
 </template>
 
 <script setup lang="ts">
-// One collection's products. Rendered by `products/collections/[collectionId].vue`, which owns the frame.
+// One menu section's items. Rendered by `products/menu/[collectionId].vue`, which owns the frame.
 import DashboardListEditor from '~/components/dashboard/DashboardListEditor.vue'
 import DashboardMediaThumb from '~/components/dashboard/DashboardMediaThumb.vue'
 import DashboardListItemDialog from '~/components/dashboard/DashboardListItemDialog.vue'
 import type { Product } from '~/server/types/products'
 import { getErrorMessage } from '~/utils/errors'
-import { requireProductPresentation } from '~/utils/product-presentation'
 
 
 const route = useRoute()
 const router = useRouter()
 const dashboardApi = useDashboardApi()
 const organizationId = await useDashboardOrganizationId()
-const dashboard = useDashboardOrganization()
-
-const vertical = dashboard.organization.value?.vertical
-if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Organization vertical is not configured' })
-// The organization's own words: a restaurant's Section of dishes, everyone else's Collection.
-const presentation = requireProductPresentation(vertical, dashboard.organization.value?.theme_id)
 const collectionId = computed(() => String(route.params.collectionId ?? route.params.categoryId ?? ''))
 const locationId = useLocationScope()
 
@@ -120,7 +115,7 @@ const orderError = ref<string | null>(null)
 const moveError = ref<string | null>(null)
 
 const collection = computed(() => collections.value.find(row => row.id === collectionId.value) ?? null)
-const loadError = computed(() => (catalog.error.value ? getErrorMessage(catalog.error.value, `Failed to load ${presentation.itemLabelPlural.toLowerCase()}`) : null))
+const loadError = computed(() => (catalog.error.value ? getErrorMessage(catalog.error.value, 'Failed to load items') : null))
 // A product's one editor is in Catalog: a collection is a way into it, never
 // its parent, so the row opens the same record Catalog does, in this scope.
 const catalogPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/products`)
@@ -129,7 +124,7 @@ const listItems = computed(() => products.value.map(row => ({ id: row.id, title:
 // Another collection in the same scope: the site-wide ones, or this one's location's.
 const moveTargets = computed(() => collections.value.filter(row => row.id !== collectionId.value && row.location_id === collection.value?.location_id))
 
-useSeoMeta({ title: () => `${collection.value?.name ?? presentation.collectionLabel} | Krabiclaw Dashboard`, robots: 'noindex, nofollow' })
+useSeoMeta({ title: () => `${collection.value?.name ?? 'Section'} | Krabiclaw Dashboard`, robots: 'noindex, nofollow' })
 
 const { locations } = await useOrganizationLocations()
 const { priceLabel } = useCatalogPrice(locationId, locations)
@@ -140,7 +135,7 @@ const load = catalog.refresh
 // would be an unhandled rejection rather than the 404 screen, so it is shown.
 watchEffect(() => {
   if (!catalog.pending.value && catalog.collections.value.length && !collection.value) {
-    showError(createError({ statusCode: 404, statusMessage: `${presentation.collectionGroupLabel} not found` }))
+    showError(createError({ statusCode: 404, statusMessage: 'Section not found' }))
   }
 })
 
@@ -233,16 +228,39 @@ async function moveSelected() {
     editing.value = false
     await load()
   } catch (error) {
-    moveError.value = getErrorMessage(error, `Failed to move ${presentation.itemLabelPlural.toLowerCase()}`)
+    moveError.value = getErrorMessage(error, 'Failed to move items')
   } finally {
     moving.value = false
   }
 }
 
+const removing = ref(false)
+
+/** Takes the selected items out of this section; the section's remaining order is sent whole. */
+async function removeSelected() {
+  if (!selected.value.length) return
+  removing.value = true
+  orderError.value = null
+  try {
+    const committed = await commitOrder()
+    if (!committed) return
+    await dashboardApi(`/api/editor/organizations/${organizationId}/collections/${collectionId.value}/products`, {
+      method: 'PUT', body: { product_ids: committed.filter(productId => !selected.value.includes(productId)) }, validate: isRecord,
+    })
+    selected.value = []
+    editing.value = false
+    await load()
+  } catch (error) {
+    orderError.value = getErrorMessage(error, 'Failed to remove items from this section')
+  } finally {
+    removing.value = false
+  }
+}
+
 
 /**
- * Adding opens Catalog's own create walk, the same screen every product is
- * created on, naming this collection so the new product joins it.
+ * Adding opens Catalog's own create walk, the same screen every offering is
+ * created on, naming this section so the new item joins it.
  */
 function openNew() {
   void navigateTo(scoped(`${catalogPath.value}/new/kind`, { collection_id: collectionId.value }))

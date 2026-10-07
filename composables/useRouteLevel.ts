@@ -1,5 +1,4 @@
 import { matchedRouteKey } from 'vue-router'
-import { dashboardOrganizationParentKey } from '~/lib/components/workspace/dashboard/dashboardScopeHeaderContext'
 
 /**
  * Which level of the route tree the caller is, what is open below it, and
@@ -16,11 +15,11 @@ import { dashboardOrganizationParentKey } from '~/lib/components/workspace/dashb
  * A directory's `index.vue` is a second record at the same URL — `/links/items`
  * matches both `items` and `items/index` — and it is one level, not two.
  *
- * `meta.back` exists only for a workspace root that leaves for another root
- * which is not a pane beside it — Account settings returning to Menu, a
- * location editor returning to Locations. A level with a matched parent that
- * declares one would give Back and the pane layout two different parents, so
- * it is refused.
+ * `meta.back` is a destination root's exit — Website to Menu, Payments to
+ * Earnings, Account settings to the account's Menu. A level with a matched
+ * parent that declares one would give Back and the pane layout two different
+ * parents, so it is refused. Which tab is lit is a separate declaration,
+ * `meta.tab`, read by the layout; it never follows an exit.
  *
  * Back is a push to the parent, never `history.back()`. Measured on a live
  * Airbnb host account on 2026-09-21: their in-app Back went to
@@ -71,8 +70,6 @@ export function useRouteLevel() {
   // still named this one — the level found itself nowhere, yielded, and its
   // pane vanished while its open child stayed on screen.
   const ownRecord = inject(matchedRouteKey, null)?.value ?? null
-  // The layout's answer to "which organization" for a route that carries none, such as Account settings.
-  const organizationParent = inject(dashboardOrganizationParentKey, null)
 
   const levels = computed(() => levelsOf(route.matched))
 
@@ -142,9 +139,8 @@ export function useRouteLevel() {
     const target = router.getRoutes().find(candidate => candidate.name === name)
     if (!target) throw new Error(`Route "${name}" named in meta.back does not exist`)
     const keys = [...target.path.matchAll(/:(\w+)/g)].map(match => match[1]!)
-    // Account settings names Menu as its parent but carries no organization in
-    // its URL; the layout knows which organization the session is in.
-    if (keys.some(key => route.params[key] === undefined)) return organizationParent?.value?.to ?? null
+    const missing = keys.find(key => route.params[key] === undefined)
+    if (missing) throw new Error(`Route "${name}" named in meta.back needs the "${missing}" param, which "${route.path}" does not carry`)
     return routeRecordPath(router, target, route.params)
   }
 

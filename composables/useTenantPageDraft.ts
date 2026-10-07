@@ -88,19 +88,17 @@ export interface TenantPageRow {
 }
 
 /**
- * The rows the Pages list shows, in its order. Every page document is here
- * except one that belongs to a product, which is that product's Page content
- * in Catalog — the relationship the server returns says so, never its path or
- * recipe. The links page leads: it is the page a tenant shares most, it opens
- * its own editor, and it is listed before its row exists because that editor
- * creates the row on the first save. Then the front page, then the rest.
+ * The rows the Pages list shows, in its order: every page document, including
+ * a page a product owns — Pages is where every page is edited. The links page
+ * leads: it is the page a tenant shares most, it opens its own editor, and it
+ * is listed before its row exists because that editor creates the row on the
+ * first save. Then the front page, then the rest.
  */
 export function tenantPageRows(pages: readonly TenantPageListRow[]): TenantPageRow[] {
-  const editable = pages.filter(page => !page.product_id)
-  const links = editable.find(page => page.recipe === 'links')
+  const links = pages.find(page => page.recipe === 'links')
   return [
     { id: links?.id ?? 'links', recipe: 'links', title: 'Links page', summary: '/links', removable: false, updatedAt: links?.updated_at ?? '' },
-    ...editable
+    ...pages
       .filter(page => page.recipe !== 'links')
       .sort((left, right) => Number(right.path === '/') - Number(left.path === '/'))
       .map(page => ({

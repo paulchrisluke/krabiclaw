@@ -33,13 +33,13 @@ export function useDashboardMenu() {
   const organizationsState = authClient.useListOrganizations()
 
   /**
-   * The organization the shell is in. A dashboard route that names an
-   * organization is that organization's — the server authorized it for this
-   * request. Every other route — Account settings, Your availability — is in
-   * Better Auth's active organization: reading the scope off the route name
-   * flipped an owner inside an organization to Personal the moment they opened
-   * one. Personal is a route with no organization and a session with no active
-   * organization, which "Switch to Personal" sets.
+   * Two answers, kept apart. The tabs are the destination's: a route under an
+   * organization has that organization's tabs and Menu, and the account's own
+   * destinations — Account settings, Past activity, its Menu — have the
+   * account's, so they light the account's Menu and exit to it. The
+   * organization a page acts in is Better Auth's: the route's, otherwise the
+   * session's active organization, which Your availability opens and switching
+   * changes. Opening Account settings never changes the active organization.
    */
   const dashboard = useDashboardOrganization()
   const activeOrganizationId = computed(() => (session.value.data?.session as { activeOrganizationId?: string | null } | undefined)?.activeOrganizationId ?? null)
@@ -48,15 +48,15 @@ export function useDashboardMenu() {
     if (routed) return { id: routed.id, slug: routed.slug, name: routed.name }
     return unref(organizationsState).data?.find(candidate => candidate.id === activeOrganizationId.value) ?? null
   })
-  const personal = computed(() => !dashboard.organization.value && !activeOrganizationId.value)
+  const personal = computed(() => !dashboard.organization.value)
   const organizationSettings = useOrganizationSettingsNavigation(organization)
 
   const orgBase = computed(() => organization.value ? `/dashboard/${encodeURIComponent(organization.value.slug)}` : null)
 
-  /** The Menu tab is the organization's settings level; its rows are the leaves beneath it. */
-  const menuPageTo = computed(() => orgBase.value ? `${orgBase.value}/settings` : '/dashboard/account/menu')
+  /** The Menu tab: the organization's launcher, or the account's. */
+  const menuPageTo = computed(() => orgBase.value ? `${orgBase.value}/menu` : '/dashboard/account/menu')
 
-  const notificationsTo = computed(() => orgBase.value ? `${orgBase.value}/settings/notifications` : null)
+  const notificationsTo = computed(() => orgBase.value ? `${orgBase.value}/notifications` : null)
 
   /** Ends the session and returns here after the next sign-in. */
   async function logOut() {

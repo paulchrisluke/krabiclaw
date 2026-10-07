@@ -72,7 +72,7 @@ import { normalizeVertical, type OrganizationVertical } from '~/utils/vertical-c
 
 // Adding a location is a tile's worth of work reached from Locations, which is
 // where Back goes.
-definePageMeta({ layout: 'dashboard', back: 'dashboard-orgSlug-settings-locations' })
+definePageMeta({ layout: 'dashboard' })
 
 const route = useRoute()
 const config = useRuntimeConfig()

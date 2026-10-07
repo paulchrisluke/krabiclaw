@@ -73,7 +73,7 @@ const tiles = computed<OrganizationLocationSelectorItem[]>(() => locations.value
     imageUrl: location.picture_url,
     eyebrow: '',
     summary: lines.length ? lines.join(', ') : 'Address not set',
-    to: `/dashboard/${orgSlug.value}/settings/locations/${location.slug}`,
+    to: `/dashboard/${orgSlug.value}/locations/${location.slug}`,
   }
 }))
 

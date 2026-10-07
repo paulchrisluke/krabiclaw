@@ -349,7 +349,7 @@
           color="neutral"
           variant="soft"
           :description="instagram.message"
-          :actions="[{ label: 'Instagram settings', to: `/dashboard/${scope?.orgSlug}/settings/integrations/instagram` }]"
+          :actions="[{ label: 'Instagram settings', to: `/dashboard/${scope?.orgSlug}/integrations/instagram` }]"
         />
         <template v-else-if="instagram && instagram.status === 'connected'">
           <p class="text-sm text-muted">@{{ instagram.username }} · {{ formatDate(instagram.period.startDate) }} – {{ formatDate(instagram.period.endDate) }} · Instagram can take up to 48 hours to report recent activity.</p>
@@ -393,7 +393,7 @@ import ActivityFeed from '~/components/dashboard/ActivityFeed.vue'
 import AnalyticsTrendChart from '~/components/dashboard/AnalyticsTrendChart.vue'
 import { CONVERSION_EVENT_CATALOG, ORGANIZATION_CONVERSION_EVENT_NAMES } from '~/utils/organization-conversion-events'
 const dashboardApi = useDashboardApi()
-definePageMeta({ layout: 'dashboard' })
+definePageMeta({ layout: 'dashboard', tab: 'menu', back: 'dashboard-orgSlug-menu' })
 
 import DashboardAnalyticsRow from '~/lib/components/workspace/dashboard/AnalyticsRow.vue'
 import { localDateAt, addLocalDays, formatCalendarDate } from '~/utils/timezone'

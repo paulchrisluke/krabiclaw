@@ -57,14 +57,14 @@ export const integrationsKey = Symbol('integrations') as InjectionKey<{
 <script setup lang="ts">
 import EditorNavigationList, { type EditorNavigationItem } from '~/components/dashboard/EditorNavigationList.vue'
 
-definePageMeta({ layout: 'dashboard' })
+definePageMeta({ layout: 'dashboard', tab: 'menu', back: 'dashboard-orgSlug-menu' })
 useSeoMeta({ title: 'Integrations | Krabiclaw Dashboard', robots: 'noindex, nofollow' })
 
 const route = useRoute()
 const level = useRouteLevel()
 const dashboardApi = useDashboardApi()
 const organizationId = await useDashboardOrganizationId()
-const base = computed(() => `/dashboard/${String(route.params.orgSlug)}/settings/integrations`)
+const base = computed(() => `/dashboard/${String(route.params.orgSlug)}/integrations`)
 
 const isSummaryResponse = (value: unknown): value is { settings: { integrations: IntegrationsSummary } } =>
   isRecord(value) && isRecord(value.settings) && isRecord(value.settings.integrations)

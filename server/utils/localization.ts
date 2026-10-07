@@ -137,7 +137,7 @@ export async function listOrganizationLocaleRecords(
 
 function billingUrl(organizationSlug: string | null): string | null {
   if (!organizationSlug) return null
-  return `/dashboard/${encodeURIComponent(organizationSlug)}/settings/website/localization`
+  return `/dashboard/${encodeURIComponent(organizationSlug)}/website/localization`
 }
 
 export async function assertOrganizationLanguageEntitlement(

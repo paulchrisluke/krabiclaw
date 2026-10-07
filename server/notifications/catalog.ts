@@ -224,7 +224,7 @@ export const NOTIFICATION_CATALOG: CatalogEntry[] = [
     message: domainUpdateMessage({
       headline: 'emberslice.com is live', message: 'Your custom domain is verified and serving traffic.',
       domain: 'emberslice.com', status: 'active',
-      dashboardUrl: 'https://demo.krabiclaw.com/dashboard/ember-slice/settings/website/domains',
+      dashboardUrl: 'https://demo.krabiclaw.com/dashboard/ember-slice/website/domains',
     }),
   },
 
@@ -235,7 +235,7 @@ export const NOTIFICATION_CATALOG: CatalogEntry[] = [
     message: onboardingCompletedMessage({
       organizationName: studio, ownerName: 'Priya Shah', ownerEmail: 'priya@example.com',
       siteUrl: 'https://pottery-house.krabiclaw.com/',
-      viewCustomerUrl: 'https://krabiclaw.com/dashboard/krabiclaw/settings/people?user=preview-user&organization=preview-organization',
+      viewCustomerUrl: 'https://krabiclaw.com/dashboard/krabiclaw/platform-accounts?user=preview-user&organization=preview-organization',
     }),
   },
 

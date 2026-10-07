@@ -65,7 +65,7 @@ const level = useRouteLevel()
 const organizationId = await useDashboardOrganizationId()
 
 const reviewId = computed(() => String(route.params.reviewId ?? ''))
-const recordPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/settings/website/qa/reviews/${reviewId.value}`)
+const recordPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/website/qa/reviews/${reviewId.value}`)
 // The list this review is a row of, so a moderated review reads the same in both.
 const listKey = computed(() => locationScope.value
   ? `dashboard-location-reviews-${organizationId}-${locationScope.value}`

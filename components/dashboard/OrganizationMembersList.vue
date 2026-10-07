@@ -161,7 +161,7 @@ function memberAvailabilityPath(member: MemberRow) {
   if (!organization) throw createError({ statusCode: 503, statusMessage: 'Dashboard context not loaded' })
   return member.userId === currentUser.value?.id
     ? `/dashboard/account/profile/calendar/${encodeURIComponent(organization.id)}`
-    : `/dashboard/${encodeURIComponent(organization.slug)}/settings/members/${encodeURIComponent(member.id)}`
+    : `/dashboard/${encodeURIComponent(organization.slug)}/team/${encodeURIComponent(member.id)}`
 }
 
 const BASE_ROLE_OPTIONS = [

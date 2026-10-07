@@ -186,8 +186,8 @@ export async function getOrganizationLocalizationProgress(
     // declared — not a list maintained here.
     { id: 'catalog', label: 'Catalog', result: progress(catalog, ['name', 'description', 'marketing_features', 'unit_label', 'details']), path: (row: LocalizableRow) => productEditorPath(slug, row.id) },
     // A collection translates on its Name, which is where its words are edited.
-    { id: 'collections', label: 'Collections', result: progress(collections, ['name', 'description']), path: (row: LocalizableRow) => `${collectionEditorPath(slug, row.id)}/name` },
-    { id: 'pages', label: 'Pages', result: progress(pages, ['title', 'summary', 'content']), path: (row: LocalizableRow) => pageEditorPath(slug, { id: row.id, product_id: row.product_id ?? null }) },
+    { id: 'collections', label: 'Menu sections', result: progress(collections, ['name', 'description']), path: (row: LocalizableRow) => `${collectionEditorPath(slug, row.id)}/name` },
+    { id: 'pages', label: 'Pages', result: progress(pages, ['title', 'summary', 'content']), path: (row: LocalizableRow) => pageEditorPath(slug, { id: row.id }) },
     { id: 'posts', label: 'Posts', result: progress(posts, ['summary', 'metadata.event.title', 'metadata.offer.terms_conditions']), path: (row: LocalizableRow) => postEditorPath(slug, row.id) },
     { id: 'blog', label: 'Blog', result: progress(blog, ['title', 'summary']), path: (row: LocalizableRow) => blogEditorPath(slug, row.id) },
     { id: 'article-categories', label: 'Article categories', result: progress(categories, ['name', 'description']), path: (row: LocalizableRow) => articleCategoryEditorPath(slug, row.id) },
