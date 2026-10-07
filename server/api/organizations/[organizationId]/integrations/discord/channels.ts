@@ -6,11 +6,15 @@ import { hasOrganizationEntitlement } from '~/server/utils/billing'
 import { DiscordError, listConnectableGuilds, listMessageChannels, readMessageChannel } from '~/server/utils/discord-bot'
 import { integrationSummary, readIntegration, storeIntegration } from '~/server/utils/organization-integrations'
 import { requireOrganizationAccess } from '~/server/utils/location-access'
-import { INTEGRATION_SCOPES } from '~/shared/organization-settings'
 
 // GET lists the channels to choose from; POST connects the chosen one. One
 // route file: the dashboard's typed $fetch is at TypeScript's depth limit
 // for the number of API routes, so Discord adds none beyond its paths.
+// Discord records the scopes it grants the account's token; `bot` is not one of
+// them (it adds the bot to a server), so only `guilds` is checked here, and the
+// bot's presence is read from Discord by listConnectableGuilds.
+const GRANTED_SCOPES = ['guilds']
+
 export default defineHandler((event) => {
   if (event.req.method === 'GET') return list(event)
   if (event.req.method === 'POST') return select(event)
@@ -36,7 +40,7 @@ async function list(event: H3Event) {
   if (!accountId) return jsonResponse({ success: true, account_id: null, connection: summary, choices: [], error: null })
 
   await requireIntegrationAccount(env, accountId, {
-    userId: session.user.id, currentAccountId: connection?.account_id, providerId: 'discord', scopes: INTEGRATION_SCOPES.discord,
+    userId: session.user.id, currentAccountId: connection?.account_id, providerId: 'discord', scopes: GRANTED_SCOPES,
   })
   try {
     const guilds = await listConnectableGuilds(env, (await linkedAccountAccessToken(env, accountId)).accessToken)
@@ -75,7 +79,7 @@ async function select(event: H3Event) {
   const current = await readIntegration(env.DB, organization.id, 'discord')
   if (current) return jsonResponse({ error: 'Disconnect Discord before connecting again.' }, { status: 409 })
   await requireIntegrationAccount(env, accountId, {
-    userId: session.user.id, currentAccountId: null, providerId: 'discord', scopes: INTEGRATION_SCOPES.discord,
+    userId: session.user.id, currentAccountId: null, providerId: 'discord', scopes: GRANTED_SCOPES,
   })
 
   const channel = await readMessageChannel(env, channelId)
