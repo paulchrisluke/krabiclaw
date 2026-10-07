@@ -1,14 +1,6 @@
 <template>
-  <!-- The three capability cards under the plugin header. -->
-  <div v-if="variant === 'capabilities'" class="mt-16 grid gap-6 md:grid-cols-3" data-parity-section="capabilities">
-    <div v-for="item in items" :key="item.title" class="rounded-2xl border border-default bg-elevated p-6">
-      <h2 class="text-lg font-bold">{{ item.title }}</h2>
-      <p class="mt-3 text-sm leading-relaxed text-muted">{{ item.description }}</p>
-    </div>
-  </div>
-
   <!-- The numbered connection steps, the MCP URL with its copy button inside step two. -->
-  <section v-else-if="variant === 'steps'" class="mx-auto mt-20 max-w-4xl border-t border-default px-4 pt-14 sm:px-6" data-parity-section="connect">
+  <section class="mx-auto mt-20 max-w-4xl border-t border-default px-4 pt-14 sm:px-6" data-parity-section="connect">
     <h2 class="text-3xl font-extrabold text-default">{{ title }}</h2>
     <p v-if="description" class="mt-3 text-muted">{{ description }}</p>
 
@@ -29,11 +21,6 @@
     <slot />
   </section>
 
-  <!-- A callout card: the safe first request. -->
-  <div v-else class="mt-10 rounded-2xl border border-default bg-elevated p-6" data-parity-section="first-request">
-    <h3 class="font-bold text-default">{{ title }}</h3>
-    <TenantPageMarkdown :content="body" class="mt-2 text-sm text-muted [&>p+p]:mt-4" />
-  </div>
 </template>
 
 <script setup lang="ts">
@@ -49,16 +36,9 @@ const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
 
 const title = computed(() => blockTextOrNull(props.block.data.title))
 const description = computed(() => blockTextOrNull(props.block.data.description))
-const body = computed(() => blockTextOrNull(props.block.data.body))
-const items = computed(() => blockRecords(props.block.data.items)
-  .map(item => ({ title: blockText(item.title), description: blockText(item.description) }))
-  .filter(item => item.title))
 const steps = computed(() => blockRecords(props.block.data.steps)
   .map(step => ({ name: blockText(step.name), text: blockText(step.text) }))
   .filter(step => step.name))
-/** This block is the connection walkthrough; the other looks it had are their own types now. */
-const variant = computed<'capabilities' | 'steps' | 'callout'>(() => 'steps')
-
 const STEP_TILES = ['bg-(--kc-navy)', 'bg-(--kc-teal)', 'bg-(--kc-coral)'] as const
 
 function stepUrl(step: { text: string }): string | null {

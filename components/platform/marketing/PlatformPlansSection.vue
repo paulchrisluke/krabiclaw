@@ -58,7 +58,7 @@ const variant = computed<'home' | 'pricing'>(() => (props.page.path === '/pricin
 
 const { plans, monthlyPrice } = await usePlans()
 const config = useRuntimeConfig()
-const pageUrl = resolveSeoUrl('/pricing', config.public.platformUrl)
+const pageUrl = resolveSeoUrl('/pricing', config.public.siteUrl)
 
 function offerFor(plan: Plan) {
   const description = plan.tagline

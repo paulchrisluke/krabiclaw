@@ -105,7 +105,7 @@ export function useContentPageSchema(input: MaybeRefOrGetter<ContentPageSchemaIn
 
     // A tenant's article belongs to the tenant's own site; only a platform
     // page is Krabiclaw's.
-    const origin = isPlatform ? config.public.platformUrl : requestURL.origin
+    const origin = isPlatform ? config.public.siteUrl : requestURL.origin
     const pageUrl = normalizeAbsoluteUrl(value.url, origin)
     const organizationRoot = normalizeAbsoluteUrl('/', origin).replace(/\/$/, '')
     const websiteId = `${organizationRoot}/#website`

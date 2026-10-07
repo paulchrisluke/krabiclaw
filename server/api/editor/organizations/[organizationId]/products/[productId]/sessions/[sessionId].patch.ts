@@ -22,9 +22,10 @@ export default defineHandler(async (event) => {
     const { db, session: auth, organization } = await requireOrganizationAccess(event, organizationId)
     // A product id in the path is not authorized by the site in the path.
     await requireOrganizationProduct(db, { organizationId: organization.id, productId })
-    const body = await readStrictBody<{ starts_at?: unknown; ends_at?: unknown; capacity?: unknown; status?: unknown }>(event, {
-      starts_at: 'unknown', ends_at: 'unknown', capacity: 'unknown', status: 'unknown',
+    const body = await readStrictBody<{ starts_at?: unknown; ends_at?: unknown; capacity?: unknown; status?: unknown; expected_updated_at: string }>(event, {
+      starts_at: 'unknown', ends_at: 'unknown', capacity: 'unknown', status: 'unknown', expected_updated_at: 'string',
     })
+    if (!body.expected_updated_at || (body.starts_at !== undefined && typeof body.starts_at !== 'string') || (body.ends_at !== undefined && typeof body.ends_at !== 'string')) return jsonResponse({ error: 'Current updated_at and valid time strings are required' }, { status: 400 })
     if (body.status !== undefined && !(PRODUCT_SESSION_STATUSES as readonly unknown[]).includes(body.status)) {
       return jsonResponse({ error: `status must be one of: ${PRODUCT_SESSION_STATUSES.join(', ')}` }, { status: 400 })
     }
@@ -34,14 +35,15 @@ export default defineHandler(async (event) => {
       && (!Number.isSafeInteger(body.capacity) || (body.capacity as number) < 0)) {
       return jsonResponse({ error: 'capacity must be a non-negative integer or null' }, { status: 400 })
     }
-    await updateSession(db, {
-      organizationId: organization.id, sessionId, actorId: auth.user.id,
+    const session = await updateSession(db, {
+      organizationId: organization.id, productId, sessionId, actorId: auth.user.id,
+      expectedUpdatedAt: body.expected_updated_at,
       startsAt: typeof body.starts_at === 'string' ? body.starts_at : undefined,
       endsAt: typeof body.ends_at === 'string' ? body.ends_at : undefined,
       capacity: body.capacity === undefined ? undefined : (body.capacity as number | null),
       status: body.status as ProductSessionStatus | undefined,
     })
-    return jsonResponse({ success: true, session_id: sessionId })
+    return jsonResponse({ success: true, session })
   } catch (error) {
     rethrowHttpError(error)
     console.error('session_update_failed', { organizationId, sessionId, error: error instanceof Error ? error.message : String(error) })

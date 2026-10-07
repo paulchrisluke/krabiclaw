@@ -1,3 +1,5 @@
+import { getPersistedSourceLocale } from '~/server/utils/localization'
+import { platformLocale } from '~/shared/platform-locales'
 // Seed only structural records for a newly created organization. Customer-facing
 // copy must be supplied by the owner or an approved import.
 // All records use source='template' so ChowBot can identify and reference them.
@@ -22,6 +24,14 @@ export async function seedNewOrganization(
   if (!db) throw new Error("Database not configured");
 
   const { env, organizationId, name, vertical } = params;
+  const source = await getPersistedSourceLocale(db, organizationId)
+  const catalog = platformLocale(source.locale)
+  if (!catalog) throw new Error('Website language catalog is unavailable')
+  const pageTitle = (key: string) => {
+    const title = catalog.messages[`site_pages.${key}`]
+    if (!title) throw new Error(`Website page label ${key} is unavailable`)
+    return title
+  }
 
   // Reuse existing location on resume (provisioning may have failed mid-seed)
   const existing = await queryFirst<{ id: string }>(
@@ -51,9 +61,9 @@ export async function seedNewOrganization(
   // identifier, and using it as the title is what wrote 'about' and 'contact'
   // into the title column and rendered them as h1s.
   const templatePages = new Map<string, { path: string; title: string; pageType: 'system' | 'recipe' | 'legal'; recipe: string }>([
-    ['home', { path: '/', title: 'Home', pageType: 'system', recipe: 'home' }],
-    ['about', { path: '/about', title: 'About', pageType: 'system', recipe: 'about' }],
-    ['contact', { path: '/contact', title: 'Contact', pageType: 'system', recipe: 'contact' }],
+    ['home', { path: '/', title: pageTitle('home'), pageType: 'system', recipe: 'home' }],
+    ['about', { path: '/about', title: pageTitle('about'), pageType: 'system', recipe: 'about' }],
+    ['contact', { path: '/contact', title: pageTitle('contact'), pageType: 'system', recipe: 'contact' }],
     // There is no '/locations/main' page. A location detail route renders the
     // business_locations row and its datasets: usePublicPageRequest gives it the
     // page key 'location', canonicalTenantPagePath() has no entry for that, and
@@ -62,13 +72,13 @@ export async function seedNewOrganization(
   ]);
   if (vertical === 'service') {
     for (const [page, path, title, pageType] of [
-      ['services', '/services', 'Services', 'system'],
-      ['pricing', '/pricing', 'Pricing', 'system'],
-      ['donate', '/donate', 'Donate', 'system'],
-      ['schedule', '/schedule', 'Schedule', 'system'],
-      ['privacy', '/policies/privacy', 'Privacy Policy', 'legal'],
-      ['terms', '/policies/terms', 'Terms of Service', 'legal'],
-      ['third-party-notices', '/third-party-notices', 'Third-Party Notices', 'legal'],
+      ['services', '/services', pageTitle('services'), 'system'],
+      ['pricing', '/pricing', pageTitle('pricing'), 'system'],
+      ['donate', '/donate', pageTitle('donate'), 'system'],
+      ['schedule', '/schedule', pageTitle('schedule'), 'system'],
+      ['privacy', '/policies/privacy', pageTitle('privacy'), 'legal'],
+      ['terms', '/policies/terms', pageTitle('terms'), 'legal'],
+      ['third-party-notices', '/third-party-notices', pageTitle('third_party_notices'), 'legal'],
     ] as const) templatePages.set(page, { path, title, pageType, recipe: page });
   }
   const pagesToCreate: Array<{
@@ -92,8 +102,6 @@ export async function seedNewOrganization(
         // collects, so it starts empty. Every other page's heading is the page's
         // own name and is known here — leaving it null made those pages depend
         // on a reader falling through to the document title.
-        // `section` is not copy: it says which hero slot on the page this block
-        // fills, and the Blawby template resolves its home hero by it.
         data: {
           title: definition.path === '/' ? null : definition.title,
           subtitle: null,
@@ -103,7 +111,7 @@ export async function seedNewOrganization(
     pagesToCreate.push({
       trustedSystemPage: definition.pageType === 'system',
       data: {
-        locale: 'en', path: definition.path, title: definition.title,
+        locale: source.locale, path: definition.path, title: definition.title,
         pageType: definition.pageType, recipe: definition.recipe, blocks,
       },
     })
@@ -125,7 +133,7 @@ export async function seedNewOrganization(
     const { initializePublicConsultationSettings } = await import('~/server/utils/professional-services')
     await initializePublicConsultationSettings(db, organizationId, {
       mode: 'native_disabled',
-      cta_label: getVerticalCopy(vertical).reservationRequestButton,
+      cta_label: getVerticalCopy(vertical, source.locale).reservationRequestButton,
       external_url: null,
       schedule_path: '/schedule',
       confirmation_path: '/contact/confirmed',

@@ -18,7 +18,6 @@ export const ANALYTICS_TOOLS: McpToolDefinition[] = [
     description: "Read the selected site’s website overview when the user asks how the business is doing: traffic, attribution, conversion rates, booking values, verified purchase revenue, refunds and signup-cohort summaries. Dates are inclusive in the site’s timezone; the default is 30 days. Amounts are minor units per currency; booking quotes are not collected revenue. Cash amounts include tax, while value fields exclude it. Session conversion rates compare converting sessions with sessions in the same attribution group; signup counts and business counts use distinct populations.",
     domain: 'analytics',
     minimumRole: 'admin',
-    confirmRequired: false,
     inputSchema: {
       start_date: { type: 'string', description: 'Inclusive local start date in YYYY-MM-DD format. Defaults to 29 days before end_date.' },
       end_date: { type: 'string', description: 'Inclusive local end date in YYYY-MM-DD format. Defaults to today.' },
@@ -30,7 +29,6 @@ export const ANALYTICS_TOOLS: McpToolDefinition[] = [
     description: "Read filtered events, sessions, grouped breakdowns or daily summaries from the selected site’s analytics. Results and totals cover the matching population without sampling. Dates are inclusive in the site timezone, default to 30 days and span at most 365. Grouped amount metrics require currency; conversion metrics require outcome_event and reject outcome-only dimensions. Daily summaries are derived rows, not individual events. Coverage reports missing facts rather than treating them as zero. Continue with next_cursor using the same query; null means complete.",
     domain: 'analytics',
     minimumRole: 'admin',
-    confirmRequired: false,
     required: ['mode'],
     inputSchema: {
       mode: { type: 'string', enum: ['events', 'sessions', 'breakdown', 'daily_summaries'], description: 'events | sessions | breakdown | daily_summaries' },

@@ -37,6 +37,7 @@ export interface McpUserContext {
   isPlatformAdmin: boolean
   scopes: string[]
   oauthClientId?: string | null
+  sessionId?: string | null
   // Only populated for session-based auth (ChowBot/dashboard) — bearer-token
   // auth (e.g. ChatGPT connector) has no browser session to read this from.
   activeOrganizationId?: string
@@ -53,7 +54,6 @@ export interface McpOrganizationContext extends McpUserContext {
   // executors authorize from it rather than pairing role with an organization
   // id from elsewhere.
   membership: ResolvedMembership
-  sessionId?: string | null
 }
 
 interface McpAuthChallengeDetails {
@@ -105,6 +105,7 @@ export async function requireMcpUser(
     userId: session.user.id,
     isPlatformAdmin: await hasPlatformEventPermission(event, env, { platform: ['access'] }),
     scopes: normalizedOptions.requiredScopes ?? ['tenant'],
+    sessionId: session.session.id,
     activeOrganizationId: typeof sessionRecord.activeOrganizationId === 'string' ? sessionRecord.activeOrganizationId : undefined,
   }
   ensureForbiddenScopesAbsent(user.scopes, normalizedOptions.forbiddenScopes)
@@ -221,9 +222,24 @@ async function verifyBearerToken(
     db,
     userId,
     oauthClientId,
+    sessionId: typeof payload.sid === 'string' ? payload.sid : null,
     isPlatformAdmin,
     scopes,
   }
+}
+
+/** Organization administration uses the issuing Better Auth session and native organization API. */
+export async function requireMcpProviderSession(event: H3Event | undefined, user: McpUserContext): Promise<Headers> {
+  const auth = createAuth(user.env)
+  if (event && !event.req.headers.get('authorization')) return new Headers(event.req.headers)
+  if (!user.sessionId) throw new HTTPError({ statusCode: 401, statusMessage: 'Reconnect this account to manage organization members', data: { code: 'authentication_required' } })
+  const context = await auth.$context
+  const issuingSession = await context.adapter.findOne<{ id: string; token: string; userId: string }>({ model: 'session', where: [{ field: 'id', value: user.sessionId }] })
+  if (!issuingSession || issuingSession.userId !== user.userId) throw new HTTPError({ statusCode: 401, statusMessage: 'Reconnect this account to manage organization members', data: { code: 'authentication_required' } })
+  const headers = new Headers({ authorization: `Bearer ${issuingSession.token}` })
+  const session = await auth.api.getSession({ headers, query: { disableCookieCache: true } })
+  if (!session || session.user.id !== user.userId) throw new HTTPError({ statusCode: 401, statusMessage: 'Reconnect this account to manage organization members', data: { code: 'authentication_required' } })
+  return headers
 }
 
 async function getAuthJwks(event: H3Event, env: CloudflareEnv): Promise<JSONWebKeySet | undefined> {

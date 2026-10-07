@@ -60,7 +60,7 @@ export default defineHandler(async (event) => {
     // video does. It used to take a request-upload / direct-to-Cloudflare /
     // confirm round trip that left a pending row behind whenever a step failed.
     if (imagePart instanceof File) {
-      if (imagePart.size > MAX_IMAGE_BYTES) return jsonResponse({ error: 'File too large (max 20 MB)' }, { status: 413 })
+      if (imagePart.size > MAX_IMAGE_BYTES) return jsonResponse({ error: 'File too large (max 10 MB)' }, { status: 413 })
       const imageData = new Uint8Array(await imagePart.arrayBuffer())
       const imageContentType = sniffMediaMimeType(imageData)
       if (!RESOLVED_MEDIA_IMAGE_TYPES.has(imageContentType)) return jsonResponse({ error: 'Unsupported image file type' }, { status: 415 })

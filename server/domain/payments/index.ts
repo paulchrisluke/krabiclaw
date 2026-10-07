@@ -52,10 +52,10 @@ export async function readPaymentDetails(db:DbClient,organizationId:string,payme
  const [refunds,disputes,booking,order]=await Promise.all([
   queryAll<{id:string;amount:number;status:string}>(db,'SELECT * FROM payment_refunds WHERE payment_id=?',[payment.id]),
   queryAll(db,'SELECT * FROM payment_disputes WHERE payment_id=?',[payment.id]),
-  payment.subject_type==='booking'?queryFirst<{request_id:string|null}>(db,'SELECT request_id FROM bookings WHERE id=? AND organization_id=?',[payment.subject_id,organizationId]):Promise.resolve(null),
+  payment.subject_type==='booking'||payment.subject_type==='reservation'?queryFirst<{request_id:string|null}>(db,`SELECT request_id FROM ${payment.subject_type==='booking'?'bookings':'reservations'} WHERE id=? AND organization_id=?`,[payment.subject_id,organizationId]):Promise.resolve(null),
   readPaymentOrder(db,organizationId,payment.id),
  ])
- return {payment,refunds,disputes,booking_request_id:booking?.request_id??null,order}
+ return {payment,refunds,disputes,visit:booking?.request_id?{kind:payment.subject_type,request_id:booking.request_id}:null,order}
 }
 export type PaymentsEarningsType = 'paid' | 'refunded'
 export async function listPayments(db: DbClient, principal: FinancialPrincipal, input: { from: string; to: string; after?: string; limit?: number; location_id?: string; earnings_type?: PaymentsEarningsType }) {
@@ -94,7 +94,7 @@ export async function paymentSummary(db: DbClient, principal: FinancialPrincipal
 }
 
 /** Only an authenticated browser approval may approve this request. MCP receives a handoff. */
-export type RefundAuthorizationAction = 'refund' | 'reject_booking' | 'cancel_booking'
+export type RefundAuthorizationAction = 'refund' | 'reject_booking' | 'cancel_booking' | 'cancel_reservation'
 /** How long a business has to approve a refund it asked for. */
 export const AUTHORIZATION_WINDOW_SECONDS = 600
 export async function requestRefundAuthorization(db: DbClient, principal: FinancialPrincipal, paymentId: string, amount: number, action: RefundAuthorizationAction = 'refund', note?: string) {
@@ -109,9 +109,9 @@ export async function requestRefundAuthorization(db: DbClient, principal: Financ
 export async function approveRefundAuthorization(db: DbClient, principal: FinancialPrincipal, id: string) {
   await authorizePayments(principal, 'refund')
   const now = new Date().toISOString()
-  const result = await execute(db, `UPDATE payment_authorizations SET approved_at=COALESCE(approved_at,?) WHERE id=? AND organization_id=? AND user_id=? AND action IN ('refund','reject_booking','cancel_booking') AND expires_at>? AND consumed_at IS NULL`, [now,id,principal.organizationId,principal.userId,now])
+  const result = await execute(db, `UPDATE payment_authorizations SET approved_at=COALESCE(approved_at,?) WHERE id=? AND organization_id=? AND user_id=? AND action IN ('refund','reject_booking','cancel_booking','cancel_reservation') AND expires_at>? AND consumed_at IS NULL`, [now,id,principal.organizationId,principal.userId,now])
   if (result.meta.changes !== 1) {
-    const replay=await queryFirst(db,`SELECT a.id FROM payment_authorizations a WHERE a.id=? AND a.organization_id=? AND a.user_id=? AND a.approved_at IS NOT NULL AND a.consumed_at IS NOT NULL AND EXISTS(SELECT 1 FROM payment_refunds r JOIN payments p ON p.id=r.payment_id WHERE r.payment_id=a.payment_id AND (r.idempotency_key='approved:'||a.id OR (a.action='reject_booking' AND r.idempotency_key='rejected:'||p.subject_id) OR (a.action='cancel_booking' AND r.idempotency_key='cancelled:'||p.subject_id)))`,[id,principal.organizationId,principal.userId])
+    const replay=await queryFirst(db,`SELECT a.id FROM payment_authorizations a WHERE a.id=? AND a.organization_id=? AND a.user_id=? AND a.approved_at IS NOT NULL AND a.consumed_at IS NOT NULL AND EXISTS(SELECT 1 FROM payment_refunds r JOIN payments p ON p.id=r.payment_id WHERE r.payment_id=a.payment_id AND (r.idempotency_key='approved:'||a.id OR (a.action='reject_booking' AND r.idempotency_key='rejected:'||p.subject_id) OR (a.action='cancel_booking' AND r.idempotency_key='cancelled:'||p.subject_id) OR (a.action='cancel_reservation' AND r.idempotency_key='cancelled-reservation:'||p.subject_id)))`,[id,principal.organizationId,principal.userId])
     if(!replay)throw new HTTPError({statusCode:409,statusMessage:'Financial authorization expired or unavailable'})
   }
 }

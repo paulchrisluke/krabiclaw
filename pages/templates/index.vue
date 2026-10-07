@@ -105,7 +105,7 @@ definePageMeta({ layout: 'platform' })
 const templates = listPublishedTemplateMarketing()
 
 const config = useRuntimeConfig()
-const organizationUrl = config.public.platformUrl
+const organizationUrl = config.public.siteUrl
 
 // A page about the business: its image is the organization's.
 const organizationSocialImage = useTenantOrganization().organization?.social_image ?? null

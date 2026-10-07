@@ -1,33 +1,12 @@
-import type { Product, ProductSurface } from '~/server/types/products'
-import type { PublicProductBooking, PublicProductLocation, PublicProductReview, PublicProductSession } from '~/server/utils/public-products'
-import { isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
+import type { ProductSurface } from '~/server/types/products'
+import type { PublicProductDetailPayload } from '~/server/utils/public-products'
+import { isCurrencyCode } from '~/shared/currencies'
 import { isRecord, publicApiRequest } from '~/utils/api-clients'
-import type { ProductCollectionSibling } from '~/utils/product-seo'
 import { isPublicProduct, type PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
 
-export interface PublicProductDetailPayload {
-  product: Product
-  location: PublicProductLocation | null
-  currency: CurrencyCode
-  vertical: string
-  brandName: string
-  reviews: PublicProductReview[]
-  /** Non-null exactly when this Product takes bookings. */
-  booking: PublicProductBooking | null
-  /**
-   * The occurrences on sale at this branch, loaded with the page so they reach
-   * the server-rendered HTML. Empty is an answer — nothing scheduled — not an
-   * unfinished load.
-   */
-  sessions: PublicProductSession[]
-  /** The collection this page was reached through, and its other members. */
-  collectionName: string
-  collectionSiblings: ProductCollectionSibling[]
-  /** The tenant's attribute vocabulary, so the page can label its own facts. */
-  localeRepresentations: PublicLocaleRepresentation[]
-}
+export type { PublicProductDetailPayload } from '~/server/utils/public-products'
 
-function isPublicProductDetailPayload(value: unknown): value is PublicProductDetailPayload {
+export function isPublicProductDetailPayload(value: unknown): value is PublicProductDetailPayload {
   return isRecord(value)
     && isPublicProduct(value.product)
     && (value.location === null || (isRecord(value.location)
@@ -39,6 +18,9 @@ function isPublicProductDetailPayload(value: unknown): value is PublicProductDet
     && (value.location.maps_url === null || typeof value.location.maps_url === 'string')
     && (value.location.latitude === null || typeof value.location.latitude === 'number')
     && (value.location.longitude === null || typeof value.location.longitude === 'number')))
+    && (value.locations === undefined || (Array.isArray(value.locations) && value.locations.every(location => isRecord(location) && typeof location.id === 'string' && typeof location.slug === 'string' && typeof location.title === 'string')))
+    && (value.scopeRequired === undefined || typeof value.scopeRequired === 'boolean')
+    && (value.onlineAvailable === undefined || typeof value.onlineAvailable === 'boolean')
     && isCurrencyCode(value.currency)
     && typeof value.vertical === 'string'
     && typeof value.brandName === 'string'
@@ -93,62 +75,36 @@ export async function usePublicProductDetail(routeKind: ProductSurface) {
   const organizationWideExperience = routeKind === 'experiences' && productSlugParam === ''
   const locationSlug = organizationWideExperience ? '' : routeSlug
   const productSlug = organizationWideExperience ? routeSlug : productSlugParam
-  const locale = typeof route.params.locale === 'string' ? route.params.locale : 'en'
+  const scope = computed(() => typeof route.query.location_id === 'string' ? route.query.location_id : null)
+  const locale = typeof route.params.locale === 'string' ? route.params.locale : useState<string>('public-locale').value
   const localeRepresentations = useState<PublicLocaleRepresentation[]>('public-locale-representations', () => [])
   if (!organizationId || !productSlug || (!organizationWideExperience && !locationSlug)) throw createError({ statusCode: 404, statusMessage: 'Product not found' })
 
   const { data, error } = await useAsyncData<PublicProductDetailPayload | null>(
-    `public-product-${organizationId}-${locale}-${locationSlug}-${productSlug}`,
+    () => `public-product-${organizationId}-${locale}-${locationSlug}-${productSlug}-${scope.value ?? ''}`,
     async (_nuxtApp, { signal }) => {
       if (import.meta.server) {
         if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
-        const [{ cloudflareEnv }, { loadPublicExperienceDetail, loadPublicProductDetail, loadPublicProductReviews, loadPublicProductSessions }, { selectProductCollectionSiblings }] = await Promise.all([
+        const [{ cloudflareEnv }, { loadPublicExperienceDetail, loadPublicProductDetail, publicProductDetailPayload }] = await Promise.all([
           import('~/server/utils/api-response'),
           import('~/server/utils/public-products'),
-          import('~/utils/product-seo'),
         ])
         const env = cloudflareEnv(requestEvent)
         const db = env.DB
         if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
         const previewAuthorized = Boolean(requestEvent.context.previewAuthorized)
         const detail = organizationWideExperience
-          ? await loadPublicExperienceDetail(env, db, organizationId, previewAuthorized, productSlug, locale)
+          ? await loadPublicExperienceDetail(env, db, organizationId, previewAuthorized, productSlug, locale, scope.value)
           : await loadPublicProductDetail(env, db, organizationId, routeKind, previewAuthorized, locationSlug, productSlug, locale)
         if (!detail) return null
-        // The collection this product belongs to on this site, in the site's
-        // own order. Several means the first by that order — one documented
-        // rule, not a per-caller guess.
-        const membership = new Set(detail.product.collections.map(entry => entry.collection_id))
-        const siblingCollection = detail.collections.find(collection => membership.has(collection.id)) ?? null
-        return {
-          product: detail.product,
-          location: detail.location,
-          currency: detail.currency,
-          vertical: detail.organization.vertical,
-          brandName: detail.organization.name,
-          reviews: locale === 'en' ? await loadPublicProductReviews(db, detail) : [],
-          booking: detail.booking,
-          // The calendar travels with the page, so the dates are in the bytes
-          // a crawler reads rather than appearing only after hydration.
-          sessions: await loadPublicProductSessions(db, detail, env),
-          // Siblings come from the collection this product actually belongs
-          // to on this site. With none, there are no siblings to show — the
-          // page does not fall back to "everything at this location".
-          collectionName: siblingCollection?.name ?? '',
-          collectionSiblings: siblingCollection
-            ? selectProductCollectionSiblings(detail.products, detail.product, siblingCollection.id, {
-                currency: detail.currency, location_id: detail.location?.id ?? null, at: new Date().toISOString(),
-              })
-            : [],
-          localeRepresentations: detail.localeRepresentations,
-        }
+        return publicProductDetailPayload(db, env, detail)
       }
       const path = organizationWideExperience
         ? `/api/public/experiences/${encodeURIComponent(productSlug)}`
         : `/api/public/locations/${encodeURIComponent(locationSlug)}/products/${encodeURIComponent(productSlug)}`
-      return publicApiRequest(`${path}?locale=${encodeURIComponent(locale)}`, {
+      return publicApiRequest(`${path}?locale=${encodeURIComponent(locale)}${scope.value ? `&location_id=${encodeURIComponent(scope.value)}` : ''}`, {
         signal,
-        coalesceKey: `public-product-${organizationId}-${locale}-${locationSlug}-${productSlug}`,
+        coalesceKey: `public-product-${organizationId}-${locale}-${locationSlug}-${productSlug}-${scope.value ?? ''}`,
         validate: isPublicProductDetailPayload,
       })
     },
@@ -158,4 +114,33 @@ export async function usePublicProductDetail(routeKind: ProductSurface) {
   if (!data.value) throw createError({ statusCode: 404, statusMessage: 'Product not found' })
   localeRepresentations.value = data.value.localeRepresentations
   return { organizationId, detail: data as Ref<PublicProductDetailPayload> }
+}
+
+/** The same public offering behind a page's explicit product binding. */
+export async function usePublicPageProduct(pagePath: ComputedRef<string>, locale: ComputedRef<string>, productId: ComputedRef<string | null>) {
+  const route = useRoute()
+  const event = useRequestEvent()
+  const { organizationId } = useTenantOrganization()
+  const scope = computed(() => typeof route.query.location_id === 'string' ? route.query.location_id : null)
+  const { data, error } = await useAsyncData<PublicProductDetailPayload | null>(
+    () => `page-product:${organizationId}:${pagePath.value}:${locale.value}:${productId.value}:${scope.value ?? ''}`,
+    async (_nuxtApp, { signal }) => {
+      if (!productId.value) return null
+      if (import.meta.server) {
+        if (!event || !organizationId) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
+        const [{ cloudflareEnv }, { loadPublicPageProductDetail, publicProductDetailPayload }] = await Promise.all([
+          import('~/server/utils/api-response'), import('~/server/utils/public-products'),
+        ])
+        const env = cloudflareEnv(event)
+        const detail = await loadPublicPageProductDetail(env, env.DB, organizationId, Boolean(event.context.previewAuthorized), pagePath.value, locale.value, scope.value)
+        return detail ? publicProductDetailPayload(env.DB, env, detail) : null
+      }
+      return publicApiRequest<PublicProductDetailPayload | null>('/api/public/pages/product', {
+        query: { path: pagePath.value, locale: locale.value, ...(scope.value ? { location_id: scope.value } : {}) }, signal,
+        validate: (value): value is PublicProductDetailPayload | null => value === null || isPublicProductDetailPayload(value),
+      })
+    },
+  )
+  if (error.value) throw error.value
+  return data
 }

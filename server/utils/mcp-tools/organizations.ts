@@ -1,4 +1,5 @@
 import type { McpToolDefinition } from './shared'
+import { HTTPError } from 'nitro'
 import { SUPPORTED_CURRENCIES, currentUserObject, globalTool, pageInfoObject, paginationInputSchema, organizationSummaryItem, organizationTool, withToolAnnotations } from './shared'
 import { setPublicConsultationMode } from '~/server/utils/professional-services'
 import type { McpExecutorContext } from './execution'
@@ -9,6 +10,10 @@ import { loadSettingsPayload, updateOrganizationSettingsFields } from '~/server/
 import { ORGANIZATION_FONT_OPTIONS, ORGANIZATION_FONT_PRESETS } from '~/shared/organization-fonts'
 import { SITE_PALETTE_ROLES, STARTER_PALETTES, paletteContrast, type SitePalette, type SitePalettePatch } from '~/shared/site-palette'
 import { resolveColor } from '~/utils/color-utils'
+import { createAuth } from '~/server/utils/auth'
+import { requireMcpProviderSession } from '~/server/utils/mcp-auth'
+import { organizationRoles } from '~/utils/organization-access'
+import { getOrganizationTeamsData, getInvitationDeliveries } from '~/server/utils/dashboard-members'
 
 const PALETTE_COLORS_SCHEMA = {
   type: 'object',
@@ -43,13 +48,71 @@ const ANNOUNCEMENT_SCHEMA = {
   },
 } as const
 
+const memberObject = { type: 'object', properties: {
+  id: { type: 'string' }, organizationId: { type: 'string' }, userId: { type: 'string' }, role: { type: 'string' }, createdAt: { type: 'string', format: 'date-time' },
+}, required: ['id', 'organizationId', 'userId', 'role', 'createdAt'] } as const
+const invitationObject = { type: 'object', properties: {
+  id: { type: 'string' }, organizationId: { type: 'string' }, email: { type: 'string' }, role: { type: ['string', 'null'] }, status: { type: 'string' }, inviterId: { type: 'string' },
+  createdAt: { type: 'string', format: 'date-time' }, expiresAt: { type: 'string', format: 'date-time' },
+  delivery: { type: ['object','null'], properties: {status:{type:'string'},provider:{type:'string'},provider_message_id:{type:['string','null']},error:{type:['string','null']}}, required:['status','provider','provider_message_id','error'] },
+}, required: ['id', 'organizationId', 'email', 'role', 'status', 'inviterId', 'createdAt', 'expiresAt','delivery'] } as const
+const roleField = { type: 'string', enum: Object.keys(organizationRoles) }
+const teamObject = { type: 'object', properties: {
+  id: { type: 'string' }, name: { type: 'string' }, organization_id: { type: 'string' }, created_at: { type: 'string', format: 'date-time' }, updated_at: { type: ['string', 'null'], format: 'date-time' }, member_user_ids: { type: 'array', items: { type: 'string' }, uniqueItems: true },
+}, required: ['id', 'name', 'organization_id', 'created_at', 'updated_at', 'member_user_ids'] } as const
+const teamOutput = { type: 'object', properties: { team: teamObject }, required: ['team'] }
+
 export const ORGANIZATIONS_TOOLS: McpToolDefinition[] = [
+  organizationTool({
+    name: 'list_teams', description: 'Read the business’s Better Auth teams and their members. Choose a team for an offering when any available member can host its bookings.',
+    domain: 'organizations', minimumRole: 'admin', outputSchema: { type: 'object', properties: { teams: { type: 'array', items: teamObject } }, required: ['teams'] },
+  }),
+  organizationTool({
+    name: 'create_team', description: 'Create a named team within this business using Better Auth. Existing teammates can then be added to it.',
+    domain: 'organizations', minimumRole: 'admin', inputSchema: { name: { type: 'string', minLength: 1, pattern: '\\S' } }, required: ['name'], outputSchema: teamOutput,
+  }),
+  organizationTool({
+    name: 'update_team', description: 'Rename a team in this business.', domain: 'organizations', minimumRole: 'admin', inputSchema: { team_id: { type: 'string' }, name: { type: 'string', minLength: 1, pattern: '\\S' } }, required: ['team_id', 'name'], outputSchema: teamOutput,
+  }),
+  organizationTool({
+    name: 'set_team_member', description: 'Add an existing business teammate to a team, or remove them from it. Existing bookings keep their saved provider.',
+    domain: 'organizations', minimumRole: 'admin', inputSchema: { team_id: { type: 'string' }, user_id: { type: 'string' }, included: { type: 'boolean' } }, required: ['team_id', 'user_id', 'included'], outputSchema: teamOutput,
+  }),
+  organizationTool({
+    name: 'delete_team', description: 'Delete a team from this business. Existing bookings keep their saved provider. Offerings assigned to this team require a new schedule assignment.',
+    domain: 'organizations', minimumRole: 'admin', inputSchema: { team_id: { type: 'string' } }, required: ['team_id'],
+    outputSchema: { type: 'object', properties: { deleted: { const: true }, team_id: { type: 'string' } }, required: ['deleted', 'team_id'] },
+  }),
+  organizationTool({
+    name: 'list_organization_members', description: 'Read the business’s teammates and invitations. Member IDs identify organization memberships; user IDs identify people.',
+    domain: 'organizations', minimumRole: 'admin', inputSchema: { limit: { type: 'integer', minimum: 1, maximum: 100 }, offset: { type: 'integer', minimum: 0 } },
+    outputSchema: { type: 'object', properties: { members: { type: 'array', items: { ...memberObject, properties: { ...memberObject.properties, user: { type: 'object', properties: { id: { type: 'string' }, name: { type: 'string' }, email: { type: 'string' }, image: { type: ['string', 'null'] } }, required: ['id', 'name', 'email', 'image'] } }, required: [...memberObject.required, 'user'] } }, total: { type: 'integer', minimum: 0 }, invitations: { type: 'array', items: invitationObject } }, required: ['members', 'total', 'invitations'], additionalProperties: false },
+  }),
+  organizationTool({
+    name: 'invite_organization_member', description: 'Invite a teammate by email using Better Auth. The invitation remains pending until they accept. Set resend only when the user wants an existing invitation sent again.',
+    domain: 'organizations', minimumRole: 'admin', inputSchema: { email: { type: 'string', format: 'email' }, role: roleField, resend: { type: 'boolean' } }, required: ['email', 'role'],
+    outputSchema: { type: 'object', properties: { invitation: invitationObject }, required: ['invitation'], additionalProperties: false },
+  }),
+  organizationTool({
+    name: 'update_organization_member_role', description: 'Change a teammate’s business role. Better Auth enforces owner privileges and protects the last owner.',
+    domain: 'organizations', minimumRole: 'admin', inputSchema: { member_id: { type: 'string' }, role: roleField }, required: ['member_id', 'role'],
+    outputSchema: { type: 'object', properties: { member: memberObject }, required: ['member'], additionalProperties: false },
+  }),
+  organizationTool({
+    name: 'remove_organization_member', description: 'Remove a teammate’s membership in this business. Better Auth enforces removal permissions and protects the last owner.',
+    domain: 'organizations', minimumRole: 'admin', inputSchema: { member_id: { type: 'string' } }, required: ['member_id'],
+    outputSchema: { type: 'object', properties: { member: memberObject }, required: ['member'], additionalProperties: false },
+  }),
+  organizationTool({
+    name: 'cancel_organization_invitation', description: 'Cancel a pending invitation to this business.',
+    domain: 'organizations', minimumRole: 'admin', inputSchema: { invitation_id: { type: 'string' } }, required: ['invitation_id'],
+    outputSchema: { type: 'object', properties: { invitation: invitationObject }, required: ['invitation'], additionalProperties: false },
+  }),
   globalTool(withToolAnnotations({
       name: 'list_organizations',
       description: "List sites available to the signed-in user and the current account identity. Match the requested site against these results and use its internal ID; a public URL, domain or business name is not an organization_id.",
       domain: 'organizations',
       minimumRole: 'admin',
-      confirmRequired: false,
       inputSchema: { type: 'object', properties: { ...paginationInputSchema }, additionalProperties: true },
       outputSchema: {
         type: 'object',
@@ -69,7 +132,6 @@ export const ORGANIZATIONS_TOOLS: McpToolDefinition[] = [
       description: "Read the selected KrabiClaw site’s identity, public address and settings. organization_id is the internal ID returned by get_workspace_context or list_organizations, not a URL, domain or business name.",
       domain: 'organizations',
       minimumRole: 'admin',
-      confirmRequired: false,
       outputSchema: {
         type: 'object',
         properties: {
@@ -99,7 +161,6 @@ export const ORGANIZATIONS_TOOLS: McpToolDefinition[] = [
       description: "Read editable settings for the selected KrabiClaw site. Use its internal organization_id from get_workspace_context or list_organizations, not its public URL, domain or name.",
       domain: 'organizations',
       minimumRole: 'admin',
-      confirmRequired: false,
       outputSchema: {
         type: 'object',
         properties: {
@@ -144,7 +205,6 @@ export const ORGANIZATIONS_TOOLS: McpToolDefinition[] = [
       description: "Change the selected site’s brand, description, website font, colors, contact email, default currency, visitor announcement popup or Live/Draft status. Only supplied settings change. An announcement replaces all its fields, and null removes it. Logos and announcement images are separate media placements; this tool does not change them. Returns the updated settings. Published website settings change immediately; this does not create a short post, blog article or social publication.",
       domain: 'organizations',
       minimumRole: 'admin',
-      confirmRequired: true,
       inputSchema: {
         name: { type: 'string' },
         brand_description: { type: 'string' },
@@ -188,8 +248,7 @@ export const ORGANIZATIONS_TOOLS: McpToolDefinition[] = [
   organizationTool({
       name: 'set_consultation_mode',
       description: 'Set how the selected website offers consultations when the user wants to enable website booking, use an external scheduler or disable booking. Native booking uses published online products linked to service pages. External scheduling requires an existing configured URL. Does not set prices or connect a calendar or payment provider.',
-      domain: 'organizations', minimumRole: 'admin', confirmRequired: false,
-      inputSchema: { mode: { type: 'string', enum: ['native', 'external_url', 'native_disabled'] } },
+      domain: 'organizations', minimumRole: 'admin', inputSchema: { mode: { type: 'string', enum: ['native', 'external_url', 'native_disabled'] } },
       required: ['mode'],
       outputSchema: { type: 'object', properties: { settings: { type: 'object', properties: { mode: { type: 'string', enum: ['native', 'external_url', 'native_disabled'] } }, required: ['mode'] } }, required: ['settings'] },
     }),
@@ -208,6 +267,74 @@ function resolvePaletteColorNames(patch: SitePalettePatch): SitePalettePatch {
 export async function handleOrganizationsTools(ctx: McpExecutorContext): Promise<unknown> {
   const { toolName, args, organization } = ctx
   switch (toolName) {
+    case 'list_teams': return { teams: await getOrganizationTeamsData(organization.env, organization.organizationId) }
+    case 'create_team':
+    case 'update_team':
+    case 'set_team_member':
+    case 'delete_team': {
+      const headers = await requireMcpProviderSession(ctx.event, organization)
+      const auth = createAuth(organization.env)
+      const organizationId = organization.organizationId
+      let teamId: string
+      if (toolName === 'create_team') teamId = (await auth.api.createTeam({ headers, body: { organizationId, name: requiredString(args, 'name') } })).id
+      else {
+        teamId = requiredString(args, 'team_id')
+        if (toolName === 'update_team') await auth.api.updateTeam({ headers, body: { teamId, data: { organizationId, name: requiredString(args, 'name') } } })
+        else if (toolName === 'delete_team') await auth.api.removeTeam({ headers, body: { teamId, organizationId } })
+        else {
+          const body = { teamId, organizationId, userId: requiredString(args, 'user_id') }
+          if (args.included === true) await auth.api.addTeamMember({ headers, body })
+          else await auth.api.removeTeamMember({ headers, body })
+        }
+      }
+      const team = (await getOrganizationTeamsData(organization.env, organizationId)).find(team => team.id === teamId)
+      if (toolName === 'delete_team') {
+        if (team) throw new Error('The deleted team is still present')
+        return { deleted: true, team_id: teamId }
+      }
+      if (!team) throw new Error('The saved team could not be read back')
+      return { team }
+    }
+    case 'list_organization_members': {
+      const headers = await requireMcpProviderSession(ctx.event, organization)
+      const auth = createAuth(organization.env)
+      const [result, invitations] = await Promise.all([
+        auth.api.listMembers({ headers, query: { organizationId: organization.organizationId, limit: args.limit as number | undefined, offset: args.offset as number | undefined } }),
+        auth.api.listInvitations({ headers, query: { organizationId: organization.organizationId } }),
+      ])
+      const facts = invitations.map(invitation => ({ ...invitation, createdAt: invitation.createdAt.toISOString(), expiresAt: invitation.expiresAt.toISOString() }))
+      const deliveries = await getInvitationDeliveries(organization.db, organization.organizationId, facts)
+      return { ...result, members: result.members.map(member => ({ ...member, createdAt: member.createdAt.toISOString() })), invitations: facts.map(invitation => ({...invitation,delivery:deliveries.get(invitation.id) ?? null})) }
+    }
+    case 'invite_organization_member': {
+      const headers = await requireMcpProviderSession(ctx.event, organization)
+      const invitation = await createAuth(organization.env).api.createInvitation({ headers, body: { organizationId: organization.organizationId, email: requiredString(args, 'email'), role: requiredString(args, 'role') as keyof typeof organizationRoles, resend: args.resend === true } })
+      const fact = { ...invitation, createdAt: invitation.createdAt.toISOString(), expiresAt: invitation.expiresAt.toISOString() }
+      const delivery = (await getInvitationDeliveries(organization.db, organization.organizationId, [fact])).get(invitation.id) ?? null
+      if (!delivery || ['failed','pending'].includes(delivery.status)) throw new HTTPError({statusCode:502,statusMessage:delivery?.error ?? 'Invitation was saved, but its email delivery is unconfirmed',data:{invitation:{...fact,delivery}}})
+      return { invitation: {...fact,delivery} }
+    }
+    case 'update_organization_member_role': {
+      const headers = await requireMcpProviderSession(ctx.event, organization)
+      const member = await createAuth(organization.env).api.updateMemberRole({ headers, body: { organizationId: organization.organizationId, memberId: requiredString(args, 'member_id'), role: requiredString(args, 'role') } })
+      return { member: { ...member, createdAt: member.createdAt.toISOString() } }
+    }
+    case 'remove_organization_member': {
+      const headers = await requireMcpProviderSession(ctx.event, organization)
+      const result = await createAuth(organization.env).api.removeMember({ headers, body: { organizationId: organization.organizationId, memberIdOrEmail: requiredString(args, 'member_id') } })
+      return { member: { ...result.member, createdAt: result.member.createdAt.toISOString() } }
+    }
+    case 'cancel_organization_invitation': {
+      const headers = await requireMcpProviderSession(ctx.event, organization)
+      const auth = createAuth(organization.env)
+      const invitationId = requiredString(args, 'invitation_id')
+      const invitations = await auth.api.listInvitations({ headers, query: { organizationId: organization.organizationId } })
+      if (!invitations.some(invitation => invitation.id === invitationId)) throw mcpProtocolError(MCP_ERROR.invalidParams, 'Invitation not found in this business')
+      const invitation = await auth.api.cancelInvitation({ headers, body: { invitationId } })
+      if (!invitation) throw new Error('Better Auth did not return the cancelled invitation')
+      const fact = { ...invitation, createdAt: invitation.createdAt.toISOString(), expiresAt: invitation.expiresAt.toISOString() }
+      return { invitation: {...fact,delivery:(await getInvitationDeliveries(organization.db, organization.organizationId, [fact])).get(invitation.id) ?? null} }
+    }
     case "get_organization":
       {
         const organizationRecord = await getOrganizationForMcp(

@@ -14,9 +14,13 @@
 </template>
 <script setup lang="ts">
 import type { PublicProvider } from '~/shared/member-scheduling'
+import { isRecord, publicApiRequest } from '~/utils/api-clients'
 const props=defineProps<{organizationId:string;organizationName:string;productId:string;slug:string;sessionId?:string}>()
 const {data:provider,error,status,refresh}=await useAsyncData(`public-provider:${props.organizationId}:${props.productId}`,async()=>{
  if(import.meta.server){const event=useRequestEvent();if(!event)throw new Error('Request required');const [{cloudflareEnv},{publicProductProvider}]=await Promise.all([import('~/server/utils/api-response'),import('~/server/utils/public-provider')]);return await publicProductProvider(cloudflareEnv(event).DB,props.organizationId,props.productId,props.sessionId)}
- return (await $fetch<{provider:PublicProvider|null}>(`/api/public/products/${encodeURIComponent(props.slug)}/provider`,{query:{session_id:props.sessionId}})).provider
+ return (await publicApiRequest<{provider:PublicProvider|null}>(`/api/public/products/${encodeURIComponent(props.slug)}/provider`, {
+  query: props.sessionId ? { session_id: props.sessionId } : {},
+  validate: (value): value is { provider: PublicProvider | null } => isRecord(value) && (value.provider === null || (isRecord(value.provider) && typeof value.provider.name === 'string' && (value.provider.photo_url === null || typeof value.provider.photo_url === 'string') && (value.provider.bio === null || typeof value.provider.bio === 'string'))),
+ })).provider
 },{watch:[()=>props.sessionId]})
 </script>

@@ -19,7 +19,7 @@ export function useSeoUrl(value: MaybeRefOrGetter<string | null | undefined>) {
 
 /**
  * Same as useSeoUrl, but for platform-only pages (blog/docs) where the
- * canonical/schema origin must always be config.public.platformUrl first — matching
+ * canonical/schema origin must always be config.public.siteUrl first — matching
  * useSocialMetadata() and useContentPageSchema() — so it doesn't disagree with
  * itself by resolving to whatever host actually served the request (e.g. a
  * staging Worker). Never use this for tenant/Saya pages: those must
@@ -28,5 +28,5 @@ export function useSeoUrl(value: MaybeRefOrGetter<string | null | undefined>) {
  */
 export function usePlatformSeoUrl(value: MaybeRefOrGetter<string | null | undefined>) {
   const config = useRuntimeConfig()
-  return computed(() => resolveSeoUrl(toValue(value), config.public.platformUrl))
+  return computed(() => resolveSeoUrl(toValue(value), config.public.siteUrl))
 }

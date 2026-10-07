@@ -106,7 +106,7 @@ export async function listPublicLocaleRepresentations(
             FROM content_documents v
             JOIN organization_locales sl
               ON sl.organization_id = v.organization_id AND sl.locale = v.locale
-           WHERE v.organization_id = ? AND v.root_id = ? AND v.row_role = 'representation' AND v.locale <> 'en'
+           WHERE v.organization_id = ? AND v.root_id = ? AND v.row_role = 'representation'
              AND sl.status = 'published'
            ORDER BY v.locale
         `, [input.organizationId, input.documentId])

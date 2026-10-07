@@ -41,7 +41,7 @@ test('native online review uses canonical Products, holds capacity, and releases
     expect(create.status(), await create.text()).toBe(201)
     const product = (await create.json()).product
     products.push(product)
-    const config = await page.request.put(`${editor}/products/${product.id}/booking`, { data: { duration_minutes: 45, default_capacity: 1, confirmation_mode: 'review', online_payment_required: true, online_timezone: 'UTC', calendar_group: `local-${stamp}` } })
+    const config = await page.request.put(`${editor}/products/${product.id}/booking`, { data: { duration_minutes: 45, default_capacity: 1, confirmation_mode: 'review', online_payment_required: false, online_timezone: 'UTC', calendar_group: `local-${stamp}` } })
     expect(config.status(), await config.text()).toBe(200)
     const schedule = await page.request.put(`${editor}/products/${product.id}/availability`, { data: { location_id: null, slots: [{ weekday: tomorrow.getUTCDay(), start_time: '14:00' }] } })
     expect(schedule.status(), await schedule.text()).toBe(200)
@@ -55,8 +55,6 @@ test('native online review uses canonical Products, holds capacity, and releases
     await page.goto(`/dashboard/north-carolina-legal-services/products/${products[0]!.id}/booking`)
     const bookingPath = `/dashboard/north-carolina-legal-services/products/${products[0]!.id}/booking`
     await expect(page.getByRole('link', { name: 'Guest limit One guest per session' })).toBeVisible()
-    // The Calendar-only build saves assignment in the focused CMS editor and
-    // reads it through MCP without requiring Payments tables or Checkout.
     const membersResponse = await page.request.get(`/api/organizations/${org}/members/scheduling`)
     expect(membersResponse.status(), await membersResponse.text()).toBe(200)
     const self = (await membersResponse.json()).members.find((member: { self: boolean }) => member.self)
@@ -66,7 +64,7 @@ test('native online review uses canonical Products, holds capacity, and releases
     expect(mcpData<{ scheduling: Record<string, unknown> }>(await mcpScheduling.json()).scheduling).toEqual(self.scheduling)
     const mcpMembers = await mcpRequest(page.request, baseURL!, { method: 'tools/call', toolName: 'get_member_scheduling', args: { organization_id: org } })
     expect(mcpMembers.status(), await mcpMembers.text()).toBe(200)
-    expect(mcpData<{ members: Array<Record<string, unknown>> }>(await mcpMembers.json()).members).toContainEqual({ id: self.id, name: self.name, self: true, scheduling: self.scheduling })
+    expect(mcpData<{ members: Array<Record<string, unknown>> }>(await mcpMembers.json()).members).toContainEqual({ id: self.id, name: self.name, image: self.image, self: true, scheduling: self.scheduling })
     for (const data of [{}, { action: 'unknown' }, { action: 'select', calendar_ids: [] }]) {
       const invalidCalendar = await page.request.post(`/api/organizations/${org}/members/${self.id}/calendar`, { data })
       expect(invalidCalendar.status(), await invalidCalendar.text()).toBe(400)
@@ -74,7 +72,7 @@ test('native online review uses canonical Products, holds capacity, and releases
     const unchangedSchedule = await page.request.get(`/api/organizations/${org}/members/${self.id}/scheduling`)
     expect(unchangedSchedule.status(), await unchangedSchedule.text()).toBe(200)
     expect((await unchangedSchedule.json()).scheduling).toEqual(self.scheduling)
-    await page.getByRole('link', { name: 'Who guests meet Tenant organization', exact: true }).click()
+    await page.getByRole('link', { name: 'Who guests meet The business schedule', exact: true }).click()
     await page.getByRole('radio', { name: self.name, exact: true }).check()
     await page.getByRole('button', { name: 'Save', exact: true }).click()
     await expect(page.getByRole('link', { name: 'Who guests meet Assigned team member', exact: true })).toBeVisible()
@@ -84,7 +82,7 @@ test('native online review uses canonical Products, holds capacity, and releases
     await page.getByRole('link', { name: 'Who guests meet Assigned team member', exact: true }).click()
     await page.getByRole('radio', { name: 'Use the business schedule', exact: true }).check()
     await page.getByRole('button', { name: 'Save', exact: true }).click()
-    await expect(page.getByRole('link', { name: 'Who guests meet Tenant organization', exact: true })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Who guests meet The business schedule', exact: true })).toBeVisible()
 
     await page.getByRole('link', { name: 'Duration 45 minutes', exact: true }).click()
     await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeDisabled()
@@ -96,7 +94,7 @@ test('native online review uses canonical Products, holds capacity, and releases
       expect(result.status()).toBe(200)
       return mcpData<{ product: { booking: Record<string, unknown> } }>(await result.json()).product.booking
     }
-    expect(await readConfig()).toMatchObject({ duration_minutes: 50, default_capacity: 1, confirmation_mode: 'review', online_payment_required: true, online_timezone: 'UTC', calendar_group: `local-${stamp}` })
+    expect(await readConfig()).toMatchObject({ duration_minutes: 50, default_capacity: 1, confirmation_mode: 'review', online_payment_required: false, online_timezone: 'UTC', calendar_group: `local-${stamp}` })
     expect((await (await page.request.get(`${editor}/consultation`)).json()).mode).toBe('native')
     const retainedSchedule = await page.request.get(`${editor}/products/${products[0]!.id}/availability?location_id=online`)
     expect(retainedSchedule.status()).toBe(200)
@@ -126,7 +124,7 @@ test('native online review uses canonical Products, holds capacity, and releases
     await page.getByLabel('Maximum guests per session', { exact: true }).fill('2')
     await page.getByRole('button', { name: 'Save', exact: true }).click()
     await expect(page.getByRole('link', { name: 'Guest limit Up to 2 guests per session', exact: true })).toBeVisible()
-    expect(await readConfig()).toMatchObject({ default_capacity: 2, duration_minutes: 45, online_timezone: 'UTC', online_payment_required: true })
+    expect(await readConfig()).toMatchObject({ default_capacity: 2, duration_minutes: 45, online_timezone: 'UTC', online_payment_required: false })
     await page.getByRole('link', { name: 'Guest limit Up to 2 guests per session', exact: true }).click()
     await page.getByRole('radio', { name: 'One guest', exact: true }).click()
     await page.getByRole('button', { name: 'Save', exact: true }).click()
@@ -385,7 +383,7 @@ test('native online review uses canonical Products, holds capacity, and releases
     }
     const ambiguousProvider=await request.get(`/api/public/products/${products[0]!.slug}/provider?session_id=${sessions[0].id}&session_id=${sessions[1].id}`,{headers})
     expect(ambiguousProvider.status(),await ambiguousProvider.text()).toBe(400)
-    const book = (index: number) => request.post(`/api/public/products/${products[index]!.slug}/book`, { headers, data: { session_id: sessions[index].id, variant_id: products[index]!.variants[0]!.id, party_size: 1, guest_name: `Local review ${index}`, guest_email: `consultation-${stamp}-${index}@playwright.example` } })
+    const book = (index: number) => request.post(`/api/public/products/${products[index]!.slug}/book`, { headers, data: { session_id: sessions[index].id, variant_id: products[index]!.variants[0]!.id, party_size: 1, guest_name: `Local review ${index}`, guest_email: `consultation-${stamp}-${index}@playwright.example`, idempotency_key: crypto.randomUUID() } })
     const results = await Promise.all([book(0), book(1)])
     expect(results.map(result => result.status()).sort()).toEqual([201, 409])
     const pending = await results.find(result => result.status() === 201)!.json()
@@ -478,9 +476,10 @@ test('native online review uses canonical Products, holds capacity, and releases
     expect(onlinePrice).toMatchObject({ currency: 'USD', unit_amount: 0 })
     const paid = await page.request.patch(`${editor}/products/${products[0]!.id}`, { data: { variants: [{ id: onlineVariant.id, prices: [{ id: onlinePrice.id, unit_amount: 7500 }] }] } })
     expect(paid.status(), await paid.text()).toBe(200)
-    const blocked = await book(0)
-    expect(blocked.status(), await blocked.text()).toBe(409)
-    expect(await blocked.json()).toMatchObject({ code: 'payment_required' })
+    const blocked = await page.request.put(`${editor}/products/${products[0]!.id}/booking`, { data: { online_payment_required: true } })
+    expect(blocked.status(), await blocked.text()).toBe(403)
+    expect(await blocked.json()).toMatchObject({ data: { code: 'financial_action_required' } })
+    expect(await readConfig()).toMatchObject({ online_payment_required: false })
     const instantPolicy = await page.request.put(`${editor}/products/${products[0]!.id}/booking`, { data: { duration_minutes: 45, default_capacity: 1, confirmation_mode: 'instant', online_payment_required: false } })
     expect(instantPolicy.status(), await instantPolicy.text()).toBe(200)
     const instantResponse = await book(0)

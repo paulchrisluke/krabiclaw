@@ -1,9 +1,12 @@
 import { HTTPError, defineHandler } from 'nitro';
 import { readBody } from 'nitro/h3';
 import type { H3Event } from "nitro";
+import { createParser } from 'eventsource-parser';
 import {
   createMcpHandler,
   McpServer,
+  fromJsonSchema,
+  type JsonSchemaType,
   ProtocolError,
   hostHeaderValidationResponse,
   originValidationResponse,
@@ -15,7 +18,7 @@ import {
 } from "@modelcontextprotocol/server";
 import { asMcpError, mcpSuccess, mcpFailure, MCP_ERROR, type JsonRpcId } from "~/server/utils/mcp-protocol";
 import { catalogFingerprint, catalogMeta } from "~/server/utils/mcp-catalog";
-import { executeMcpToolCall, MCP_PUBLIC_TOOLS, MCP_TOOLS } from "~/server/utils/mcp-tools";
+import { executeMcpToolCall, mcpToolInputSchema, MCP_PUBLIC_TOOLS, MCP_TOOLS } from "~/server/utils/mcp-tools";
 import { isMcpRenderResponse } from "~/server/utils/mcp-render";
 import {
   getActiveEntitlements, getVisibleOrganizationContext, requireMcpUser, roleSatisfies, type McpUserContext, } from "~/server/utils/mcp-auth";
@@ -61,23 +64,17 @@ function resolveTenantToolMeta(toolName: string | null): McpToolMeta {
   return { domain: tool?.domain ?? null, isMutating: isMcpMutatingTool(tool) };
 }
 
-const MCP_INSTRUCTIONS = `KrabiClaw manages content and settings for the site selected by the user.
+const MCP_INSTRUCTIONS = `Manage the business the user selects. Resolve IDs through workspace reads and ask about ambiguous targets before a write.
 
-Use internal organization and location IDs from get_workspace_context, list_organizations or list_locations. Confirm an ambiguous target before a write; an explicitly selected target remains selected until the user changes it. Public URLs and names identify a site to look up, not IDs to pass to tools. Organization/location setup, domains and billing are managed in the dashboard.
+Finish the requested human task. Ask for missing business facts before calling a tool; never invent prices, times, capacity or policies. Menu updates preserve sections and order. Experiences are bookable offerings. Follow returned readiness and public URLs rather than assuming a catalog write finished the website.
 
-Media tools save existing attachments or assets to the selected site when the user requests that action. Saving creates publicly accessible media even before assignment. save_media_attachment saves a file from the conversation, including a generated image; videos require a poster image. Use only authorized file references supplied by the host. If attachment delivery fails, report it and request a new attachment rather than inventing a URL. set_media replaces or clears one cover, hero or logo; attach_media, remove_media and reorder_media manage ordered galleries. Use the exact target owner ID and placement requested by the user.
+Read current state before replacing content. Preserve unrelated records and IDs, use concurrency tokens, and reuse an operation’s idempotency key on retry. Follow pagination before claiming complete results. Use only host-supplied attachment references.
 
-create_post makes a draft short website announcement, event notice or offer. create_blog_post makes a draft long-form blog or documentation article. The website announcement modal is an organization setting, not an article or social post. create_product makes a catalog offering with variants and prices. Publication is a separate action; changes to already published content can appear immediately. Publish only to the destinations the user requests. Connected social targets and publication states come from get_social_connections and publication reads. Report uncertain publication outcomes and reconcile them without creating a second provider post.
+Publish and send messages only to the destinations the user requested. Report drafts, partial results, delivery failures and unresolved actions accurately. A guest change proposal leaves the existing booking in place until accepted.
 
-For whole-document or collection replacement, read the latest state and preserve everything outside the requested change. Use the supplied concurrency tokens and deletion confirmations. Read all pages before claiming a complete collection or replacing it. update_product merges variants and prices by ID; omitted siblings remain. Explicit replace modes remove omitted entries, while supplied options and details replace their corresponding values. Prices belong to variants; location offerings and website visibility are separate. Weekly schedules use Product duration/capacity; saved Sessions retain their actual facts and any Booking history protects them.
+Financial tools are read-only. A financial_action_required result is an incomplete action with a dashboard handoff; never describe it as a completed booking, cancellation or refund. Authorization and entitlements are enforced by the server.`;
 
-Product bookings and consultations use the shared session allocator and confirmation/payment policy. Create bookings only for a valid zero price or when online collection is disabled. Required positive online collection returns financial_action_required with a dashboard URL before any booking, hold, Checkout or financial record is created. Confirm approves a pending staff-review booking; reject declines a pending booking; cancel ends a pending or confirmed booking. These and guest change proposals can email guests and require approval for the exact action. A proposal leaves the current booking or reservation unchanged until the guest accepts. If rejection or cancellation requires a refund, the operation is incomplete and returns the authenticated dashboard URL before changing state or preparing financial records. MCP does not prepare or execute refunds, payouts, transfers or Checkout. Finance tools read the selected business’s payments, totals, payout history and operating usage; get_payments_dashboard_link only looks up its setup URL. Subscription billing remains separate. Never describe an action-required handoff as a completed booking, cancellation or refund.
-
-Contact submissions and table reservations can be read here; contact replies and other inbox status work use the dashboard. Table reservation cancellation and change proposals have dedicated tools. Reviews and imported Google Q&A are managed in Google. Authored Q&A has dedicated create, update, delete and reorder tools. Language tools manage exact authored representations rather than automatic translation. get_organization_analytics reads the website overview; query_organization_analytics reads explicitly filtered events, sessions or grouped results.
-
-Report the affected site and actual result, including a returned public or preview URL when useful. Distinguish draft content, published content and unresolved external publication. Tool availability, authorization and entitlements are enforced by the server.`;
-
-// Everything a per-request Server factory needs, threaded through
+// Per-request domain context, threaded through
 // `AuthInfo.extra` since `McpServerFactory` only receives an `McpRequestContext`.
 interface McpFactoryContext {
   event: H3Event;
@@ -92,61 +89,127 @@ function factoryContextFrom(ctx: McpRequestContext): McpFactoryContext {
   return extra;
 }
 
-// Builds one `McpServer` per HTTP exchange (createMcpHandler's contract).
-// `initialize`, `ping`, and protocol/version negotiation are the SDK's own —
-// only the KrabiClaw-specific catalog (tools/list, tools/call) and the two
-// vestigial prompt methods are ours. Registered directly on the underlying
-// `Server` (McpServer's own escape hatch for advanced use cases) rather than
-// through `registerTool()`, since our tool catalog is filtered per-request
-// by site/role/entitlement rather than a static per-tool registry.
+// A fresh SDK registry per exchange keeps schemas and execution together.
 function createTenantMcpServer(ctx: McpRequestContext): McpServer {
   const mcpServer = new McpServer(
     { name: "krabiclaw-mcp", version: "phase-5" },
-    { capabilities: { tools: {}, resources: {}, prompts: {} }, instructions: MCP_INSTRUCTIONS },
+    { capabilities: { tools: {}, prompts: {} }, instructions: MCP_INSTRUCTIONS },
   );
   const server = mcpServer.server;
 
-  // The app has never populated MCP resources — this preserves the existing
-  // empty-catalog / not-found-on-read behavior rather than dropping the
-  // capability (clients that already probe resources/list expect a list, not
-  // a method-not-found error).
-  server.setRequestHandler("resources/list", async () => ({ resources: [] }));
-  server.setRequestHandler("resources/templates/list", async () => ({ resourceTemplates: [] }));
-  server.setRequestHandler("resources/read", async (request) => {
-    const uri = typeof request.params?.uri === "string" ? request.params.uri : "";
-    throw new ProtocolError(MCP_ERROR.invalidParams, `Unknown MCP app resource: ${uri}`);
-  });
+  for (const prompt of MCP_PROMPTS) {
+    mcpServer.registerPrompt(prompt.name, {
+      description: prompt.description,
+      argsSchema: fromJsonSchema<Record<string, string>>({
+        type: 'object',
+        properties: Object.fromEntries(prompt.arguments.map(argument => [argument.name, {
+          type: 'string', pattern: '\\S', description: argument.description,
+        }])),
+        required: prompt.arguments.filter(argument => argument.required).map(argument => argument.name),
+        additionalProperties: false,
+      }),
+    }, (args) => {
+      const rendered = renderMcpPrompt(prompt.name, args);
+      return {
+        description: rendered.description,
+        messages: [{ role: 'user' as const, content: { type: 'text' as const, text: rendered.text } }],
+      };
+    });
+  }
 
-  // server/discover is a pre-handshake optimization some clients use to skip
-  // the spec's own initialize-retry version negotiation. @modelcontextprotocol/
-  // server@2.0.0 only wires it up for servers that speak the modern
-  // (2026-07-28+) protocol era — see _ondiscover in the SDK's Server
-  // constructor, gated on modernProtocolVersions(...).length > 0. This server
-  // only serves the legacy eras, so an unregistered server/discover correctly
-  // falls through to -32601 Method not found; clients fall back to the
-  // spec-mandated initialize → version-mismatch → retry path instead. This is
-  // the deliberate replacement for issue #922/#923's old hand-rolled,
-  // partial server/discover shim — bolting a bespoke discover handler onto a
-  // legacy-only server is exactly the one-off-per-client pattern that caused
-  // those incidents.
+  for (const toolDef of MCP_PUBLIC_TOOLS) {
+    const { event, mcpUser } = factoryContextFrom(ctx);
+    mcpServer.registerTool(toolDef.name, {
+      description: toolDef.description,
+      inputSchema: mcpToolInputSchema(event, toolDef, mcpUser),
+      outputSchema: fromJsonSchema<Record<string, unknown>>(toolDef.outputSchema as JsonSchemaType),
+      annotations: toolDef.annotations,
+      _meta: {
+        securitySchemes: toolDef.securitySchemes,
+        'krabiclaw/toolInfo': { domain: toolDef.domain, minimumRole: toolDef.minimumRole },
+        ...(toolDef.fileParams?.length ? { 'openai/fileParams': toolDef.fileParams } : {}),
+      },
+    }, async (rawArgs) => {
+    const { event, mcpUser, cfEnv, requestId } = factoryContextFrom(ctx);
+    if (!mcpUser) throw new ProtocolError(MCP_ERROR.internal, "Missing authenticated MCP request context.");
+    const toolName = toolDef.name;
+    const toolStartedAt = Date.now();
 
-  server.setRequestHandler("prompts/list", async () => ({ prompts: MCP_PROMPTS }));
+    const authStartedAt = performance.now();
+    // requireMcpUser already ran once up front in the route handler (this is
+    // that same resolved user, not a second auth check).
+    recordRequestPhase(event, "mcp_auth", authStartedAt);
+    const executionStartedAt = performance.now();
 
-  server.setRequestHandler("prompts/get", async (request) => {
-    const name = typeof request.params?.name === "string" ? request.params.name : "";
-    const rawArgs = request.params?.arguments;
-    const promptArgs: Record<string, string> = {};
-    if (rawArgs && typeof rawArgs === "object" && !Array.isArray(rawArgs)) {
-      for (const [key, value] of Object.entries(rawArgs as Record<string, unknown>)) {
-        if (typeof value === "string") promptArgs[key] = value;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let result: any;
+    try {
+      result = await executeMcpToolCall(event, toolName, rawArgs, mcpUser);
+    } catch (toolError) {
+      recordRequestPhase(event, "mcp_execute", executionStartedAt);
+      const mcpErr = asMcpError(toolError);
+      console.error({
+        event: "mcp_tool_failed", tool: toolDef?.name ?? null, request_id: requestId ?? null,
+        ray_id: event.req.headers.get("cf-ray"), duration_ms: Date.now() - toolStartedAt,
+        error_code: mcpErr.code, error_kind: mcpErr.kind,
+      });
+      if (mcpErr.kind === "protocol") {
+        // Unknown-tool and similar protocol-level failures become a real
+        // JSON-RPC error, not a tool result. `toolError` carries our own
+        // `.mcp`-tagged shape, which the SDK doesn't read — throw its own
+        // ProtocolError so createMcpHandler maps the code/data correctly
+        // instead of falling back to a generic internal error.
+        throw new ProtocolError(mcpErr.code, mcpErr.message, mcpErr.data);
+      }
+      // Any other tool-execution failure (including a plain `throw new
+      // Error(...)` from a business-rule guard, which asMcpError falls back
+      // to classifying as kind:'transport') must still resolve as a
+      // graceful isError:true CallToolResult, not a JSON-RPC error — MCP
+      // clients can't act on a transport-level error mid-tool-call.
+      const failure = mcpFinancialApprovalErrorResult(toolError, cfEnv.NUXT_PUBLIC_PLATFORM_DOMAIN, mcpErr.message)
+        ?? { isError: true, content: [{ type: "text" as const, text: mcpErr.message }] };
+      return failure;
+    }
+
+    recordRequestPhase(event, "mcp_execute", executionStartedAt);
+    const isRender = isMcpRenderResponse(result);
+    const structuredContent = isRender ? result.structuredContent : result;
+    const modelText = isRender && result.modelText ? result.modelText : JSON.stringify(structuredContent, null, 2);
+
+    const executionContext = event.context.mcpExecutionContext as { organizationId: string } | undefined;
+    const resolvedOrganizationId = executionContext?.organizationId ?? null;
+
+    // After any mutating tool call the site's caches are cleared before the
+    // response: its public resource entries and the SSR HTML for every active
+    // hostname and its subdomain, all through purgeOrganizationCaches. Awaited,
+    // so a client that reads right after the mutation cannot see what it
+    // replaced. A missing binding reaches the helper and fails there.
+    let purgeFailure: string | null = null;
+    if (isMcpMutatingTool(toolDef) && resolvedOrganizationId) {
+      const env = cloudflareEnv(event);
+      const cacheStartedAt = performance.now();
+      // A purge that failed is the edit not reaching the site. The write has
+      // landed, so this is neither success nor a transport failure: the tool
+      // result says both halves, and the client can act on it.
+      try {
+        await purgePublicResourceCacheNow({
+          DB: env.db,
+          ORGANIZATION_CACHE: env.ORGANIZATION_CACHE,
+          NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN: env.NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN,
+        }, resolvedOrganizationId);
+      } catch (purgeError) {
+        purgeFailure = `${toolName} wrote its change to organization ${resolvedOrganizationId}, but the public cache was not purged, so the site may keep serving what the write replaced: ${describeErrorForTelemetry(purgeError)}`;
+      } finally {
+        recordRequestPhase(event, "mcp_cache_purge", cacheStartedAt);
       }
     }
-    const rendered = renderMcpPrompt(name, promptArgs);
-    return {
-      description: rendered.description,
-      messages: [{ role: "user" as const, content: { type: "text" as const, text: rendered.text } }],
+    const response = {
+      isError: purgeFailure !== null || (isRender && result.isError === true), structuredContent, content: [{ type: "text" as const, text: purgeFailure ? `${purgeFailure}\n\n${modelText}` : modelText }],
+      ...(isRender && result.privateMeta ? { _meta: result.privateMeta } : {}),
     };
+    return response;
   });
+  }
 
   server.setRequestHandler("tools/list", async () => {
     const { event, mcpUser, cfEnv, requestId } = factoryContextFrom(ctx);
@@ -196,7 +259,7 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
       const baseTool = {
         name: tool.name, description: tool.description, inputSchema: tool.inputSchema, _meta: {
           securitySchemes: tool.securitySchemes, "krabiclaw/toolInfo": {
-            domain: tool.domain, minimumRole: tool.minimumRole, confirmRequired: tool.confirmRequired, }, ...(tool.fileParams?.length ? { "openai/fileParams": tool.fileParams } : {}), }, };
+            domain: tool.domain, minimumRole: tool.minimumRole, }, ...(tool.fileParams?.length ? { "openai/fileParams": tool.fileParams } : {}), }, };
       return { ...baseTool, outputSchema: tool.outputSchema, annotations: tool.annotations, securitySchemes: tool.securitySchemes };
     });
 
@@ -211,112 +274,11 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
     return { tools, _meta: catalogMeta(MCP_PUBLIC_TOOLS) } as unknown as ListToolsResult;
   });
 
-  server.setRequestHandler("tools/call", async (request) => {
-    const { event, mcpUser, cfEnv, requestId } = factoryContextFrom(ctx);
-    if (!mcpUser) throw new ProtocolError(MCP_ERROR.internal, "Missing authenticated MCP request context.");
-    const toolName = typeof request.params?.name === "string" ? request.params.name : "";
-    const rawArgsValue = (request.params as { arguments?: unknown } | undefined)?.arguments;
-    const rawArgs = (rawArgsValue && typeof rawArgsValue === "object" && !Array.isArray(rawArgsValue)
-      ? rawArgsValue as Record<string, unknown>
-      : {});
-    const telemetryArgs = { ...rawArgs, _request: {
-      meta: request.params?._meta, user_agent: event.req.headers.get('user-agent'),
-      request_id: getRequestDataMetrics(event).requestId,
-    } };
-
-    const toolDef = MCP_TOOLS.find((t) => t.name === toolName);
-    const toolStartedAt = Date.now();
-
-    const authStartedAt = performance.now();
-    // requireMcpUser already ran once up front in the route handler (this is
-    // that same resolved user, not a second auth check).
-    recordRequestPhase(event, "mcp_auth", authStartedAt);
-    const executionStartedAt = performance.now();
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let result: any;
-    try {
-      result = await executeMcpToolCall(event, toolName, rawArgs, mcpUser);
-    } catch (toolError) {
-      recordRequestPhase(event, "mcp_execute", executionStartedAt);
-      const mcpErr = asMcpError(toolError);
-      console.error({
-        event: "mcp_tool_failed", tool: toolDef?.name ?? null, request_id: requestId ?? null,
-        ray_id: event.req.headers.get("cf-ray"), duration_ms: Date.now() - toolStartedAt,
-        error_code: mcpErr.code, error_kind: mcpErr.kind,
-      });
-      if (mcpErr.kind === "protocol") {
-        // Unknown-tool and similar protocol-level failures become a real
-        // JSON-RPC error, not a tool result. `toolError` carries our own
-        // `.mcp`-tagged shape, which the SDK doesn't read — throw its own
-        // ProtocolError so createMcpHandler maps the code/data correctly
-        // instead of falling back to a generic internal error.
-        const telemetryErrorMessage = describeErrorForTelemetry(toolError);
-        logMcpEventDetached(event, cfEnv.DB, {
-          userId: mcpUser.userId, requestId, method: "tools/call", toolName, toolDomain: toolDef?.domain ?? null, isMutating: false, arguments: telemetryArgs, result: { error: mcpErr }, status: "error", errorCode: mcpErr.code, errorMessage: telemetryErrorMessage, httpStatus: 200, jsonrpcErrorCode: mcpErr.code, jsonrpcErrorMessage: telemetryErrorMessage, unknownToolName: toolDef ? null : toolName || null, oauthClientId: mcpUser.oauthClientId ?? null, durationMs: Date.now() - toolStartedAt, });
-        throw new ProtocolError(mcpErr.code, mcpErr.message, mcpErr.data);
-      }
-      // Any other tool-execution failure (including a plain `throw new
-      // Error(...)` from a business-rule guard, which asMcpError falls back
-      // to classifying as kind:'transport') must still resolve as a
-      // graceful isError:true CallToolResult, not a JSON-RPC error — MCP
-      // clients can't act on a transport-level error mid-tool-call.
-      const failure = mcpFinancialApprovalErrorResult(toolError, cfEnv.NUXT_PUBLIC_PLATFORM_DOMAIN, mcpErr.message)
-        ?? { isError: true, content: [{ type: "text" as const, text: mcpErr.message }] };
-      logMcpEventDetached(event, cfEnv.DB, {
-        userId: mcpUser.userId, requestId, method: "tools/call", toolName, toolDomain: toolDef?.domain ?? null, isMutating: isMcpMutatingTool(toolDef), arguments: telemetryArgs, result: failure, status: "error", errorCode: mcpErr.code, errorMessage: describeErrorForTelemetry(toolError), httpStatus: 200, oauthClientId: mcpUser.oauthClientId ?? null, durationMs: Date.now() - toolStartedAt, });
-      return failure;
-    }
-
-    recordRequestPhase(event, "mcp_execute", executionStartedAt);
-    const isRender = isMcpRenderResponse(result);
-    const structuredContent = isRender ? result.structuredContent : result;
-    const modelText = isRender && result.modelText ? result.modelText : JSON.stringify(structuredContent, null, 2);
-
-    const executionContext = event.context.mcpExecutionContext as { organizationId: string } | undefined;
-    const resolvedOrganizationId = executionContext?.organizationId ?? null;
-
-    // After any mutating tool call the site's caches are cleared before the
-    // response: its public resource entries and the SSR HTML for every active
-    // hostname and its subdomain, all through purgeOrganizationCaches. Awaited,
-    // so a client that reads right after the mutation cannot see what it
-    // replaced. A missing binding reaches the helper and fails there.
-    let purgeFailure: string | null = null;
-    if (isMcpMutatingTool(toolDef) && resolvedOrganizationId) {
-      const env = cloudflareEnv(event);
-      const cacheStartedAt = performance.now();
-      // A purge that failed is the edit not reaching the site. The write has
-      // landed, so this is neither success nor a transport failure: the tool
-      // result says both halves, and the client can act on it.
-      try {
-        await purgePublicResourceCacheNow({
-          DB: env.db,
-          ORGANIZATION_CACHE: env.ORGANIZATION_CACHE,
-          NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN: env.NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN,
-        }, resolvedOrganizationId);
-      } catch (purgeError) {
-        purgeFailure = `${toolName} wrote its change to organization ${resolvedOrganizationId}, but the public cache was not purged, so the site may keep serving what the write replaced: ${describeErrorForTelemetry(purgeError)}`;
-      } finally {
-        recordRequestPhase(event, "mcp_cache_purge", cacheStartedAt);
-      }
-    }
-    const response = {
-      isError: purgeFailure !== null, structuredContent, content: [{ type: "text" as const, text: purgeFailure ? `${purgeFailure}\n\n${modelText}` : modelText }],
-      ...(isRender && result.privateMeta ? { _meta: result.privateMeta } : {}),
-    };
-    logMcpEventDetached(event, cfEnv.DB, {
-      userId: mcpUser.userId, requestId, method: "tools/call", toolName, toolDomain: toolDef?.domain ?? null, isMutating: isMcpMutatingTool(toolDef), arguments: telemetryArgs, result: response, status: purgeFailure ? "error" : "success", errorMessage: purgeFailure, httpStatus: 200, oauthClientId: mcpUser.oauthClientId ?? null, durationMs: Date.now() - toolStartedAt, });
-    return response;
-  });
 
   return mcpServer;
 }
 
-// responseMode: 'json' — this server is fully stateless and never emits a
-// progress/logging notification before a result, so there's nothing for the
-// SDK's default 'auto' mode to ever upgrade to SSE for; forcing 'json' keeps
-// every response a flat JSON body instead of leaving that upgrade decision
-// implicit to callers that don't expect it.
+// The SDK serves modern requests as JSON and legacy requests as native SSE.
 const mcpHandler = createMcpHandler(createTenantMcpServer, { responseMode: "json" });
 
 // Best-effort peek at the JSON-RPC method for logging and for the two methods
@@ -428,15 +390,31 @@ export default defineHandler(async (event) => {
     };
 
     const response = await mcpHandler.fetch(webRequest, { authInfo, parsedBody: body });
-    // MCP clients (e.g. ChatGPT) read Mcp-Session-Id off the initialize
-    // response and echo it on later calls. The server is fully stateless —
-    // nothing here actually keys off this id — but issuing one preserves the
-    // existing client-observable contract instead of breaking clients that
-    // expect it to be present.
-    if (requestMethod === "initialize" && response.ok && !response.headers.has("Mcp-Session-Id")) {
-      const headers = new Headers(response.headers);
-      headers.set("Mcp-Session-Id", crypto.randomUUID());
-      return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+    if (requestMethod === 'tools/call') {
+      type Wire = { id?: JsonRpcId; result?: { isError?: boolean; content?: Array<{ type: string; text?: string }> }; error?: { code: number; message: string } };
+      let wire: Wire | undefined;
+      const copy = response.clone();
+      if (copy.headers.get('content-type')?.includes('text/event-stream')) {
+        createParser({ onEvent: ({ data }) => {
+          const message = JSON.parse(data) as Wire;
+          if (message.id === requestId && (message.result || message.error)) wire = message;
+        }, onError: error => { throw error } }).feed(await copy.text());
+      } else wire = await copy.json() as Wire;
+      if (!wire) throw new Error('MCP response has no terminal tool result');
+      const params = (body as { params?: { name?: string; arguments?: unknown; _meta?: unknown } }).params;
+      const toolName = params?.name ?? '';
+      const tool = MCP_TOOLS.find(entry => entry.name === toolName);
+      const failed = Boolean(wire.error || wire.result?.isError);
+      logMcpEventDetached(event, cfEnv.DB, {
+        userId: mcpUser?.userId, requestId, method: 'tools/call', toolName,
+        toolDomain: tool?.domain ?? null, isMutating: isMcpMutatingTool(tool),
+        arguments: { ...((params?.arguments ?? {}) as Record<string, unknown>), _request: { meta: params?._meta, user_agent: event.req.headers.get('user-agent'), request_id: getRequestDataMetrics(event).requestId } },
+        result: wire.result ?? wire.error, status: failed ? 'error' : 'success',
+        errorMessage: wire.error?.message ?? (failed ? wire.result?.content?.filter(entry => entry.type === 'text').map(entry => entry.text).join('\n') : null),
+        httpStatus: response.status, jsonrpcErrorCode: wire.error?.code,
+        jsonrpcErrorMessage: wire.error?.message, oauthClientId: mcpUser?.oauthClientId ?? null,
+        durationMs: Date.now() - requestStartedAt,
+      });
     }
     return response;
   } finally {

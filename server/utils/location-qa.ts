@@ -112,7 +112,8 @@ function normalizeQaInput(input: UpdateQaInput, creating = false) {
  * it has read it, so an id lookup replaces the scope clause rather than
  * narrowing it. Without an id this behaves exactly as before.
  */
-export async function listQa(db: DbClient, organizationId: string, locationId: string | null, publishedOnly = false, pagePath?: string | null, locale = 'en', qaId?: string | null) {
+export async function listQa(db: DbClient, organizationId: string, locationId: string | null, publishedOnly = false, pagePath?: string | null, locale?: string, qaId?: string | null) {
+  locale ??= (await getPersistedSourceLocale(db, organizationId)).locale
   const scope = qaId
     ? { clause: 'root.id = ?', params: [qaId] as unknown[] }
     : scopeSql(locationId, pagePath)
@@ -135,7 +136,7 @@ export function faqBlockSource(block: { type: string; data: Record<string, unkno
 }
 
 /** The published records a FAQ block with `source` lists on `pagePath`. */
-export function listFaqBlockQa(db: DbClient, organizationId: string, pagePath: string, source: FaqBlockSource, locale = 'en') {
+export function listFaqBlockQa(db: DbClient, organizationId: string, pagePath: string, source: FaqBlockSource, locale?: string) {
   return listQa(db, organizationId, null, true, source === 'page_qa' ? pagePath : null, locale)
 }
 
@@ -149,7 +150,7 @@ export function faqItems(rows: QaDocument[]) {
  * surface renders the same items.
  */
 export async function attachPageQa<T extends { type: string; data: Record<string, unknown> }>(
-  db: DbClient, organizationId: string, pagePath: string, blocks: T[], locale = 'en',
+  db: DbClient, organizationId: string, pagePath: string, blocks: T[], locale?: string,
 ): Promise<T[]> {
   const sources = new Set(blocks.map(faqBlockSource).filter((source): source is FaqBlockSource => source !== null))
   if (!sources.size) return blocks
@@ -179,12 +180,12 @@ export async function createQa(db: DbClient, scope: QaScope, input: CreateQaInpu
   const status = normalized.status === 'hidden' ? 'hidden' : 'published'
   const explicitSortOrder = normalized.sort_order === undefined ? null : normalized.sort_order as number
 
-  await getPersistedSourceLocale(db, scope.organizationId)
+  const source = await getPersistedSourceLocale(db, scope.organizationId)
   const id = crypto.randomUUID()
   const pagePath = scope.locationId === null ? normalizePagePath(scope.pagePath) : null
   const scoped = scopeSql(scope.locationId, pagePath)
   await createContentDocumentWithBlocks(db, {
-    id, rowRole: 'root', kind: 'qa', locale: 'en', organizationId: scope.organizationId,
+    id, rowRole: 'root', kind: 'qa', locale: source.locale, organizationId: scope.organizationId,
     locationId: scope.locationId, scopePath: pagePath, status, source: 'manual', sortOrder: explicitSortOrder ?? 0,
     title: question, summary: answer,
     metadata: { question_author: stringOrNull(normalized.question_author, 120),

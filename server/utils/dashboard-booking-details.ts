@@ -6,7 +6,9 @@ import { HTTPError } from 'nitro'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { assertResourceAccess, memberAccessPrincipal, roleAllows } from '~/server/utils/member-access'
-import { getLocationReservationConfig, reservationPolicySummarySource, renderBookingPolicySummary, type RenderedBookingPolicySummary } from '~/server/utils/reservations'
+import { renderBookingPolicySummary, type RenderedBookingPolicySummary } from '~/server/utils/reservations'
+import type { BookingPolicySummarySource } from '~/server/utils/booking-policy-summary'
+import { getSourceLocale } from '~/server/utils/organization-locales'
 import { loadOwnerPictures } from '~/server/notifications/hero'
 import { localPartsAt } from '~/utils/timezone'
 import { appendEntry, getEntryById, GuestThreadEntryDedupeConflictError } from '~/server/domain/guest-threads/entries'
@@ -49,6 +51,7 @@ interface BookingRow {
   cancellation_used_at: string | null
   created_at: string
   updated_at: string
+  policy_json: string | null
 }
 
 export interface DashboardBookingNote {
@@ -148,7 +151,7 @@ async function loadBookingRow(
   // refers to — a reservation or a booking — not on the thread. The thread
   // carries the conversation and the guest.
   return queryFirst<BookingRow>(db, `SELECT r.id, record.id AS operational_id, r.organization_id, s.name AS organization_name, s.vertical,
-    record.assigned_member_id, record.operational_updated_at, record.location_id, l.slug AS location_slug, l.title AS location_title,
+    record.assigned_member_id, record.operational_updated_at, record.policy_json, record.location_id, l.slug AS location_slug, l.title AS location_title,
     json_extract(r.payload_json, '$.guest.name') AS guest_name, json_extract(r.payload_json, '$.guest.email') AS guest_email, json_extract(r.payload_json, '$.guest.phone') AS guest_phone,
     (SELECT u.image FROM user u WHERE u.id = r.user_id) AS guest_image_url, record.party_size, record.starts_at, record.ends_at, record.timezone, record.status, json_extract(r.payload_json, '$.notes') AS requests,
     record.product_id AS experience_id, record.product_name AS experience_title, record.product_session_id AS session_id,
@@ -156,10 +159,10 @@ async function loadBookingRow(
     FROM requests r
     JOIN organization s ON s.id = r.organization_id
     JOIN (
-      SELECT b.id, b.request_id, b.status, b.party_size, ps.starts_at, ps.ends_at, ps.timezone, ps.location_id, b.product_id, p.name AS product_name, ps.id AS product_session_id, b.assigned_member_id, b.updated_at AS operational_updated_at
+      SELECT b.id, b.request_id, b.status, b.party_size, ps.starts_at, ps.ends_at, ps.timezone, ps.location_id, b.product_id, p.name AS product_name, ps.id AS product_session_id, b.assigned_member_id, b.updated_at AS operational_updated_at, NULL AS policy_json
         FROM bookings b JOIN product_sessions ps ON ps.id = b.product_session_id JOIN products p ON p.id = b.product_id
       UNION ALL
-      SELECT res.id, res.request_id, res.status, res.party_size, res.starts_at, res.ends_at, res.timezone, res.location_id, NULL, NULL, NULL, NULL, res.updated_at FROM reservations res
+      SELECT res.id, res.request_id, res.status, res.party_size, res.starts_at, res.ends_at, res.timezone, res.location_id, NULL, NULL, NULL, NULL, res.updated_at, res.policy_json FROM reservations res
     ) record ON record.request_id = r.id
     LEFT JOIN business_locations l ON l.id = record.location_id
     WHERE r.id = ? AND r.kind = ? AND ${scope.buyerUserId ? `r.user_id = ? AND ${REQUEST_CURRENT_BUYER_SQL}` : 'r.organization_id = ?'}`, [bookingId, type, scope.buyerUserId ?? scope.organizationId])
@@ -265,14 +268,9 @@ async function composeBookingDetails(
   const visibleLocations = locations.filter(location => type === 'reservation' || location.id === row.location_id)
   const locationPictures = await loadOwnerPictures(db, row.organization_id, 'business_location', visibleLocations.map(location => location.id))
 
-  const [resourceImageUrl, resolvedPolicy, notes, timeZone, contact] = await Promise.all([
+  const [resourceImageUrl, policyLocale, notes, timeZone, contact] = await Promise.all([
     loadResourceImage(db, row, type),
-    // A reservation's terms are its location's typed policy. A booking's are
-    // the product's own attributes, which travel with the product — there is
-    // no site-level policy to merge underneath either.
-    type === 'reservation' && row.location_id
-      ? getLocationReservationConfig(db, { organizationId: row.organization_id, locationId: row.location_id })
-      : Promise.resolve(null),
+    row.policy_json ? getSourceLocale(db,row.organization_id) : Promise.resolve(null),
     reader.buyerUserId ? Promise.resolve([]) : listInternalNotes(db, row.request_id),
     Promise.resolve(row.timezone),
     row.location_id
@@ -326,7 +324,7 @@ async function composeBookingDetails(
     updatedAt: row.updated_at,
     // Null means this location states no reservation policy, which the
     // screen shows as such rather than inventing default terms.
-    policy: resolvedPolicy ? renderBookingPolicySummary(reservationPolicySummarySource(resolvedPolicy)) : null,
+    policy: row.policy_json && policyLocale ? renderBookingPolicySummary(JSON.parse(row.policy_json) as BookingPolicySummarySource,policyLocale) : null,
     notes,
     pendingChange: await pendingBookingChange(db, row.request_id),
     locations: visibleLocations.map(location => ({ ...location, imageUrl: locationPictures.get(location.id)?.imageUrl ?? null })),

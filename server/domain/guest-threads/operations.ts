@@ -1,4 +1,4 @@
-import { bookingRefundQueries } from '~/server/domain/payments/booking-refund'
+import { visitRefundQueries } from '~/server/domain/payments/visit-refund'
 import { recordBookingCancelled, recordBookingDecision } from '~/server/domain/booking-analytics'
 import { executeBatch, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { isReservedTestDomain, shouldSendRealEmail } from '~/server/utils/email-delivery'
@@ -15,6 +15,7 @@ import { guestThreadReplyMessage, guestThreadStatusMessage } from '~/server/noti
 import { organizationLogo } from '~/server/notifications/hero'
 import { getPlatformDomain } from '~/server/utils/dashboard-notification-links'
 import { isBookingComplete } from '~/shared/bookings'
+import { creationRequestHash } from '~/server/utils/organization-events'
 import type {
   GuestThreadDeliveryProvider,
   GuestThreadDeliveryRow,
@@ -47,7 +48,7 @@ export type ExecuteOperationInput = {
   action: string
   body?: string
   /** The photos a reply carries, in the order they were chosen. */
-  photos?: MessagePhoto[]
+  photos?: MessagePhoto[] | { sourceIds: string[]; resolve: () => Promise<MessagePhoto[]> }
   env: ReplyEmailEnv & UploadResolvedMediaInput['env']
   idempotencyKey?: string
   actorUserId: string
@@ -409,8 +410,8 @@ async function executeSourceMutation(
     ? operationSubject(plan.action, await getOrganizationBrandName(db, context.thread.organization_id))
     : null
   // Declining or cancelling a paid booking returns the payment in the same batch, once the operator approved it.
-  const refundPlan = plan.kind === 'booking' && (plan.action === 'reject' || plan.action === 'cancel') && context.record
-    ? await bookingRefundQueries(db,{action:plan.action,organizationId:input.organizationId,actorUserId:input.actorUserId,bookingId:context.record.id,authorizationId:input.financialAuthorizationId,financialWritesAllowed:input.financialWritesAllowed,note:input.body,entryId,now}) : {queries:[],guard:null}
+  const refundPlan = (plan.action === 'reject' || plan.action === 'cancel') && context.record
+    ? await visitRefundQueries(db,{action:plan.action,organizationId:context.thread.organization_id,actorUserId:input.actorUserId,subjectType:plan.kind,subjectId:context.record.id,authorizationId:input.financialAuthorizationId,financialWritesAllowed:input.financialWritesAllowed,note:input.body,entryId,now}) : {queries:[],guard:null}
   const queries = [
     operationEntryQuery(context, plan, input, entryId, dedupeKey, now, subject,refundPlan.guard),
     sourceUpdateQuery(context, plan, input, entryId, now),
@@ -449,19 +450,31 @@ async function executeReply(
   const summary = await requestSummary(db, context.thread)
   if (!summary.guestEmail) return { ok: false, status: 400, reason: 'no_guest_email' }
   const body = (input.body ?? '').trim()
-  const photos = input.photos ?? []
-  if (!body && !photos.length) return { ok: false, status: 400, reason: 'empty_body' }
+  const photoInput = input.photos ?? []
+  const photoCount = Array.isArray(photoInput) ? photoInput.length : photoInput.sourceIds.length
+  if (!body && !photoCount) return { ok: false, status: 400, reason: 'empty_body' }
+  const photoIdentity = Array.isArray(photoInput)
+    ? await Promise.all(photoInput.map(async photo => ({ filename: photo.filename, hash: [...new Uint8Array(await crypto.subtle.digest('SHA-256', photo.bytes))].map(byte => byte.toString(16).padStart(2, '0')).join('') })))
+    : photoInput.sourceIds
+  const requestHash = await creationRequestHash({ body, photos: photoIdentity })
+  const matchesReply = (entry: GuestThreadEntryRow): boolean => {
+    if (!entryMatchesRequest(entry, 'thread.member_reply', body)) return false
+    const payload = JSON.parse(entry.payload_json ?? '{}') as { request_hash?: string }
+    return payload.request_hash === requestHash
+  }
 
   const dedupeKey = operationDedupeKey(input)
   const deliveryKey = deliveryDedupeKey(input)
   let entry = await findEntryByDedupeKey(db, dedupeKey)
-  if (entry && !entryMatchesRequest(entry, 'thread.member_reply', body)) return conflict()
+  if (entry && !matchesReply(entry)) return conflict()
 
   if (!entry) {
     const entryId = crypto.randomUUID()
     const deliveryId = deliveryKey
     const now = new Date().toISOString()
     const organizationId = context.thread.organization_id
+    const photos = Array.isArray(photoInput) ? photoInput : await photoInput.resolve()
+    if (photos.length !== photoCount) throw new Error('Resolved reply photos do not match their declared sources')
     // The photos are stored first and placed by the same batch that writes the
     // message, so a reply exists with all of its photos or not at all.
     const assetIds = await uploadMessagePhotos(db, input.env, organizationId, photos, { source: 'uploaded', userId: input.actorUserId })
@@ -476,14 +489,14 @@ async function executeReply(
           query: `
             INSERT INTO activity_entries
               (id, request_id, kind, scope_kind, actor_kind, actor_user_id, channel, body, event_name, payload_json, dedupe_key, sequence, occurred_at, created_at)
-            SELECT ?, id, 'message', 'request', 'member', ?, 'email', ?, 'thread.member_reply', '{}', ?,
+            SELECT ?, id, 'message', 'request', 'member', ?, 'email', ?, 'thread.member_reply', ?, ?,
                    COALESCE((SELECT MAX(sequence) FROM activity_entries WHERE request_id = requests.id), 0) + 1,
                    ?, ?
             FROM requests
             WHERE id = ? AND organization_id = ?
             ON CONFLICT(dedupe_key) DO NOTHING
           `,
-          params: [entryId, input.actorUserId, body || null, dedupeKey, now, now, context.thread.id, context.thread.organization_id],
+          params: [entryId, input.actorUserId, body || null, JSON.stringify({ request_hash: requestHash }), dedupeKey, now, now, context.thread.id, context.thread.organization_id],
         },
         {
           query: `
@@ -499,16 +512,26 @@ async function executeReply(
         ...messagePhotoPlacements(organizationId, entryId, assetIds, now),
       ], { operation: 'guest thread reply receipt' })
     } catch (error) {
-      await discardMessagePhotos(db, input.env, organizationId, assetIds, input.actorUserId, error)
-      throw error
+      let concurrent: GuestThreadEntryRow | null
+      try {
+        concurrent = await findEntryByDedupeKey(db, dedupeKey)
+      } catch (readError) {
+        throw new AggregateError([error, readError], 'The reply commit could not be read; its photos have been retained', { cause: readError })
+      }
+      if (concurrent?.id !== entryId) await discardMessagePhotos(db, input.env, organizationId, assetIds, input.actorUserId, error)
+      if (!concurrent || !matchesReply(concurrent)) throw error
     }
     entry = await findEntryByDedupeKey(db, dedupeKey)
   }
 
   if (!entry) return { ok: false, status: 404, reason: 'thread_not_found' }
-  if (!entryMatchesRequest(entry, 'thread.member_reply', body)) return conflict()
+  if (!matchesReply(entry)) return conflict()
   const delivery = await getDeliveryById(db, deliveryKey)
   if (!delivery || delivery.entry_id !== entry.id) throw new Error('Reply delivery receipt does not match its ledger entry')
+  if (isDeliverySent(delivery)) {
+    await updateThreadProjectionIfLatestEntry(db, context.thread.id, entry.id, { conversationState: 'waiting_on_guest' })
+    return successfulOutcome(db, context)
+  }
 
   const fromName = await getOrganizationBrandName(db, context.thread.organization_id)
   const outcome = await deliverGuestThreadEmail(db, {

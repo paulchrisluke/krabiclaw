@@ -10,6 +10,7 @@ import {tokenHash} from './buyer'
 import {describeErrorForTelemetry} from '~/server/utils/error-telemetry'
 import {stripeLivemodeFromKey} from '~/server/utils/stripe-connect'
 import {recordPaymentsVolumeBilled} from '~/server/domain/booking-analytics'
+import { readPaymentsBillingBasis } from './fx'
 
 export function metronomeCurrencyAmount(minor:number,currency:CurrencyCode):string {
  if(currency!=='USD')throw new Error('Payments usage billing requires USD cents')
@@ -181,7 +182,7 @@ export async function setUpPaymentsBillingForSubscriptionEvent(db:DbClient,strip
  if(organizations.length>1)throw new Error('Stripe customer belongs to more than one organization')
  if(organizations[0]&&await hasOrganizationEntitlement(env,organizations[0].id,'payments'))await setUpPaymentsBilling(db,stripe,env,organizations[0].id)
 }
-async function paymentsBillingPricing(db:DbClient,env:CloudflareEnv,organizationId:string) {
+export async function paymentsBillingPricing(db:DbClient,env:CloudflareEnv,organizationId:string) {
  const account=await queryFirst<BillingAccount>(db,'SELECT * FROM payment_billing_accounts WHERE organization_id=?',[organizationId])
  if(!account?.metronome_customer_id||!account.metronome_contract_id)return {account,contract:null,pricing:null}
  const contract=await getPaymentsBillingContract(env,account)
@@ -192,12 +193,23 @@ async function paymentsBillingPricing(db:DbClient,env:CloudflareEnv,organization
 }
 export async function paymentsUsageStatus(db:DbClient,env:CloudflareEnv,organizationId:string) {
  const {account,contract:native,pricing}=await paymentsBillingPricing(db,env,organizationId)
- const pending=await queryAll(db,`SELECT currency,kind,COUNT(*) AS event_count,SUM(amount) AS amount,MAX(error) AS error FROM payment_usage_events WHERE organization_id=? AND delivery_at IS NULL GROUP BY currency,kind`,[organizationId])
+ const pending=await queryAll<{currency:string;kind:string;event_count:number;amount:number;billing_amount:number;invalid_basis:number;error:string|null}>(db,`SELECT currency,kind,COUNT(*) AS event_count,SUM(amount) AS amount,
+  SUM(CASE WHEN billing_basis_json IS NULL AND currency='USD' THEN amount ELSE json_extract(billing_basis_json,'$.amount') END) AS billing_amount,
+  SUM(CASE WHEN billing_basis_json IS NULL THEN currency<>'USD' ELSE
+   COALESCE(json_extract(billing_basis_json,'$.currency')<>'USD'
+    OR json_extract(billing_basis_json,'$.source_currency')<>currency
+    OR json_extract(billing_basis_json,'$.source_amount')<>amount
+    OR json_type(billing_basis_json,'$.amount')<>'integer',1) END) AS invalid_basis,
+  MAX(error) AS error FROM payment_usage_events WHERE organization_id=? AND delivery_at IS NULL GROUP BY currency,kind`,[organizationId])
+ if(pending.some(row=>row.invalid_basis!==0||!Number.isSafeInteger(row.billing_amount)))throw new Error('Accrued Payments usage is missing its native currency billing receipt')
  if(!account?.metronome_customer_id||!account.metronome_contract_id||!native)return {configured:false,pending,pricing:null,invoices:[],credits:[],source:'Metronome configuration missing; durable accrued events retained'}
  const stripe=getStripe(env)
  const invoices=await metronomeInvoices(env,account.metronome_customer_id,account.metronome_contract_id)
- const negative=await queryAll<{id:string;source_id:string;kind:string;currency:string;amount:number;provider_occurred_at:string;error:string|null}>(db,"SELECT id,source_id,kind,currency,amount,provider_occurred_at,error FROM payment_usage_events WHERE organization_id=? AND kind IN ('stripe_cost','stripe_cost_adjustment') AND amount<0 AND delivery_at IS NULL AND billing_timestamp IS NULL",[organizationId])
- const credits=negative.filter(event=>usageBillingDecision(event,invoices,undefined,account.contract_start_at).requiresCredit)
+ const negative=await queryAll<{id:string;source_id:string;kind:string;currency:string;amount:number;provider_occurred_at:string;error:string|null;billing_basis_json:string|null}>(db,"SELECT id,source_id,kind,currency,amount,provider_occurred_at,error,billing_basis_json FROM payment_usage_events WHERE organization_id=? AND kind IN ('stripe_cost','stripe_cost_adjustment') AND amount<0 AND delivery_at IS NULL AND billing_timestamp IS NULL",[organizationId])
+ const credits=negative.map(event=>{
+  const basis=readPaymentsBillingBasis(event.billing_basis_json,event.amount,event.currency)
+  return {id:event.id,source_id:event.source_id,kind:event.kind,currency:basis.currency,amount:basis.amount,source_currency:event.currency,source_amount:event.amount,fx_quote_id:basis.fx_quote?.id??null,provider_occurred_at:event.provider_occurred_at,error:event.error}
+ }).filter(event=>usageBillingDecision(event,invoices,undefined,account.contract_start_at).requiresCredit)
  const collected=[]
  for(const invoice of invoices){
   let collection_invoice=null
@@ -215,13 +227,18 @@ export async function paymentsUsageStatus(db:DbClient,env:CloudflareEnv,organiza
  return {configured:true,pending,pricing,account:{...account,status},invoices:collected,credits,source:'Metronome',refreshed_at:new Date().toISOString()}
 }
 export async function deliverPaymentsUsage(db:DbClient,env:CloudflareEnv,organizationId:string) {
- const events=await queryAll<{id:string;payment_id:string|null;kind:string;currency:CurrencyCode;amount:number;source_id:string;provider_occurred_at:string;created_at:string;billing_timestamp:string|null}>(db,`SELECT * FROM payment_usage_events WHERE organization_id=? AND delivery_at IS NULL AND dead_letter_at IS NULL ORDER BY created_at LIMIT 100`,[organizationId])
+ const events=await queryAll<{id:string;payment_id:string|null;kind:string;currency:CurrencyCode;amount:number;source_id:string;provider_occurred_at:string;created_at:string;billing_timestamp:string|null;billing_basis_json:string|null}>(db,`SELECT * FROM payment_usage_events WHERE organization_id=? AND delivery_at IS NULL AND dead_letter_at IS NULL ORDER BY created_at LIMIT 100`,[organizationId])
  if(!events.length)return {delivered:0}
  const account=await queryFirst<BillingAccount>(db,'SELECT * FROM payment_billing_accounts WHERE organization_id=?',[organizationId])
  if(!account?.metronome_customer_id||!account.metronome_contract_id) throw new Error('Payments billing mapping missing; accrued usage remains undelivered')
  const native=await getPaymentsBillingContract(env,account)
  const invoices=await metronomeInvoices(env,account.metronome_customer_id,account.metronome_contract_id)
- if(typeof native.ending_before==='string'&&Date.parse(native.ending_before)<=Date.now()&&events.some(event=>!usageBillingDecision(event,invoices,undefined,account.contract_start_at).requiresCredit)){
+ const pricedEvents=events.map(event=>{
+  const basis=readPaymentsBillingBasis(event.billing_basis_json,event.amount,event.currency)
+  if(basis.currency!==account.currency)throw new Error('Payments billing basis does not match its native contract')
+  return {event,basis}
+ })
+ if(typeof native.ending_before==='string'&&Date.parse(native.ending_before)<=Date.now()&&pricedEvents.some(({event,basis})=>!usageBillingDecision({...event,amount:basis.amount},invoices,undefined,account.contract_start_at).requiresCredit)){
   // updateEndDate without ending_before is the native documented reopening path.
   // Only historical accrued events reach this path; it grants no new acceptance.
   await metronomeRequest(env,'/v1/contracts/updateEndDate',{customer_id:account.metronome_customer_id,contract_id:account.metronome_contract_id},`payments-servicing:${account.metronome_contract_id}:${events[0]!.id}`)
@@ -230,10 +247,10 @@ export async function deliverPaymentsUsage(db:DbClient,env:CloudflareEnv,organiz
   await execute(db,"UPDATE payment_billing_accounts SET status='servicing',updated_at=? WHERE organization_id=?",[new Date().toISOString(),organizationId])
  }
  let delivered=0
- for(const event of events){
-  if(event.currency!==account.currency)throw new Error(`Payments ${event.currency} costs need a matching provider-currency contract; no FX conversion is available`)
-  const decision=usageBillingDecision(event,invoices,undefined,account.contract_start_at)
-  if(event.billing_timestamp && usageBillingDecision({...event,provider_occurred_at:event.billing_timestamp},invoices,undefined,account.contract_start_at).adjustment){
+ for(const {event,basis} of pricedEvents){
+  const billingEvent = { ...event, amount: basis.amount }
+  const decision=usageBillingDecision(billingEvent,invoices,undefined,account.contract_start_at)
+  if(event.billing_timestamp && usageBillingDecision({...billingEvent,provider_occurred_at:event.billing_timestamp},invoices,undefined,account.contract_start_at).adjustment){
    await execute(db,'UPDATE payment_usage_events SET error=?,dead_letter_at=? WHERE id=?',['Previously attempted usage period has closed; reconcile native acceptance before retiming this event',new Date().toISOString(),event.id]);continue
   }
   if(decision.requiresCredit){await execute(db,'UPDATE payment_usage_events SET error=?,dead_letter_at=? WHERE id=?',['Closed-period actual-cost credit requires native Stripe credit memo settlement; retained for owner servicing',new Date().toISOString(),event.id]);continue}
@@ -244,8 +261,8 @@ export async function deliverPaymentsUsage(db:DbClient,env:CloudflareEnv,organiz
    continue
   }
   try {
-   await metronomeRequest(env,'/v1/ingest',[{transaction_id:`payments:${await tokenHash(event.source_id)}`,customer_id:account.metronome_customer_id,timestamp,event_type:`payments_${event.kind}`,properties:{amount_minor:String(event.amount),currency:event.currency,pricing_amount:metronomeCurrencyAmount(event.amount,event.currency),provider_occurred_at:event.provider_occurred_at,payment_source:event.source_id,billing_adjustment:decision.adjustment?'closed_period_roll_forward':'original_period'}}])
-   if(event.kind==='captured_volume'){if(!event.payment_id)throw new Error(`Captured volume ${event.id} has no payment`);await recordPaymentsVolumeBilled(db,{organizationId,paymentId:event.payment_id,volumeMinor:event.amount,currency:event.currency})}
+   await metronomeRequest(env,'/v1/ingest',[{transaction_id:`payments:${await tokenHash(event.source_id)}`,customer_id:account.metronome_customer_id,timestamp,event_type:`payments_${event.kind}`,properties:{amount_minor:String(event.amount),source_currency:event.currency,currency:basis.currency,pricing_amount:metronomeCurrencyAmount(basis.amount,basis.currency),...(basis.fx_quote?{fx_quote_id:basis.fx_quote.id}:{}),provider_occurred_at:event.provider_occurred_at,payment_source:event.source_id,billing_adjustment:decision.adjustment?'closed_period_roll_forward':'original_period'}}])
+   if(event.kind==='captured_volume'){if(!event.payment_id)throw new Error(`Captured volume ${event.id} has no payment`);await recordPaymentsVolumeBilled(db,{organizationId,paymentId:event.payment_id,volumeMinor:basis.amount,currency:basis.currency})}
    await execute(db,'UPDATE payment_usage_events SET delivery_at=?,error=NULL WHERE id=?',[new Date().toISOString(),event.id]);delivered++
   }catch(error){
    const status=error instanceof HTTPError?error.data?.provider_status:undefined
@@ -296,18 +313,19 @@ export async function reconcileNativeBillingCredit(db:DbClient,stripe:Stripe,env
  const {assertRoleAllows}=await import('~/server/utils/member-access')
  await assertRoleAllows({organizationId:principal.organizationId,role:principal.role,permissions:{billing:['update']}})
  const account=await queryFirst<BillingAccount>(db,'SELECT * FROM payment_billing_accounts WHERE organization_id=?',[principal.organizationId])
- const event=await queryFirst<{id:string;kind:string;amount:number;currency:string;provider_occurred_at:string;delivery_at:string|null;credit_note_id:string|null;billing_timestamp:string|null}>(db,"SELECT * FROM payment_usage_events WHERE id=? AND organization_id=? AND kind IN ('stripe_cost','stripe_cost_adjustment') AND amount<0",[eventId,principal.organizationId])
+ const event=await queryFirst<{id:string;kind:string;amount:number;currency:string;provider_occurred_at:string;delivery_at:string|null;credit_note_id:string|null;billing_timestamp:string|null;billing_basis_json:string|null}>(db,"SELECT * FROM payment_usage_events WHERE id=? AND organization_id=? AND kind IN ('stripe_cost','stripe_cost_adjustment') AND amount<0",[eventId,principal.organizationId])
  if(!account||!event)throw new HTTPError({statusCode:404,statusMessage:'Unsettled actual-cost credit not found'})
  if(event.delivery_at&&event.credit_note_id!==creditNoteId)throw new HTTPError({statusCode:409,statusMessage:'Cost credit has already been delivered'})
  if(event.billing_timestamp)throw new HTTPError({statusCode:409,statusMessage:'Reconcile native usage acceptance before settling a previously attempted cost credit'})
  await getPaymentsBillingContract(env,account)
  const invoices=await metronomeInvoices(env,account.metronome_customer_id!,account.metronome_contract_id!)
- if(!usageBillingDecision(event,invoices,undefined,account.contract_start_at).requiresCredit)throw new HTTPError({statusCode:409,statusMessage:'This cost credit is still eligible for native usage delivery'})
+ const basis = readPaymentsBillingBasis(event.billing_basis_json, event.amount, event.currency)
+ if(!usageBillingDecision({...event,amount:basis.amount},invoices,undefined,account.contract_start_at).requiresCredit)throw new HTTPError({statusCode:409,statusMessage:'This cost credit is still eligible for native usage delivery'})
  const note=await stripe.creditNotes.retrieve(creditNoteId)
  const invoiceId=typeof note.invoice==='string'?note.invoice:note.invoice.id
  const invoice=await stripe.invoices.retrieve(invoiceId)
  const customerId=typeof invoice.customer==='string'?invoice.customer:invoice.customer?.id
- if(customerId!==account.stripe_billing_customer_id||note.status!=='issued'||note.currency.toUpperCase()!==event.currency||note.total_excluding_tax!==-event.amount||note.livemode!==invoice.livemode)throw new HTTPError({statusCode:409,statusMessage:'Native billing credit does not match this tenant’s attributable credit'})
+ if(customerId!==account.stripe_billing_customer_id||note.status!=='issued'||note.currency.toUpperCase()!==basis.currency||note.total_excluding_tax!==-basis.amount||note.livemode!==invoice.livemode)throw new HTTPError({statusCode:409,statusMessage:'Native billing credit does not match this tenant’s attributable credit'})
  if(event.credit_note_id===note.id)return {settled:true,credit_note_id:note.id,source:'Stripe native credit note'}
  const result=await execute(db,'UPDATE payment_usage_events SET credit_note_id=?,delivery_at=?,error=NULL WHERE id=? AND organization_id=? AND delivery_at IS NULL AND billing_timestamp IS NULL',[note.id,new Date().toISOString(),event.id,principal.organizationId])
  if(result.meta.changes!==1)throw new HTTPError({statusCode:409,statusMessage:'Credit settled concurrently'})

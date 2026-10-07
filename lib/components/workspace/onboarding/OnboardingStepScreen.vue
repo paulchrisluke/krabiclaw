@@ -12,6 +12,13 @@
       @update:model-value="choose(() => { state.vertical = $event as OrganizationVertical })"
     />
 
+    <OnboardingChoiceGrid
+      v-else-if="step.id === 'language'"
+      :choices="LANGUAGE_CHOICES"
+      :model-value="state.details.sourceLocale"
+      @update:model-value="choose(() => { state.details.sourceLocale = $event })"
+    />
+
     <GooglePlacePicker v-else-if="step.id === 'business'" v-model="businessSearch" @select="choosePlace">
       <template #actions>
         <UButton
@@ -63,6 +70,8 @@
 </template>
 
 <script setup lang="ts">
+import { PLATFORM_LOCALES } from '~/shared/platform-locales'
+const LANGUAGE_CHOICES = PLATFORM_LOCALES.map(locale => ({ value: locale.locale, label: locale.label, icon: 'i-lucide-languages' }))
 import IntakeDetailsCard from '~/lib/components/workspace/onboarding/IntakeDetailsCard.vue'
 import DraftBrandCard from '~/lib/components/workspace/onboarding/DraftBrandCard.vue'
 import LocationHoursCard from '~/lib/components/workspace/location/LocationHoursCard.vue'

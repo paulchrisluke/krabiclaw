@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { guestReservationRefundQueries } from '~/server/domain/payments/visit-refund'
 import { recordBookingCancelled } from '~/server/domain/booking-analytics'
 import { executeBatch, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { isBookingComplete, type BookingStatus } from '~/shared/bookings'
@@ -29,7 +30,7 @@ const guest = z.object({ name: z.string(), email: z.string(), phone: z.string().
  * `bookings.completed_at` and the `review_requests` record.
  */
 const threadPayload = z.object({
-  provenance: z.object({ source: z.string(), external_reference: z.string().nullable(), actor_user_id: z.string(), idempotency_key: z.string(), fingerprint: z.string(), guest_acknowledgement: z.boolean(), creation_kind: z.literal('ordinary'), creation_status: z.enum(['pending', 'confirmed']), followups_completed: z.boolean() }).optional(),
+  provenance: z.object({ source: z.string(), external_reference: z.string().nullable(), actor_user_id: z.string().nullable(), idempotency_key: z.string(), fingerprint: z.string(), guest_acknowledgement: z.boolean(), creation_kind: z.enum(['ordinary', 'checkout']), creation_status: z.enum(['pending', 'confirmed']), followups_completed: z.boolean() }).optional(),
   guest,
   party_size_is_minimum: z.boolean(),
   notes: z.string().nullable(),
@@ -59,6 +60,15 @@ export type GuestRequest = z.infer<typeof guestRequestSchema>
 export type BookingRequest = Extract<GuestRequest, { kind: 'reservation' | 'booking' }>
 export type GuestRequestKind = GuestRequest['kind']
 export type ThreadPayload = z.infer<typeof threadPayload>
+
+/** The authenticated business operation that created a guest commitment. */
+export interface BookingOperator {
+  userId: string
+  idempotencyKey: string
+  source: string
+  externalReference: string | null
+  guestAcknowledgement: boolean
+}
 
 /** The operational record a thread links to, when it has one. */
 export interface ThreadOperationalRecord {
@@ -128,7 +138,7 @@ export async function getThreadOperationalRecord(db: DbClient, requestId: string
  * A new thread has not been archived by anyone, so it carries no archive state.
  */
 export function requestInsertQueries(request: Omit<GuestRequest, 'archived_at' | 'archived_by_user_id'>, claimedBy?: BatchQuery): BatchQuery[] {
-  const provenance = request.kind === 'booking' && 'provenance' in request.payload ? request.payload.provenance : undefined
+  const provenance = request.kind !== 'contact' && 'provenance' in request.payload ? request.payload.provenance : undefined
   const values = [request.id, request.kind, request.organization_id, request.location_id, request.user_id, request.review_id,
     request.conversation_state, request.resolved_at, JSON.stringify(request.payload), request.created_at, request.updated_at]
   return [{
@@ -141,7 +151,7 @@ export function requestInsertQueries(request: Omit<GuestRequest, 'archived_at' |
   }, {
     query: `INSERT INTO activity_entries (id, request_id, kind, scope_kind, actor_kind, actor_user_id, channel, payload_json, dedupe_key, sequence, occurred_at, created_at)
       SELECT ?, id, 'submission', 'request', ?, ?, ?, json_object('kind', kind), ?, 1, created_at, created_at FROM requests WHERE id = ? AND changes() = 1`,
-    params: [crypto.randomUUID(), provenance ? 'member' : 'guest', provenance?.actor_user_id ?? null, provenance ? 'system' : 'web', `request:${request.id}:submission`, request.id],
+    params: [crypto.randomUUID(), provenance?.actor_user_id ? 'member' : 'guest', provenance?.actor_user_id ?? request.user_id, provenance?.actor_user_id ? 'system' : 'web', `request:${request.id}:submission`, request.id],
   }, publicResourceCacheInvalidationQuery(request.organization_id, 'guest-thread-create')]
 }
 
@@ -230,15 +240,18 @@ export async function cancelBookingRequest(db: DbClient, input: {
   // moved in between left the guest with a consumed token and a live booking
   // still holding its seats.
   const table = record.kind === 'booking' ? 'bookings' : 'reservations'
+  const refund = record.kind === 'reservation' ? await guestReservationRefundQueries(db, {
+    organizationId: input.organizationId, reservationId: record.id, requestId: input.id, startsAt: record.starts_at, now: input.now, buyerUserId: input.buyerUserId,
+  }) : { queries: [], guard: null }
   const [consumed, released] = await executeBatch(db, [
     {
       query: `UPDATE requests SET
           payload_json = json_set(payload_json, '$.cancellation.used_at', ?), updated_at = ?
         WHERE id = ? AND organization_id = ? AND kind = ?
           AND ${input.buyerUserId ? 'user_id = ?' : "json_extract(payload_json, '$.cancellation.token_hash') = ? AND json_extract(payload_json, '$.cancellation.expires_at') > ?"}
-          AND json_extract(payload_json, '$.cancellation.used_at') IS NULL
+          AND json_extract(payload_json, '$.cancellation.used_at') IS NULL AND (${refund.guard?.query ?? '1=1'})
           AND EXISTS (SELECT 1 FROM ${table} WHERE id = ? AND organization_id = ? AND request_id = ? AND status = ?${input.buyerUserId ? ' AND user_id = ?' : ''}) RETURNING *`,
-      params: [input.now, input.now, input.id, input.organizationId, input.kind, ...(input.buyerUserId ? [input.buyerUserId] : [input.tokenHash, input.now]), record.id, input.organizationId, input.id, record.status, ...(input.buyerUserId ? [input.buyerUserId] : [])],
+      params: [input.now, input.now, input.id, input.organizationId, input.kind, ...(input.buyerUserId ? [input.buyerUserId] : [input.tokenHash, input.now]), ...(refund.guard?.params ?? []), record.id, input.organizationId, input.id, record.status, ...(input.buyerUserId ? [input.buyerUserId] : [])],
     },
     {
       query: `UPDATE ${table} SET status = 'cancelled', cancelled_at = ?, cancellation_reason = 'guest_cancelled', updated_at = ?
@@ -254,6 +267,7 @@ export async function cancelBookingRequest(db: DbClient, input: {
         WHERE changes() = 1`,
       params: [crypto.randomUUID(), input.id, `${record.kind}.cancel`, JSON.stringify({ action: 'cancel', beforeStatus: record.status, afterStatus: 'cancelled', operational_booking_id: record.id, request_id: input.id, ...(input.buyerUserId ? { actor_user_id: input.buyerUserId } : {}) }), `${record.kind}:${record.id}:guest-cancel`, input.id, input.now, input.now],
     },
+    ...refund.queries,
   ], { operation: 'Cancel booking request' })
 
   const row = (consumed?.results?.[0] ?? null) as Record<string, unknown> | null

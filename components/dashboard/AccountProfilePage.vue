@@ -110,6 +110,7 @@ import { dashboardScopeHeaderModelKey } from '~/lib/components/workspace/dashboa
 // -nocheck
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import { authClient } from '~/lib/auth-client'
+import { parsePhoneOrThrow } from '~/utils/phone'
 
 
 // The level runs while setup is still synchronous: it injects the record the
@@ -363,8 +364,10 @@ async function requestPhoneVerify() {
   phoneSaving.value = true
   phoneError.value = null
   try {
-    const res = await authClient.phoneNumber.sendOtp({ phoneNumber: phoneInput.value.trim() })
+    const phoneNumber = parsePhoneOrThrow(phoneInput.value)
+    const res = await authClient.phoneNumber.sendOtp({ phoneNumber })
     if (res.error) throw new Error(res.error.message || 'Failed to send OTP')
+    phoneInput.value = phoneNumber
     
     otpCode.value = ''
     verifyError.value = ''

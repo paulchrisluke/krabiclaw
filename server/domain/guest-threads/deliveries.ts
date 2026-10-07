@@ -169,9 +169,9 @@ export async function applyResendEmailEvent(
   if (!delivery) return 'no_delivery'
   const changed = await advanceDeliveryStatus(db, delivery, status, status === 'failed' ? resendFailureReason(event) : null)
   if (!changed) return 'unchanged'
-  const entry = await queryFirst<{ request_id: string }>(db, 'SELECT request_id FROM activity_entries WHERE id = ?', [delivery.entry_id])
+  const entry = await queryFirst<{ request_id: string | null }>(db, 'SELECT request_id FROM activity_entries WHERE id = ?', [delivery.entry_id])
   if (!entry) throw new Error(`Activity entry ${delivery.entry_id} for delivery ${delivery.id} not found`)
-  await publishGuestInboxThreadEvent(env, db, { threadId: entry.request_id, type: 'delivery.changed' })
+  if (entry.request_id) await publishGuestInboxThreadEvent(env, db, { threadId: entry.request_id, type: 'delivery.changed' })
   return 'advanced'
 }
 

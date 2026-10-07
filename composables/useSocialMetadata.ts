@@ -96,7 +96,7 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
     if (!value) return null
     const template = value.template ?? resolvePublicTemplate({ themeId: tenant.themeId }).slug
     const origin = template === 'platform'
-      ? config.public.platformUrl
+      ? config.public.siteUrl
       : requestURL.origin
     const exactRepresentation = localeRepresentations.value.find(item => item.locale === publicLocale.value)
     if (publicLocale.value !== 'en' && !exactRepresentation) {

@@ -60,9 +60,16 @@ const paymentEntitled = computed(() => {
   if (!plan) throw createError({ statusCode: 500, statusMessage: 'Organization billing status is unavailable', fatal: true })
   return getPlanEntitlements(plan).payments === true
 })
-const { data: members, error: membersError, status: membersStatus } = await useFetch<{ members: { id: string; name: string }[] }>(() => `/api/organizations/${dashboard.organization.value?.id}/members/scheduling`)
-const assignedMember = computed({ get: () => p.form.assigned_member_id, set: (value: string | null) => { p.form.assigned_member_id = value ?? ''; p.form.scheduling_mode = value ? 'provider' : 'legacy' } })
-const memberOptions = computed(() => [{ label: 'Use the business schedule', value: '' }, ...(members.value?.members.map(member => ({ label: member.name, value: member.id })) ?? [])])
+const { data: members, error: membersError, status: membersStatus } = await useMemberSchedulingList(() => dashboard.organization.value?.id)
+const assignedMember = computed({
+  get: () => p.form.assigned_team_id ? `team:${p.form.assigned_team_id}` : p.form.assigned_member_id ? `member:${p.form.assigned_member_id}` : '',
+  set: (value: string | null) => {
+    p.form.assigned_team_id = value?.startsWith('team:') ? value.slice(5) : ''
+    p.form.assigned_member_id = value?.startsWith('member:') ? value.slice(7) : ''
+    p.form.scheduling_mode = value ? 'provider' : 'legacy'
+  },
+})
+const memberOptions = computed(() => [{ label: 'Use the business schedule', value: '' }, ...(members.value?.teams.map(team => ({ label: `Any available member of ${team.name}`, value: `team:${team.id}` })) ?? []), ...(members.value?.members.map(member => ({ label: member.name, value: `member:${member.id}` })) ?? [])])
 const setting = computed(() => settings[concern.value as keyof typeof settings] ?? { title: '', lead: '' })
 watchEffect(() => {
   if (level.mode.value === 'yield') return
@@ -97,7 +104,7 @@ const dirty = computed(() => {
     case 'duration': return Number(p.form.booking_duration) !== config?.duration_minutes
     case 'capacity': return (p.form.booking_capacity === '' ? null : Number(p.form.booking_capacity)) !== config?.default_capacity
     case 'confirmation': return p.form.confirmation_mode !== config?.confirmation_mode
-    case 'assignment': return p.form.assigned_member_id !== (config?.assigned_member_id ?? '') || p.form.scheduling_mode !== config?.scheduling_mode
+    case 'assignment': return p.form.assigned_member_id !== (config?.assigned_member_id ?? '') || p.form.assigned_team_id !== (config?.assigned_team_id ?? '') || p.form.scheduling_mode !== config?.scheduling_mode
     case 'payment': return p.form.online_payment_required !== config?.online_payment_required
     case 'location': return (p.form.online_schedule ? p.form.online_timezone : null) !== config?.online_timezone
     case 'calendar': return (p.form.calendar_group.trim() || null) !== config?.calendar_group

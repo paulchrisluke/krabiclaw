@@ -399,9 +399,9 @@ export async function listOrganizationGuestThreads(
     LEFT JOIN organization s ON s.id = gt.organization_id${PLACE_IMAGE_SQL}
     WHERE gt.kind IN ('contact', 'reservation', 'booking') AND ${where}
     ${unreadFilter}
-    ORDER BY gt.updated_at DESC
-    LIMIT ?
-  `, opts.unreadOnly && opts.userId ? [...params, ...(opts.buyerAudience?buyerUnreadThreadParams(opts.userId):[opts.userId,opts.userId]), limit] : [...params, limit])
+    ORDER BY gt.updated_at DESC, gt.id
+    LIMIT ? OFFSET ?
+  `, opts.unreadOnly && opts.userId ? [...params, ...(opts.buyerAudience?buyerUnreadThreadParams(opts.userId):[opts.userId,opts.userId]), limit, opts.offset ?? 0] : [...params, limit, opts.offset ?? 0])
 
   const unreadIds = opts.userId
     ? new Set(await listUnreadThreadIds(db, rows.map(row => row.id), opts.userId))

@@ -459,7 +459,7 @@ export function buildMediaAssetInsertQuery(data: CreateInput, now = new Date().t
   }
 }
 
-export async function createMediaAsset(db: DbClient, data: CreateInput): Promise<void> {
+export async function createMediaAsset(db: DbClient, data: CreateInput, creation?: { dedupeKey: string; requestHash: string }): Promise<void> {
   const query = buildMediaAssetInsertQuery(data)
   await executeBatch(db, [query, organizationEventQuery({
     organizationId: data.organization_id,
@@ -468,7 +468,9 @@ export async function createMediaAsset(db: DbClient, data: CreateInput): Promise
     eventType: 'media.uploaded',
     entityType: 'media_asset',
     entityId: data.id,
+    ...(creation ? { dedupeKey: creation.dedupeKey } : {}),
     metadata: {
+      ...(creation ? { request_hash: creation.requestHash } : {}),
       kind: data.kind,
       provider: data.provider,
       source: data.source,

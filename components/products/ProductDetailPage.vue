@@ -1,11 +1,14 @@
 <template>
   <div class="bg-default text-default" :class="compact ? undefined : 'min-h-screen'">
+    <slot name="scope">
+      <BookingScopeSelect :locations="locations ?? []" :online-available="onlineAvailable" :selected-location-id="location?.id ?? null" :scope-required="scopeRequired" />
+    </slot>
     <AppBreadcrumb v-if="!compact" :crumbs="breadcrumbs" />
 
     <!-- One responsive primary action: the mobile bar and the desktop card
          resolve the same booking, so the page never shows two of them. -->
     <div
-      v-if="booking && (canBook || canOrderExternally || canEnquire)"
+      v-if="canBook || canOrderExternally || canEnquire"
       class="fixed inset-x-0 bottom-0 z-30 flex items-center justify-between gap-4 border-t border-default bg-default/95 px-5 py-4 shadow-lg backdrop-blur-sm lg:hidden"
     >
       <div v-if="priceLabel" class="min-w-0">
@@ -27,7 +30,7 @@
            travelling with the reader on the right. A product that takes no
            bookings has nothing to put in that column, so it keeps the single
            card. -->
-      <div v-if="booking">
+      <div v-if="booking || product.order_url">
         <MediaGallery v-if="!compact && galleryItems.length" :items="galleryItems" :title="displayTitle" />
 
         <!-- What it is, in one glance: name, tagline, how guests rate it,
@@ -63,7 +66,7 @@
 
         <div class="grid gap-10 lg:grid-cols-[1fr_380px] lg:items-start" :class="compact ? 'mt-8' : 'mt-14'">
         <div class="min-w-0">
-          <p v-if="!canBook && !canEnquire && !canOrderExternally" role="status" class="rounded-xl border border-default bg-elevated p-5 text-muted lg:hidden">{{ vertical === 'service' && !offer ? t('booking.price_unavailable_contact') : t('saya.common.temporarily_unavailable') }}</p>
+          <p v-if="!canBook && !canEnquire && !canOrderExternally" role="status" class="rounded-xl border border-default bg-elevated p-5 text-muted lg:hidden">{{ scopeRequired ? t('booking.choose_location') : vertical === 'service' && !offer ? t('booking.price_unavailable_contact') : t('saya.common.temporarily_unavailable') }}</p>
           <section v-if="!pageDocument && !compact && product.description" class="border-t border-default pt-10">
             <h2 class="saya-display text-2xl text-default sm:text-3xl">{{ t('saya.experience_detail.what_youll_do') }}</h2>
             <p class="mt-4 whitespace-pre-line text-base leading-relaxed text-muted sm:text-lg">{{ product.description }}</p>
@@ -194,7 +197,7 @@
               {{ sessionDayLabel(nextSession) }} · {{ sessionTimeLabel(nextSession) }}
             </p>
             <p v-if="!canBook && !canEnquire && !canOrderExternally" class="rounded-lg bg-default px-4 py-3 text-center text-sm font-semibold text-muted">
-              {{ vertical === 'service' && !offer ? t('booking.price_unavailable') : t('saya.common.temporarily_unavailable') }}
+              {{ scopeRequired ? t('booking.choose_location') : vertical === 'service' && !offer ? t('booking.price_unavailable') : t('saya.common.temporarily_unavailable') }}
             </p>
             <div v-else class="pt-2">
               <SayaButton v-if="canOrderExternally" block :href="product.order_url!" target="_blank" rel="noopener noreferrer" @click="recordExternalOrderClick">{{ externalActionLabel }}</SayaButton>
@@ -360,6 +363,9 @@ const props = defineProps<{
   pageDocument?: PublicTenantPage
   /** The directory supplies its own selected-service introduction. */
   compact?: boolean
+  scopeRequired?: boolean
+  locations?: PublicProductLocation[]
+  onlineAvailable?: boolean
 }>()
 
 const displayTitle = computed(() => props.pageDocument?.title ?? props.product.name)
@@ -442,9 +448,9 @@ const isAvailable = computed(() =>
   // booking form otherwise asked for an option it had none to offer.
   && (Boolean(props.product.order_url) || sellableVariants.value.length > 0))
 const canOrderExternally = computed(() => isAvailable.value && Boolean(props.product.order_url))
-const externalActionLabel = computed(() => props.booking || props.vertical === 'service' ? t('saya.experience_detail.book_now') : t('saya.cta.order_now'))
-const canEnquire = computed(() => isAvailable.value && !props.product.order_url && enquiryOnly.value)
-const canBook = computed(() => isAvailable.value && !props.product.order_url && !enquiryOnly.value && (props.vertical !== 'service' || offer.value !== null))
+const externalActionLabel = computed(() => props.product.kind === 'experience' || props.product.kind === 'service' ? t('saya.experience_detail.book_now') : t('saya.cta.order_now'))
+const canEnquire = computed(() => props.product.kind !== 'experience' && isAvailable.value && !props.product.order_url && enquiryOnly.value)
+const canBook = computed(() => !props.scopeRequired && Boolean(props.booking) && isAvailable.value && !props.product.order_url && !enquiryOnly.value && (props.vertical !== 'service' || offer.value !== null))
 
 
 
@@ -516,7 +522,7 @@ const visibleDetails = computed(() => productDetailFields(props.product.kind).fl
 }))
 
 const { data: initialSessions, error: initialSessionsError } = await useAsyncData(`product-detail-sessions:${props.organizationId}:${props.product.id}:${props.location?.id ?? 'online'}`, async () => {
-  if (!props.booking || props.product.order_url) return []
+  if (!props.booking || props.product.order_url || props.scopeRequired) return []
   if (props.sessions !== undefined) return props.sessions
   if (import.meta.server) {
     const event = useRequestEvent()!

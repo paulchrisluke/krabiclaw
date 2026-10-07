@@ -2,7 +2,8 @@ import { createHash } from 'node:crypto'
 import { guestAccountUrl } from '~/shared/guest-account'
 import { formatCalendarDate, formatTime, localPartsAt } from '~/utils/timezone'
 import { getGuestRequest, requestSummary, type cancelBookingRequest } from '~/server/domain/requests'
-import { queryFirst, type DbClient } from '~/server/db'
+import { execute, queryFirst, type DbClient } from '~/server/db'
+import { organizationEventQuery } from '~/server/utils/organization-events'
 import { getEmailDeliveryMode, hashEmail, isReservedTestDomain, sendEmail } from '~/server/utils/email-delivery'
 import { buildWhatsAppTemplatePayload, sendWhatsAppNotification, type WhatsAppTemplate } from '~/server/utils/whatsapp'
 import { hasOrganizationEntitlement } from '~/server/utils/billing'
@@ -73,6 +74,7 @@ interface OrganizationContext {
 }
 
 interface ReservationNotificationInput extends OrganizationContext {
+  guestAcknowledgement?: boolean
   locationId?: string | null
   locationName?: string | null
   reservationId: string
@@ -761,7 +763,7 @@ export async function notifyReservationCreated(
       message: ownerMessage,
       whatsappTemplate: 'new_reservation',
     }),
-    sendEmailNotification(env, db, {
+    ...(opts.guestAcknowledgement === false ? [] : [sendEmailNotification(env, db, {
       ...opts,
       to: opts.email,
       replyTo,
@@ -770,7 +772,7 @@ export async function notifyReservationCreated(
       payload,
       email: { subject: 'Your reservation is confirmed', html: guestEmail.html, text: guestEmail.text },
       delivery: threadDelivery(threadContext, 'guest_acknowledgement', 'email', 'reservation_customer_received', opts.email),
-    }),
+    })]),
   ])
 
   raiseSettledFailures('notifyReservationCreated', `reservationId ${opts.reservationId}`, results)
@@ -1408,6 +1410,8 @@ export async function notifyGuestThreadReply(
 export interface OrganizationInvitationInput {
   organizationId: string
   invitationId: string
+  expiresAt: string
+  inviterUserId: string
   email: string
   role: string
   organizationName: string
@@ -1425,6 +1429,13 @@ export async function notifyOrganizationInvited(
 ) {
   const platformDomain = getPlatformDomain(env)
   const inviteUrl = `https://${platformDomain}/accept-invitation/${opts.invitationId}`
+  const eventKey = `organization-invitation:${opts.invitationId}`
+  const audit = organizationEventQuery({ organizationId: opts.organizationId, actorId: opts.inviterUserId,
+    eventType: 'member.invited', entityType: 'invitation', entityId: opts.invitationId,
+    dedupeKey: eventKey, metadata: { role: opts.role } })
+  await execute(db, `${audit.query} ON CONFLICT(dedupe_key) DO NOTHING`, audit.params)
+  const entry = await queryFirst<{id:string}>(db, "SELECT id FROM activity_entries WHERE dedupe_key=? AND organization_id=? AND scope_kind='organization'", [eventKey,opts.organizationId])
+  if (!entry) throw new Error('Invitation delivery has no organization receipt')
 
   const rendered = await renderNotificationEmail(organizationInviteMessage({
     organizationName: opts.organizationName,
@@ -1438,6 +1449,7 @@ export async function notifyOrganizationInvited(
     to: opts.email,
     template: 'organization_invited',
     title: `You're invited to join ${opts.organizationName}`,
+    delivery: { threadId: null, entryId: entry.id, purpose: 'status_update', idempotencyKey: `organization-invitation-email:${opts.invitationId}:${opts.expiresAt}` },
     payload: {
       invitation_id: opts.invitationId,
       role: opts.role,

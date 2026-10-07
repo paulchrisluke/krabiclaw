@@ -75,9 +75,13 @@
             <p class="truncate text-sm text-muted">
               Expires {{ formatDate(invitation.expiresAt) }}
             </p>
+            <p class="text-sm" :class="invitation.delivery?.status === 'failed' ? 'text-error' : 'text-muted'">
+              {{ invitation.delivery?.error || (invitation.delivery ? `Email: ${invitation.delivery.provider === 'log_only' ? 'recorded locally' : invitation.delivery.status}` : 'Email delivery is unconfirmed') }}
+            </p>
           </div>
           <div class="flex shrink-0 items-center gap-2">
             <UBadge v-if="invitation.role" :label="invitation.role" color="neutral" variant="soft" size="lg" class="rounded-full capitalize" />
+            <UButton v-if="currentUserRole === 'owner' || currentUserRole === 'admin'" color="neutral" variant="ghost" :loading="resendingInviteId === invitation.id" @click="resendInvitation(invitation)">Resend</UButton>
             <UButton
               icon="i-lucide-x"
               color="neutral"
@@ -101,49 +105,12 @@ import { formatTimestamp } from '~/utils/timezone'
 
 import { authClient } from '~/lib/auth-client'
 import { getErrorMessage } from '~/utils/errors'
-import { organizationMembersKey } from '~/utils/organization-members'
+import type { DashboardMemberRow as MemberRow, DashboardInvitationRow } from '~/server/utils/dashboard-members'
 
 const dashboardApi = useDashboardApi()
 
-interface MemberRow {
-  id: string
-  role: string
-  createdAt: string
-  userId: string
-  name: string | null
-  email: string
-  image: string | null
-}
-
-interface InvitationRow {
-  id: string
-  email: string
-  role: string | null
-  status: string
-  expiresAt: string
-  createdAt: string
-}
-
-const isMembersResponse = (
-  value: unknown,
-): value is { members: MemberRow[]; invitations: InvitationRow[] } =>
-  isRecord(value)
-  && Array.isArray(value.members)
-  && value.members.every(member => isRecord(member) && typeof member.id === 'string')
-  && Array.isArray(value.invitations)
-  && value.invitations.every(invitation => isRecord(invitation) && typeof invitation.id === 'string')
-
-const route = useRoute()
 const dashboard = useDashboardOrganization()
-const membersKey = computed(() => organizationMembersKey(String(route.params.orgSlug ?? '')))
-
-const { data, error: loadError, refresh } = await useAsyncData(
-  membersKey,
-  () => dashboardApi<{ members: MemberRow[]; invitations: InvitationRow[] }>(
-    '/api/dashboard/members',
-    { validate: isMembersResponse },
-  ),
-)
+const { data, error: loadError, refresh } = await useOrganizationMembers()
 
 const members = computed(() => data.value?.members ?? [])
 const invitations = computed(() => data.value?.invitations ?? [])
@@ -187,6 +154,7 @@ function canEditMemberRole(member: MemberRow): boolean {
 
 const removingMemberId = ref<string | null>(null)
 const cancellingInviteId = ref<string | null>(null)
+const resendingInviteId = ref<string | null>(null)
 const memberError = ref<string | null>(null)
 const pendingInvitationError = ref<string | null>(null)
 
@@ -239,6 +207,22 @@ async function cancelInvitation(invitationId: string) {
     pendingInvitationError.value = err instanceof Error ? err.message : 'Failed to cancel invitation.'
   } finally {
     cancellingInviteId.value = null
+  }
+}
+
+async function resendInvitation(invitation: DashboardInvitationRow) {
+  resendingInviteId.value = invitation.id
+  pendingInvitationError.value = null
+  try {
+    const organizationId = dashboard.organization.value?.id
+    if (!organizationId || !['admin','owner','member'].includes(invitation.role ?? '')) throw new Error('Invitation details are unavailable')
+    const result = await authClient.organization.inviteMember({ organizationId, email: invitation.email, role: invitation.role as 'admin' | 'owner' | 'member', resend: true })
+    if (result.error) throw new Error(result.error.message || 'Failed to resend invitation')
+    await refresh()
+  } catch (error) {
+    pendingInvitationError.value = getErrorMessage(error, 'Failed to resend invitation')
+  } finally {
+    resendingInviteId.value = null
   }
 }
 

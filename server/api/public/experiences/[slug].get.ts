@@ -1,11 +1,11 @@
+import { getSourceLocale } from '~/server/utils/organization-locales'
 import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { previewSecretOf, resolvePreviewAuthorization } from '~/server/utils/preview-token'
-import { loadPublicExperienceDetail, loadPublicProductReviews, loadPublicProductSessions } from '~/server/utils/public-products'
+import { loadPublicExperienceDetail, publicProductDetailPayload } from '~/server/utils/public-products'
 import { defineHandler } from 'nitro'
 import { getRouterParam } from 'nitro/h3'
 import { getQuery } from 'nitro/h3'
 import { assertExactCanonicalLocale } from '~/server/utils/localization'
-import { selectProductCollectionSiblings } from '~/utils/product-seo'
 
 export default defineHandler(async (event) => {
   const organizationId = event.context.organizationId as string | null | undefined
@@ -15,31 +15,11 @@ export default defineHandler(async (event) => {
     const env = cloudflareEnv(event)
     const db = env.DB
     if (!db) return jsonResponse({ error: 'Database unavailable' }, { status: 503 })
-    const locale = assertExactCanonicalLocale(getQuery(event).locale ?? 'en')
+    const locale = assertExactCanonicalLocale(getQuery(event).locale ?? await getSourceLocale(db, organizationId))
     const previewAuthorized = await resolvePreviewAuthorization(event, organizationId, previewSecretOf(cloudflareEnv(event)))
-    const result = await loadPublicExperienceDetail(env, db, organizationId, previewAuthorized, slug, locale)
+    const result = await loadPublicExperienceDetail(env, db, organizationId, previewAuthorized, slug, locale, typeof getQuery(event).location_id === 'string' ? getQuery(event).location_id as string : null)
     if (!result) return jsonResponse({ error: 'Experience not found' }, { status: 404 })
-    const reviews = await loadPublicProductReviews(db, result)
-    // The collection this Experience belongs to on this site, in the site's own
-    // order. One documented rule, applied here and in the SSR path alike.
-    const membership = new Set(result.product.collections.map(entry => entry.collection_id))
-    const siblingCollection = result.collections.find(collection => membership.has(collection.id)) ?? null
-    const priceSelection = { currency: result.currency, location_id: result.location?.id ?? null, at: new Date().toISOString() }
-    return jsonResponse({
-      product: result.product,
-      location: result.location,
-      currency: result.currency,
-      vertical: result.organization.vertical,
-      brandName: result.organization.name,
-      reviews,
-      booking: result.booking,
-      sessions: await loadPublicProductSessions(db, result, env),
-      collectionName: siblingCollection?.name ?? '',
-      collectionSiblings: siblingCollection
-        ? selectProductCollectionSiblings(result.products, result.product, siblingCollection.id, priceSelection)
-        : [],
-      localeRepresentations: result.localeRepresentations,
-    })
+    return jsonResponse(await publicProductDetailPayload(db, env, result))
   } catch (error) {
     rethrowHttpError(error)
     console.error('public_experience_detail_failed', { organizationId, slug, error: error instanceof Error ? error.message : String(error) })

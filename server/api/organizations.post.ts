@@ -1,3 +1,4 @@
+import { platformLocale } from '~/shared/platform-locales'
 import { defineHandler } from 'nitro';
 import { readBody } from 'nitro/h3';
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
@@ -13,7 +14,7 @@ import type { OrganizationVertical } from '~/utils/vertical-copy'
 // the dashboard sends the route's `org` query param (dashboardFetch), API
 // callers send `organizationId` in the body. Nothing is inferred from memberships.
 export default defineHandler(async (event) => {
-  const body = await readBody<{ name?: string; subdomain?: string; vertical?: string; organizationId?: string; defaultCurrency?: string }>(event)
+  const body = await readBody<{ name?: string; subdomain?: string; vertical?: string; organizationId?: string; defaultCurrency?: string; sourceLocale?: string }>(event)
   const name = body?.name?.trim()
   const subdomain = body?.subdomain?.trim()
   const vertical = body?.vertical
@@ -37,6 +38,9 @@ export default defineHandler(async (event) => {
     }, { status: 400 })
   }
 
+  const sourceLocale = typeof body?.sourceLocale === 'string' ? body.sourceLocale : ''
+  if (!platformLocale(sourceLocale)) return jsonResponse({ error: 'sourceLocale is required and must name a supported website language' }, { status: 400 })
+
   const env = cloudflareEnv(event)
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
@@ -57,6 +61,7 @@ export default defineHandler(async (event) => {
     subdomain,
     vertical: vertical as OrganizationVertical,
     defaultCurrency,
+    sourceLocale,
     origin: event.req,
   })
   // Provisioning is not finished until the caller's session is on the new

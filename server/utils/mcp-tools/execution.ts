@@ -541,43 +541,6 @@ export function humanizeEntitlement(entitlement: string) {
     .join(" ");
 }
 
-export function validateRequiredArguments(
-  schema: Record<string, unknown>,
-  args: Record<string, unknown>,
-) {
-  const required = Array.isArray(schema.required) ? schema.required : [];
-  const properties =
-    schema.properties && typeof schema.properties === "object"
-      ? (schema.properties as Record<string, unknown>)
-      : {};
-  for (const key of required) {
-    const propertySchema =
-      properties[key] && typeof properties[key] === "object"
-        ? (properties[key] as Record<string, unknown>)
-        : null;
-    const allowsNull = propertyAllowsNull(propertySchema);
-    if (
-      !(key in args) ||
-      args[key] === undefined ||
-      (args[key] === null && !allowsNull) ||
-      args[key] === ""
-    ) {
-      throw mcpProtocolError(
-        MCP_ERROR.invalidParams,
-        `Missing required argument: ${key}`,
-      );
-    }
-  }
-}
-
-export function propertyAllowsNull(schema: Record<string, unknown> | null) {
-  if (!schema) return false;
-  const type = schema.type;
-  if (type === "null") return true;
-  if (Array.isArray(type)) return type.includes("null");
-  return false;
-}
-
 export function requiredString(source: Record<string, unknown>, key: string) {
   const value = source[key];
   if (typeof value !== "string" || !value.trim()) {
@@ -727,21 +690,6 @@ export function assertDomainSuccess(result: {
     data: result.data,
   });
 }
-
-export function normalizeOrganizationCreationData(data: Record<string, unknown>) {
-  const organizationId = typeof data.organizationId === "string" ? data.organizationId : "";
-  if (!organizationId.trim()) {
-    throw mcpProtocolError(
-      MCP_ERROR.invalidParams,
-      "Critical identifier organizationId is empty or missing in site creation response",
-    );
-  }
-  return {
-    ...data,
-    organizationId,
-  };
-}
-
 
 export const NOT_HANDLED = Symbol('mcp-executor-not-handled')
 

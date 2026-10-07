@@ -115,7 +115,7 @@ useCopyableCodeBlocks(articleBodyRef, computed(() => post.value.content_blocks))
 
 const requestURL = useRequestURL()
 const runtimeConfig = useRuntimeConfig()
-const origin = computed(() => template.value.slug === 'platform' ? runtimeConfig.public.platformUrl : requestURL.origin)
+const origin = computed(() => template.value.slug === 'platform' ? runtimeConfig.public.siteUrl : requestURL.origin)
 const resolvedSeo = computed(() => resolveBlogSeo({
   title: post.value.title, excerpt: post.value.excerpt, slug: post.value.slug,
   baseUrl: origin.value, publicPath: articlePath.value, organizationName: organizationName.value ?? '',

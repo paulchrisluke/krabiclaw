@@ -23,7 +23,7 @@ import {
   type LocalizedResourceType,
   type LocalizedValues,
 } from '~/server/utils/localization-registry'
-import { assertProductKind, type ProductKind } from '~/shared/product-details'
+import { assertProductKind, validateProductDetails, type ProductKind } from '~/shared/product-details'
 import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 
@@ -110,7 +110,7 @@ export async function getPersistedSourceLocale(
      ORDER BY id
   `, [organizationId])
   const source = rows.length === 1 ? rows[0] : undefined
-  if (!source || source.locale !== 'en' || source.status !== 'published' || !platformLocale(source.locale)) {
+  if (!source || source.status !== 'published' || !platformLocale(source.locale)) {
     throw new HTTPError({
       statusCode: 500,
       statusMessage: 'Organization source locale integrity check failed',
@@ -330,7 +330,7 @@ export async function getLocalizationForAuthoring(
 ) {
   if (resourceType !== 'content_document') return getResourceLocalization(env, db, organizationId, resourceType, resourceId, localeInput)
   const { locale, source } = await assertOrganizationLanguageEntitlement(env, db, organizationId, localeInput)
-  if (source) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'English source content is edited through its document')
+  if (source) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'Source content is edited through its document')
   const document = await getContentRepresentation(db, { rootId: resourceId, locale })
   if (!document || document.organization_id !== organizationId || document.organization_id !== organizationId) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Document representation was not found')
   const copy = await queryFirst<{ title: string | null; summary: string | null; slug: string | null; path: string | null;
@@ -557,7 +557,7 @@ export async function putLocalizationForAuthoring(env: CloudflareEnv, db: D1Data
 ) {
   if (input.resourceType !== 'content_document') return putResourceLocalization(env, db, input)
   const { locale, source } = await assertOrganizationLanguageEntitlement(env, db, input.organizationId, input.locale)
-  if (source) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'English source content is edited through its document')
+  if (source) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'Source content is edited through its document')
   const root = await getContentDocumentById(db, input.resourceId)
   if (!root || root.row_role !== 'root' || root.organization_id !== input.organizationId || root.organization_id !== input.organizationId) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Source document was not found')
   if (root.kind === 'qa') localizationError(403, 'LOCALIZATION_READ_ONLY', 'Q&A is read-only')
@@ -681,24 +681,23 @@ export async function getProductCatalogLocalization(
 ) {
   const { locale, source } = await assertOrganizationLanguageEntitlement(env, db, organizationId, localeInput)
   if (source) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'Product catalog localization requires a secondary locale')
-  // Products belong to the organization and reach this site through a
-  // publication; collections are the site's own merchandising. Both are listed
-  // in the order the public pages render them, so a translator works down the
-  // page rather than down a join.
   const [rows, collectionRows] = await Promise.all([queryAll<{
     id: string
+    kind: string
     name: string
     description: string
+    marketing_features: string
+    unit_label: string | null
+    details_json: string
     localization_id: string | null
     values_json: string | null
     route_path: string | null
   }>(db, `
-    SELECT p.id, p.name, p.description,
+    SELECT p.id, p.kind, p.name, p.description, p.marketing_features, p.unit_label, p.details_json,
            rl.id AS localization_id, rl.values_json, rl.route_path
       FROM products p
-      JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id 
       LEFT JOIN resource_localizations rl
-        ON rl.organization_id = p.organization_id AND rl.organization_id = pub.organization_id
+        ON rl.organization_id = p.organization_id
        AND rl.resource_type = 'product' AND rl.resource_id = p.id AND rl.locale = ?
      WHERE p.organization_id = ?
      ORDER BY p.name, p.id
@@ -706,10 +705,11 @@ export async function getProductCatalogLocalization(
     id: string
     location_id: string | null
     name: string
+    description: string | null
     localization_id: string | null
     values_json: string | null
   }>(db, `
-    SELECT c.id, c.location_id, c.name, rl.id AS localization_id, rl.values_json
+    SELECT c.id, c.location_id, c.name, c.description, rl.id AS localization_id, rl.values_json
       FROM collections c
       LEFT JOIN resource_localizations rl
         ON rl.organization_id = c.organization_id AND rl.organization_id = c.organization_id
@@ -722,12 +722,14 @@ export async function getProductCatalogLocalization(
     collections: collectionRows.map(row => ({
       id: row.id,
       location_id: row.location_id,
-      source: { name: row.name },
+      source: { name: row.name, description: row.description },
       localization: row.localization_id ? { values: JSON.parse(row.values_json!) } : null,
     })),
     products: rows.map(row => ({
       id: row.id,
-      source: { name: row.name, description: row.description },
+      kind: assertProductKind(row.kind),
+      source: { name: row.name, description: row.description, marketing_features: JSON.parse(row.marketing_features) as string[], unit_label: row.unit_label,
+        details: validateProductDetails(assertProductKind(row.kind), JSON.parse(row.details_json)) },
       localization: row.localization_id
         ? { values: JSON.parse(row.values_json!), route_path: row.route_path }
         : null,

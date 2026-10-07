@@ -286,7 +286,7 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
     try {
       await dashboardApi<{ success: true; config: LocationReservationConfig | null }>(
         `/api/editor/organizations/${organizationId}/locations/${requestedLocationId}/reservation-config`,
-        { method: 'PUT', body: reservationForm.value, validate: isReservationConfigResponse },
+        { method: 'PUT', body: { ...reservationForm.value, expected_updated_at: reservationConfig.value?.updated_at ?? null }, validate: isReservationConfigResponse },
       )
       if (locationId.value !== requestedLocationId) return
       await refreshLocationWorkspace()

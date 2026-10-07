@@ -2,8 +2,9 @@ import type Stripe from 'stripe'
 import { HTTPError } from 'nitro';
 import type { DbClient } from '~/server/db'
 import { betterAuthTimestampToIso } from '~/server/utils/better-auth-timestamps'
-import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
-import { getOrgAdapter, hasPermission } from 'better-auth/plugins'
+import type { CloudflareEnv } from '~/server/utils/auth'
+import { hasPermission } from 'better-auth/plugins'
+import { organizationAdapter } from '~/server/utils/member-access'
 import { getPlanEntitlements, type EntitlementsMap } from '~/server/utils/billing-entitlements'
 import { getOrganizationEntitlements, planFromSubscriptions, readOrganizationSubscriptions } from '~/server/utils/billing-access'
 import { createStripeClient } from '~/server/utils/stripe-client'
@@ -49,15 +50,14 @@ export async function getOrganizationBillingStatus(
   db: DbClient,
   organizationId: string,
 ): Promise<OrganizationBillingStatus> {
-  const authContext = await createAuth(env).$context
-  const organizationAdapter = getOrgAdapter(authContext as Parameters<typeof getOrgAdapter>[0], {})
+  const adapter = await organizationAdapter(env)
   // One read of the subscription rows answers both questions asked of them
   // here: which subscription this organization is billed on, and which plan it
   // is entitled to. Those are different rules — a past_due row is the current
   // subscription but grants nothing — so both are applied to the same rows
   // rather than read twice.
   const [organization, subscriptionsByOrganization] = await Promise.all([
-    organizationAdapter.findOrganizationById(organizationId),
+    adapter.findOrganizationById(organizationId),
     readOrganizationSubscriptions(env, [organizationId]),
   ])
   if (!organization) throw new HTTPError({ statusCode: 404, statusMessage: 'Organization not found' })
@@ -155,10 +155,8 @@ export async function requireBillingAccess(
   userId: string,
 ): Promise<void> {
   void db
-  const auth = createAuth(env)
-  const authContext = await auth.$context
-  const organizationAdapter = getOrgAdapter(authContext as Parameters<typeof getOrgAdapter>[0], billingAuthorizationOptions)
-  const membership = await organizationAdapter.findMemberByOrgId({
+  const adapter = await organizationAdapter(env)
+  const membership = await adapter.findMemberByOrgId({
     userId,
     organizationId,
   })

@@ -1,3 +1,4 @@
+import { getSourceLocale } from '~/server/utils/organization-locales'
 import { defineHandler, HTTPError, type H3Event } from 'nitro';
 import {    redirect, setResponseHeader } from 'nitro/h3';
 import { queryFirst } from '~/server/db'
@@ -98,14 +99,15 @@ async function resolveTenantRedirectForRequest(event: H3Event) {
   const url = event.url
   const path = url.pathname === '/' ? '/' : url.pathname.replace(/\/$/, '')
   const firstSegment = path.split('/')[1] || ''
-  const localized = firstSegment && firstSegment !== 'en'
+  const sourceLocale = await getSourceLocale(db, organizationId)
+  const localized = firstSegment && firstSegment !== sourceLocale
     ? await queryFirst<{ locale: string } | null>(db, `
         SELECT locale FROM organization_locales
-         WHERE organization_id = ? AND locale = ? AND status = 'published'
+         WHERE organization_id = ? AND locale = ? AND is_source = 0 AND status = 'published'
          LIMIT 1
       `, [organizationId, firstSegment])
     : null
-  const locale = localized?.locale ?? 'en'
+  const locale = localized?.locale ?? sourceLocale
   const tenantPagePath = localized ? (path.slice(locale.length + 1) || '/') : path
 
   const exactPage = await queryFirst<{ id: string } | null>(db, `
@@ -219,8 +221,8 @@ export default defineHandler(async (event) => {
         // served a 404 for a path the tenant had already pointed somewhere.
         const redirected = await queryFirst<{ to_path: string } | null>(db, `
           SELECT to_path FROM organization_redirects
-           WHERE organization_id = ? AND locale = 'en' AND from_path = ? AND behavior = 'redirect' LIMIT 1
-        `, [platformOrganizationId, normalizedPathname])
+           WHERE organization_id = ? AND locale = (SELECT locale FROM organization_locales WHERE organization_id = ? AND is_source = 1) AND from_path = ? AND behavior = 'redirect' LIMIT 1
+        `, [platformOrganizationId, platformOrganizationId, normalizedPathname])
         if (redirected) return redirect(`${redirected.to_path}${url.search}${url.hash}`, 301)
       }
     }

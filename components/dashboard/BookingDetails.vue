@@ -240,7 +240,7 @@
 import type { ComputedRef, InjectionKey, Ref } from 'vue'
 import type { DashboardBookingDetails, DashboardRecordType } from '~/server/utils/dashboard-booking-details'
 
-export interface BookingChangeDraft { bookingDate: string; bookingTime: string; partySize: number; locationId: string; sessionId: string; sessionLabel: string; sourceUpdatedAt: string }
+export interface BookingChangeDraft { overridePolicy: boolean; bookingDate: string; bookingTime: string; partySize: number; locationId: string; sessionId: string; sessionLabel: string; sourceUpdatedAt: string }
 export type BookingChangeField = 'date' | 'time' | 'guests' | 'location' | 'session'
 
 /** The record and the drafts its levels edit: one change request, one note. */
@@ -384,7 +384,7 @@ const refundable = computed(() => (booking.value?.payments ?? []).reduce((sum, e
 const changeSaving = ref(false)
 const changeDraft = useState(
   `booking-change-draft:${orgSlug.value}:${props.bookingType}:${props.bookingId}`,
-  () => ({ bookingDate: '', bookingTime: '', partySize: 1, locationId: '', sessionId: '', sessionLabel: '', sourceUpdatedAt: '' }),
+  () => ({ overridePolicy: false, bookingDate: '', bookingTime: '', partySize: 1, locationId: '', sessionId: '', sessionLabel: '', sourceUpdatedAt: '' }),
 )
 const changeAttemptKey = ref<string | null>(null)
 const changeAttemptDraft = ref('')
@@ -465,6 +465,7 @@ function resetChangeDraft() {
   if (!booking.value) return
   changeDraft.value.bookingDate = booking.value.bookingDate
   changeDraft.value.bookingTime = (booking.value.bookingTime ?? '').slice(0, 5)
+  changeDraft.value.overridePolicy = false
   changeDraft.value.partySize = booking.value.partySize ?? 1
   changeDraft.value.locationId = booking.value.locationId ?? ''
   changeDraft.value.sessionId = booking.value.sessionId ?? ''
@@ -571,6 +572,7 @@ async function sendChangeRequest() {
     const proposal = props.bookingType === 'reservation'
       ? {
           kind: 'reservation' as const,
+          overridePolicy: changeDraft.value.overridePolicy,
           bookingDate: changeDraft.value.bookingDate,
           bookingTime: changeDraft.value.bookingTime,
           partySize: changeDraft.value.partySize,

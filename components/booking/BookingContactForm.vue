@@ -24,13 +24,20 @@
 
     <div>
       <label for="booking-phone" class="block text-sm font-medium text-default mb-1">{{ t('saya.experience_detail.phone_number') }} <span v-if="!phoneRequired" class="text-muted font-normal">({{ t('saya.experience_detail.optional') }})</span></label>
-      <input 
+      <div class="flex gap-2">
+      <select v-model="countryCode" :aria-label="t('booking.phone_country')" class="w-32 rounded-lg border border-default bg-default px-2">
+        <option value="">{{ t('booking.international') }}</option>
+        <option v-for="country in countries" :key="country.code" :value="country.code">{{ country.name }} {{ country.dialCode }}</option>
+      </select>
+      <input
+        ref="phoneInput"
         id="booking-phone"
         v-model="form.phone"
         type="tel"
         :required="phoneRequired"
         class="w-full px-3 py-2 border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-transparent text-default"
       />
+      </div>
     </div>
 
     <div>
@@ -53,6 +60,7 @@
 
 <script setup lang="ts">
 import { reactive } from 'vue'
+import { listPhoneCountries, parsePhone, type CountryCode } from '~/utils/phone'
 
 export interface ContactFormState {
   name: string
@@ -70,7 +78,13 @@ const props = withDefaults(defineProps<{
   loading: false,
   phoneRequired: false
 })
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const phoneInput = ref<HTMLInputElement | null>(null)
+const countryCode = ref<CountryCode | ''>(parsePhone(props.initialState?.phone ?? '').country ?? '')
+const countries = computed(() => {
+  const names = new Intl.DisplayNames(locale.value, { type: 'region' })
+  return listPhoneCountries().map(country => ({ ...country, name: names.of(country.code) ?? country.code })).sort((a, b) => a.name.localeCompare(b.name, locale.value))
+})
 
 const emit = defineEmits<{
   submit: [form: ContactFormState]
@@ -83,7 +97,14 @@ const form = reactive<ContactFormState>({
   notes: props.initialState?.notes || ''
 })
 
+watch([() => form.phone, countryCode], () => phoneInput.value?.setCustomValidity(''))
 function submit() {
-  emit('submit', { ...form })
+  const parsed = parsePhone(form.phone, countryCode.value ? { defaultCountry: countryCode.value } : undefined)
+  if (form.phone && (!parsed.valid || !parsed.e164)) {
+    phoneInput.value?.setCustomValidity(t('booking.invalid_phone'))
+    phoneInput.value?.reportValidity()
+    return
+  }
+  emit('submit', { ...form, phone: parsed.e164 ?? '' })
 }
 </script>

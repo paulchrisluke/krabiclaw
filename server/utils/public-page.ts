@@ -16,7 +16,7 @@ import {
   normalizePublicReviewAggregateRows,
 } from "~/server/utils/public-review-aggregate";
 import { getPublicTenantPageForPath, type PublicTenantPage } from "~/server/utils/public-tenant-pages";
-import { listCollections, listOrganizationProducts } from '~/server/utils/product-management'
+import { listCollections, listOrganizationProducts, PUBLIC_PRODUCT_SQL } from '~/server/utils/product-management'
 import { previewSecretOf, resolvePreviewAuthorization } from "~/server/utils/preview-token";
 import {
   toResolvedMediaAsset,
@@ -44,6 +44,8 @@ import { normalizeVertical } from '~/utils/vertical-copy'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { isPublicSourceRouteRoot } from '~/shared/public-locale-routes'
 import { parsePostalAddress } from '~/utils/postal-address'
+import { getSourceLocale } from '~/server/utils/organization-locales'
+import { assertPublicOrganizationLanguageEntitlement } from '~/server/utils/localization'
 import {
   loadExactPublicLocalizations,
   projectExactLocalizedCollection,
@@ -299,7 +301,9 @@ async function loadPublicPageSource(
   options.signal?.throwIfAborted();
 
   const orgId = organization.id;
-  const localizedLocale = locale && locale !== 'en' ? locale : null
+  const sourceLocale = await getSourceLocale(db, orgId)
+  const language = await assertPublicOrganizationLanguageEntitlement(env, db, orgId, locale ?? sourceLocale)
+  const localizedLocale = language.source ? null : language.locale
   let publicLocalizations: ExactPublicLocalization[] = []
   if (localizedLocale) {
     publicLocalizations = await loadExactPublicLocalizations(env, db, orgId, localizedLocale)
@@ -374,7 +378,7 @@ async function loadPublicPageSource(
     idxProducts = push(
       `SELECT DISTINCT p.id, pl.location_id
          FROM products p
-         JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id AND pub.published = 1
+         JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id AND (${PUBLIC_PRODUCT_SQL})
          JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id AND pl.published = 1
          JOIN business_locations bl ON bl.id = pl.location_id AND bl.organization_id = pub.organization_id AND bl.status = 'active'
         WHERE pub.organization_id = ? ${locationSlug ? 'AND pl.location_id = ?' : ''} AND p.organization_id = ? AND p.active = 1
@@ -481,6 +485,7 @@ async function loadPublicPageSource(
   options.signal?.throwIfAborted();
 
   const sourceShell = buildPublicShellPayload(organization, batchResults, shellIndexes)
+  sourceShell.platformMessages = language.platform_messages
   const shell = (() => {
     if (!localizedLocale) return sourceShell
     const organizationLocalization = publicLocalizations.find(item => item.resourceType === 'organization' && item.resourceId === organizationId)
@@ -547,7 +552,6 @@ async function loadPublicPageSource(
     idxQa >= 0
       ? (batchResults[idxQa] as { results: Record<string, unknown>[] })
       : { results: [] as Record<string, unknown>[] };
-  const sourceLocale = 'en';
   const routePagePath = routeSourcePath(page)
   // Which paths carry a tenant page document is declared once, per template.
   const documentPath = page

@@ -195,14 +195,7 @@ async function refreshSocialCardForPlacement(db: DbClient, input: {
   for (const owner of owners) await refreshSocialCard({ db, env: input.env, owner })
 }
 
-// Attaches one asset to an ordered collection. Appends at the end (its
-// position within the current live count, computed atomically inside the
-// INSERT itself — not from any earlier read) unless the collection is
-// already at MAX_ORDERED_MEDIA_ASSETS, in which case the INSERT's WHERE
-// clause makes it a no-op and this throws. A duplicate attach attempt hits
-// the DB's own unique(owner_type, owner_id, slot, asset_id) constraint and
-// is reported as a 409, not silently ignored — callers that want idempotent
-// "make sure this is attached" behavior should treat 409 as success.
+// Append a new asset atomically; an existing membership remains in its current position.
 export async function attachMediaPlacement(db: DbClient, input: {
   organizationId: string
   env: CloudflareEnv
@@ -224,6 +217,11 @@ export async function attachMediaPlacement(db: DbClient, input: {
     fieldName: 'asset_id',
   })
   if (!asset) throw new HTTPError({ statusCode: 400, statusMessage: 'asset_id is required' })
+  const current = await canonicalPlacementState(db, input)
+  if (current.asset_ids.includes(input.assetId)) {
+    await refreshSocialCardForPlacement(db, input)
+    return canonicalPlacementState(db, input)
+  }
   const now = new Date().toISOString()
   const scopeParams = [input.organizationId, input.placement.owner_type, input.placement.owner_id, input.placement.slot]
   const owner = mediaPlacementOwnerQuery({ ...input, ownerType: input.placement.owner_type, ownerId: input.placement.owner_id })
@@ -249,12 +247,19 @@ export async function attachMediaPlacement(db: DbClient, input: {
     }])
   } catch (error) {
     if (isUniqueConstraintError(error)) {
-      throw new HTTPError({ statusCode: 409, statusMessage: 'Media asset is already attached to this placement' })
+      const saved = await canonicalPlacementState(db, input)
+      if (saved.asset_ids.includes(input.assetId)) {
+        await refreshSocialCardForPlacement(db, input)
+        return canonicalPlacementState(db, input)
+      }
     }
     throw error
   }
   if (Number(results[postQueries.length]?.meta?.changes ?? 0) === 0) {
-    throw new HTTPError({ statusCode: 422, statusMessage: `The owner no longer accepts media or has reached ${MAX_ORDERED_MEDIA_ASSETS} assets` })
+    const saved = await canonicalPlacementState(db, input)
+    if (!saved.asset_ids.includes(input.assetId)) {
+      throw new HTTPError({ statusCode: 422, statusMessage: `The owner no longer accepts media or has reached ${MAX_ORDERED_MEDIA_ASSETS} assets` })
+    }
   }
   await refreshSocialCardForPlacement(db, input)
   return canonicalPlacementState(db, input)

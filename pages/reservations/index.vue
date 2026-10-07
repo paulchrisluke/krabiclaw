@@ -153,14 +153,14 @@
 
 <script setup lang="ts">
 import type { SubmissionMeasurement } from '~/composables/useOrganizationConversionTracking'
-import { $fetch } from 'ofetch'
+import { isRecord, publicApiMutation, publicApiRequest, normalizeApiError } from '~/utils/api-clients'
 import BookingContactForm from '@/components/booking/BookingContactForm.vue'
 import BookingLocationStep from '@/components/booking/BookingLocationStep.vue'
 import BookingModal from '@/components/booking/BookingModal.vue'
 import BookingRecap from '@/components/booking/BookingRecap.vue'
 import BookingTimeStep, { type RawDateAvailability, type TimeSlotSelection } from '@/components/booking/BookingTimeStep.vue'
 import { getTodayHoursLabel, isOpenNow, schemaOpeningHours } from '~/shared/reservation-hours'
-import { formatTime, localDateTimeToInstant } from '~/utils/timezone'
+import { formatTime, localDateAt, isValidInstant, isValidTimezone } from '~/utils/timezone'
 import { setBookingConfirmation } from '~/composables/useBookingHandoff'
 import { requireProductPresentation } from '~/utils/product-presentation'
 import { addressPlaceName, formatPostalAddress, schemaPostalAddress, type PostalAddress } from '~/utils/postal-address'
@@ -339,10 +339,13 @@ async function loadAvailability() {
   const locationId = reservationForm.value.location_id
   availabilityLoading.value = true
   try {
-    const today = new Date()
-    const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
-    const res = await $fetch<{ dates: RawDateAvailability[] }>(`/api/public/reservations/availability`, {
+    const dateStr = localDateAt(new Date(), reservationTimezone.value)
+    const res = await publicApiRequest(`/api/public/reservations/availability`, {
       query: { location_id: locationId, date: dateStr, days: 14 },
+      validate: (value): value is { dates: RawDateAvailability[] } => isRecord(value) && Array.isArray(value.dates)
+        && value.dates.every(day => isRecord(day) && typeof day.date === 'string' && Array.isArray(day.slots)
+          && day.slots.every(slot => isRecord(slot) && typeof slot.time_slot === 'string' && (slot.capacity === null || Number.isSafeInteger(slot.capacity))
+            && (slot.remaining === null || Number.isSafeInteger(slot.remaining)) && typeof slot.is_closed === 'boolean' && typeof slot.is_full === 'boolean')),
     })
     // Ignore stale responses from a location that was changed away from before this resolved
     if (requestId !== availabilityRequestId || locationId !== reservationForm.value.location_id) return
@@ -357,7 +360,7 @@ async function loadAvailability() {
 }
 
 watch(() => reservationForm.value.location_id, (id) => {
-  if (id) {
+  if (id && import.meta.client) {
     timeSelection.value = null
     loadAvailability()
   }
@@ -365,6 +368,8 @@ watch(() => reservationForm.value.location_id, (id) => {
 
 // ── Submission ────────────────────────────────────────────────────────────
 const submitting = ref(false)
+let reservationRequestKey: string | null = null
+let reservationFingerprint: string | null = null
 const { mirrorSubmission, pageEventId, trackCheckoutStart } = useOrganizationConversionTracking()
 let checkoutStarted = false
 watch([isBookingModalOpen, () => reservationForm.value.location_id], ([open, locationId]) => {
@@ -393,26 +398,37 @@ async function handleReservation() {
   submitting.value = true
   submitError.value = null
   try {
-    // The instant is resolved BEFORE the request. Reading the location's zone
-    // and converting the wall-clock slot both throw on a misconfigured
-    // location, and doing it after the POST turned a reservation that exists
-    // into "Failed to submit" — which the guest answers by booking a second one.
-    const startsAt = localDateTimeToInstant(reservationForm.value.date, reservationForm.value.time, reservationTimezone.value).toISOString()
-    const timezone = reservationTimezone.value
-    const res = await $fetch<{ id: string; cancellationToken: string; policy_summary?: ApiRecord | null; measurement?: SubmissionMeasurement }>(`/api/public/reservations`, {
+    const details = { ...reservationForm.value, name: reservationForm.value.name.trim(), email: reservationForm.value.email.trim(), phone: reservationForm.value.phone.trim(), requests: reservationForm.value.requests.trim() }
+    const fingerprint = JSON.stringify(details)
+    if (fingerprint !== reservationFingerprint) {
+      reservationRequestKey = crypto.randomUUID()
+      reservationFingerprint = fingerprint
+    }
+    reservationRequestKey ??= crypto.randomUUID()
+    type ReservationReceipt = { success: true; status: 'confirmed'; id: string; request_id: string; operational_reservation_id: string; starts_at: string; ends_at: string; timezone: string; cancellationToken: string; policy_summary?: ApiRecord | null; measurement?: SubmissionMeasurement }
+      | { success: true; status: 'checkout'; payment_id: string; checkout_url: string; expires_at: string }
+    const res = await publicApiMutation(`/api/public/reservations`, {
       method: 'POST',
-      body: { ...reservationForm.value, page_event_id: await pageEventId() },
+      body: { ...details, idempotency_key: reservationRequestKey, locale: locale.value, page_event_id: await pageEventId() },
+      validate: (value): value is ReservationReceipt => isRecord(value) && value.success === true && (
+        value.status === 'checkout' ? typeof value.payment_id === 'string' && typeof value.checkout_url === 'string' && /^https:\/\/checkout\.stripe\.com\//.test(value.checkout_url) && isValidInstant(value.expires_at)
+        : value.status === 'confirmed' && typeof value.id === 'string' && typeof value.request_id === 'string' && typeof value.operational_reservation_id === 'string' && typeof value.cancellationToken === 'string'
+          && isValidInstant(value.starts_at) && isValidInstant(value.ends_at) && typeof value.timezone === 'string' && isValidTimezone(value.timezone)),
     })
+    if (res.status === 'checkout') {
+      await navigateTo(res.checkout_url, { external: true })
+      return
+    }
     setBookingConfirmation({
       type: 'reservation',
       organizationId,
       organizationName: brandName.value,
       guestName: reservationForm.value.name,
       guestEmail: reservationForm.value.email,
-      // The guest picked a wall-clock slot at this location; the instant it
-      // means was resolved once, above, in that location's zone.
-      startsAt,
-      timezone,
+      operationalBookingId: res.operational_reservation_id,
+      requestId: res.request_id,
+      startsAt: res.starts_at,
+      timezone: res.timezone,
       guests: reservationForm.value.guests,
       requests: reservationForm.value.requests || null,
       cancelUrl: res?.id && res?.cancellationToken ? `/reservations/cancel?id=${res.id}#${res.cancellationToken}` : null,
@@ -426,16 +442,18 @@ async function handleReservation() {
     })
     mirrorSubmission('reservation_submit', res.measurement, selectedLocation.value?.id ? String(selectedLocation.value.id) : null)
     await navigateTo('/reservations/confirmed')
+    reservationRequestKey = null
+    reservationFingerprint = null
   } catch (err) {
-    const error = err as { data?: { error?: string }; status?: number }
-    if (error.status === 409) {
+    const error = normalizeApiError(err)
+    if (error.statusCode === 409 && error.code === 'capacity_unavailable') {
       // Conflict (slot filled or capacity exceeded) — revert to time selection and reload availability
       bookingStep.value = 2
       timeSelection.value = null
-      submitError.value = error.data?.error || 'This time is no longer available. Please select another.'
+      submitError.value = error.message
       await loadAvailability()
     } else {
-      submitError.value = error.data?.error ?? 'Failed to submit. Please try again.'
+      submitError.value = error.message
     }
   } finally {
     submitting.value = false

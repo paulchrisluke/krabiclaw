@@ -3,6 +3,7 @@ import { platformLocale } from '~/shared/platform-locales'
 
 export default defineNuxtRouteMiddleware(async (to) => {
   const state = useState<string>('public-locale', () => 'en')
+  const sourceLocale = useState<string | null>('public-source-locale', () => null)
   const setAppLocale = (locale: string, messages: Record<string, string> | null) => {
     const { $setAppLocale } = useNuxtApp() as {
       $setAppLocale?: (value: string, catalog: Record<string, string> | null) => void
@@ -37,6 +38,9 @@ export default defineNuxtRouteMiddleware(async (to) => {
         }
         return
       }
+      if (catalog.locale === sourceLocale.value) {
+        throw createError({ statusCode: 404, statusMessage: 'Primary language routes are unprefixed' })
+      }
       state.value = catalog.locale
       setAppLocale(catalog.locale, { ...catalog.messages })
       return
@@ -68,6 +72,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
   const db = env.db
   if (!db) throw createError({ statusCode: 503, statusMessage: 'Database unavailable' })
   const source = await getPersistedSourceLocale(db, organizationId)
+  sourceLocale.value = source.locale
   const sourceCatalog = platformLocale(source.locale)
   if (!sourceCatalog) throw createError({ statusCode: 500, statusMessage: 'Organization primary language is unavailable' })
   state.value = source.locale
