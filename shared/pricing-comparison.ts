@@ -1,5 +1,4 @@
 import { getPlanEntitlements } from '../server/utils/billing-entitlements'
-import { STARTER_PLAN_ID, NEW_SALE_PAID_PLAN_IDS } from './billing-model'
 import { PLATFORM_LOCALES } from './platform-locales'
 
 const ADDITIONAL_LANGUAGE_NAMES = new Intl.ListFormat('en', { type: 'conjunction' }).format(
@@ -16,7 +15,6 @@ export interface PricingComparisonRow {
   detail: string
   included?: string
   entitlement?: string
-  limits?: Readonly<Record<string, number>>
 }
 
 export const PRICING_COMPARISON: ReadonlyArray<{ title: string; rows: readonly PricingComparisonRow[] }> = [
@@ -53,25 +51,19 @@ export const PRICING_COMPARISON: ReadonlyArray<{ title: string; rows: readonly P
     { id: 'places.refresh', label: 'Google Places re-import', detail: 'Connect a selected Place and explicitly refresh its details.', entitlement: 'google_places' },
     { id: 'places.refresh', label: 'Weekly Google review refresh', detail: 'Scheduled review and rating refresh for connected Places; not continuous synchronization of all business details.', entitlement: 'google_places' },
     { id: 'content.locales', label: 'English source website', detail: 'Source content remains available while additional languages are authored.', included: 'Included' },
-    { id: 'content.additional-locales', label: 'Additional website languages', detail: `Manually author and publish ${ADDITIONAL_LANGUAGE_NAMES}; no automatic translation.`, limits: Object.fromEntries([STARTER_PLAN_ID, ...NEW_SALE_PAID_PLAN_IDS].map(plan => {
-      const limit = getPlanEntitlements(plan).additional_languages
-      if (typeof limit !== 'number') throw new Error(`Missing language allowance for plan ${plan}`)
-      return [plan, limit]
-    })) },
+    { id: 'content.additional-locales', label: 'Additional website languages', detail: `Manually author and publish ${ADDITIONAL_LANGUAGE_NAMES}; no automatic translation.`, entitlement: 'additional_languages' },
   ] },
   { title: 'Help', rows: [
     { id: 'support.docs-help', label: 'Documentation and help form', detail: 'Browse the docs or contact us through the platform help form.', included: 'Included' },
   ] },
 ]
 
-export function comparisonValue(row: Pick<PricingComparisonRow, 'included' | 'entitlement' | 'limits'>, planId: string): string {
+export function comparisonValue(row: Pick<PricingComparisonRow, 'included' | 'entitlement'>, planId: string): string {
   if (row.included) return row.included
   if (row.entitlement) {
     const value = getPlanEntitlements(planId)[row.entitlement]
     if (typeof value !== 'boolean') throw new Error(`Unknown capability ${row.entitlement}`)
     return value ? 'Included' : 'Not included'
   }
-  const limit = row.limits?.[planId]
-  if (limit !== undefined) return limit === 0 ? 'English only' : `Up to ${limit} additional languages`
   throw new Error(`No comparison value for plan ${planId}`)
 }
