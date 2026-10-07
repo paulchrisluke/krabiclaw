@@ -29,6 +29,13 @@
       "when": 1791355007743,
       "tag": "0003_discord_webhook_publishing",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1791362887872,
+      "tag": "0004_discord_better_auth",
+      "breakpoints": true
     }
   ]
 }
