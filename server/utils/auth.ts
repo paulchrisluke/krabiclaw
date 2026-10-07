@@ -2,6 +2,7 @@ import { APIError, betterAuth, type BetterAuthPlugin } from 'better-auth'
 import { createAuthMiddleware, getOAuthState, isAPIError } from 'better-auth/api'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { hashPassword } from 'better-auth/crypto'
+import { DISCORD_BOT_PERMISSIONS } from '~/server/utils/discord-bot'
 import { loginMethodForPath } from '~/shared/auth/login-method'
 import { admin, anonymous, genericOAuth, getOrgAdapter, hasPermission, jwt, lastLoginMethod, organization, phoneNumber } from 'better-auth/plugins'
 import { stripe as betterAuthStripe } from '@better-auth/stripe'
@@ -142,6 +143,9 @@ export interface CloudflareEnv {
   FACEBOOK_CONFIG_ID?: string
   INSTAGRAM_APP_ID?: string
   INSTAGRAM_APP_SECRET?: string
+  DISCORD_CLIENT_ID?: string
+  DISCORD_CLIENT_SECRET?: string
+  DISCORD_BOT_TOKEN?: string
   RESEND_API_KEY?: string
   RESEND_WEBHOOK_SECRET?: string
   RESEND_PRODUCT_NEWS_SEGMENT_ID?: string
@@ -723,6 +727,15 @@ export function createAuth(env: CloudflareEnv) {
         disableDefaultScope: true,
         disableSignUp: true,
       },
+      // Linked to a Krabiclaw user to choose where posts go, never used to
+      // create one. The `bot` scope adds the KrabiClaw bot, with these
+      // permissions, to the server the owner picks on Discord's consent screen.
+      discord: {
+        clientId: env.DISCORD_CLIENT_ID ?? '',
+        clientSecret: env.DISCORD_CLIENT_SECRET ?? '',
+        permissions: DISCORD_BOT_PERMISSIONS,
+        disableSignUp: true,
+      },
     },
     account: {
       // Integration tokens live on these rows; Better Auth encrypts them with
@@ -730,11 +743,11 @@ export function createAuth(env: CloudflareEnv) {
       encryptOAuthTokens: true,
       accountLinking: {
         enabled: true,
-        // Facebook and Instagram are linked only from an authenticated
+        // Facebook, Instagram and Discord are linked only from an authenticated
         // session, for Page and publishing access. Instagram returns no email
         // at all and a business's Facebook or Google account is rarely the
         // address its owner signs in with, so linking may not require one.
-        trustedProviders: ['google', 'facebook', 'instagram'],
+        trustedProviders: ['google', 'facebook', 'instagram', 'discord'],
         allowDifferentEmails: true,
       }
     }
