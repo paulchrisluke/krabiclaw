@@ -130,6 +130,12 @@ in the MCP surface inspected here; use the existing mechanism, not a new tool.
    workspace may be a customer site. Inspect `list_blog_posts` for the intended
    collection, `list_posts`, and the relevant live provider posts. Reuse the
    exact existing document when appropriate; do not duplicate a launch.
+   Listed tools can still be unavailable: inspect every result for `isError`
+   and missing structured content. If harmless reads return `Unknown tool`,
+   report the connector failure, make at most one confirmation read and finish
+   independent content preparation. A local draft is not a CMS draft. Do not
+   substitute private API calls or publish through another account to claim an
+   MCP acceptance pass. Resume from fresh reads when the connection is restored.
 2. Prepare ordered blocks with `create_blog_post` or edit the existing article
    using `get_blog_post` and its latest `expected_updated_at`. Use the correct
    `blog` or `docs` collection and a category from `list_article_categories`.
