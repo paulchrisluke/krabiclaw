@@ -172,7 +172,7 @@ test('MCP financial reads return bounded reports and authenticated detail links 
   assert.equal(listed.organization_id,ORG)
   assert.deepEqual((listed.payments as Array<Record<string,unknown>>).map(payment=>({id:payment.id,title:payment.title,currency:payment.currency,captured_amount:payment.captured_amount,refunded_amount:payment.refunded_amount,to:payment.to})),[{id:'report',title:'Original consultation',currency:'USD',captured_amount:10000,refunded_amount:1000,to:'https://proof.example/dashboard/payments/bookings/payment/report'}])
   const detail = await call('get_payment',{payment_id:'report'})
-  assert.deepEqual(detail.purchase,{title:'Original consultation',quantity:1,product_id:undefined,variant_id:undefined,session_id:undefined,price:{unit_amount:10000,currency:'USD',type:'one_time',tax_behavior:'exclusive'}})
+  assert.deepEqual(detail.purchase,{title:'Original consultation',quantity:1,product_id:null,variant_id:null,session_id:null,price:{unit_amount:10000,currency:'USD',type:'one_time',tax_behavior:'exclusive'}})
   assert.deepEqual(detail.refunds,[{id:'report-refund',amount:1000,status:'succeeded'}])
   assert.equal(detail.dashboard_url,'https://proof.example/dashboard/payments/bookings/payment/report')
   const usage = await call('get_payments_usage')

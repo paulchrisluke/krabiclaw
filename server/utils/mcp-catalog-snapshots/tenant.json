@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:33fcbc9e7ffd706cde7dfb60911c0d12e2e2c1a4f1c18e023a6f1ae63792aa9a",
+  "fingerprint": "sha256:655d33f612e42f6171ceec8d3516b7a6fab6ca4b39777dbf62b8b0d4813c08cc",
   "tools": [
     {
       "name": "append_content_block",
@@ -20435,7 +20435,10 @@
               "available",
               "pending"
             ],
-            "type": "object"
+            "type": [
+              "object",
+              "null"
+            ]
           },
           "configured": {
             "type": "boolean"
@@ -20492,7 +20495,10 @@
             "type": "array"
           },
           "refreshed_at": {
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "source": {
             "type": "string"
@@ -20574,7 +20580,10 @@
             "type": "string"
           },
           "refreshed_at": {
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "source": {
             "type": "string"
@@ -20697,7 +20706,10 @@
                 "type": "string"
               }
             },
-            "type": "object"
+            "type": [
+              "object",
+              "null"
+            ]
           },
           "configured": {
             "type": "boolean"
@@ -20824,22 +20836,34 @@
                   "type": "object"
                 },
                 "end_timestamp": {
-                  "type": "string"
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 },
                 "id": {
                   "type": "string"
                 },
                 "start_timestamp": {
-                  "type": "string"
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 },
                 "status": {
-                  "type": "string"
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 },
                 "total": {
                   "type": "number"
                 },
                 "type": {
-                  "type": "string"
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 }
               },
               "required": [
@@ -20924,7 +20948,10 @@
             ]
           },
           "refreshed_at": {
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "source": {
             "type": "string"
