@@ -40,7 +40,7 @@
           <p class="saya-kicker mb-3">{{ collectionName }}</p>
           <h1 class="saya-display-md text-3xl text-default sm:text-4xl lg:text-5xl">{{ displayTitle }}</h1>
           <p v-if="pageDocument?.summary || tagline" class="mx-auto mt-4 max-w-2xl text-base text-muted sm:text-lg">{{ pageDocument?.summary || tagline }}</p>
-          <ProductVariantPrices v-if="!booking" :product="product" :location-id="location?.id ?? null" :currency="currency" class="mx-auto mt-6 max-w-xl text-base" />
+          <ProductVariantPrices v-if="!booking" :product="product" :location-ids="[location?.id ?? null]" :currency="currency" class="mx-auto mt-6 max-w-xl text-base" />
           <div class="mt-4 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm text-muted">
               <template v-if="averageRating">
                 <span class="inline-flex items-center gap-1 font-medium text-default">
@@ -227,7 +227,7 @@
             <p class="saya-kicker">{{ collectionName }}</p>
             <h1 class="saya-display saya-italic mt-3 text-3xl sm:text-4xl lg:text-5xl text-default leading-tight">{{ product.name }}</h1>
             <p class="mt-2 text-sm sm:text-base text-muted">{{ location?.title ?? organizationName }}</p>
-            <ProductVariantPrices :product="product" :location-id="location?.id ?? null" :currency="currency" class="mt-6 text-lg" />
+            <ProductVariantPrices :product="product" :location-ids="[location?.id ?? null]" :currency="currency" class="mt-6 text-lg" />
             <div v-if="!offer && priceLabel" class="mt-6 flex items-baseline gap-3 text-2xl font-semibold tabular-nums">
               <span v-if="compareAtLabel" class="text-base font-normal text-muted line-through">{{ compareAtLabel }}</span>
               <span>{{ priceLabel }}</span>

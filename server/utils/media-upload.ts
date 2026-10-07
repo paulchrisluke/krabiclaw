@@ -107,14 +107,14 @@ export async function uploadResolvedMediaToAssetStore(
 
   try {
     if (input.kind === 'image' && provider === 'cloudflare_images') {
-      const uploaded = await uploadImageBuffer(input.env, input.buffer, input.filename, input.contentType, assetId);
+      const uploaded = await uploadImageBuffer(input.env, input.buffer, input.filename, input.contentType, `media-${assetId}`);
       imageId = uploaded.imageId;
       publicUrl = uploaded.publicUrl;
       thumbnailUrl = uploaded.thumbnailUrl;
       timings[stage] = Date.now() - stageStartedAt;
     } else {
       if (input.kind === 'video') {
-        const poster = await uploadImageBuffer(input.env, input.poster.buffer, input.poster.filename, input.poster.contentType, `${assetId}-poster`);
+        const poster = await uploadImageBuffer(input.env, input.poster.buffer, input.poster.filename, input.poster.contentType, `media-${assetId}-poster`);
         imageId = poster.imageId;
         thumbnailUrl = poster.publicUrl;
         timings[stage] = Date.now() - stageStartedAt;
