@@ -49,23 +49,13 @@
       </template>
     </section>
 
-    <section v-if="account" class="rounded-2xl p-6 ring ring-default">
-      <h3 class="text-xl font-semibold text-highlighted">Need help?</h3>
-      <div class="mt-2 divide-y divide-default">
-        <div v-if="payout" class="py-4">
-          <p class="text-base font-medium text-highlighted">When you’ll get your payout</p>
-          <p class="mt-1 text-sm text-muted">{{ scheduleLabel }}.</p>
-        </div>
-        <NuxtLink :to="`/dashboard/${route.params.orgSlug}/earnings/transactions`" class="flex items-center justify-between gap-4 py-4">
-          <span class="text-base font-medium text-highlighted underline underline-offset-4">Go to your transactions</span>
-          <UIcon name="i-lucide-chevron-right" class="size-5 shrink-0 text-muted" />
-        </NuxtLink>
-      </div>
-    </section>
+    <p v-if="payout" class="text-sm text-muted">{{ scheduleLabel }}.</p>
+    <PaymentsHelp />
   </div>
 </template>
 
 <script setup lang="ts">
+import PaymentsHelp from '~/components/dashboard/PaymentsHelp.vue'
 
 type ConnectStatus = 'creating' | 'creation_failed' | 'action_required' | 'pending_review' | 'restricted' | 'ready'
 type CapabilityStatus = 'active' | 'pending' | 'restricted' | 'unsupported'
@@ -145,8 +135,7 @@ function setAccount(next: ConnectedAccount) {
 const scheduleLabel = computed(() => {
   const schedule = payout.value?.schedule
   if (!schedule) return ''
-  const when = schedule.interval === 'daily' ? 'Sent daily' : schedule.interval === 'weekly' ? 'Sent weekly' : schedule.interval === 'monthly' ? 'Sent monthly' : 'Sent when you ask'
-  return schedule.delayDays ? `${when}, ${schedule.delayDays} days after a payment` : when
+  return schedule.interval === 'daily' ? 'Available funds sent daily' : schedule.interval === 'weekly' ? 'Available funds sent weekly' : schedule.interval === 'monthly' ? 'Available funds sent monthly' : 'Available funds sent when you ask'
 })
 const starting = ref(false)
 const openingDashboard = ref(false)

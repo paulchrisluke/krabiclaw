@@ -98,6 +98,58 @@ Growth's features and Payments. Free and Growth do not include Payments;
 historical Basic/Starter catalog names do not grant it. Existing transaction,
 refund, dispute, receipt and usage servicing is independent of new-sale entitlement.
 
+## Payments help articles
+
+The platform's canonical Docs collection owns these articles. They were created
+and published through MCP on October 7, 2026 under **Payments and payouts**:
+
+- [When you'll get your payout](https://krabiclaw.com/docs/when-youll-get-your-payout)
+- [How refunds work](https://krabiclaw.com/docs/how-refunds-work)
+- [Fees and invoices](https://krabiclaw.com/docs/fees-and-invoices)
+- [Disputes](https://krabiclaw.com/docs/disputes)
+- [Changing your bank account](https://krabiclaw.com/docs/changing-your-bank-account)
+
+`PaymentsHelp` links these stable platform URLs from Earnings, Paid, payout
+details and Payments → Payouts. The articles remain CMS content; dashboard
+components own only their links. Absolute platform URLs keep tenant-hosted
+dashboards pointed at the same articles. Go to your transactions remains scoped
+to the selected business.
+
+Stripe's settlement timing and payout schedule are separate. Krabiclaw does not
+apply Airbnb check-in payout-release rules. Bank changes use Stripe Express;
+sent payouts cannot be redirected. Merchant refunds require authenticated browser
+approval; paid business cancellation/rejection refunds the remaining principal.
+Dispute evidence is submitted in Stripe, and Managed Risk covers unrecoverable
+negative balances rather than guaranteeing that disputed funds are retained.
+The 1.4% captured-volume fee remains billable after refunds/disputes; actual Stripe
+costs and subscription billing remain separate.
+
+The customer articles follow the provider help structure, with the relevant
+steps, timing, status explanations and troubleshooting mapped to Krabiclaw's
+actual screens. They are complete task guidance rather than external-source
+summaries. Their links point only to related Krabiclaw articles and support.
+The dispute notification opens Krabiclaw payment details, not Stripe; the article
+explains the separate Stripe Express Payments → Disputes response workflow.
+The booking refund guide names Amount, Reason, Review refund and the final
+Approve and send refund action, including the 10-minute approval expiry.
+
+Provider references for future operator maintenance (reviewed October 7, 2026):
+
+- [Airbnb payout help structure](https://www.airbnb.com/help/article/425)
+- [Stripe settlement and payout schedules](https://docs.stripe.com/payouts)
+- [Stripe Express payout restrictions and statuses](https://support.stripe.com/express/questions/what-does-it-mean-that-my-payouts-are-paused-or-my-payments-are-blocked)
+- [Stripe refund destinations, timing and failures](https://docs.stripe.com/refunds)
+- [Stripe Express dispute actions](https://support.stripe.com/express/questions/how-do-i-manage-my-disputes?locale=en-GB)
+- [Stripe dispute response requirements](https://docs.stripe.com/disputes/responding)
+- [Stripe dispute evidence and withdrawn disputes](https://docs.stripe.com/disputes/best-practices)
+- [Stripe Express bank changes](https://support.stripe.com/express/questions/update-bank-account-or-debit-card-for-payouts?locale=en-GB)
+- [Stripe Express bank-change verification recovery](https://support.stripe.com/express/questions/how-do-i-update-my-payout-account-details-if-i-dont-have-my-previous-bank-or-card-details)
+- [Stripe Express wrong-bank payout troubleshooting](https://support.stripe.com/express/questions/my-payout-was-sent-to-the-wrong-bank-account)
+
+Amounts and Krabiclaw-specific rules come from the native financial and Metronome
+billing contracts below. Recheck both the provider guidance and the actual
+application actions before changing these articles; preserve their stable paths.
+
 ## Activity and payment details
 
 Buyer navigation is Today, Calendar, Activity, Messages and Menu. Tenant
