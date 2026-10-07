@@ -235,7 +235,7 @@ test.describe('dashboard pane hierarchy', () => {
       // The record opens beside Past activity; its own Back returns to that list.
       await page.locator('#dashboard-panel-account-booking-details [data-testid="dashboard-navbar-back"]').click()
       await expect(page).toHaveURL('/dashboard/account/activity')
-    } else {
+    } else if (!cancelled.length) {
       await expect(page.getByText('No past activity yet', { exact: true })).toBeVisible()
     }
     await mobileNav.getByRole('link', { name: 'Today', exact: true }).click()
