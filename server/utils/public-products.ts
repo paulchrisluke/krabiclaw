@@ -435,7 +435,7 @@ export async function loadPublicProductSessions(
   detail: PublicProductDetail,
   env: CloudflareEnv,
 ): Promise<PublicProductSession[]> {
-  if (!detail.booking || detail.scopeRequired) return []
+  if (!detail.product.active || !detail.booking || detail.scopeRequired) return []
   // A branch with no zone cannot state when anything starts, so it offers
   // nothing here rather than a time in a zone nobody chose.
   if (!detail.location) {
