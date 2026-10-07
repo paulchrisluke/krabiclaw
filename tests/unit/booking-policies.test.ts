@@ -22,7 +22,11 @@ function reservationPolicy(overrides: Partial<BookingPolicySummarySource> = {}):
 test('reservation summaries keep cancellation terms and authored notes', () => {
   const summary = formatBookingPolicySummary(reservationPolicy({ additional_notes_html: '<p>Call for dietary requests.</p>' }), 'en')
   assert.equal(summary.heading, 'Reservation policies')
-  assert.deepEqual(summary.items, [{ id: 'cancellation', text: 'Cancel free up to 2 hours before your booking.' }])
+  assert.deepEqual(summary.items, [
+    { id: 'cancellation', text: 'Cancel free up to 2 hours before your booking.' },
+    { id: 'reschedule', text: 'You can reschedule up to 2 hours before the start time.' },
+    { id: 'deposit', text: 'Parties of 6+ guests require a deposit.' },
+  ])
   assert.equal(summary.additional_notes_html, '<p>Call for dietary requests.</p>')
 })
 
@@ -42,7 +46,11 @@ test('renderBookingPolicySummary localizes Thai summaries', () => {
 test('renderBookingPolicySummary localizes Vietnamese summaries', () => {
   const summary = formatBookingPolicySummary(reservationPolicy(), 'vi')
   assert.equal(summary.heading, 'Chính sách đặt bàn')
-  assert.deepEqual(summary.items, [{ id: 'cancellation', text: 'Hủy miễn phí trước giờ đặt tối đa 2 giờ.' }])
+  assert.deepEqual(summary.items, [
+    { id: 'cancellation', text: 'Hủy miễn phí trước giờ đặt tối đa 2 giờ.' },
+    { id: 'reschedule', text: 'Bạn có thể đổi lịch trước giờ bắt đầu tối đa 2 giờ.' },
+    { id: 'deposit', text: 'Nhóm từ 6 khách trở lên cần đặt cọc.' },
+  ])
 })
 
 test('renderBookingPolicySummary refuses a locale without a platform catalog', () => {

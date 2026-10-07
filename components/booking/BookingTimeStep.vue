@@ -126,7 +126,6 @@ export interface RawSlotAvailability {
   time_slot: string
   session_id?: string
   capacity: number | null
-  booked: number
   remaining: number | null
   is_closed: boolean
   is_full: boolean

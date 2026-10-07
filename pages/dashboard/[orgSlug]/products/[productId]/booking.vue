@@ -24,9 +24,10 @@ const groups = computed<EditorNavigationGroup[]>(() => {
     row('duration', 'Duration', config.duration_minutes ? `${config.duration_minutes} minutes` : 'Choose a duration'),
     p.locationId.value ? { id: 'location', label: 'Meeting location', summary: p.location.value?.title ?? '' } : row('location', 'Meeting location', config.online_timezone ? `Online · ${timezoneLabel(config.online_timezone)}` : 'Choose a time zone'),
     row('capacity', 'Guest limit', config.default_capacity === null ? 'No guest limit' : config.default_capacity === 1 ? 'One guest per session' : config.default_capacity === 0 ? 'Closed to new guests' : `Up to ${config.default_capacity} guests per session`),
-    row('assignment', 'Who guests meet', config.assigned_member_id ? 'Assigned team member' : 'Tenant organization'),
+    row('assignment', 'Who guests meet', config.assigned_team_id ? 'Any available member of the assigned team' : config.assigned_member_id ? 'Assigned team member' : 'The business schedule'),
     row('confirmation', 'Confirmation', config.confirmation_mode === 'instant' ? 'Confirm automatically' : 'Review each request'),
     row('schedule', 'Weekly schedule', p.scheduleError.value ? p.scheduleError.value : p.weekdays.filter(day => p.savedSlotsFor(day.value).length).map(day => day.label).join(', ') || 'No weekly times set'),
+    row('sessions', 'Dated sessions', 'Add or edit individual dates'),
   )
   // One flat list. Whether guests book on the website at all is the
   // organization's setting, under Website, not this product's.

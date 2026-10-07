@@ -16,6 +16,9 @@ export interface AgendaItem {
   assignedMemberId: string | null
   assignedMemberName: string | null
   id: string
+  requestId: string | null
+  operationalBookingId: string | null
+  operationalReservationId: string | null
   kind: AgendaKind
   startsAt: string
   endsAt: string | null
@@ -81,6 +84,7 @@ interface SourceRow {
   assigned_member_id: string | null
   assigned_member_name: string | null
   id: string
+  operational_id: string | null
   kind: AgendaKind
   starts_at: string | null
   ends_at: string | null
@@ -207,7 +211,7 @@ export async function listAgenda(
     resourceTitle?: string
     assignedMember?: string
   } = {}) => `
-    SELECT ${enrichment.assignedMember??'NULL'} assigned_member_id, ${enrichment.assignedMember?`(SELECT u.name FROM member m JOIN user u ON u.id=m.userId WHERE m.id=${enrichment.assignedMember} AND m.organizationId=${alias}.organization_id)`:'NULL'} assigned_member_name, ${alias}.id, '${kind}' AS kind, ${fields}, ${alias}.organization_id,
+    SELECT ${enrichment.assignedMember??'NULL'} assigned_member_id, ${enrichment.assignedMember?`(SELECT u.name FROM member m JOIN user u ON u.id=m.userId WHERE m.id=${enrichment.assignedMember} AND m.organizationId=${alias}.organization_id)`:'NULL'} assigned_member_name, ${alias}.id, ${kind === 'booking' ? 'agenda_booking.id' : kind === 'reservation' ? 'agenda_reservation.id' : 'NULL'} AS operational_id, '${kind}' AS kind, ${fields}, ${alias}.organization_id,
            s.name AS organization_name,
            ${alias}.location_id,
            l.title AS location_title,
@@ -272,7 +276,7 @@ export async function listAgenda(
         : `/dashboard/${query.organizationSlug ?? scope.organizationId}/bookings/${row.kind}/${encodeURIComponent(row.id)}`
     return [{
       assignedMemberId:row.assigned_member_id,assignedMemberName:row.assigned_member_name,
-      id: `${row.kind}:${row.id}`, kind: row.kind, startsAt,
+      id: `${row.kind}:${row.id}`, requestId: row.kind === 'post' ? null : row.id, operationalBookingId: row.kind === 'booking' ? row.operational_id : null, operationalReservationId: row.kind === 'reservation' ? row.operational_id : null, kind: row.kind, startsAt,
       endsAt: row.ends_at === null ? null : instantDate(row.ends_at).toISOString(),
       dayKey, timeZone, showTimeZone: false,
       title: scope.buyerUserId ? row.resource_title ?? row.title : row.title,

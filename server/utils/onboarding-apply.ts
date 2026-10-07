@@ -1,3 +1,4 @@
+import { getSourceLocale } from '~/server/utils/organization-locales'
 // Writing an onboarding draft's answers onto its real tenant.
 //
 // The wizard's answers live in onboarding_drafts while the owner is answering,
@@ -43,6 +44,7 @@ export interface OnboardingDraftRow {
   name: string
   vertical: OrganizationVertical
   subdomain_candidate: string
+  source_locale: string | null
 }
 
 function summarizeBatchQueries(batchQueries: BatchQuery[]) {
@@ -71,6 +73,7 @@ export async function ensureOnboardingTarget(
   userId: string,
   draft: OnboardingDraftRow,
 ): Promise<{ target: OnboardingTarget } | { error: string; status: number }> {
+  if (!draft.source_locale) return { status: 400, error: 'Choose a supported website language' }
   let organizationId = draft.organization_id
   if (!organizationId) {
     const created = await createOrganization(env, userId, draft.name)
@@ -112,6 +115,7 @@ export async function ensureOnboardingTarget(
       // tenant. It stays unset until the owner answers, and applyOnboardingDraft
       // writes it from that answer on the save that carries it.
       defaultCurrency: null,
+      sourceLocale: draft.source_locale,
       activate: false,
       // Provisioned pending; nothing here is an onboarding outcome.
       origin: null,
@@ -405,7 +409,7 @@ export async function applyOnboardingDraft(
   const replaced = await queryAll<{ id: string }>(db, "SELECT id FROM content_documents WHERE organization_id = ? AND row_role = 'root' AND kind = 'qa'", [organizationId])
   for (const document of replaced) batchQueries.push(...prepareContentDocumentDeletion({ documentId: document.id, organizationId }))
   for (const item of payload.preview.qa) batchQueries.push(...prepareContentDocumentWithBlocks({
-    id: item.id, organizationId, kind: 'qa', rowRole: 'root', locale: 'en', locationId: locationRow.id,
+    id: item.id, organizationId, kind: 'qa', rowRole: 'root', locale: await getSourceLocale(db, organizationId), locationId: locationRow.id,
     title: item.question, summary: item.answer, source: 'template', status: 'published', sortOrder: item.sort_order,
     metadata: { answer_author: item.answer_author, is_owner_answer: 1, upvote_count: 0 },
   }, []).queries)

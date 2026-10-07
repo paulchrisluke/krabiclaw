@@ -181,7 +181,7 @@ export default defineNuxtConfig({
       platformDomain: process.env.NUXT_PUBLIC_PLATFORM_DOMAIN || '',
       freeOrganizationDomain: process.env.NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN || '',
       appName: process.env.NUXT_PUBLIC_APP_NAME || '',
-      platformUrl: process.env.NUXT_PUBLIC_SITE_URL || '',
+      siteUrl: process.env.NUXT_PUBLIC_SITE_URL || '',
       helpUrl: process.env.NUXT_PUBLIC_HELP_URL || 'https://krabiclaw.com/help',
       stripePublishableKey: process.env.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '',
 

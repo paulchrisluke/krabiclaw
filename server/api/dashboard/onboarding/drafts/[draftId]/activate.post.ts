@@ -95,6 +95,7 @@ export default defineHandler(async (event) => {
       name: draft.name,
       vertical: draft.vertical,
       subdomain_candidate: draft.subdomain_candidate,
+      source_locale: payload.source.details.sourceLocale,
     })
   } catch (error) {
     await reopenDraft()

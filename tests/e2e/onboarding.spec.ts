@@ -88,6 +88,8 @@ test('a new owner builds a draft and creates a site through the routed flow', as
   // A single-choice step is answered by the press itself: no Next to confirm it.
   await expect(step('type')).toBeVisible()
   await page.getByRole('button', { name: 'Restaurant, café or bar' }).click()
+  await expect(step('language')).toBeVisible()
+  await page.getByRole('button', { name: 'English', exact: true }).click()
 
   // The business step is one Google Maps search. A name Google does not know
   // is entered manually from under the predictions, and that path never asks
@@ -272,6 +274,8 @@ test('a new owner picks their Google listing and it seeds location, contact and 
   await page.goto('/dashboard/onboarding/type')
   await expect(page.locator('[data-onboarding-hydrated="true"]')).toBeVisible()
   await page.getByRole('button', { name: 'Restaurant, café or bar' }).click()
+  await expect(step('language')).toBeVisible()
+  await page.getByRole('button', { name: 'English', exact: true }).click()
   await expect(step('business')).toBeVisible()
 
   // Predictions appear as the owner types; each names the place and its area.
@@ -324,7 +328,7 @@ test('deleting a site through Better Auth also deletes the draft that created it
 
   const name = `E2E Deleted ${Date.now().toString(36)}`
   const firstSave = await page.request.post('/api/dashboard/onboarding/drafts/active', {
-    data: { sourceType: 'manual', vertical: 'restaurant', name, details: { country: 'TH', city: 'Ao Nang', streetAddress: '88 Moo 2' } },
+    data: { sourceType: 'manual', vertical: 'restaurant', name, details: { sourceLocale: 'en', country: 'TH', city: 'Ao Nang', streetAddress: '88 Moo 2' } },
   })
   expect(firstSave.status(), await firstSave.text()).toBe(200)
   const { organizationId } = await firstSave.json() as { organizationId: string }

@@ -4,9 +4,9 @@ import type { PublicProductLocation, PublicProductSession } from '~/server/utils
 import type { CurrencyCode } from '~/shared/currencies'
 import { selectPrice } from '~/shared/prices'
 import { formatProductMoney } from '~/utils/product-money'
-import { localDateAt, localPartsAt, TIMEZONE_OPTIONS } from '~/utils/timezone'
+import { isValidInstant, isValidTimezone, localDateAt, localPartsAt, TIMEZONE_OPTIONS } from '~/utils/timezone'
 import { getErrorMessage } from '~/utils/errors'
-import { isRecord, publicApiRequest, publicApiMutation } from '~/utils/api-clients'
+import { isRecord, normalizeApiError, publicApiRequest, publicApiMutation } from '~/utils/api-clients'
 import { setBookingConfirmation } from '~/composables/useBookingHandoff'
 import type { SubmissionMeasurement } from '~/composables/useOrganizationConversionTracking'
 import type { ConversionValue } from '~/utils/organization-conversion-events'
@@ -77,18 +77,28 @@ export function useSessionBooking(input: MaybeRefOrGetter<SessionBookingContext>
     return `${String(parts.hour).padStart(2, '0')}:${String(parts.minute).padStart(2, '0')}`
   }
 
+  // A party books one provider; places from different providers cannot be combined.
+  const offeredTimes = computed(() => {
+    const times = new Map<string, PublicProductSession>()
+    for (const session of sessions.value) {
+      const key = `${session.starts_at}:${session.ends_at}`
+      const current = times.get(key)
+      if (!current || (current.is_full && !session.is_full) || (current.is_full === session.is_full && (session.remaining ?? Infinity) > (current.remaining ?? Infinity))) times.set(key, session)
+    }
+    return [...times.values()].sort((a, b) => a.starts_at.localeCompare(b.starts_at))
+  })
+
   // The calendar speaks in the session's own zone, so a 10:00 class is 10:00 for
   // every guest reading the page from anywhere.
   const availabilityDates = computed<RawDateAvailability[]>(() => {
     const byDate = new Map<string, RawDateAvailability>()
-    for (const session of sessions.value) {
+    for (const session of offeredTimes.value) {
       const date = localDateOf(session)
       const entry = byDate.get(date) ?? { date, slots: [] }
       entry.slots.push({
         session_id: session.id,
         time_slot: localTimeOf(session),
         capacity: session.remaining === null ? null : session.remaining,
-        booked: 0,
         remaining: session.remaining,
         is_closed: false,
         is_full: session.is_full,
@@ -124,6 +134,14 @@ export function useSessionBooking(input: MaybeRefOrGetter<SessionBookingContext>
     if (!selection) return null
     if (selection.sessionId) return sessions.value.find(session => session.id === selection.sessionId) ?? null
     return sessions.value.find(session => localDateOf(session) === selection.day && localTimeOf(session) === selection.time) ?? null
+  })
+
+  watch([sessions, partySize], () => {
+    const chosen = selectedSession.value
+    if (!chosen) { timeSelection.value = null; return }
+    if (!chosen.is_full && (chosen.remaining === null || chosen.remaining >= partySize.value)) return
+    const replacement = offeredTimes.value.find(session => session.starts_at === chosen.starts_at && session.ends_at === chosen.ends_at && !session.is_full && (session.remaining === null || session.remaining >= partySize.value))
+    timeSelection.value = replacement ? { ...timeSelection.value!, sessionId: replacement.id } : null
   })
 
   /**
@@ -185,7 +203,7 @@ export function useSessionBooking(input: MaybeRefOrGetter<SessionBookingContext>
 
   const upcomingSessions = computed(() => {
     const now = Date.now()
-    return sessions.value
+    return offeredTimes.value
       .filter(session => !session.is_full && Date.parse(session.starts_at) > now)
       .sort((left, right) => left.starts_at.localeCompare(right.starts_at))
       .slice(0, 4)
@@ -229,7 +247,8 @@ export function useSessionBooking(input: MaybeRefOrGetter<SessionBookingContext>
       }
       checkoutRequestKey.value ??= crypto.randomUUID()
       type CheckoutResponse = { success: true; status: 'checkout'; payment_id: string; checkout_url: string; expires_at: string }
-      const response = await publicApiMutation<CheckoutResponse | { success: true; status: 'pending' | 'confirmed'; operational_booking_id: string; request_id: string; booking_id: string; cancellation_token: string; message: string; quoted_value?: ConversionValue | null; measurement?: SubmissionMeasurement; policy_summary?: ApiRecord | null }>(
+      type BookingResponse = { success: true; status: 'pending' | 'confirmed'; operational_booking_id: string; request_id: string; booking_id: string; cancellation_token: string; starts_at: string; ends_at: string; timezone: string; message: string; quoted_value?: ConversionValue | null; measurement?: SubmissionMeasurement; policy_summary?: ApiRecord | null }
+      const response = await publicApiMutation<CheckoutResponse | BookingResponse>(
         `/api/public/products/${encodeURIComponent(context.value.product.slug)}/book`,
         {
           method: 'POST',
@@ -245,8 +264,10 @@ export function useSessionBooking(input: MaybeRefOrGetter<SessionBookingContext>
             locale: locale.value,
             page_event_id: await pageEventId(),
           },
-          validate: (value): value is CheckoutResponse | { success: true; status: 'pending' | 'confirmed'; operational_booking_id: string; request_id: string; booking_id: string; cancellation_token: string; message: string; quoted_value?: ConversionValue | null; measurement?: SubmissionMeasurement } =>
-            isRecord(value) && value.success === true && ((value.status === 'checkout' && typeof value.checkout_url === 'string' && typeof value.payment_id === 'string' && typeof value.expires_at === 'string') || (typeof value.booking_id === 'string' && typeof value.cancellation_token === 'string' && typeof value.operational_booking_id === 'string' && typeof value.request_id === 'string' && (value.status === 'pending' || value.status === 'confirmed'))),
+          validate: (value): value is CheckoutResponse | BookingResponse =>
+            isRecord(value) && value.success === true && ((value.status === 'checkout' && typeof value.checkout_url === 'string' && typeof value.payment_id === 'string' && isValidInstant(value.expires_at))
+              || (typeof value.booking_id === 'string' && typeof value.cancellation_token === 'string' && typeof value.operational_booking_id === 'string' && typeof value.request_id === 'string'
+                && (value.status === 'pending' || value.status === 'confirmed') && typeof value.message === 'string' && isValidInstant(value.starts_at) && isValidInstant(value.ends_at) && typeof value.timezone === 'string' && isValidTimezone(value.timezone))),
         },
       )
       if (response.status === 'checkout') {
@@ -255,8 +276,6 @@ export function useSessionBooking(input: MaybeRefOrGetter<SessionBookingContext>
         await navigateTo(target.toString(), { external: true })
         return
       }
-      checkoutRequestKey.value = null
-      checkoutFingerprint = null
       mirrorSubmission('booking_submit', response.measurement, context.value.location?.id ?? null, response.quoted_value)
       setBookingConfirmation({
         type: 'booking', status: response.status, operationalBookingId: response.operational_booking_id, requestId: response.request_id,
@@ -264,8 +283,8 @@ export function useSessionBooking(input: MaybeRefOrGetter<SessionBookingContext>
         organizationName: context.value.location?.title ?? context.value.organizationName,
         guestName: contact.name,
         guestEmail: contact.email,
-        startsAt: session.starts_at,
-        timezone: allowTimezoneSelection.value ? bookingTimezone.value! : session.timezone,
+        startsAt: response.starts_at,
+        timezone: allowTimezoneSelection.value ? bookingTimezone.value! : response.timezone,
         guests: partySize.value,
         productId: context.value.product.id,
         title: context.value.product.name,
@@ -279,16 +298,15 @@ export function useSessionBooking(input: MaybeRefOrGetter<SessionBookingContext>
       })
       bookingOpen.value = false
       await navigateTo('/bookings/confirmed')
+      checkoutRequestKey.value = null
+      checkoutFingerprint = null
     } catch (error) {
-      // Unknown provider outcomes retain their key so retries cannot create a second payment.
-      const response = isRecord(error) && isRecord(error.data) ? error.data : null
-      if ((isRecord(error) && (error.code === 'checkout_expired' || error.code === 'checkout_failed'))
-        || response?.code === 'checkout_expired' || response?.code === 'checkout_failed'
-        || (isRecord(response?.data) && (response.data.code === 'checkout_expired' || response.data.code === 'checkout_failed'))) {
+      const failure = normalizeApiError(error)
+      if (failure.code === 'checkout_expired' || failure.code === 'checkout_failed') {
         checkoutRequestKey.value = null
         checkoutFingerprint = null
       }
-      bookingError.value = getErrorMessage(error, 'That booking could not be completed. Please try again.')
+      bookingError.value = failure.message
     } finally {
       submitting.value = false
     }

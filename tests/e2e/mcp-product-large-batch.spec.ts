@@ -5,7 +5,7 @@ import { MCP_ORGANIZATION_ID, mcpData, mcpRequest } from './helpers/mcp'
 
 interface CreatedProduct { id: string; name: string; description: string; active: boolean }
 
-test('Product batches validate and commit atomically at the supported limit', async ({ request, baseURL }, testInfo) => {
+test('Product batches validate and commit atomically for a 100-item catalog', async ({ request, baseURL }, testInfo) => {
   const organizationId = MCP_ORGANIZATION_ID
   // deactivate_missing acts on the whole tenant, and the assertions below name
   // its whole catalog, so nothing else may write the demo's products meanwhile.
@@ -21,11 +21,11 @@ test('Product batches validate and commit atomically at the supported limit', as
       const products: CreatedProduct[] = []
       let cursor: string | undefined
       do {
-        const page = mcpData<{ products: CreatedProduct[]; next_cursor?: string | null }>(await (await mcpRequest(request, baseURL!, {
+        const page = mcpData<{ products: CreatedProduct[]; page_info: {next_cursor: string | null} }>(await (await mcpRequest(request, baseURL!, {
           method: 'tools/call', toolName: 'list_products', args: { organization_id: organizationId, limit: 100, ...(cursor ? { cursor } : {}) },
         })).json())
         products.push(...page.products)
-        cursor = page.next_cursor ?? undefined
+        cursor = page.page_info.next_cursor ?? undefined
       } while (cursor)
       return products
     }
@@ -58,7 +58,7 @@ test('Product batches validate and commit atomically at the supported limit', as
 
       const invalidCreate = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'batch_create_products',
-        args: { organization_id: organizationId, products: invalidProducts },
+        args: { organization_id: organizationId, idempotency_key: `invalid-batch-${Date.now()}`, products: invalidProducts },
       })
       expect((await invalidCreate.json()).result?.isError).toBe(true)
 
@@ -69,7 +69,7 @@ test('Product batches validate and commit atomically at the supported limit', as
 
       const validCreate = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'batch_create_products',
-        args: { organization_id: organizationId, products },
+        args: { organization_id: organizationId, idempotency_key: `valid-batch-${Date.now()}`, products },
       })
       created = mcpData<{ products: CreatedProduct[] }>(await validCreate.json()).products
       expect(created).toHaveLength(100)
@@ -96,7 +96,7 @@ test('Product batches validate and commit atomically at the supported limit', as
       }))
       const reconcileResponse = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'reconcile_products',
-        args: { organization_id: organizationId, products: desired, deactivate_missing: true },
+        args: { organization_id: organizationId, idempotency_key: crypto.randomUUID(), products: desired, deactivate_missing: true },
       })
       const reconciled = mcpData<{ products: CreatedProduct[] }>(await reconcileResponse.json()).products
       expect(reconciled.find(product => product.id === created[0]!.id)?.description).toBe('Updated atomically')

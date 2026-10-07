@@ -204,4 +204,5 @@ export interface ListGuestThreadsOptions {
   /** Current or Past, as `resolveGuestThreadMailbox` defines them. Null lists both. */
   mailbox?: GuestThreadMailbox | null
   limit?: number
+  offset?: number
 }

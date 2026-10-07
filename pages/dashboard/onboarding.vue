@@ -141,7 +141,7 @@ async function goNext() {
   const step = currentStep.value
   if (!step || !canAdvance.value) return
 
-  if (!step.intro && !await draft.save()) return
+  if (!['type', 'language', 'business'].includes(step.id) && !await draft.save()) return
 
   if (step.action === 'commit') {
     if (!await draft.activate()) return

@@ -39,6 +39,7 @@ async function boot(legacy = false) {
     ? ['0000_baseline'].flatMap(name => readFileSync(`migrations-history/v11/${name}.sql`, 'utf8').split('--> statement-breakpoint').map(sql => sql.trim()).filter(Boolean))
     : await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))
   await db.batch(statements.map(statement => db.prepare(statement)))
+  await db.prepare("INSERT INTO user (id,name,email) VALUES (?,'Operator','operator@example.com')").bind(ACTOR).run()
   await db.prepare(`INSERT INTO organization (id, name, slug, subdomain, settings_json, theme_id, default_currency, status, onboarding_status, url_structure, vertical, updated_at)
     VALUES (?, 'Sessions', 'sessions', 'sessions', '{"config":{"default_timezone":"Asia/Bangkok"}}', 'theme', 'THB', 'active', 'complete', 'flat', 'experience', ?)`)
     .bind(ORG, NOW).run()
@@ -55,8 +56,8 @@ async function boot(legacy = false) {
   // location is still offering the product.
   await db.prepare(`INSERT INTO product_locations (organization_id, product_id, location_id, active, published, created_by, updated_by)
     VALUES (?, ?, ?, 1, 1, ?, ?)`).bind(ORG, PRODUCT, LOCATION, ACTOR, ACTOR).run()
-  await db.prepare(`INSERT INTO product_booking_configs (product_id, organization_id, duration_minutes, default_capacity, created_by, updated_by)
-    VALUES (?, ?, 120, 10, ?, ?)`).bind(PRODUCT, ORG, ACTOR, ACTOR).run()
+  await db.prepare(`INSERT INTO product_booking_configs (product_id, organization_id, duration_minutes, default_capacity, online_timezone, created_by, updated_by)
+    VALUES (?, ?, 120, 10, 'Asia/Bangkok', ?, ?)`).bind(PRODUCT, ORG, ACTOR, ACTOR).run()
   return { runtime, db }
 }
 
@@ -236,7 +237,7 @@ test('the occurrence key is the intended local start, not the actual instant', (
 })
 
 
-test('required online collection follows the canonical subscription entitlement while disabling remains available', { timeout: 120_000 }, async () => {
+test('required online collection needs Payments setup as well as entitlement, while disabling remains available', { timeout: 120_000 }, async () => {
   const { runtime, db } = await boot()
   const scope = { organizationId: ORG, productId: PRODUCT, actorId: ACTOR }
   const env = { DB: db, STRIPE_SECRET_KEY: 'sk_test_local_d1_no_stripe_requests', BETTER_AUTH_URL: 'https://proof.example', BETTER_AUTH_SECRET: 'local-proof-secret-long-enough-for-auth', NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://krabiclaw.test' } as CloudflareEnv
@@ -253,8 +254,10 @@ test('required online collection follows the canonical subscription entitlement 
     assert.equal(await db.prepare('SELECT COUNT(*) FROM public_resource_cache_invalidations').first('COUNT(*)'), invalidations)
 
     await db.prepare("UPDATE subscription SET status='active' WHERE id='booking-entitlement'").run()
-    await setProductBookingConfig(db, { ...scope, env, patch: { online_payment_required: true } })
-    assert.equal(await db.prepare('SELECT online_payment_required FROM product_booking_configs WHERE product_id = ?').bind(PRODUCT).first('online_payment_required'), 1)
+    await assert.rejects(() => setProductBookingConfig(db, { ...scope, env, patch: { online_payment_required: true } }), { statusCode: 409 })
+    assert.deepEqual(await db.prepare('SELECT online_payment_required, updated_at FROM product_booking_configs WHERE product_id = ?').bind(PRODUCT).first(), before)
+    // A saved policy from before a downgrade can still be disabled.
+    await db.prepare('UPDATE product_booking_configs SET online_payment_required=1 WHERE product_id=?').bind(PRODUCT).run()
     await db.prepare("UPDATE subscription SET status='canceled' WHERE id='booking-entitlement'").run()
     await setProductBookingConfig(db, { ...scope, patch: { duration_minutes: 60 } })
     assert.equal(await db.prepare('SELECT online_payment_required FROM product_booking_configs WHERE product_id = ?').bind(PRODUCT).first('online_payment_required'), 1, 'other settings preserve the saved policy after downgrade')
@@ -271,6 +274,8 @@ test('shared booking defaults retain omissions, zero and null; all history block
   try {
     await setProductBookingConfig(db, { ...scope, patch: { default_capacity: 0 } })
     assert.deepEqual(await db.prepare('SELECT duration_minutes, default_capacity FROM product_booking_configs WHERE product_id = ?').bind(PRODUCT).first(), { duration_minutes: 120, default_capacity: 0 })
+    await assert.rejects(setProductBookingConfig(db, { ...scope, patch: { duration_minutes: null } }), /Keep a session duration/)
+    await db.prepare('UPDATE product_publications SET published=0 WHERE product_id=?').bind(PRODUCT).run()
     await setProductBookingConfig(db, { ...scope, patch: { duration_minutes: null } })
     assert.deepEqual(await db.prepare('SELECT duration_minutes, default_capacity FROM product_booking_configs WHERE product_id = ?').bind(PRODUCT).first(), { duration_minutes: null, default_capacity: 0 })
     await assert.rejects(setProductBookingConfig(db, { ...scope, patch: { duration_minutes: 0 } }), /duration_minutes/)
@@ -320,8 +325,9 @@ test('weekly replacement uses saved timezone, converges and preserves booked occ
     assert(cleared.cancelled > 0)
     assert.deepEqual(await db.prepare('SELECT status, availability_rule_id FROM product_sessions WHERE id = ?').bind(monday).first(), { status: 'scheduled', availability_rule_id: null })
     assert.deepEqual(await db.prepare('SELECT status, product_session_id FROM bookings WHERE id = ?').bind(booked.bookingId).first(), { status: 'confirmed', product_session_id: monday })
-    // Clearing remains valid after the duration default has been cleared.
-    await setProductBookingConfig(db, { ...scope, patch: { duration_minutes: null } })
+    // A published experience retains the duration needed for its other scope.
+    await assert.rejects(setProductBookingConfig(db, { ...scope, patch: { duration_minutes: null } }), /Keep a session duration/)
+    assert.equal(await db.prepare('SELECT duration_minutes FROM product_booking_configs WHERE product_id=?').bind(PRODUCT).first('duration_minutes'),120)
     assert.deepEqual((await replaceWeeklySchedule(db, { ...scope, slots: [] })).rules, [])
   } finally { await runtime.dispose() }
 })
@@ -336,7 +342,7 @@ test('readding a weekly slot preserves every fact of sessions with booking histo
       const sessionId = await db.prepare('SELECT id FROM product_sessions WHERE starts_at > ? ORDER BY starts_at LIMIT 1').bind(new Date().toISOString()).first<string>('id')
       assert(sessionId)
       const booking = await claimSessionCapacity(db, { ...scope, sessionId, productVariantId: 'var-adult', partySize: 6 })
-      if (scenario === 'cancelled-booking') await setBookingStatus(db, { organizationId: ORG, bookingId: booking.bookingId, status: 'cancelled' })
+      if (scenario === 'cancelled-booking' || scenario === 'cancelled-session' || scenario === 'moved') await setBookingStatus(db, { organizationId: ORG, bookingId: booking.bookingId, status: 'cancelled' })
       if (scenario === 'cancelled-session') await updateSession(db, { ...scope, sessionId, status: 'cancelled' })
       if (scenario === 'edited') await updateSession(db, { ...scope, sessionId, capacity: 8 })
       if (scenario === 'moved') {
@@ -452,7 +458,6 @@ test('provider additive migration keeps the separately held weekly columns and t
 test('one configured online calendar excludes overlapping pending requests and review retries release once', { timeout: 120_000 }, async () => {
   const { runtime, db } = await boot()
   try {
-    await db.prepare("INSERT INTO user (id, name, email) VALUES (?, 'Operator', 'operator@example.com')").bind(ACTOR).run()
     await db.prepare("UPDATE product_booking_configs SET confirmation_mode = 'review', online_timezone = 'America/New_York', calendar_group = 'online' WHERE product_id = ?").bind(PRODUCT).run()
     for (const [productId, variantId, group] of [['prod-consult', 'var-consult', 'online'], ['prod-independent', 'var-independent', null]]) {
       await db.prepare(`INSERT INTO products (kind, id, organization_id, name, slug, created_by, updated_by) VALUES ('experience', ?, ?, ?, ?, ?, ?)`).bind(productId, ORG, productId, productId, ACTOR, ACTOR).run()
@@ -500,7 +505,7 @@ test('one configured online calendar excludes overlapping pending requests and r
     assert.equal((await executeGuestThreadOperation(db, confirm)).ok, true)
     assert.equal((await getThreadOperationalRecord(db, winner.requestId))?.status, 'confirmed')
     assert.equal(await db.prepare('SELECT COUNT(*) n FROM bookings').first('n'), 1)
-    const moved = sessionMoveQuery({ bookingId: record!.id, organizationId: ORG, productId: winner.productId, sessionId: winner.sessionId, partySize: 1, now: new Date().toISOString() })
+    const moved = await sessionMoveQuery(db, { bookingId: record!.id, organizationId: ORG, productId: winner.productId, sessionId: winner.sessionId, partySize: 1, now: new Date().toISOString() })
     assert.equal((await db.prepare(moved.query).bind(...moved.params!).run()).meta.changes, 1, 'same-session changes exclude the allocation being moved')
     assert.equal((await getThreadOperationalRecord(db, winner.requestId))?.id, record!.id)
     assert.equal((await getThreadOperationalRecord(db, winner.requestId))?.status, 'confirmed')

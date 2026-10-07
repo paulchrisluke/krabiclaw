@@ -16,7 +16,13 @@ const organizationId = await useDashboardOrganizationId()
 const api = `/api/organizations/${organizationId}/integrations/google-calendar`
 const connection = useIntegrationConnection('google', INTEGRATION_SCOPES['google-calendar'])
 const failure = ref(''), saving = ref(false)
-const { data, error, refresh } = await useAsyncData(`google-calendar:${organizationId}`, () => applicationFetch<{calendar:GoogleCalendarIntegration|null;cleanup_pending:boolean}>(api, { validate: (v):v is {calendar:GoogleCalendarIntegration|null;cleanup_pending:boolean} => isRecord(v) && (v.calendar === null || (isRecord(v.calendar) && typeof v.calendar.calendar_id === 'string')) }))
+const isCalendarResponse = (value: unknown): value is {calendar:GoogleCalendarIntegration|null;cleanup_pending:boolean} => {
+ if (!isRecord(value) || typeof value.cleanup_pending !== 'boolean') return false
+ const calendar = value.calendar
+ return calendar === null || (isRecord(calendar) && ['revision','account_id','calendar_id','calendar_name','created_at','updated_at'].every(field => typeof calendar[field] === 'string')
+  && ['active','disabled','error'].includes(String(calendar.status)) && (calendar.last_error === null || typeof calendar.last_error === 'string'))
+}
+const { data, error, refresh } = await useAsyncData(`google-calendar:${organizationId}`, () => applicationFetch(api, {validate:isCalendarResponse}))
 const calendar = computed(() => data.value?.calendar ?? null)
 const connected = computed(() => calendar.value && calendar.value.status !== 'disabled')
 watch(error, value => { if(value) failure.value = getErrorMessage(value, 'Could not load Google Calendar.') }, {immediate:true})
@@ -27,10 +33,11 @@ async function run(action:()=>Promise<void>) {
  finally {saving.value=false}
 }
 async function finishConnection() {
- await run(async()=>{await $fetch(`${api}/connect`,{method:'POST',body:{account_id:connection.accountId.value}}); await connection.clear()})
+ await run(async()=>{await applicationFetch(`${api}/connect`,{method:'POST',body:{account_id:connection.accountId.value},validate:isCalendarMutation}); await connection.clear()})
 }
+const isCalendarMutation = (value: unknown): value is {success:true} => isRecord(value) && value.success === true
 async function connect(){await connection.connect({access_type:'offline',prompt:'consent select_account'})}
-async function disconnect(){await run(async()=>{await $fetch(`${api}/disconnect`,{method:'POST'})})}
-async function retry(){if(connection.accountId.value)await finishConnection();else await run(async()=>{await $fetch(`${api}/sync`,{method:'POST'})})}
+async function disconnect(){await run(async()=>{await applicationFetch(`${api}/disconnect`,{method:'POST',validate:isCalendarMutation})})}
+async function retry(){if(connection.accountId.value)await finishConnection();else await run(async()=>{await applicationFetch(`${api}/sync`,{method:'POST',validate:isCalendarMutation})})}
 onMounted(async()=>{if(connection.accountId.value)await finishConnection()})
 </script>

@@ -1,4 +1,6 @@
 import { platformLocale } from '~/shared/platform-locales'
+import { isCurrencyCode } from '~/shared/currencies'
+import { formatMinorAmount } from '~/shared/prices'
 
 export type BookingPolicySummaryType = 'reservation' | 'experience'
 
@@ -9,6 +11,9 @@ export interface BookingPolicySummarySource {
   reschedule_allowed: boolean | null
   reschedule_cutoff_minutes: number | null
   deposit_required: boolean | null
+  deposit_amount?: number | null
+  deposit_currency?: string | null
+  deposit_tax_behavior?: 'inclusive' | 'exclusive' | null
   deposit_trigger_party_size: number | null
   minimum_guest_age: number | null
   accessibility_contact_required: boolean | null
@@ -47,32 +52,36 @@ function formatMinutes(minutes: number, locale: string) {
 
 export function formatBookingPolicySummary(
   policy: BookingPolicySummarySource,
-  locale = 'en',
+  locale: string,
   _vertical?: string | null,
 ): FormattedBookingPolicySummary {
   const t = policyMessages(locale)
   const experience = policy.policy_type === 'experience'
   const items: FormattedBookingPolicySummaryItem[] = []
 
-  if (policy.free_cancellation_until_minutes) {
+  if (policy.free_cancellation_until_minutes !== null) {
     const duration = formatMinutes(policy.free_cancellation_until_minutes, locale)
-    items.push({ id: 'cancellation', text: t(experience ? 'experience_cancellation' : 'reservation_cancellation', { duration }) })
+    items.push({ id: 'cancellation', text: t(policy.free_cancellation_until_minutes === 0 ? 'cancellation_until_start' : experience ? 'experience_cancellation' : 'reservation_cancellation', { duration }) })
   }
-  if (experience && policy.reschedule_allowed && policy.reschedule_cutoff_minutes) {
-    items.push({ id: 'reschedule', text: t('reschedule', { duration: formatMinutes(policy.reschedule_cutoff_minutes, locale) }) })
+  if (policy.reschedule_allowed !== null) {
+    const key = !policy.reschedule_allowed ? 'reschedule_disallowed' : policy.reschedule_cutoff_minutes === null ? 'reschedule_allowed' : policy.reschedule_cutoff_minutes === 0 ? 'reschedule_until_start' : 'reschedule'
+    items.push({ id: 'reschedule', text: t(key, policy.reschedule_cutoff_minutes === null ? {} : { duration: formatMinutes(policy.reschedule_cutoff_minutes,locale) }) })
   }
-  if (experience && policy.deposit_required) {
+  if (policy.deposit_required) {
     items.push({
       id: 'deposit',
       text: policy.deposit_trigger_party_size
         ? t('deposit_party', { count: policy.deposit_trigger_party_size })
         : t('deposit', {}),
     })
+    if (policy.deposit_amount != null && isCurrencyCode(policy.deposit_currency)) {
+      items.push({ id: 'deposit_amount', text: t(policy.deposit_tax_behavior === 'exclusive' ? 'deposit_amount_exclusive' : 'deposit_amount', { amount: formatMinorAmount(policy.deposit_amount, policy.deposit_currency, locale) }) })
+    }
   }
-  if (experience && policy.minimum_guest_age) {
+  if (policy.minimum_guest_age) {
     items.push({ id: 'minimum_guest_age', text: t('minimum_guest_age', { age: policy.minimum_guest_age }) })
   }
-  if (experience && policy.accessibility_contact_required) {
+  if (policy.accessibility_contact_required) {
     items.push({ id: 'accessibility', text: t('accessibility', {}) })
   }
 

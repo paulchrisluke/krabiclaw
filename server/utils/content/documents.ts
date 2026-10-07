@@ -41,7 +41,7 @@ interface ContentDocumentInputFields {
 
 export type ContentDocumentInput = ContentDocumentInputFields & (
   | { rowRole: 'representation'; rootId: string; locale: string }
-  | { rowRole: 'root'; locale: 'en'; locationId?: string | null; productId?: string | null; scopePath?: string | null;
+  | { rowRole: 'root'; locale: string; locationId?: string | null; productId?: string | null; scopePath?: string | null;
       status?: string | null; visibility?: string | null; sortOrder?: number; source?: string | null;
       authorId?: string | null; publishedAt?: string | null; firstPublishedAt?: string | null }
 )
@@ -133,16 +133,6 @@ function mediaFreeBlockData(type: ContentBlockType, value: unknown, field: strin
     data = validateContentBlockData(type, data)
   } catch (error) {
     badRequest(error instanceof Error ? error.message : `${field} contains invalid block data`)
-  }
-  // A heading's text is `text`, and its level is the `level` column. Importers
-  // also wrote a `markdown` key holding `'#'.repeat(level) + ' ' + text` — a
-  // second copy of both, which no reader consumes and which the CMS leaves
-  // behind when it edits `text`, so the row ends up asserting two different
-  // headlines. Drop it on write: the block is exactly what the registry says
-  // it is.
-  if (type === 'heading') {
-    delete data.markdown
-    delete data.level
   }
   // The markdown contract lives here, on the one batch builder every content
   // document write passes through, because `content_blocks` is one table and a

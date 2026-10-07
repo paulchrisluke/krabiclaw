@@ -120,8 +120,6 @@ The representative client order is:
 4. Krabiclaw's own site: home, documentation, blog, and the help form. It is an
    ordinary site on the platform template, so it is qualified like a tenant.
 
-Dashboard, CMS, ChowBot, and billing are outside the release-qualified scope.
-
 For a shared renderer, routing, theme, content-model, or destructive
 content-migration change, expand that representative set to every published
 route using the sitemap and fixture inventory. Check desktop and narrow/mobile
@@ -267,6 +265,45 @@ node --experimental-strip-types scripts/pull-production-snapshot.ts --staging --
 node --experimental-strip-types scripts/pull-production-snapshot.ts --production --source krabiclaw-production-v12 --out production-v13-initial.sqlite
 node --experimental-strip-types scripts/pull-production-snapshot.ts --staging --source krabiclaw-staging-v12 --out staging-v13-final.sqlite --delta-from staging-v13-initial.sqlite
 node --experimental-strip-types scripts/pull-production-snapshot.ts --production --source krabiclaw-production-v12 --out production-v13-final.sqlite --delta-from production-v13-initial.sqlite
+```
+
+The v13-to-v14 business-workflow replacement adds Better Auth's native `team`
+and `teamMember` tables, and native `invitation.teamId`. Product booking settings
+can select one member or one native team. `content_documents` gains generated
+`document_role` and a source-locale foreign key to the site's authored language;
+its children include blocks, placements and publication records.
+`organization_locales` gives that source language a unique owner per site.
+`reservations` stores the policy actually accepted, and Checkout holds distinguish
+booking and reservation allocations. These referenced-parent constraints use a
+replacement baseline, not a D1 parent-table rebuild. The complete applied v13
+SQL and Drizzle metadata remain unchanged in `migrations-history/v13/`.
+
+The transfer retains source identities, memberships, sessions, OAuth clients and
+signing keys from each environment's own v13 database. It keeps the site's actual
+source language and all booking commitments. Native teams start empty. New
+reservation duration/deposit fields, historical accepted reservation policies,
+and historical financial billing bases remain unknown until their canonical
+owner supplies the facts; today's settings are never backfilled as past terms.
+Oversized text rows are reconstructed from bounded SQL chunks during the same
+native D1 import, without truncation. The import-only helper table is removed
+before row-count, schema and foreign-key verification.
+
+Both v14 databases were created with `--location wnam` on 2026-10-08, and
+Cloudflare reported WNAM before binding or loading:
+
+- `krabiclaw-production-v14`: `dad88350-88f8-4036-8cf2-d73c458d6060`
+- `krabiclaw-staging-v14`: `2c172842-4e77-4cf3-b1c0-f1d1ec0d32ba`
+
+Apply the generated baseline with native `wrangler d1 migrations apply`, then
+use the existing transfer for each initial load and final delta. Keep the old
+Worker live until the normal staging/main release changes its binding. Review
+changed and deleted keys in the final manifests before carrying customer edits.
+
+```sh
+node --experimental-strip-types scripts/pull-production-snapshot.ts --staging --source krabiclaw-staging-v13 --out staging-v14-initial.sqlite
+node --experimental-strip-types scripts/pull-production-snapshot.ts --production --source krabiclaw-production-v13 --out production-v14-initial.sqlite
+node --experimental-strip-types scripts/pull-production-snapshot.ts --staging --source krabiclaw-staging-v13 --out staging-v14-final.sqlite --delta-from staging-v14-initial.sqlite
+node --experimental-strip-types scripts/pull-production-snapshot.ts --production --source krabiclaw-production-v13 --out production-v14-final.sqlite --delta-from production-v14-initial.sqlite
 ```
 
 Before dropping or retiring a legacy table or writer:

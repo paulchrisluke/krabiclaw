@@ -1,5 +1,5 @@
 import { localizationError } from './localization-errors.ts'
-import { validateProductDetails, assertProductKind, ProductDetailError, type ProductKind } from '../../shared/product-details.ts'
+import { validateProductDetails, assertProductKind, ProductDetailError, productDetailsSchema, type ProductKind } from '../../shared/product-details.ts'
 
 import { LOCALIZED_RESOURCE_TYPES, type LocalizedResourceType } from '../../shared/content-registries.ts'
 export { LOCALIZED_RESOURCE_TYPES, type LocalizedResourceType } from '../../shared/content-registries.ts'
@@ -64,6 +64,17 @@ export const RESOURCE_LOCALIZATION_REGISTRY: Readonly<Record<LocalizedResourceTy
   article_category: { table: 'article_categories', tenantScope: 'organization_column', fields: { name: 'text', description: 'text' }, route: 'none' },
   media_asset: { table: 'media_assets', tenantScope: 'organization_column', fields: { alt_text: 'text' }, route: 'none' },
 })
+
+function localizedShapeSchema(shape: ValueShape): Record<string, unknown> {
+  if (shape === 'text') return { type: 'string' }
+  if (shape === 'string_array') return { type: 'array', items: { type: 'string', pattern: '\\S' } }
+  if (shape === 'details') return productDetailsSchema()
+  return { type: 'object', properties: Object.fromEntries(Object.entries(shape).map(([key, nested]) => [key, localizedShapeSchema(nested)])), additionalProperties: false }
+}
+
+export function localizedResourceValuesSchema(resourceType: LocalizedResourceType): Record<string, unknown> {
+  return localizedShapeSchema(RESOURCE_LOCALIZATION_REGISTRY[resourceType].fields)
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)

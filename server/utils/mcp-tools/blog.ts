@@ -1,6 +1,6 @@
 import type { McpToolDefinition } from './shared'
 import { articleCategoryObject, blogPostMutationResultObject, blogPostObject, blogPostSummaryObject, contentBlockMediaInputObject, contentBlockUpdatedAtInput, pageInfoObject, paginationInputSchema, organizationTool } from './shared'
-import { PUBLICATION_CONTENT_BLOCK_TYPES, describeContentBlockTextFields } from '~/shared/content-registries'
+import { PUBLICATION_CONTENT_BLOCK_TYPES, contentBlockDataSchema } from '~/shared/content-registries'
 import type { McpExecutorContext } from './execution'
 import { BLOG_UPDATE_MUTATION_FIELDS, createBlogPost, deleteBlogPost, getBlogPost, listBlogPosts, reorderArticles, updateBlogLifecycle, updateBlogPost } from '~/server/utils/content/publishing'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
@@ -20,12 +20,13 @@ const blogContentBlockSchema = {
     type: { type: 'string', enum: [...PUBLICATION_CONTENT_BLOCK_TYPES] },
     parent_block_id: { type: ['string', 'null'] },
     level: { type: ['number', 'null'] },
-    data: { type: 'object', description: describeContentBlockTextFields(PUBLICATION_CONTENT_BLOCK_TYPES) },
+    data: { type: 'object' },
     media: { type: 'array', items: contentBlockMediaInputObject, description: 'Required on image blocks: one item, the picture. A block read back keeps its media by sending it as read.' },
     updated_at: contentBlockUpdatedAtInput,
   },
   required: ['type', 'data'],
   additionalProperties: false,
+  anyOf: PUBLICATION_CONTENT_BLOCK_TYPES.map(type => ({ properties: { type: { const: type }, data: contentBlockDataSchema(type) } })),
 } as const
 
 const articleCategoryResult = {
@@ -48,7 +49,6 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
       description: "List draft and published long-form articles in the selected site’s blog or documentation collection. Results are paginated in public display order. Short website posts are listed separately by list_posts.",
       domain: 'blog',
       minimumRole: 'admin',
-      confirmRequired: false,
       inputSchema: { status: { type: 'string', enum: ['draft', 'published'] }, collection: { type: 'string', enum: ['blog', 'docs'] }, ...paginationInputSchema },
       outputSchema: {
         type: 'object',
@@ -62,7 +62,6 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
       description: "Read one blog or documentation article by ID or slug, including its ordered content_blocks and updated_at token. Use that token when editing or publishing the article.",
       domain: 'blog',
       minimumRole: 'admin',
-      confirmRequired: false,
       inputSchema: { post_id: { type: 'string', description: 'Post id or slug.' } },
       required: ['post_id'],
       outputSchema: {
@@ -79,7 +78,6 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
       description: "Create a draft blog or documentation article with ordered content_blocks. It stays private until published. A category in the selected collection is required for publication. Use a new idempotency_key for each article; retrying the same key returns the same article. The preview_url allows draft review.",
       domain: 'blog',
       minimumRole: 'admin',
-      confirmRequired: true,
       inputSchema: {
         idempotency_key: { type: 'string', minLength: 1, maxLength: 200, description: 'A value you make up once for this article, such as a UUID, and reuse only to retry this same request.' },
         title: { type: 'string' },
@@ -98,7 +96,6 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
       description: "Edit the selected blog or documentation article. Only supplied metadata changes; content_blocks replaces the entire body and requires expected_updated_at from the latest read. Stale tokens conflict. Changes to a published article are public immediately.",
       domain: 'blog',
       minimumRole: 'admin',
-      confirmRequired: true,
       inputSchema: {
         post_id: { type: 'string', description: 'Post id or slug.' },
         title: { type: 'string' },
@@ -119,8 +116,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
   organizationTool({
       name: 'publish_blog_post',
       description: "Publish the selected draft blog or documentation article when publication is requested. Requires expected_updated_at from the latest read. An already published article is unchanged, including its date and announcement. Returns the article and website URL; this does not publish to Facebook or Instagram.",
-      domain: 'blog', minimumRole: 'admin', confirmRequired: true,
-      inputSchema: {
+      domain: 'blog', minimumRole: 'admin', inputSchema: {
         post_id: { type: 'string', description: 'Post id or slug.' },
         expected_updated_at: { type: 'string', description: 'Exact post.updated_at concurrency token from the latest get_blog_post or successful blog mutation.' },
       },
@@ -132,7 +128,6 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
       description: "Replace the public display order of articles in one blog or documentation collection. Supply every article ID in that collection exactly once, including drafts. New articles with sort_order 0 appear first until ordered; category ordering is separate.",
       domain: 'blog',
       minimumRole: 'admin',
-      confirmRequired: false,
       inputSchema: {
         collection: { type: 'string', enum: ['blog', 'docs'] },
         post_ids: { type: 'array', items: { type: 'string' }, minItems: 1 },
@@ -149,7 +144,6 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
       description: "Permanently delete the selected blog or documentation article and its owned content. Use only when the user requests removing that article; a published article is removed from the website.",
       domain: 'blog',
       minimumRole: 'admin',
-      confirmRequired: true,
       inputSchema: { post_id: { type: 'string', description: 'Post id or slug.' } },
       required: ['post_id'],
       outputSchema: {
@@ -162,16 +156,14 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
   organizationTool({
       name: 'list_article_categories',
       description: "List categories and subcategories in one site blog or documentation collection, in public display order, with article and child-category counts. Published articles require a category in their collection.",
-      domain: 'blog', minimumRole: 'admin', confirmRequired: false,
-      inputSchema: { collection: { type: 'string', enum: ['blog', 'docs'] } },
+      domain: 'blog', minimumRole: 'admin', inputSchema: { collection: { type: 'string', enum: ['blog', 'docs'] } },
       required: ['collection'],
       outputSchema: articleCategoryListResult,
     }),
   organizationTool({
       name: 'create_article_category',
       description: 'Create a category in the blog or the documentation, at the top level or under another category (parent_id). It goes last among its siblings; place it with reorder_article_categories. Its slug comes from the name and does not change later. Returns the category and ID; articles are assigned separately.',
-      domain: 'blog', minimumRole: 'admin', confirmRequired: false,
-      inputSchema: {
+      domain: 'blog', minimumRole: 'admin', inputSchema: {
         collection: { type: 'string', enum: ['blog', 'docs'] },
         name: { type: 'string', minLength: 1, maxLength: 100 },
         parent_id: { type: ['string', 'null'], description: 'The category this one sits under, in the same collection; null or omitted for the top level. Categories nest at most 3 levels deep.' },
@@ -183,8 +175,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
   organizationTool({
       name: 'update_article_category',
       description: "Rename a category, change its description, or move it under another category (parent_id; null moves it to the top level, where it goes last). Its page's address (slug) stays the same. Omitted fields stay unchanged; returns the updated category without moving its articles.",
-      domain: 'blog', minimumRole: 'admin', confirmRequired: false,
-      inputSchema: {
+      domain: 'blog', minimumRole: 'admin', inputSchema: {
         category_id: { type: 'string' },
         parent_id: { type: ['string', 'null'], description: 'The category this one sits under, in the same collection; null or omitted for the top level. Categories nest at most 3 levels deep.' },
         name: { type: 'string', minLength: 1, maxLength: 100 },
@@ -196,8 +187,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
   organizationTool({
       name: 'delete_article_category',
       description: 'Delete an empty category. A category that still has articles or subcategories is refused with how many it holds: ask the user where they should go, move each article with update_blog_post (category_id) and each subcategory with update_article_category (parent_id), then delete it.',
-      domain: 'blog', minimumRole: 'admin', confirmRequired: true,
-      inputSchema: { category_id: { type: 'string' } },
+      domain: 'blog', minimumRole: 'admin', inputSchema: { category_id: { type: 'string' } },
       required: ['category_id'],
       outputSchema: {
         type: 'object',
@@ -209,8 +199,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
   organizationTool({
       name: 'reorder_article_categories',
       description: "Set the order of one set of sibling categories on the public site — the index, its sidebar and the menu: the collection's top level (parent_id null or omitted), or one category's subcategories. Send every sibling id exactly once; a partial order is rejected.",
-      domain: 'blog', minimumRole: 'admin', confirmRequired: false,
-      inputSchema: {
+      domain: 'blog', minimumRole: 'admin', inputSchema: {
         collection: { type: 'string', enum: ['blog', 'docs'] },
         parent_id: { type: ['string', 'null'], description: 'Whose subcategories are being ordered; null or omitted for the top level.' },
         category_ids: { type: 'array', items: { type: 'string' }, minItems: 1 },

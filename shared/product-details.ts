@@ -69,6 +69,21 @@ const DEFAULT_TEXT_MAX_LENGTH = 1_000
 const DEFAULT_MULTILINE_MAX_LENGTH = 10_000
 const DEFAULT_LIST_MAX_ITEMS = 100
 
+export function productDetailsSchema(kind?: ProductKind): Record<string, unknown> {
+  const fields = kind ? productDetailFields(kind) : PRODUCT_DETAIL_FIELDS
+  return { type: 'object', additionalProperties: false, properties: Object.fromEntries(fields.map(field => {
+    const multiline = field.value_type === 'multi_line_text'
+    const text = { type: 'string', minLength: 1,
+      maxLength: field.validations.max_length ?? (multiline ? DEFAULT_MULTILINE_MAX_LENGTH : DEFAULT_TEXT_MAX_LENGTH),
+      pattern: multiline ? '\\S' : '^(?=[\\s\\S]*\\S)[^\\r\\n]*$',
+      ...(field.validations.choices ? { enum: field.validations.choices } : {}),
+    }
+    return [field.key, { ...(field.value_type === 'list.single_line_text'
+      ? { type: 'array', maxItems: field.validations.max_items ?? DEFAULT_LIST_MAX_ITEMS, uniqueItems: true, items: text }
+      : text), description: field.description }]
+  })) }
+}
+
 function assertText(value: unknown, rules: ProductDetailField['validations'], fallbackMax: number, label: string): string {
   if (typeof value !== 'string') throw new ProductDetailError(`${label} must be a string`)
   if (value.trim() === '') throw new ProductDetailError(`${label} must not be blank`)
@@ -109,4 +124,3 @@ export function validateProductDetailValue(definition: ProductDetailField, value
     }
   }
 }
-

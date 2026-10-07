@@ -8069,6 +8069,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"eventsource-parser@npm:^4.1.0":
+  version: 4.1.0
+  resolution: "eventsource-parser@npm:4.1.0"
+  checksum: 10c0/0591250f4f3df7ebef56ddfbba0e19aee5450d81347609d7d2417f08191060aea3fbb3aa71a02c25515b198ee17bd0c94d30190f576e0aa937c93c9e9f605e6f
+  languageName: node
+  linkType: hard
+
 "execa@npm:^8.0.1":
   version: 8.0.1
   resolution: "execa@npm:8.0.1"
@@ -10328,6 +10335,7 @@ __metadata:
     drizzle-orm: "npm:^0.45.2"
     email-reply-parser: "npm:2.3.9"
     eslint: "npm:^10.9.1"
+    eventsource-parser: "npm:^4.1.0"
     h3: "npm:2.0.1-rc.29"
     html-to-text: "npm:10.0.1"
     isomorphic-dompurify: "npm:^3.23.0"

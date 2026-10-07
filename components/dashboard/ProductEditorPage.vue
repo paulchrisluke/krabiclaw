@@ -89,6 +89,7 @@ export interface ProductForm {
   confirmation_mode: 'instant' | 'review'
   scheduling_mode: 'legacy' | 'provider'
   assigned_member_id: string
+  assigned_team_id: string
   online_payment_required: boolean
   online_timezone: string
   calendar_group: string
@@ -216,7 +217,7 @@ const sectionLabels: Record<SectionKey, string> = {
   'publication': 'Website',
   'booking': 'Scheduling',
   'locations': 'Locations',
-  'collections': 'Menu sections',
+  get collections() { return product.value?.kind === 'dish' ? 'Menu sections' : presentation.value.collectionGroupLabelPlural },
 }
 
 const detailKey = computed(() => level.child.value)
@@ -329,7 +330,7 @@ const draft = useState<ProductForm>(draftKey, () => ({
   collection_ids: [] as string[],
   bookable: false,
   booking_duration: '',
-  booking_capacity: '', scheduling_mode: 'legacy', assigned_member_id: '', confirmation_mode: 'instant', online_payment_required: false, online_timezone: '', calendar_group: '', online_schedule: false,
+  booking_capacity: '', scheduling_mode: 'legacy', assigned_member_id: '', assigned_team_id: '', confirmation_mode: 'instant', online_payment_required: false, online_timezone: '', calendar_group: '', online_schedule: false,
   image_asset_id: null as string | null,
 }))
 const form = reactive(draft.value)
@@ -385,6 +386,7 @@ function loadForm(row: Product) {
   form.confirmation_mode = row.booking?.confirmation_mode ?? 'instant'
   form.scheduling_mode = row.booking?.scheduling_mode ?? 'legacy'
   form.assigned_member_id = row.booking?.assigned_member_id ?? ''
+  form.assigned_team_id = row.booking?.assigned_team_id ?? ''
   form.online_payment_required = row.booking?.online_payment_required ?? false
   form.online_timezone = row.booking?.online_timezone ?? ''
   form.calendar_group = row.booking?.calendar_group ?? ''
@@ -496,8 +498,9 @@ function listSummary(values: readonly string[], empty: string) {
 
 // Who handles a bookable service's consultations, by name: the same list the
 // assignment concern reads, so it is one request shared by both.
-const { data: schedulingMembers, error: schedulingMembersError } = await useFetch<{ members: { id: string; name: string }[] }>(() => `/api/organizations/${dashboard.organization.value?.id}/members/scheduling`)
+const { data: schedulingMembers, error: schedulingMembersError } = await useMemberSchedulingList(() => dashboard.organization.value?.id)
 function assignmentSummary(): string {
+  if (form.assigned_team_id) return schedulingMembers.value?.teams.find(team => team.id === form.assigned_team_id)?.name ?? 'Assigned team'
   if (!form.assigned_member_id) return 'The business schedule'
   if (schedulingMembersError.value) return 'Team members could not be loaded'
   return schedulingMembers.value?.members.find(member => member.id === form.assigned_member_id)?.name ?? 'Assigned team member'
@@ -535,7 +538,7 @@ function bookingSummary(): string {
 
 function publicationSummary(): string {
   const parts = [form.published ? 'Visible on website' : 'Hidden from website']
-  if (!form.active) parts.push(form.bookable || form.kind === 'service' ? 'Bookings paused' : 'Orders paused')
+  if (!form.active) parts.push(form.kind === 'experience' || form.kind === 'service' ? 'Bookings paused' : 'Orders paused')
   return parts.join(' · ')
 }
 
@@ -594,7 +597,7 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => {
       { id: 'booking', label: form.kind === 'service' ? 'Bookings' : 'Scheduling', summary: form.bookable ? bookingSummary() : 'Not bookable', placeholder: !form.bookable, to: sectionPath('booking') },
       { id: 'order-url', label: 'External link', summary: form.order_url || 'No external link', placeholder: !form.order_url, to: sectionPath('order-url') },
       { id: 'locations', label: 'Locations', summary: locationsSummary(), placeholder: !Object.keys(form.locations).length, to: sectionPath('locations') },
-      { id: 'collections', label: 'Menu sections', summary: collectionsSummary(), placeholder: !form.collection_ids.length, to: sectionPath('collections') },
+      { id: 'collections', label: sectionLabels.collections, summary: collectionsSummary(), placeholder: !form.collection_ids.length, to: sectionPath('collections') },
       { id: 'publication', label: 'Website visibility', summary: publicationSummary(), to: sectionPath('publication') },
     ].sort((left, right) => rowRank(left.id) - rowRank(right.id)),
   }]
@@ -762,7 +765,7 @@ async function commit(bookingConcern?: BookingConcern) {
         method: 'POST',
         body: {
           ...payload(),
-          ...(form.kind === 'service' ? { active: false, page: { title: form.name.trim(), pageType: 'custom', recipe: null, blocks: [] } } : {}),
+          ...(form.kind === 'service' ? { active: false } : {}),
           idempotency_key: createKey.value,
         },
         validate: isOne,
@@ -864,7 +867,7 @@ async function saveBooking(concern: BookingConcern) {
   const body = concern === 'duration' ? { duration_minutes: Number(form.booking_duration) }
     : concern === 'capacity' ? { default_capacity: form.booking_capacity.trim() ? Number(form.booking_capacity) : null }
     : concern === 'confirmation' ? { confirmation_mode: form.confirmation_mode }
-    : concern === 'assignment' ? { scheduling_mode: form.scheduling_mode, assigned_member_id: form.assigned_member_id || null }
+    : concern === 'assignment' ? { scheduling_mode: form.scheduling_mode, assigned_member_id: form.assigned_member_id || null, assigned_team_id: form.assigned_team_id || null }
     : concern === 'payment' ? { online_payment_required: form.online_payment_required }
     : concern === 'location' ? { online_timezone: form.online_timezone }
     : concern === 'calendar' ? { calendar_group: form.calendar_group.trim() || null }
@@ -920,7 +923,7 @@ async function createPage() {
   try {
     const created = await dashboardApi(`/api/editor/organizations/${organizationId}/pages`, {
       method: 'POST',
-      body: { productId: row.id, path: `/services/${row.slug}`, title: row.name, pageType: 'custom', recipe: null, blocks: [] },
+      body: { productId: row.id, path: `/services/${row.slug}`, title: row.name, pageType: 'recipe', recipe: 'service-detail', blocks: [] },
       validate: (value: unknown): value is { page: { id: string } } => isRecord(value) && isRecord(value.page) && typeof value.page.id === 'string',
     })
     await reload()

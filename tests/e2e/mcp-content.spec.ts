@@ -101,7 +101,9 @@ test.describe('stateless MCP server', () => {
         args: { organization_id: organizationId, post_id: created.post.id, expected_updated_at: draft.updated_at, targets: [{ channel: 'organization' }, facebookTarget] },
       })
       expect(publish.status()).toBe(200)
-      const publishData = mcpData<{ ok: boolean, updated_at: string, outcomes: Array<{ channel: string, status: string, code?: string }> }>(await publish.json())
+      const publishResult = (await publish.json()).result
+      expect(publishResult.isError).toBe(true)
+      const publishData = publishResult.structuredContent as { ok: boolean, updated_at: string, outcomes: Array<{ channel: string, status: string, code?: string }> }
       expect(publishData.ok).toBe(false)
       expect(publishData.outcomes.find(outcome => outcome.channel === 'organization')?.status).toBe('published')
       expect(publishData.outcomes.find(outcome => outcome.channel === 'facebook')).toMatchObject({ status: 'skipped', code: facebook.problems[0]!.code })
@@ -311,7 +313,7 @@ test.describe('stateless MCP server', () => {
     expect(allToolNames).toEqual(expect.arrayContaining([
       'list_organizations',
       'get_organization', 'list_locations', 'list_location_products', 'list_posts', 'get_organization_media_assets',
-      'list_site_pages', 'list_products', 'list_collections', 'list_contact_inquiries',
+      'list_site_pages', 'list_products', 'list_collections', 'list_guest_conversations',
     ]))
     const invalid = await mcpRequest(request, baseURL!, { method: 'bad/method', id: 'bad-method' })
     expect(invalid.status()).toBe(200)

@@ -1,7 +1,7 @@
 name = "krabiclaw"
 main = ".output/server/index.mjs"
 compatibility_date = "2024-11-01"
-compatibility_flags = ["nodejs_compat_v2", "global_fetch_strictly_public"]
+compatibility_flags = ["nodejs_compat_v2", "nodejs_compat_populate_process_env", "global_fetch_strictly_public"]
 
 [placement]
 mode = "smart"
@@ -82,8 +82,8 @@ MCP_DIAGNOSTICS_ENABLED = "true"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "krabiclaw-production-v13"
-database_id = "57d494c8-b322-4584-a5f4-e2cc40d3d7b7"
+database_name = "krabiclaw-production-v14"
+database_id = "dad88350-88f8-4036-8cf2-d73c458d6060"
 migrations_dir = "migrations"
 remote = false
 
@@ -154,8 +154,8 @@ WHATSAPP_DELIVERY_MODE = "provider"
 
 [[env.dev.d1_databases]]
 binding = "DB"
-database_name = "krabiclaw-production-v13"
-database_id = "57d494c8-b322-4584-a5f4-e2cc40d3d7b7"
+database_name = "krabiclaw-production-v14"
+database_id = "dad88350-88f8-4036-8cf2-d73c458d6060"
 migrations_dir = "migrations"
 remote = false
 
@@ -214,8 +214,8 @@ E2E_ALLOW_DEV_ROUTES = "true"
 
 [[env.staging.d1_databases]]
 binding = "DB"
-database_name = "krabiclaw-staging-v13"
-database_id = "bc7d411b-b836-4b83-9771-3e09561463e3"
+database_name = "krabiclaw-staging-v14"
+database_id = "2c172842-4e77-4cf3-b1c0-f1d1ec0d32ba"
 migrations_dir = "migrations"
 remote = false
 
@@ -278,8 +278,8 @@ WHATSAPP_DELIVERY_MODE = "log_only"
 
 [[env.e2e.d1_databases]]
 binding = "DB"
-database_name = "krabiclaw-production-v13"
-database_id = "57d494c8-b322-4584-a5f4-e2cc40d3d7b7"
+database_name = "krabiclaw-production-v14"
+database_id = "dad88350-88f8-4036-8cf2-d73c458d6060"
 migrations_dir = "migrations"
 remote = false
 

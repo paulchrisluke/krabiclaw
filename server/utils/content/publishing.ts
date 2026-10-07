@@ -1,3 +1,4 @@
+import { getSourceLocale } from '~/server/utils/organization-locales'
 import { blogEditorPath } from '~/server/utils/dashboard-links'
 import { HTTPError } from 'nitro';
 
@@ -392,7 +393,7 @@ const ARTICLE_ORDER_SQL = (alias: string) => `${alias}.sort_order, ${alias}.publ
  */
 export async function listPublishedArticles(db: DbClient, env: CloudflareEnv, organizationId: string, collection: ArticleCollection, locale: string) {
   // A language the site has not published is not readable, here or anywhere public.
-  if (locale !== 'en') await assertPublicOrganizationLanguageEntitlement(env, db, organizationId, locale)
+  await assertPublicOrganizationLanguageEntitlement(env, db, organizationId, locale)
   const sql = `
     SELECT
       root.id, p.title, p.slug, p.summary AS excerpt, (root.metadata_json ->> '$.collection') AS collection,
@@ -605,7 +606,7 @@ export async function getPublishedBlogPost(
   if (!active) return null
   const { template } = await loadOrganizationTemplate(db, organizationId)
   const pathOf = (articleSlug: string) => tenantBlogPostPath(template, articleSlug, collection)
-  if (locale === 'en') {
+  if (locale === await getSourceLocale(db, organizationId)) {
     const post = await getPublicOrganizationBlogPost(db, organizationId, collection, slug, env, previewAuthorized)
     if (!post || typeof post.id !== 'string') return post
     return {
@@ -699,7 +700,7 @@ export async function createBlogPost(
     const slug = attempt === 0 ? slugBase : `${slugBase}-${randomSlugSuffix()}`
     try {
       await createContentDocumentWithBlocks(db, {
-        id, rowRole: 'root', locale: 'en', kind: 'article', organizationId,
+        id, rowRole: 'root', locale: await getSourceLocale(db, organizationId), kind: 'article', organizationId,
         title: article.title, slug, summary: article.excerpt ?? null, status: 'draft', visibility: article.visibility ?? 'listed',
         authorId, seoKeywords: article.seo_keywords,
         metadata: { collection, slug_manually_overridden: customSlug ? 1 : 0 },
@@ -812,8 +813,8 @@ export async function updateBlogPost(
     title: input.title ?? current.title, currentSlug: current.slug, manuallyOverridden: Boolean(current.slug_manually_overridden) })
   const requestedSlug = input.slug !== undefined || input.reset_slug_override ? slugMutation.slug : changes.slug
   if (requestedSlug && requestedSlug !== current.slug) {
-    const redirect = await queryFirst<{ id: string }>(db, `SELECT id FROM organization_redirects WHERE organization_id = ? AND locale = 'en' AND from_path IN (?, ?, ?) LIMIT 1`,
-      [organizationId, `/blog/${requestedSlug}`, `/article/${requestedSlug}`, `/${requestedSlug}`])
+    const redirect = await queryFirst<{ id: string }>(db, `SELECT id FROM organization_redirects WHERE organization_id = ? AND locale = (SELECT locale FROM organization_locales WHERE organization_id = ? AND is_source = 1) AND from_path IN (?, ?, ?) LIMIT 1`,
+      [organizationId, organizationId, `/blog/${requestedSlug}`, `/article/${requestedSlug}`, `/${requestedSlug}`])
     if (redirect) badRequest('Slug collides with redirect history')
     changes.slug = requestedSlug
     if (input.slug !== undefined || input.reset_slug_override) metadata.slug_manually_overridden = slugMutation.manuallyOverridden ? 1 : 0
@@ -874,8 +875,8 @@ async function createBlogRedirect(db: D1Database, postId: string, organizationId
   // organization, so the redirect cannot be written against another tenant's.
   await execute(db, `INSERT INTO organization_redirects
     (id, organization_id, locale, owner_type, owner_id, from_path, to_path, status_code, behavior, reason, source, created_at, updated_at)
-    VALUES (?, ?, 'en', ?, ?, ?, ?, 301, 'redirect', ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 301, 'redirect', ?, ?, ?, ?)
     ON CONFLICT(organization_id, locale, from_path) DO UPDATE SET owner_type = excluded.owner_type, owner_id = excluded.owner_id,
       to_path = excluded.to_path, status_code = 301, behavior = 'redirect', reason = excluded.reason, source = excluded.source, updated_at = excluded.updated_at`,
-  [crypto.randomUUID(), post.organization_id, 'content_document', postId, oldPath, newPath, 'blog_slug_change', 'blog', now, now])
+  [crypto.randomUUID(), post.organization_id, await getSourceLocale(db, post.organization_id), 'content_document', postId, oldPath, newPath, 'blog_slug_change', 'blog', now, now])
 }

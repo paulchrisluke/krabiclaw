@@ -227,7 +227,7 @@ export function useArticleItemList(listPath: MaybeRefOrGetter<string>, name: May
   const requestURL = useRequestURL()
   const runtimeConfig = useRuntimeConfig()
   return computed(() => {
-    const origin = template.value.slug === 'platform' ? runtimeConfig.public.platformUrl : requestURL.origin
+    const origin = template.value.slug === 'platform' ? runtimeConfig.public.siteUrl : requestURL.origin
     return {
       '@context': 'https://schema.org',
       '@type': 'ItemList',

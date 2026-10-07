@@ -1,8 +1,8 @@
-import { calendarDateSchema, timezoneSchema } from '~/utils/timezone'
+import { contentBlockDataSchema, contentBlockSchemaDefinitions, CONTENT_BLOCK_TYPES  } from '~/shared/content-registries'
+import { timezoneSchema } from '~/utils/timezone'
 import { openingHoursSchema, specialHoursSchema } from '~/shared/reservation-hours'
 import type { McpToolRole } from '~/server/utils/mcp-auth'
 import { SUPPORTED_CURRENCIES } from '~/shared/currencies'
-import { PUBLICATION_CONTENT_BLOCK_TYPES } from '~/shared/content-registries'
 import { RESERVATION_STATUSES } from '~/shared/bookings'
 
 export interface McpToolDefinition {
@@ -10,7 +10,6 @@ export interface McpToolDefinition {
   description: string
   domain: string
   minimumRole: McpToolRole
-  confirmRequired: boolean
   annotations: McpToolAnnotations
   securitySchemes: McpToolSecurityScheme[]
   requiredEntitlement?: string
@@ -150,22 +149,6 @@ export const locationMutationSummaryObject = {
   required: ['ok', 'entity', 'id'],
 }
 
-const howToStepSchema = {
-  type: 'object',
-  properties: {
-    name: { type: 'string' },
-    text: { type: 'string' },
-    url: { type: ['string', 'null'] },
-    position: { type: 'number' },
-  },
-  required: ['name', 'text'],
-}
-
-// `data`'s shape depends on the sibling `type` field (faq vs how_to), so it's spelled out
-// per-type via if/then here instead of left as a bare object — that's what gives the model
-// the actual field names (how_to steps need `name`+`text`) instead of an opaque object it
-// has to guess the shape of. Tenant blog posts share the same validator (and therefore the
-// same field names) as platform blog posts/docs — see server/utils/content/publishing.ts.
 export const blogComponentInputSchema = {
   type: 'object',
   properties: {
@@ -178,51 +161,9 @@ export const blogComponentInputSchema = {
     data: { type: 'object' },
   },
   required: ['type', 'data'],
-  allOf: [
-    {
-      if: { properties: { type: { const: 'faq' } } },
-      then: {
-        properties: {
-          data: {
-            type: 'object',
-            // The block stores no questions: `page_qa` lists the published Q&A records filed under this page, `organization_qa` the site-wide set.
-            properties: { title: { type: ['string', 'null'] }, source: { type: 'string', enum: ['page_qa', 'organization_qa'] } },
-            required: ['source'],
-          },
-        },
-      },
-    },
-    {
-      if: { properties: { type: { const: 'how_to' } } },
-      then: {
-        properties: {
-          data: {
-            type: 'object',
-            properties: {
-              steps: { type: 'array', items: howToStepSchema },
-              estimated_time: { type: ['string', 'null'] },
-              tool_items: { type: 'array', items: { type: 'string' } },
-              supply_items: { type: 'array', items: { type: 'string' } },
-            },
-            required: ['steps'],
-          },
-        },
-      },
-    },
-  ],
-}
-
-const mediaPlacementObject = {
-  type: 'object',
-  properties: {
-    asset_id: { type: 'string' },
-    slot: { type: 'string' },
-    public_url: { type: ['string', 'null'] },
-    kind: { type: ['string', 'null'] },
-    width: { type: ['number', 'null'] },
-    height: { type: ['number', 'null'] },
-  },
-  additionalProperties: false,
+  anyOf: ['faq', 'how_to', 'ai_assistance'].map(type => ({
+    properties: { type: { const: type }, data: contentBlockDataSchema(type as 'faq' | 'how_to' | 'ai_assistance') },
+  })),
 }
 
 /**
@@ -269,19 +210,22 @@ const blogCoverObject = {
   additionalProperties: false,
 }
 
-const blogContentBlockObject = {
+export const contentBlockObject = {
   type: 'object',
   properties: {
     id: { type: 'string' },
     parent_block_id: { type: ['string', 'null'] },
-    type: { type: 'string', enum: [...PUBLICATION_CONTENT_BLOCK_TYPES] },
+    type: { type: 'string', enum: [...CONTENT_BLOCK_TYPES] },
+    source_block_id: { type: ['string', 'null'] },
+    position: { type: 'integer' },
     level: { type: ['number', 'null'] },
     data: { type: 'object' },
-    media: { type: 'array', items: mediaPlacementObject },
+    media: { type: 'array', items: contentBlockMediaInputObject },
     updated_at: { type: 'string', description: 'The block\'s own concurrency token, for replace_content_block and delete_content_block.' },
   },
   required: ['id', 'parent_block_id', 'type', 'level', 'data', 'media', 'updated_at'],
   additionalProperties: false,
+  anyOf: CONTENT_BLOCK_TYPES.map(type => ({ properties: { type: { const: type }, data: contentBlockDataSchema(type) } })),
 }
 
 /** An article's category as posts carry it. */
@@ -334,7 +278,7 @@ export const blogPostObject = {
     public_url: { type: ['string', 'null'] },
     preview_url: { type: ['string', 'null'] },
     view_url: { type: ['string', 'null'] },
-    content_blocks: { type: 'array', items: blogContentBlockObject },
+    content_blocks: { type: 'array', items: contentBlockObject },
   },
   required: [
     'id', 'title', 'slug', 'excerpt', 'collection', 'category', 'sort_order',
@@ -588,12 +532,16 @@ export const locationReservationConfigObject = {
   type: 'object',
   properties: {
     location_id: { type: 'string' },
+    duration_minutes: { type: ['integer', 'null'], minimum: 1 },
     slot_capacity: { type: ['number', 'null'], description: 'Guests seatable at one start time. Null means unlimited.' },
     advance_notice_minutes: { type: ['number', 'null'] },
     free_cancellation_until_minutes: { type: ['number', 'null'] },
     reschedule_allowed: { type: 'boolean' },
     reschedule_cutoff_minutes: { type: ['number', 'null'] },
     deposit_required: { type: 'boolean' },
+    deposit_amount: { type: ['integer', 'null'], minimum: 1, description: 'Total deposit per reservation, in deposit_currency minor units.' },
+    deposit_currency: { type: ['string', 'null'], enum: [...SUPPORTED_CURRENCIES, null] },
+    deposit_tax_behavior: { type: ['string', 'null'], enum: ['inclusive', 'exclusive', null] },
     deposit_trigger_party_size: { type: ['number', 'null'] },
     minimum_guest_age: { type: ['number', 'null'] },
     accessibility_contact_required: { type: 'boolean' },
@@ -605,57 +553,21 @@ export const locationReservationConfigObject = {
 } as const
 
 export const locationReservationConfigWriteSchema = {
+  duration_minutes: { type: ['integer', 'null'], minimum: 1 },
   slot_capacity: { type: ['number', 'null'], minimum: 0 },
   advance_notice_minutes: { type: ['number', 'null'], minimum: 0 },
   free_cancellation_until_minutes: { type: ['number', 'null'], minimum: 0 },
   reschedule_allowed: { type: 'boolean' },
   reschedule_cutoff_minutes: { type: ['number', 'null'], minimum: 0 },
   deposit_required: { type: 'boolean' },
+  deposit_amount: { type: ['integer', 'null'], minimum: 1, description: 'Total deposit per reservation, in deposit_currency minor units.' },
+    deposit_currency: { type: ['string', 'null'], enum: [...SUPPORTED_CURRENCIES, null] },
+  deposit_tax_behavior: { type: ['string', 'null'], enum: ['inclusive', 'exclusive', null] },
   deposit_trigger_party_size: { type: ['number', 'null'], minimum: 1 },
   minimum_guest_age: { type: ['number', 'null'], minimum: 0 },
   accessibility_contact_required: { type: 'boolean' },
   additional_notes_html: { type: ['string', 'null'], description: 'Guest-facing notes. Sanitized on the way in; only basic formatting and links survive.' },
 } as const
-
-export const bookingObject = {
-  type: 'object',
-  properties: {
-    id: { type: 'string' },
-    experience_id: { type: 'string' },
-    experience_title: { type: ['string', 'null'] },
-    location_id: { type: ['string', 'null'] },
-    location_title: { type: ['string', 'null'] },
-    guest_name: { type: 'string' },
-    guest_email: { type: 'string' },
-    guest_phone: { type: ['string', 'null'] },
-    status: { type: 'string', enum: ['pending', 'confirmed', 'cancelled'] },
-    booking_date: { ...calendarDateSchema, type: ['string', 'null'] },
-    time_slot: { type: ['string', 'null'] },
-    party_size: { type: 'number' },
-    notes: { type: ['string', 'null'] },
-    created_at: { type: 'string' },
-  },
-}
-
-export const bookingsSummaryObject = {
-  type: 'object',
-  properties: {
-    total: { type: 'number' },
-    by_status: { type: 'object', description: 'Count of bookings per status, e.g. { pending: 2, confirmed: 5 }.' },
-    by_experience: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          experience_id: { type: 'string' },
-          experience_title: { type: ['string', 'null'] },
-          count: { type: 'number' },
-        },
-      },
-    },
-  },
-  required: ['total', 'by_status'],
-}
 
 export const qaItemObject = {
   type: 'object',
@@ -704,7 +616,10 @@ export const submissionObject = {
 export const reservationSubmissionObject = {
   type: 'object',
   properties: {
-    id: { type: 'string' },
+    id: { type: 'string', description: 'Inbox request ID.' },
+    request_id: { type: 'string' },
+    operational_reservation_id: { type: 'string', description: 'Use this ID to manage the reservation.' },
+    updated_at: { type: 'string' },
     name: { type: ['string', 'null'] },
     email: { type: ['string', 'null'] },
     phone: { type: ['string', 'null'] },
@@ -781,9 +696,9 @@ export const organizationIdSchema = {
 export function organizationTool(definition: Omit<RawMcpToolDefinition, 'inputSchema' | 'outputSchema'> & {
   inputSchema?: Record<string, unknown>
   required?: string[]
-  outputSchema?: Record<string, unknown>
+  outputSchema: Record<string, unknown>
 }): McpToolDefinition {
-  const { oneOf, anyOf, allOf, ...propertyDefs } = definition.inputSchema ?? {}
+  const { oneOf, anyOf, allOf, $defs, ...propertyDefs } = definition.inputSchema ?? {}
   const properties = {
     ...organizationIdSchema,
     ...propertyDefs,
@@ -793,12 +708,12 @@ export function organizationTool(definition: Omit<RawMcpToolDefinition, 'inputSc
   if (oneOf !== undefined) combinators.oneOf = oneOf
   if (anyOf !== undefined) combinators.anyOf = anyOf
   if (allOf !== undefined) combinators.allOf = allOf
+  const definitions = { ...contentBlockSchemaDefinitions(definition.inputSchema), ...($defs as Record<string, unknown> | undefined) }
   return withToolAnnotations({
     name: definition.name,
     description: definition.description,
     domain: definition.domain,
     minimumRole: definition.minimumRole,
-    confirmRequired: definition.confirmRequired,
     requiredEntitlement: definition.requiredEntitlement,
     inputSchema: {
       type: 'object',
@@ -806,8 +721,9 @@ export function organizationTool(definition: Omit<RawMcpToolDefinition, 'inputSc
       required,
       additionalProperties: false,
       ...combinators,
+      ...(Object.keys(definitions).length ? { $defs: definitions } : {}),
     },
-    outputSchema: definition.outputSchema ?? { type: 'object' },
+    outputSchema: { ...definition.outputSchema, $defs: { ...contentBlockSchemaDefinitions(definition.outputSchema), ...(definition.outputSchema.$defs as Record<string, unknown> | undefined) } },
     fileParams: definition.fileParams,
     uiResourceUri: definition.uiResourceUri,
   })
@@ -821,7 +737,7 @@ export function globalTool(definition: RawMcpToolDefinition | McpToolDefinition)
     if (hasValidAnnotations && hasValidSecuritySchemes) {
       // Re-validate even on this pre-built-definition path — a caller could
       // hand in annotations that never passed through withToolAnnotations.
-      validateToolAnnotations(definition.name, definition.annotations, definition.confirmRequired)
+      validateToolAnnotations(definition.name, definition.annotations)
       return { ...definition, inputSchema: { ...definition.inputSchema, additionalProperties: false } }
     }
   }
@@ -832,9 +748,8 @@ export function globalTool(definition: RawMcpToolDefinition | McpToolDefinition)
 export type RawMcpToolDefinition = Omit<McpToolDefinition, 'annotations' | 'securitySchemes'>
 
 // Classify the complete supported contract, including optional branches.
-// Deletion/replacement of owned records and messages sent to recipients are
-// destructive effects even if a later edit or cancellation is possible.
-// Ordinary property edits that retain the underlying record are W.
+// MCP calls an update destructive when it can overwrite or remove existing
+// state. W is reserved for additive writes; D includes ordinary property edits.
 // A provider's hosting alone is not open-world: the selected workspace's own
 // Stripe account, stored media, and linked accounts remain bounded targets.
 // Guest email, public social audiences and host file downloads cross that scope.
@@ -850,12 +765,12 @@ const D: McpToolAnnotations = Object.freeze({ readOnlyHint: false, openWorldHint
 /** Submission-review contract. Every real public tool is listed explicitly. */
 export const EXPECTED_TOOL_ANNOTATIONS = {
   create_qa: W,
-  update_qa: W,
+  update_qa: D,
   delete_qa: D,
-  reorder_qa: W,
+  reorder_qa: D,
   get_member_scheduling: R,
-  set_member_scheduling: W,
-  set_member_busy_calendars: W,
+  set_member_scheduling: D,
+  set_member_busy_calendars: D,
   reassign_product_booking: { ...D, openWorldHint: true, idempotentHint: true },
   get_payment_summary: R,
   list_payments: R,
@@ -863,9 +778,12 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   get_payment_payouts: R,
   get_payments_usage: R,
   get_payments_dashboard_link: R,
-  set_product_booking_config: W,
+  set_product_booking_config: D,
   delete_product_booking_config: D,
   replace_product_weekly_schedule: D,
+  create_product_session: { ...D, idempotentHint: true },
+  create_table_reservation: { ...D, openWorldHint: true, idempotentHint: true },
+  update_product_session: D,
   create_product_booking: { ...D, openWorldHint: true, idempotentHint: true },
   get_product_booking: R,
   list_product_bookings: R,
@@ -877,11 +795,12 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   cancel_table_reservation: { ...D, openWorldHint: true, idempotentHint: true },
   request_table_reservation_change: { ...D, openWorldHint: true, idempotentHint: true },
   append_content_block: W,
-  attach_media: W,
-  batch_create_products: W,
+  attach_media: { ...W, idempotentHint: true },
+  update_menu: { ...D, idempotentHint: true },
+  batch_create_products: { ...W, idempotentHint: true },
   create_blog_post: W,
   create_post: W,
-  create_product: W,
+  create_product: { ...W, idempotentHint: true },
   create_site_page: W,
   delete_blog_post: D,
   delete_content_block: D,
@@ -890,7 +809,10 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   delete_product: D,
   delete_resource_localization: D,
   get_blog_post: R,
-  list_contact_inquiries: R,
+  list_guest_conversations: R,
+  get_guest_conversation: R,
+  reply_to_guest: { ...D, openWorldHint: true, idempotentHint: true },
+  set_guest_conversation_archived: { ...D, idempotentHint: true },
   get_location: R,
   get_post: R,
   get_product: R,
@@ -912,11 +834,23 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   // Asks Meta whether each saved connection's access still works.
   get_social_connections: R,
   // Reads Meta, and records what the read proves about one publication.
-  reconcile_post_publication: W,
+  reconcile_post_publication: D,
   list_channel_posts: R,
   get_channel_post: R,
   delete_channel_post: { ...D, openWorldHint: true },
   list_organization_locales: R,
+  list_organization_members: R,
+  invite_organization_member: { ...D, openWorldHint: true },
+  list_teams: R,
+  create_team: W,
+  update_team: D,
+  set_team_member: D,
+  delete_team: D,
+  update_organization_member_role: D,
+  remove_organization_member: D,
+  cancel_organization_invitation: D,
+  set_organization_language: { ...D, idempotentHint: true },
+  delete_organization_language: { ...D, idempotentHint: true },
   list_organization_qa: R,
   list_organization_reviews: R,
   list_organizations: R,
@@ -924,47 +858,47 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   publish_blog_post: D,
   publish_post: { ...D, openWorldHint: true },
   put_resource_localization: D,
-  remove_media: W,
-  reorder_media: W,
+  remove_media: D,
+  reorder_media: D,
   replace_content_block: D,
-  set_consultation_mode: W,
-  set_media: W,
-  set_workspace_context: W,
-  reconcile_products: D,
+  set_consultation_mode: D,
+  set_media: D,
+  set_workspace_context: D,
+  reconcile_products: { ...D, idempotentHint: true },
   update_blog_post: D,
-  update_location: W,
+  update_location: D,
   get_calendar: R,
-  block_dates: W,
-  open_dates: W,
-  update_media_asset: W,
-  update_post: W,
+  block_dates: D,
+  open_dates: D,
+  update_media_asset: D,
+  update_post: D,
   update_product: D,
   update_organization_settings: D,
   update_site_page: D,
   delete_site_page: D,
-  save_media_attachment: { ...W, openWorldHint: true },
+  save_media_attachment: { ...D, openWorldHint: true, idempotentHint: true },
   list_products: R,
-  set_product_publication: W,
-  set_product_location: W,
+  set_product_publication: D,
+  set_product_location: D,
   remove_product_location: D,
   list_collections: R,
   create_collection: W,
-  update_collection: W,
+  update_collection: D,
   delete_collection: D,
   // Replaces the whole membership list: products left out lose their place in
   // the collection, which is a removal the caller must mean.
   set_collection_products: D,
-  reorder_collections: W,
-  reorder_blog_posts: W,
+  reorder_collections: D,
+  reorder_blog_posts: D,
   list_article_categories: R,
   create_article_category: W,
-  update_article_category: W,
+  update_article_category: D,
   delete_article_category: D,
-  reorder_article_categories: W,
+  reorder_article_categories: D,
   get_product_catalog_localization: R,
   replace_resource_localizations: D,
   get_reservation_policy: R,
-  update_reservation_policy: W,
+  update_reservation_policy: D,
 } as const satisfies Record<string, McpToolAnnotations>
 
 export function buildToolAnnotationsByName() {
@@ -973,7 +907,7 @@ export function buildToolAnnotationsByName() {
 
 export const TOOL_ANNOTATIONS_BY_NAME = buildToolAnnotationsByName()
 
-export function validateToolAnnotations(name: string, annotations: McpToolAnnotations, confirmRequired: boolean): void {
+export function validateToolAnnotations(name: string, annotations: McpToolAnnotations): void {
   // ChatGPT Apps submission review requires every tool to declare all three
   // hints explicitly. A future classification that forgets openWorldHint or
   // destructiveHint must fail at module load.
@@ -989,12 +923,6 @@ export function validateToolAnnotations(name: string, annotations: McpToolAnnota
     if (annotations.destructiveHint) {
       throw new Error(`Read-only tool "${name}" cannot declare destructiveHint as true.`)
     }
-    if (confirmRequired) {
-      throw new Error(`Read-only MCP tool "${name}" cannot require confirmation.`)
-    }
-  } else if (annotations.destructiveHint && !confirmRequired) {
-    // Destructive means irreversible, and an irreversible act is confirmed.
-    throw new Error(`Destructive tool "${name}" must require confirmation.`)
   }
 }
 
@@ -1004,7 +932,7 @@ export function withToolAnnotations(definition: RawMcpToolDefinition): McpToolDe
     throw new Error(`Missing MCP tool annotation classification for "${definition.name}".`)
   }
 
-  validateToolAnnotations(definition.name, annotations, definition.confirmRequired)
+  validateToolAnnotations(definition.name, annotations)
 
   return {
     ...definition,

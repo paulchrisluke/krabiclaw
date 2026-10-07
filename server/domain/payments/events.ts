@@ -1,18 +1,22 @@
 import type Stripe from 'stripe'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { refreshMemberBusy } from '~/server/domain/member-scheduling'
+import { reservationClaimQuery } from '~/server/utils/reservations'
+import { notifyTableReservationCreated } from '~/server/domain/table-reservations'
+import { localNow } from '~/utils/timezone'
 import { notifyProductBookingCreated } from '~/server/domain/product-bookings'
-import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { execute, executeBatch, queryAll, queryFirst, type DbClient, type BatchQuery } from '~/server/db'
 import { sessionClaimQuery, sessionAssignmentQuery } from '~/server/utils/availability'
 import { processStripeWebhookEvent } from '~/server/utils/stripe-webhook-events'
 import { executeRefund, reconcileRefundState, requirePayment, assertMinorAmount, type Payment } from './index'
 import { notifyPaymentFinancialEvent, reconcilePayoutEvent } from './notifications'
 import { recordCheckoutExpired, recordPaymentPaid } from '~/server/domain/booking-analytics'
 import { raiseSettledFailures } from '~/server/utils/notifications'
+import { paymentsBillingBasis } from './fx'
 
 interface Hold {
-  id:string; organization_id:string; product_id:string; variant_id:string; session_id:string
-  buyer_user_id:string|null; request_id:string|null; quantity:number; status:string; expires_at:string; converted_booking_id:string|null; assigned_member_id:string|null
+  id:string; organization_id:string; product_id:string|null; variant_id:string|null; session_id:string|null; location_id:string|null; timezone:string|null
+  buyer_user_id:string|null; request_id:string|null; quantity:number; status:string; expires_at:string; converted_booking_id:string|null; assigned_member_id:string|null; starts_at:string; ends_at:string
 }
 /** Provider retrieval, account/mode and frozen money checks precede every conversion; the paid analytics event follows it. */
 export async function reconcilePaymentIntent(db:DbClient,stripe:Stripe,payment:Payment,intent:Stripe.PaymentIntent, env:CloudflareEnv) {
@@ -27,7 +31,7 @@ async function settlePaymentIntent(db:DbClient,stripe:Stripe,payment:Payment,int
   const attempt=await queryFirst<{stripe_checkout_id:string}>(db,'SELECT stripe_checkout_id FROM payment_attempts WHERE payment_id=? AND stripe_checkout_id IS NOT NULL ORDER BY created_at DESC LIMIT 1',[payment.id])
   if(!attempt) throw new Error('PaymentIntent has no authorized checkout attempt')
   const checkout=await stripe.checkout.sessions.retrieve(attempt.stripe_checkout_id,{expand:['line_items.data.price']},{stripeAccount:payment.stripe_account_id})
-  const snapshot=JSON.parse(payment.price_snapshot_json) as {price:{unit_amount:number;currency:string};quantity:number}
+  const snapshot=JSON.parse(payment.price_snapshot_json) as {price:{unit_amount:number;currency:string};quantity:number;billing_fx?:unknown}
   const line=checkout.line_items?.data[0]
   const checkoutIntentId=typeof checkout.payment_intent==='string'?checkout.payment_intent:checkout.payment_intent?.id
   if(checkoutIntentId!==intent.id)throw new Error('Captured intent is not the authorized Checkout payment')
@@ -43,10 +47,11 @@ async function settlePaymentIntent(db:DbClient,stripe:Stripe,payment:Payment,int
   const chargeId=typeof intent.latest_charge==='string'?intent.latest_charge:intent.latest_charge?.id
   const charge=chargeId?await stripe.charges.retrieve(chargeId,{}, {stripeAccount:payment.stripe_account_id}):null
   if(!charge || charge.livemode!==Boolean(payment.livemode) || charge.payment_intent!==intent.id || charge.amount!==intent.amount_received) throw new Error('Captured charge financial scope mismatch')
+  const billingBasis = paymentsBillingBasis(intent.amount_received, payment.currency, snapshot.billing_fx)
   await executeBatch(db,[
     {query:'UPDATE payments SET stripe_charge_id=?,receipt_url=? WHERE id=?',params:[charge.id,charge.receipt_url,payment.id]},
     {query:"UPDATE payments SET stripe_payment_intent_id=?,captured_amount=?,tax_amount=?,state=CASE WHEN state IN ('refunded','recovery') THEN state ELSE 'captured' END,updated_at=? WHERE id=? AND organization_id=?",params:[intent.id,intent.amount_received,checkout.total_details?.amount_tax??0,now,payment.id,payment.organization_id]},
-    {query:"INSERT OR IGNORE INTO payment_usage_events(id,organization_id,payment_id,kind,currency,amount,source_id,provider_occurred_at,created_at) VALUES(?,?,?,'captured_volume',?,?,?,?,?)",params:[crypto.randomUUID(),payment.organization_id,payment.id,payment.currency,intent.amount_received,`capture:${payment.stripe_account_id}:${payment.livemode}:${intent.id}`,new Date(charge.created*1000).toISOString(),now]},
+    {query:"INSERT OR IGNORE INTO payment_usage_events(id,organization_id,payment_id,kind,currency,amount,billing_basis_json,source_id,provider_occurred_at,created_at) VALUES(?,?,?,'captured_volume',?,?,?,?,?,?)",params:[crypto.randomUUID(),payment.organization_id,payment.id,payment.currency,intent.amount_received,JSON.stringify(billingBasis),`capture:${payment.stripe_account_id}:${payment.livemode}:${intent.id}`,new Date(charge.created*1000).toISOString(),now]},
   ],{operation:'Record authenticated capture and usage'})
   const recorded = await requirePayment(db,payment.organization_id,payment.id)
   // A card Checkout offered from the buyer's saved ones existed before this Checkout did.
@@ -59,34 +64,53 @@ async function settlePaymentIntent(db:DbClient,stripe:Stripe,payment:Payment,int
     raiseSettledFailures('Unfulfillable payment recovery',payment.id,outcomes,['refund','capture notification'])
     return
   }
-  if (recorded.state === 'refunded' || recorded.refunded_amount > 0 || payment.subject_type !== 'booking') {await notifyPaymentFinancialEvent(db,stripe,env,recorded,capture);return}
+  if (recorded.state === 'refunded' || recorded.refunded_amount > 0 || !['booking', 'reservation'].includes(payment.subject_type)) {await notifyPaymentFinancialEvent(db,stripe,env,recorded,capture);return}
   const hold = await queryFirst<Hold>(db,'SELECT * FROM payment_checkout_holds WHERE payment_id=? AND organization_id=?',[payment.id,payment.organization_id])
-  if (!hold) throw new Error('Captured booking payment has no durable hold')
+  if (!hold || !hold.request_id) throw new Error('Captured visit payment has no durable hold and guest request')
   if (hold.status !== 'converted') {
-  if (hold.assigned_member_id) await refreshMemberBusy(db,env,hold.assigned_member_id,true)
-  const bookingId = crypto.randomUUID()
-  const claim = sessionClaimQuery({bookingId,organizationId:hold.organization_id,productId:hold.product_id,sessionId:hold.session_id,productVariantId:hold.variant_id,partySize:hold.quantity,userId:hold.buyer_user_id,requestId:hold.request_id,now,capturedPaymentId:payment.id,capturedAt:new Date(charge.created*1000).toISOString()})
-  const results = await executeBatch(db,[claim, sessionAssignmentQuery(hold.session_id, hold.organization_id, bookingId),
-    {query:"UPDATE payment_checkout_holds SET status='converted',converted_booking_id=? WHERE id=? AND status IN ('active','released') AND EXISTS(SELECT 1 FROM bookings WHERE id=?)",params:[bookingId,hold.id,bookingId]},
-    {query:`INSERT INTO activity_entries(id,request_id,kind,scope_kind,actor_kind,event_name,payload_json,dedupe_key,sequence,occurred_at,created_at) SELECT ?,b.request_id,'operation','request','system','booking.created',json_object('operational_booking_id',b.id,'request_id',b.request_id,'afterStatus',b.status,'payment_id',?,'intent','booking.created'),?,COALESCE((SELECT MAX(sequence) FROM activity_entries WHERE request_id=b.request_id),0)+1,?,? FROM bookings b WHERE b.id=? AND b.request_id IS NOT NULL ON CONFLICT(dedupe_key) DO NOTHING`,params:[crypto.randomUUID(),payment.id,`booking:${bookingId}:created`,now,now,bookingId]},
-    {query:'UPDATE payments SET subject_id=?,updated_at=? WHERE id=? AND EXISTS(SELECT 1 FROM bookings WHERE id=?)',params:[bookingId,now,payment.id,bookingId]},
-    {query: "UPDATE requests SET conversation_state='needs_attention',payload_json=json_set(payload_json,'$.payment.state','captured'),updated_at=? WHERE id=? AND EXISTS(SELECT 1 FROM bookings WHERE id=?)",params:[now,hold.request_id,bookingId]},
-  ],{operation:'Convert captured checkout hold'})
-  if (results[0]?.meta.changes !== 1) {
-    // Replays/races can observe another worker's conversion after this worker read.
-    const converted = await queryFirst<Hold>(db,'SELECT * FROM payment_checkout_holds WHERE id=?',[hold.id])
-    if (converted?.status !== 'converted') {
-      await executeBatch(db,[{query:"UPDATE payment_checkout_holds SET status='released' WHERE id=? AND status='active'",params:[hold.id]},{query:"UPDATE payments SET state='recovery',updated_at=? WHERE id=?",params:[now,payment.id]}])
-      const outcomes=await Promise.allSettled([executeRefund(db,stripe,await requirePayment(db,payment.organization_id,payment.id),intent.amount_received,`unfulfillable:${intent.id}`,'requested_by_customer',null,env),notifyPaymentFinancialEvent(db,stripe,env,recorded,capture)])
-      raiseSettledFailures('Unfulfillable payment recovery',payment.id,outcomes,['refund','capture notification'])
-      return
+    const subjectId = crypto.randomUUID()
+    let claim: BatchQuery
+    const assignment: BatchQuery[] = []
+    const kind = payment.subject_type === 'booking' ? 'booking' : 'reservation'
+    const table = kind === 'booking' ? 'bookings' : 'reservations'
+    const convertedColumn = kind === 'booking' ? 'converted_booking_id' : 'converted_reservation_id'
+    if (kind === 'booking') {
+      if (!hold.product_id || !hold.variant_id || !hold.session_id) throw new Error('Booking hold has no offering or session')
+      if (hold.assigned_member_id) await refreshMemberBusy(db,env,hold.assigned_member_id,true)
+      claim = await sessionClaimQuery(db, {bookingId:subjectId,organizationId:hold.organization_id,productId:hold.product_id,sessionId:hold.session_id,productVariantId:hold.variant_id,partySize:hold.quantity,userId:hold.buyer_user_id,requestId:hold.request_id,now,capturedPaymentId:payment.id,capturedAt:new Date(charge.created*1000).toISOString()})
+      assignment.push(sessionAssignmentQuery(hold.session_id, hold.organization_id, subjectId))
+    } else {
+      if (hold.product_id || !hold.location_id || !hold.timezone) throw new Error('Reservation hold has invalid location facts')
+      const local = localNow(hold.timezone, new Date(hold.starts_at))
+      claim = await reservationClaimQuery(db, {organizationId:hold.organization_id,locationId:hold.location_id,reservationId:subjectId,requestId:hold.request_id,userId:hold.buyer_user_id,timezone:hold.timezone,startsAt:hold.starts_at,endsAt:hold.ends_at,date:local.date,timeSlot:local.time,partySize:hold.quantity,capturedPaymentId:payment.id,capturedAt:new Date(charge.created*1000).toISOString()})
+    }
+    let created: boolean
+    try {
+      const results = await executeBatch(db,[claim, ...assignment,
+        {query:`UPDATE payment_checkout_holds SET status='converted',${convertedColumn}=? WHERE id=? AND status IN ('active','released') AND EXISTS(SELECT 1 FROM ${table} WHERE id=?)`,params:[subjectId,hold.id,subjectId]},
+        {query:`INSERT INTO activity_entries(id,request_id,kind,scope_kind,actor_kind,event_name,payload_json,dedupe_key,sequence,occurred_at,created_at) SELECT ?,v.request_id,'operation','request','system',?,json_object(?,v.id,'request_id',v.request_id,'afterStatus',v.status,'payment_id',?,'intent',?),?,COALESCE((SELECT MAX(sequence) FROM activity_entries WHERE request_id=v.request_id),0)+1,?,? FROM ${table} v WHERE v.id=? AND v.request_id IS NOT NULL ON CONFLICT(dedupe_key) DO NOTHING`,params:[crypto.randomUUID(),`${kind}.created`,`operational_${kind}_id`,payment.id,`${kind}.created`,`${kind}:${subjectId}:created`,now,now,subjectId]},
+        {query:`UPDATE payments SET subject_id=?,updated_at=? WHERE id=? AND EXISTS(SELECT 1 FROM ${table} WHERE id=?)`,params:[subjectId,now,payment.id,subjectId]},
+        {query:`UPDATE requests SET conversation_state='needs_attention',payload_json=json_set(payload_json,'$.payment.state','captured'),updated_at=? WHERE id=? AND EXISTS(SELECT 1 FROM ${table} WHERE id=?)`,params:[now,hold.request_id,subjectId]},
+      ],{operation:'Convert authenticated visit payment'})
+      created = results[0]?.meta.changes === 1
+    } catch (error) {
+      const converted = await queryFirst<{status:string}>(db, 'SELECT status FROM payment_checkout_holds WHERE id=?', [hold.id])
+      if (converted?.status !== 'converted') throw error
+      created = true
+    }
+    if (!created) {
+      const converted = await queryFirst<{status:string}>(db,'SELECT status FROM payment_checkout_holds WHERE id=?',[hold.id])
+      if (converted?.status !== 'converted') {
+        await executeBatch(db,[{query:"UPDATE payment_checkout_holds SET status='released' WHERE id=? AND status='active'",params:[hold.id]},{query:"UPDATE payments SET state='recovery',updated_at=? WHERE id=?",params:[now,payment.id]}])
+        const outcomes=await Promise.allSettled([executeRefund(db,stripe,await requirePayment(db,payment.organization_id,payment.id),intent.amount_received,`unfulfillable:${intent.id}`,'requested_by_customer',null,env),notifyPaymentFinancialEvent(db,stripe,env,recorded,capture)])
+        raiseSettledFailures('Unfulfillable payment recovery',payment.id,outcomes,['refund','capture notification'])
+        return
+      }
     }
   }
-  }
   if(!await queryFirst(db,'SELECT id FROM organization WHERE id=?',[payment.organization_id])&&await queryFirst(db,'SELECT organization_id FROM payment_servicing_tenants WHERE organization_id=? AND stripe_account_id=? AND livemode=?',[payment.organization_id,payment.stripe_account_id,payment.livemode])){await notifyPaymentFinancialEvent(db,stripe,env,recorded,capture);return}
-  if(!hold.request_id)throw new Error('Captured booking has no canonical guest request for delivery')
-  const outcomes=await Promise.allSettled([notifyPaymentFinancialEvent(db,stripe,env,await requirePayment(db,payment.organization_id,payment.id),capture),notifyProductBookingCreated(env,db,hold.organization_id,hold.request_id)])
-  raiseSettledFailures('Captured booking delivery',payment.id,outcomes,['capture notification','booking creation notification'])
+    const outcomes=await Promise.allSettled([notifyPaymentFinancialEvent(db,stripe,env,await requirePayment(db,payment.organization_id,payment.id),capture),payment.subject_type === 'booking' ? notifyProductBookingCreated(env,db,hold.organization_id,hold.request_id) : notifyTableReservationCreated(env,db,hold.organization_id,hold.request_id)])
+  raiseSettledFailures('Captured visit delivery',payment.id,outcomes,['capture notification','booking creation notification'])
   await execute(db,"UPDATE requests SET payload_json=json_set(payload_json,'$.provenance.followups_completed',json('true')) WHERE id=? AND organization_id=? AND json_type(payload_json,'$.provenance')='object'",[hold.request_id,hold.organization_id])
 }
 

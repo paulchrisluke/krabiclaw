@@ -1,12 +1,31 @@
 export default {
+  "reservations": { "deposit_label": "Reservation deposit" },
+  "site_pages": {
+      "home": "Home",
+      "about": "About",
+      "contact": "Contact",
+      "services": "Services",
+      "pricing": "Pricing",
+      "donate": "Donate",
+      "schedule": "Schedule",
+      "privacy": "Privacy Policy",
+      "terms": "Terms of Service",
+      "third_party_notices": "Third-Party Notices"
+  },
   "booking_policy": {
+    "cancellation_until_start": "Cancel free before the start time.",
+    "reschedule_until_start": "You can reschedule before the start time.",
+    "reschedule_allowed": "You can request a change of time.",
+    "reschedule_disallowed": "Time changes are not allowed.",
     "reservation_heading": "Reservation policies",
     "experience_heading": "Experience policies",
     "reservation_cancellation": "Cancel free up to {duration} before your booking.",
     "experience_cancellation": "Free cancellation is available up to {duration} before the experience starts.",
     "reschedule": "You can reschedule up to {duration} before the start time.",
-    "deposit_party": "Parties of {count}+ guests may require a deposit.",
-    "deposit": "A deposit may be required before confirmation.",
+    "deposit_party": "Parties of {count}+ guests require a deposit.",
+    "deposit": "A deposit is required before confirmation.",
+    "deposit_amount": "Deposit: {amount} per reservation.",
+    "deposit_amount_exclusive": "Deposit: {amount} per reservation, plus applicable tax.",
     "minimum_guest_age": "The minimum guest age is {age}.",
     "accessibility": "Please contact us before booking if you need accessibility arrangements."
   },
@@ -15,6 +34,11 @@ export default {
     "time_unavailable": "Time unavailable"
   },
   "booking": {
+    "choose_location": "Choose a location",
+    "online": "Online",
+    "phone_country": "Phone country",
+    "international": "International",
+    "invalid_phone": "Enter a valid number and choose its country, or include the international calling code.",
     "choose_consultation": "Choose your consultation",
     "service": "Service",
     "service_details": "Full service details →",

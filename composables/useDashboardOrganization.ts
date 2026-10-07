@@ -1,4 +1,4 @@
-import type { DashboardRequestScope } from '~/composables/dashboardFetch'
+import { dashboardFetch, type DashboardRequestScope } from '~/composables/dashboardFetch'
 
 /**
  * The tenant, as the dashboard reads it.
@@ -30,6 +30,7 @@ export interface DashboardLocation {
   slug: string
   title: string
   status: string
+  timezone: string | null
   city: string | null
   address: PostalAddress | null
   media: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string | null }>
@@ -78,6 +79,7 @@ const isDashboardLocation = (value: unknown): value is DashboardLocation =>
   && typeof value.slug === 'string'
   && typeof value.title === 'string'
   && typeof value.status === 'string'
+  && (value.timezone === null || typeof value.timezone === 'string')
   && isSocialImage(value.social_image)
   && (value.picture_url === null || typeof value.picture_url === 'string')
   && isMediaList(value.media)
@@ -126,23 +128,7 @@ function dashboardContextKey(scope: DashboardRequestScope | null) {
 export function useDashboardContext(scope: DashboardRequestScope) {
   return useAsyncData<DashboardContextResponse>(
     dashboardContextKey(scope),
-    async (_nuxtApp, { signal }) => {
-      const response = await $fetch<unknown>('/api/dashboard/context', {
-        query: buildDashboardRequestQuery(scope),
-        signal,
-      })
-
-      if (!isDashboardContextResponse(response)) {
-        throw new ApiClientError(
-          'Dashboard context response did not match its contract',
-          502,
-          'INVALID_API_RESPONSE',
-          null,
-        )
-      }
-
-      return response
-    },
+    async (_nuxtApp, { signal }) => dashboardFetch('/api/dashboard/context', scope, { signal, validate: isDashboardContextResponse }),
     { dedupe: 'defer' },
   )
 }

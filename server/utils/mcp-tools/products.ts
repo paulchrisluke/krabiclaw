@@ -2,11 +2,12 @@ import type { McpToolDefinition } from './shared'
 import { pageInfoObject, paginationInputSchema, resolvedMediaAssetObject, organizationTool } from './shared'
 import { TENANT_PAGE_BLOCKS_SCHEMA, TENANT_PAGE_METADATA_SCHEMA } from './content'
 import { productEditorPath } from '~/server/utils/dashboard-links'
+import { queryFirst } from '~/server/db'
 import { PRODUCT_LIMITS } from '~/server/utils/product-validation'
 import { SUPPORTED_CURRENCIES } from '~/shared/currencies'
-import { PRODUCT_KINDS, PRODUCT_DETAIL_FIELDS } from '~/shared/product-details'
+import { PRODUCT_KINDS, productDetailsSchema } from '~/shared/product-details'
 import { PRICE_RECURRING_INTERVALS, PRICE_TAX_BEHAVIORS, PRICE_TYPES } from '~/shared/prices'
-import { setProductBookingConfig, deleteProductBookingConfig, replaceWeeklySchedule } from '~/server/utils/availability'
+import { setProductBookingConfig, deleteProductBookingConfig, replaceWeeklySchedule, type ProductBookingSetupInput } from '~/server/utils/availability'
 import type { CreateProductInput, Product, ReconcileProductInput, UpdateProductInput } from '~/server/types/products'
 import {
   createCollection,
@@ -29,6 +30,10 @@ import {
   setProductPublication,
   updateCollection,
   updateProduct,
+  updateMenu,
+  productBookingReadiness,
+  PUBLIC_PRODUCT_SQL,
+  type MenuSectionInput,
 } from '~/server/utils/product-management'
 import { assertResourceAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 import { mcpPageInfo, mcpPageWindow } from '~/server/utils/mcp-pagination'
@@ -168,7 +173,8 @@ const collectionObject = {
 
 const bookingPolicyFields = {
   scheduling_mode: { type: 'string', enum: ['legacy', 'provider'] },
-  assigned_member_id: { type: ['string', 'null'], description: 'Existing organization member ID for provider scheduling; null uses organization availability.' },
+  assigned_member_id: { type: ['string', 'null'], description: 'One organization member for provider scheduling. Clear assigned_team_id when choosing a member.' },
+  assigned_team_id: { type: ['string', 'null'], description: 'Better Auth team whose available members can host bookings. Clear assigned_member_id when choosing a team.' },
   confirmation_mode: { type: 'string', enum: ['instant', 'review'] },
   online_payment_required: { type: 'boolean', description: 'Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.' },
   online_timezone: { type: ['string', 'null'], description: 'IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.' },
@@ -180,7 +186,18 @@ const bookingConfigObject = {
   required: ['duration_minutes', 'default_capacity', 'confirmation_mode', 'online_payment_required', 'online_timezone', 'calendar_group'],
 } as const
 
-const detailObject = { type: 'object', additionalProperties: false, properties: Object.fromEntries(PRODUCT_DETAIL_FIELDS.map(field => [field.key, { ...(field.value_type === 'list.single_line_text' ? { type: 'array', items: { type: 'string' } } : { type: 'string' }), description: `${field.description} For ${field.kinds.join(', ')}.` }])) } as const
+const weeklySlot = { type: 'object', properties: { weekday: { type: 'integer', minimum: 0, maximum: 6 }, start_time: { type: 'string', pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$' } }, required: ['weekday', 'start_time'], additionalProperties: false }
+const bookingSetup = {
+  type: 'object',
+  properties: { ...bookingPolicyFields, location_id: { type: ['string', 'null'] }, duration_minutes: { type: 'integer', minimum: 1 }, default_capacity: { type: ['integer', 'null'], minimum: 1 },
+    weekly_slots: { type: 'array', minItems: 1, maxItems: 100, items: weeklySlot },
+    sessions: { type: 'array', minItems: 1, maxItems: 100, items: { type: 'object', properties: { starts_at: { type: 'string', format: 'date-time' }, ends_at: { type: 'string', format: 'date-time' }, capacity: { type: ['integer', 'null'], minimum: 1 } }, required: ['starts_at', 'ends_at'], additionalProperties: false } },
+  },
+  required: ['location_id', 'duration_minutes', 'default_capacity', 'confirmation_mode', 'online_payment_required'],
+  anyOf: [{ required: ['weekly_slots'] }, { required: ['sessions'] }], additionalProperties: false,
+}
+
+const detailObject = productDetailsSchema()
 
 const productObject = {
   type: 'object',
@@ -191,6 +208,8 @@ const productObject = {
     marketing_features: { type: 'array', items: { type: 'string' } },
     metadata: { type: 'object', additionalProperties: { type: 'string' } },
     booking: bookingConfigObject,
+    booking_readiness: { type: ['object', 'null'], properties: { ready: { type: 'boolean' }, missing: { type: 'array', items: { type: 'string' } } }, required: ['ready', 'missing'] },
+    public_url: { type: ['string', 'null'] },
     page: { type: ['object', 'null'], description: "The source page this product owns, or null. Edit its content with the site-page tools; its binding is the page's product_id.", properties: { id: { type: 'string' }, path: { type: 'string' }, title: { type: 'string' } }, required: ['id', 'path', 'title'] },
     admin_edit_url: { type: ['string', 'null'], description: 'The dashboard editor for this product, on the platform host.' },
     tax_code: { type: ['string', 'null'] },
@@ -213,6 +232,10 @@ const productListItemObject = {
   properties: {
     kind: { type: 'string', enum: [...PRODUCT_KINDS] }, id: { type: 'string' }, name: { type: 'string' }, slug: { type: 'string' }, description: { type: 'string' },
     active: { type: 'boolean' }, variant_count: { type: 'integer' },
+    variants: { type: 'array', items: variantObject },
+    options: { type: 'array', items: optionObject },
+    collections: { type: 'array', items: { type: 'object', properties: { collection_id: { type: 'string' }, sort_order: { type: 'integer' } }, required: ['collection_id', 'sort_order'] } },
+    booking: bookingConfigObject,
     publications: { type: 'array', items: publicationObject },
     locations: { type: 'array', items: productLocationObject },
   },
@@ -259,27 +282,31 @@ const productPatch = {
 } as const
 
 export const PRODUCTS_TOOLS: McpToolDefinition[] = [
-  organizationTool({ name: 'set_product_booking_config', description: 'Configure a product’s duration, capacity, staff review, payment requirement and online calendar when the user wants to set up bookable sessions. Existing sessions keep their saved times, capacity and state. Omitted fields stay unchanged; null clears a nullable default and zero capacity means no places. Read the settings with get_product.', domain: 'products', minimumRole: 'admin', confirmRequired: false, inputSchema: { product_id: { type: 'string' }, duration_minutes: { type: ['integer', 'null'], minimum: 1 }, default_capacity: { type: ['integer', 'null'], minimum: 0 }, ...bookingPolicyFields }, required: ['product_id'], outputSchema: { type: 'object', properties: { config: bookingConfigObject }, required: ['config'] } }),
-  organizationTool({ name: 'delete_product_booking_config', description: 'Delete the selected product’s booking configuration to disable its session booking. Returns deleted status. Refused if any booking history exists, including cancelled bookings; the catalog product itself remains.', domain: 'products', minimumRole: 'admin', confirmRequired: true, inputSchema: { product_id: { type: 'string' } }, required: ['product_id'], outputSchema: { type: 'object', properties: { deleted: { type: 'boolean' } }, required: ['deleted'] } }),
-  organizationTool({ name: 'replace_product_weekly_schedule', description: 'Replace a product’s weekly time slots when the user wants to change its recurring schedule. Supply a location ID for in-person sessions or null for online sessions. Uses the configured timezone and product duration/capacity. An empty slots array clears that schedule. Sessions with any booking history are preserved; removed future sessions without bookings are cancelled, and re-added unbooked slots can reopen with current defaults.', domain: 'products', minimumRole: 'admin', confirmRequired: true, inputSchema: { product_id: { type: 'string' }, location_id: { type: ['string', 'null'], description: 'A saved location ID, or explicit null for online sessions in the Product’s saved online timezone.' }, slots: { type: 'array', items: { type: 'object', properties: { weekday: { type: 'integer', minimum: 0, maximum: 6 }, start_time: { type: 'string', description: 'Local HH:mm time.' } }, required: ['weekday', 'start_time'], additionalProperties: false } } }, required: ['product_id', 'location_id', 'slots'], outputSchema: { type: 'object', properties: { rules: { type: 'array', items: { type: 'object' } }, sessions: { type: 'object', properties: { created: { type: 'integer' }, existing: { type: 'integer' }, skipped: { type: 'array', items: { type: 'object' } } }, required: ['created', 'existing', 'skipped'] }, cancelled: { type: 'integer' } }, required: ['rules', 'sessions', 'cancelled'] } }),
-  organizationTool({ name: 'list_products', description: "List products carried by the selected site, published or withheld. Results include products across the site; list_location_products narrows to one location.", domain: 'products', minimumRole: 'admin', confirmRequired: false, inputSchema: { published_only: { type: 'boolean' }, ...paginationInputSchema }, required: [], outputSchema: { type: 'object', properties: { products: { type: 'array', items: productListItemObject }, page_info: pageInfoObject }, required: ['products', 'page_info'] } }),
-  organizationTool({ name: 'list_location_products', description: 'List products offered at one selected location, including their catalog identities, variants, prices and availability. Results are paginated; published_only narrows to visible items. Use list_products for the whole site.', domain: 'products', minimumRole: 'admin', confirmRequired: false, inputSchema: { location_id: { type: 'string' }, published_only: { type: 'boolean' }, ...paginationInputSchema }, required: ['location_id'], outputSchema: { type: 'object', properties: { products: { type: 'array', items: productListItemObject }, page_info: pageInfoObject }, required: ['products', 'page_info'] } }),
-  organizationTool({ name: 'get_product', description: "Read one site product before reviewing or editing its options, variants, prices, media, publication, locations, collections, named product facts or booking defaults. Prices belong to variants; booking defaults apply to new sessions.", domain: 'products', minimumRole: 'admin', confirmRequired: false, inputSchema: { product_id: { type: 'string' } }, required: ['product_id'], outputSchema: productResult }),
-  organizationTool({ name: 'create_product', description: "Create a product with options, variants and prices when the user wants to add an item to the selected site’s catalog. To create a service with its own page, send page in this same call: the product, its default variant, the page and their binding commit together, and a service's page without a path gets the first free /services/<slug>. Do not create the page separately and link it afterwards. Send an idempotency_key and repeat it on a retry so a lost response never makes a second product. A product created with its page starts sale-inactive unless active is sent. The new product is unpublished; use set_product_publication and set_product_location to control website visibility and location offerings.", domain: 'products', minimumRole: 'admin', confirmRequired: false, inputSchema: { ...productWrite, page: { type: 'object', description: 'A source page created with this product and bound to it, in the same write. Omit for a product without a page of its own.', properties: { ...TENANT_PAGE_METADATA_SCHEMA, path: { type: 'string', description: "The page's public path. A service may omit it to get the first free /services/<slug>." }, blocks: TENANT_PAGE_BLOCKS_SCHEMA }, required: ['title', 'blocks'], additionalProperties: false }, idempotency_key: { type: 'string', minLength: 1, maxLength: 200, description: 'Repeat the same key with the same request to get the product it created instead of a second one.' } }, required: ['name', 'kind'], outputSchema: productResult }),
-  organizationTool({ name: 'update_product', description: "Edit the selected product and return its updated catalog record. Only supplied fields change. Variants and their prices merge by ID by default: omitted sibling variants, prices, fields and option selections stay unchanged. A price-only edit supplies variant id, price id and unit_amount. Use variants_mode replace or a variant’s prices_mode replace only for explicit removal of omitted entries; booking history protects variant removal. Supplied options and details are complete replacements, so retain values outside the requested change. Publication and location offerings use separate tools.", domain: 'products', minimumRole: 'admin', confirmRequired: true, inputSchema: { product_id: { type: 'string' }, ...productPatch }, required: ['product_id'], outputSchema: productResult }),
-  organizationTool({ name: 'delete_product', description: "Permanently delete a product and its owned variants, prices, details and placements when the user requests its removal. Refused if the product has booking history or a site page still references it. Withhold publication or disable sale to retain the product.", domain: 'products', minimumRole: 'admin', confirmRequired: true, inputSchema: { product_id: { type: 'string' } }, required: ['product_id'], outputSchema: { type: 'object', properties: { deleted: { type: 'boolean' } }, required: ['deleted'] } }),
-  organizationTool({ name: 'set_product_publication', description: "Publish or withhold a product when the user wants to change its visibility on the selected site. This setting is independent of whether the product is available for sale and of visibility at individual locations.", domain: 'products', minimumRole: 'admin', confirmRequired: false, inputSchema: { product_id: { type: 'string' }, published: { type: 'boolean' } }, required: ['product_id', 'published'], outputSchema: productResult }),
-  organizationTool({ name: 'set_product_location', description: "Set whether the selected location offers a product and whether it appears on that location’s website surfaces. Existing product prices do not establish a location offering.", domain: 'products', minimumRole: 'admin', confirmRequired: false, inputSchema: { product_id: { type: 'string' }, location_id: { type: 'string' }, active: { type: 'boolean' }, published: { type: 'boolean' } }, required: ['product_id', 'location_id'], outputSchema: productResult }),
-  organizationTool({ name: 'remove_product_location', description: 'Remove the selected product’s offering at one explicit location and return the updated product. This removes that location relationship; the catalog product, prices and other location offerings remain.', domain: 'products', minimumRole: 'admin', confirmRequired: true, inputSchema: { product_id: { type: 'string' }, location_id: { type: 'string' } }, required: ['product_id', 'location_id'], outputSchema: productResult }),
-  organizationTool({ name: 'batch_create_products', description: "Create several products in the selected site’s catalog when the user supplies a new catalog batch. Validates every entry before writing; any invalid entry rejects the complete request. Publication and location offerings are assigned separately.", domain: 'products', minimumRole: 'admin', confirmRequired: false, inputSchema: { products: { type: 'array', minItems: 1, maxItems: PRODUCT_LIMITS.batchCreate, items: { type: 'object', properties: productWrite, required: ['name', 'kind'], additionalProperties: false } } }, required: ['products'], outputSchema: { type: 'object', properties: { products: { type: 'array', items: productObject } }, required: ['products'] } }),
-  organizationTool({ name: 'reconcile_products', description: "Create or update a supplied catalog batch when the user explicitly wants to synchronize complete product entries. A supplied product_id identifies the product to update or create; an entry without product_id creates a new product, so retrying it can create duplicates. Supplied options, variants and prices replace their corresponding lists; preserve existing IDs and every entry to retain. Omitted products stay unchanged unless deactivate_missing is true, which disables their sale without deleting them. Returns the resulting products; use update_product for a partial price edit.", domain: 'products', minimumRole: 'admin', confirmRequired: true, inputSchema: { products: { type: 'array', maxItems: PRODUCT_LIMITS.reconcile, items: { type: 'object', properties: { product_id: { type: 'string', minLength: 1 }, ...productWrite }, required: ['name', 'kind'], additionalProperties: false } }, deactivate_missing: { type: 'boolean' } }, required: ['products'], outputSchema: { type: 'object', properties: { products: { type: 'array', items: productObject } }, required: ['products'] } }),
+  organizationTool({ name: 'update_menu', domain: 'products', minimumRole: 'admin', description: 'Update the restaurant menu from the supplied sections and items, preserving their order. Creates or updates dishes, prices and sections and makes them visible at the selected location on Menu. Omitted sections remain. Reuse the same key for an identical retry.',
+    inputSchema: { location_id: { type: 'string' }, idempotency_key: { type: 'string', minLength: 1, maxLength: 200 }, sections: { type: 'array', minItems: 1, maxItems: 30, items: { type: 'object', properties: { collection_id: { type: 'string' }, name: { type: 'string', minLength: 1 }, items: { type: 'array', minItems: 1, maxItems: 100, items: { type: 'object', properties: { ...productWrite, product_id: { type: 'string' }, kind: { const: 'dish' } }, required: ['name'], additionalProperties: false } } }, required: ['name', 'items'], additionalProperties: false } } }, required: ['location_id', 'idempotency_key', 'sections'],
+    outputSchema: { type: 'object', properties: { sections: { type: 'array', items: { type: 'object', properties: { collection: collectionObject, products: { type: 'array', items: productObject } }, required: ['collection', 'products'] } }, replayed: { type: 'boolean' }, public_url: { type: ['string', 'null'] } }, required: ['sections', 'replayed', 'public_url'] },
+  }),
+  organizationTool({ name: 'set_product_booking_config', description: 'Configure a product’s duration, capacity, staff review, payment requirement and online calendar when the user wants to set up bookable sessions. Existing sessions keep their saved times, capacity and state. Omitted fields stay unchanged; null clears a nullable default and zero capacity means no places. Read the settings with get_product.', domain: 'products', minimumRole: 'admin', inputSchema: { product_id: { type: 'string' }, duration_minutes: { type: ['integer', 'null'], minimum: 1 }, default_capacity: { type: ['integer', 'null'], minimum: 0 }, ...bookingPolicyFields }, required: ['product_id'], outputSchema: { type: 'object', properties: { config: bookingConfigObject }, required: ['config'] } }),
+  organizationTool({ name: 'delete_product_booking_config', description: 'Delete the selected product’s booking configuration to disable its session booking. Returns deleted status. Refused if any booking history exists, including cancelled bookings; the catalog product itself remains.', domain: 'products', minimumRole: 'admin', inputSchema: { product_id: { type: 'string' } }, required: ['product_id'], outputSchema: { type: 'object', properties: { deleted: { type: 'boolean' } }, required: ['deleted'] } }),
+  organizationTool({ name: 'replace_product_weekly_schedule', description: 'Replace a product’s weekly time slots when the user wants to change its recurring schedule. Supply a location ID for in-person sessions or null for online sessions. Uses the configured timezone and product duration/capacity. An empty slots array clears that schedule. Sessions with any booking history are preserved; removed future sessions without bookings are cancelled, and re-added unbooked slots can reopen with current defaults.', domain: 'products', minimumRole: 'admin', inputSchema: { product_id: { type: 'string' }, location_id: { type: ['string', 'null'], description: 'A saved location ID, or explicit null for online sessions in the Product’s saved online timezone.' }, slots: { type: 'array', items: { type: 'object', properties: { weekday: { type: 'integer', minimum: 0, maximum: 6 }, start_time: { type: 'string', description: 'Local HH:mm time.' } }, required: ['weekday', 'start_time'], additionalProperties: false } } }, required: ['product_id', 'location_id', 'slots'], outputSchema: { type: 'object', properties: { rules: { type: 'array', items: { type: 'object' } }, sessions: { type: 'object', properties: { created: { type: 'integer' }, existing: { type: 'integer' }, skipped: { type: 'array', items: { type: 'object' } } }, required: ['created', 'existing', 'skipped'] }, cancelled: { type: 'integer' } }, required: ['rules', 'sessions', 'cancelled'] } }),
+  organizationTool({ name: 'list_products', description: "List products carried by the selected site, published or withheld. Results include products across the site; list_location_products narrows to one location.", domain: 'products', minimumRole: 'admin', inputSchema: { published_only: { type: 'boolean' }, ...paginationInputSchema }, required: [], outputSchema: { type: 'object', properties: { products: { type: 'array', items: productListItemObject }, page_info: pageInfoObject }, required: ['products', 'page_info'] } }),
+  organizationTool({ name: 'list_location_products', description: 'List products offered at one selected location, including their catalog identities, variants, prices and availability. Results are paginated; published_only narrows to visible items. Use list_products for the whole site.', domain: 'products', minimumRole: 'admin', inputSchema: { location_id: { type: 'string' }, published_only: { type: 'boolean' }, ...paginationInputSchema }, required: ['location_id'], outputSchema: { type: 'object', properties: { products: { type: 'array', items: productListItemObject }, page_info: pageInfoObject }, required: ['products', 'page_info'] } }),
+  organizationTool({ name: 'get_product', description: "Read one site product before reviewing or editing its options, variants, prices, media, publication, locations, collections, named product facts or booking defaults. Prices belong to variants; booking defaults apply to new sessions.", domain: 'products', minimumRole: 'admin', inputSchema: { product_id: { type: 'string' } }, required: ['product_id'], outputSchema: productResult }),
+  organizationTool({ name: 'create_product', description: 'Add a catalog item, experience or service. Experiences require real booking details or an external booking URL. Supplying booking creates its configuration, location offering, schedule and public detail page together. Ask the owner for missing times, duration, places, prices and policies before calling. Repeat the same idempotency key on retry.' , domain: 'products', minimumRole: 'admin', inputSchema: { ...productWrite, booking: bookingSetup, anyOf: [{ properties: { kind: { enum: ['dish', 'service', 'item'] } } }, { required: ['booking'] }, { properties: { order_url: { type: 'string', minLength: 1 } }, required: ['order_url'] }], page: { type: 'object', description: 'A source page created with this product and bound to it, in the same write. Omit for a product without a page of its own.', properties: { ...TENANT_PAGE_METADATA_SCHEMA, path: { type: 'string', description: "The page's public path. A service may omit it to get the first free /services/<slug>." }, blocks: TENANT_PAGE_BLOCKS_SCHEMA }, required: ['title', 'blocks'], additionalProperties: false }, idempotency_key: { type: 'string', minLength: 1, maxLength: 200, description: 'Repeat the same key with the same request to get the product it created instead of a second one.' } }, required: ['name', 'kind', 'idempotency_key'], outputSchema: productResult }),
+  organizationTool({ name: 'update_product', description: "Edit the selected product and return its updated catalog record. Only supplied fields change. Variants and their prices merge by ID by default: omitted sibling variants, prices, fields and option selections stay unchanged. A price-only edit supplies variant id, price id and unit_amount. Use variants_mode replace or a variant’s prices_mode replace only for explicit removal of omitted entries; booking history protects variant removal. Supplied options and details are complete replacements, so retain values outside the requested change. Publication and location offerings use separate tools.", domain: 'products', minimumRole: 'admin', inputSchema: { product_id: { type: 'string' }, ...productPatch, booking: bookingSetup, idempotency_key: { type: 'string', minLength: 1, maxLength: 200 }, anyOf: [{ not: { required: ['booking'] } }, { required: ['idempotency_key'] }] }, required: ['product_id'], outputSchema: productResult }),
+  organizationTool({ name: 'delete_product', description: 'Delete a product and its public page. Booking history prevents deletion; pause bookings or withhold publication to retain it.', domain: 'products', minimumRole: 'admin', inputSchema: { product_id: { type: 'string' } }, required: ['product_id'], outputSchema: { type: 'object', properties: { deleted: { type: 'boolean' } }, required: ['deleted'] } }),
+  organizationTool({ name: 'set_product_publication', description: "Publish or withhold a product when the user wants to change its visibility on the selected site. This setting is independent of whether the product is available for sale and of visibility at individual locations.", domain: 'products', minimumRole: 'admin', inputSchema: { product_id: { type: 'string' }, published: { type: 'boolean' } }, required: ['product_id', 'published'], outputSchema: productResult }),
+  organizationTool({ name: 'set_product_location', description: "Set whether the selected location offers a product and whether it appears on that location’s website surfaces. Existing product prices do not establish a location offering.", domain: 'products', minimumRole: 'admin', inputSchema: { product_id: { type: 'string' }, location_id: { type: 'string' }, active: { type: 'boolean' }, published: { type: 'boolean' } }, required: ['product_id', 'location_id'], outputSchema: productResult }),
+  organizationTool({ name: 'remove_product_location', description: 'Remove the selected product’s offering at one explicit location and return the updated product. This removes that location relationship; the catalog product, prices and other location offerings remain.', domain: 'products', minimumRole: 'admin', inputSchema: { product_id: { type: 'string' }, location_id: { type: 'string' } }, required: ['product_id', 'location_id'], outputSchema: productResult }),
+  organizationTool({ name: 'batch_create_products', description: "Create several products in the selected site’s catalog when the user supplies a new catalog batch. Validates every entry before writing; any invalid entry rejects the complete request. Publication and location offerings are assigned separately.", domain: 'products', minimumRole: 'admin', inputSchema: { idempotency_key: { type: 'string', minLength: 1, maxLength: 200 }, products: { type: 'array', minItems: 1, maxItems: PRODUCT_LIMITS.batchCreate, items: { type: 'object', properties: productWrite, required: ['name', 'kind'], additionalProperties: false } } }, required: ['products', 'idempotency_key'], outputSchema: { type: 'object', properties: { products: { type: 'array', items: productObject } }, required: ['products'] } }),
+  organizationTool({ name: 'reconcile_products', description: 'Synchronize complete catalog entries in one atomic write. Existing product IDs preserve identity; supplied variants, prices and options replace their lists. Omitted products stay unchanged unless deactivate_missing disables them. Repeat the same idempotency key for an identical retry. Use update_menu for a restaurant menu and update_product for a partial edit.', domain: 'products', minimumRole: 'admin', inputSchema: { idempotency_key: { type: 'string', minLength: 1, maxLength: 200 }, products: { type: 'array', maxItems: PRODUCT_LIMITS.reconcile, items: { type: 'object', properties: { product_id: { type: 'string', minLength: 1 }, ...productWrite }, required: ['name', 'kind'], additionalProperties: false } }, deactivate_missing: { type: 'boolean' } }, required: ['products', 'idempotency_key'], outputSchema: { type: 'object', properties: { products: { type: 'array', items: productObject } }, required: ['products'] } }),
 
-  organizationTool({ name: 'list_collections', description: "List the selected site’s product collections when the user wants to find menu sections or other product groups. Returns their public display order. Supply location_id to narrow the list to one location.", domain: 'products', minimumRole: 'admin', confirmRequired: false, inputSchema: { location_id: { type: ['string', 'null'] } }, required: [], outputSchema: { type: 'object', properties: { collections: { type: 'array', items: collectionObject } }, required: ['collections'] } }),
-  organizationTool({ name: 'create_collection', description: 'Create an empty product collection, such as a menu section, site-wide or at the named location. Returns the saved collection and its ID. Add products separately with set_collection_products; existing products and collections stay unchanged.', domain: 'products', minimumRole: 'admin', confirmRequired: false, inputSchema: { name: { type: 'string' }, description: { type: ['string', 'null'] }, location_id: { type: ['string', 'null'], description: 'Narrow this collection to one location, or omit for site-wide.' }, sort_order: { type: 'integer' } }, required: ['name'], outputSchema: { type: 'object', properties: { collection: collectionObject }, required: ['collection'] } }),
-  organizationTool({ name: 'update_collection', description: 'Change the selected product collection’s name, description or display position and return the saved collection. Only supplied fields change; membership uses set_collection_products and ordering several collections uses reorder_collections.', domain: 'products', minimumRole: 'admin', confirmRequired: false, inputSchema: { collection_id: { type: 'string' }, name: { type: 'string' }, description: { type: ['string', 'null'] }, sort_order: { type: 'integer' } }, required: ['collection_id'], outputSchema: { type: 'object', properties: { collection: collectionObject }, required: ['collection'] } }),
-  organizationTool({ name: 'delete_collection', description: 'Permanently delete the selected product collection and its memberships when the user asks to remove that group. Returns deleted status; its products remain in the catalog and other collections.', domain: 'products', minimumRole: 'admin', confirmRequired: true, inputSchema: { collection_id: { type: 'string' } }, required: ['collection_id'], outputSchema: { type: 'object', properties: { deleted: { type: 'boolean' } }, required: ['deleted'] } }),
-  organizationTool({ name: 'set_collection_products', description: "Replace a product collection’s membership and display order when the user wants to change which items it contains. Supply every product ID to retain, in the intended order. Omitted products are removed from this collection but remain in the catalog.", domain: 'products', minimumRole: 'admin', confirmRequired: true, inputSchema: { collection_id: { type: 'string' }, product_ids: { type: 'array', items: { type: 'string' }, maxItems: PRODUCT_LIMITS.collectionProducts } }, required: ['collection_id', 'product_ids'], outputSchema: { type: 'object', properties: { products: { type: 'array', items: productListItemObject } }, required: ['products'] } }),
-  organizationTool({ name: 'reorder_collections', description: 'Set the display order of product collections for the whole site or one explicit location. Supply every collection ID in that scope exactly once; a partial list is rejected. Returns the ordered collections without changing their products.', domain: 'products', minimumRole: 'admin', confirmRequired: false, inputSchema: { collection_ids: { type: 'array', items: { type: 'string' }, minItems: 1 }, location_id: { type: ['string', 'null'] } }, required: ['collection_ids'], outputSchema: { type: 'object', properties: { collections: { type: 'array', items: collectionObject } }, required: ['collections'] } }),
+  organizationTool({ name: 'list_collections', description: "List the selected site’s product collections when the user wants to find menu sections or other product groups. Returns their public display order. Supply location_id to narrow the list to one location.", domain: 'products', minimumRole: 'admin', inputSchema: { location_id: { type: ['string', 'null'] } }, required: [], outputSchema: { type: 'object', properties: { collections: { type: 'array', items: collectionObject } }, required: ['collections'] } }),
+  organizationTool({ name: 'create_collection', description: 'Create an empty product collection, such as a menu section, site-wide or at the named location. Returns the saved collection and its ID. Add products separately with set_collection_products; existing products and collections stay unchanged.', domain: 'products', minimumRole: 'admin', inputSchema: { name: { type: 'string' }, description: { type: ['string', 'null'] }, location_id: { type: ['string', 'null'], description: 'Narrow this collection to one location, or omit for site-wide.' }, sort_order: { type: 'integer' } }, required: ['name'], outputSchema: { type: 'object', properties: { collection: collectionObject }, required: ['collection'] } }),
+  organizationTool({ name: 'update_collection', description: 'Change the selected product collection’s name, description or display position and return the saved collection. Only supplied fields change; membership uses set_collection_products and ordering several collections uses reorder_collections.', domain: 'products', minimumRole: 'admin', inputSchema: { collection_id: { type: 'string' }, name: { type: 'string' }, description: { type: ['string', 'null'] }, sort_order: { type: 'integer' } }, required: ['collection_id'], outputSchema: { type: 'object', properties: { collection: collectionObject }, required: ['collection'] } }),
+  organizationTool({ name: 'delete_collection', description: 'Permanently delete the selected product collection and its memberships when the user asks to remove that group. Returns deleted status; its products remain in the catalog and other collections.', domain: 'products', minimumRole: 'admin', inputSchema: { collection_id: { type: 'string' } }, required: ['collection_id'], outputSchema: { type: 'object', properties: { deleted: { type: 'boolean' } }, required: ['deleted'] } }),
+  organizationTool({ name: 'set_collection_products', description: "Replace a product collection’s membership and display order when the user wants to change which items it contains. Supply every product ID to retain, in the intended order. Omitted products are removed from this collection but remain in the catalog.", domain: 'products', minimumRole: 'admin', inputSchema: { collection_id: { type: 'string' }, product_ids: { type: 'array', items: { type: 'string' }, maxItems: PRODUCT_LIMITS.collectionProducts } }, required: ['collection_id', 'product_ids'], outputSchema: { type: 'object', properties: { products: { type: 'array', items: productListItemObject } }, required: ['products'] } }),
+  organizationTool({ name: 'reorder_collections', description: 'Set the display order of product collections for the whole site or one explicit location. Supply every collection ID in that scope exactly once; a partial list is rejected. Returns the ordered collections without changing their products.', domain: 'products', minimumRole: 'admin', inputSchema: { collection_ids: { type: 'array', items: { type: 'string' }, minItems: 1 }, location_id: { type: ['string', 'null'] } }, required: ['collection_ids'], outputSchema: { type: 'object', properties: { collections: { type: 'array', items: collectionObject } }, required: ['collections'] } }),
 
 ]
 
@@ -319,7 +346,15 @@ async function resolveCarriedProduct(ctx: McpExecutorContext, productId: string)
 async function productResponse(ctx: McpExecutorContext, product: Product) {
   const [hydrated] = await hydrateProductMedia(ctx.organization.db, ctx.organization.organizationId, [product])
   const slug = ctx.organization.organizationSlug
-  return { product: { ...hydrated!, admin_edit_url: slug ? productEditorPath(slug, hydrated!.id) : null } }
+  const value = hydrated!
+  const path = value.kind === 'experience' ? `/experiences/${encodeURIComponent(value.slug)}` : value.page?.path ?? null
+  const readiness = value.kind === 'experience' || value.booking ? await productBookingReadiness(ctx.organization.db, ctx.organization.organizationId, value) : null
+  const published = path && await queryFirst(ctx.organization.db, `SELECT p.id FROM products p
+    JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
+    WHERE p.organization_id = ? AND p.id = ? AND ${PUBLIC_PRODUCT_SQL}`, [ctx.organization.organizationId, value.id])
+  const publicUrl = path && published && ctx.organization.publicUrl
+    ? new URL(path, ctx.organization.publicUrl).toString() : null
+  return { product: { ...value, booking_readiness: readiness ? {ready:readiness.ready,missing:readiness.missing} : null, public_url: publicUrl, admin_edit_url: slug ? productEditorPath(slug, value.id) : null } }
 }
 
 /** One page of products, with the extra row the query asked for removed. */
@@ -340,6 +375,10 @@ function productListItem(product: Product) {
     description: product.description,
     active: product.active,
     variant_count: product.variants.length,
+    variants: product.variants,
+    options: product.options,
+    collections: product.collections,
+    booking: product.booking,
     publications: product.publications,
     locations: product.locations,
   }
@@ -351,10 +390,16 @@ export async function handleProductsTools(ctx: McpExecutorContext) {
   const scope = { organizationId: organization.organizationId}
 
   switch (toolName) {
+    case 'update_menu': {
+      const locationId = requiredString(args, 'location_id')
+      await authorizeLocation(ctx, locationId)
+      return { ...await updateMenu(organization.db, { ...scope, locationId, sections: args.sections as MenuSectionInput[], idempotencyKey: requiredString(args, 'idempotency_key'), actor }), public_url: organization.publicUrl ? new URL('/menu', organization.publicUrl).toString() : null }
+    }
+
     case 'set_product_booking_config': {
       const config = await setProductBookingConfig(organization.db, {
         ...scope, productId: requiredString(args, 'product_id'), actorId: organization.userId, env: organization.env,
-        patch: { duration_minutes: args.duration_minutes, default_capacity: args.default_capacity, confirmation_mode: args.confirmation_mode, online_payment_required: args.online_payment_required, online_timezone: args.online_timezone, calendar_group: args.calendar_group, scheduling_mode: args.scheduling_mode, assigned_member_id: args.assigned_member_id },
+        patch: { duration_minutes: args.duration_minutes, default_capacity: args.default_capacity, confirmation_mode: args.confirmation_mode, online_payment_required: args.online_payment_required, online_timezone: args.online_timezone, calendar_group: args.calendar_group, scheduling_mode: args.scheduling_mode, assigned_member_id: args.assigned_member_id, assigned_team_id: args.assigned_team_id },
       })
       return { config }
     }
@@ -397,10 +442,14 @@ export async function handleProductsTools(ctx: McpExecutorContext) {
       // with it is created and bound in the same batch.
       const page = args.page === undefined ? undefined : args.page as { title: string; path?: string; summary?: string | null; pageType?: 'custom' | 'recipe' | 'legal' | 'system'; recipe?: string | null; sortOrder?: number; blocks: unknown }
       const idempotencyKey = args.idempotency_key === undefined ? undefined : requiredString(args, 'idempotency_key')
+      const booking = args.booking as ProductBookingSetupInput | undefined
+      if (booking?.location_id) await authorizeLocation(ctx, booking.location_id)
       const product = await createProduct(organization.db, {
         organizationId: organization.organizationId,
-        product: omit(args, ['page', 'idempotency_key']) as unknown as CreateProductInput, actor,
-        publication: { published: false },
+        env: organization.env,
+        product: { ...omit(args, ['page', 'booking', 'idempotency_key']), ...(booking && args.active === undefined ? { active: true } : {}) } as unknown as CreateProductInput, actor,
+        publication: { published: Boolean(booking || args.kind === 'experience' && args.order_url) },
+        ...(booking ? { booking: { data: booking, env: organization.env } } : {}),
         ...(page ? { page: { data: page, env: organization.env } } : {}),
         ...(idempotencyKey !== undefined ? { idempotencyKey } : {}),
       })
@@ -409,8 +458,12 @@ export async function handleProductsTools(ctx: McpExecutorContext) {
     case 'update_product': {
       const productId = requiredString(args, 'product_id')
       await resolveCarriedProduct(ctx, productId)
+      const booking = args.booking as ProductBookingSetupInput | undefined
+      if (booking?.location_id) await authorizeLocation(ctx, booking.location_id)
       return await productResponse(ctx, await updateProduct(organization.db, {
-        ...scope, productId, patch: omit(args, ['product_id']) as unknown as UpdateProductInput, actor,
+        ...scope, productId, patch: omit(args, ['product_id', 'booking', 'idempotency_key']) as unknown as UpdateProductInput, actor,
+        ...(booking ? { booking: { data: booking, env: organization.env } } : {}),
+        ...(args.idempotency_key ? { idempotencyKey: requiredString(args, 'idempotency_key') } : {}),
       }))
     }
     case 'delete_product': {
@@ -466,6 +519,7 @@ export async function handleProductsTools(ctx: McpExecutorContext) {
       const products = await createProductsBatch(organization.db, {
         ...scope, products: objectArray(args.products, 'products') as unknown as CreateProductInput[], actor,
         publication: { published: false },
+        idempotencyKey: requiredString(args, 'idempotency_key'),
       })
       return { products }
     }
@@ -476,6 +530,7 @@ export async function handleProductsTools(ctx: McpExecutorContext) {
           products: objectArray(args.products, 'products') as unknown as ReconcileProductInput[],
           actor,
           deactivateMissing: args.deactivate_missing === true,
+          idempotencyKey: requiredString(args, 'idempotency_key'),
         })),
       }
 

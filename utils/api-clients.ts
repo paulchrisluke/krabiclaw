@@ -75,14 +75,19 @@ export function normalizeApiError(error: unknown, fallbackMessage = 'API request
   const data = sanitizeApiData(candidate.data)
   const structuredError = isRecord(data.error) ? data.error : null
   const topLevelError = typeof data.error === 'string' ? data.error : null
+  const domainData = isRecord(data.data) ? data.data : data
   const statusCode = candidate.statusCode ?? candidate.status ?? candidate.response?.status ?? 500
   return new ApiClientError(
     (typeof structuredError?.message === 'string' ? structuredError.message : null)
       ?? topLevelError
+      ?? (typeof data.message === 'string' ? data.message : null)
+      ?? (typeof data.statusMessage === 'string' ? data.statusMessage : null)
       ?? candidate.message
       ?? fallbackMessage,
     statusCode,
-    (typeof structuredError?.code === 'string' ? structuredError.code : null) ?? 'API_REQUEST_FAILED',
+    (typeof structuredError?.code === 'string' ? structuredError.code : null)
+      ?? (typeof domainData.code === 'string' ? domainData.code : null)
+      ?? 'API_REQUEST_FAILED',
     (typeof structuredError?.requestId === 'string' ? structuredError.requestId : null)
       ?? candidate.response?.headers?.get('x-request-id')
       ?? null,

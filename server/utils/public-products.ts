@@ -1,8 +1,8 @@
+import { getSourceLocale } from '~/server/utils/organization-locales'
 import { parseGoogleReviewMetadata, type GoogleReviewMetadata } from '~/shared/google-review'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { bookingWindow, listSessions } from '~/server/utils/availability'
-import { resolveOrganizationCmsCapabilities } from '~/server/utils/cms-capabilities'
-import { getProductBySlug, hydrateProductMedia, listCollections, listLocationProducts } from '~/server/utils/product-management'
+import { getProduct, getProductBySlug, hydrateProductMedia, listCollections, listLocationProducts, listOrganizationProducts } from '~/server/utils/product-management'
 import type { Collection, Product, ProductBookingConfig, ProductPresentation, ProductSurface } from '~/server/types/products'
 import { isExperience, productSurfaceOf, resolveProductPresentation, presentationForSurface } from '~/utils/product-presentation'
 import { isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
@@ -18,6 +18,8 @@ import type { PublicLocaleRepresentation } from '~/utils/public-resource-contrac
 import { parsePostalAddress, type PostalAddress } from '~/utils/postal-address'
 import { publicTenantVisibilitySql } from '~/server/utils/public-base'
 import { refreshProductBusy } from '~/server/domain/member-scheduling'
+import { selectProductCollectionSiblings, type ProductCollectionSibling } from '~/utils/product-seo'
+import { getPublicTenantPageForPath } from '~/server/utils/public-tenant-pages'
 
 interface PublicProductOrganizationRow {
   id: string
@@ -83,6 +85,8 @@ export interface PublicProductSession {
 
 export interface PublicProductDetail extends PublicProductCollection {
   location: PublicProductLocation | null
+  scopeRequired?: boolean
+  onlineAvailable?: boolean
   product: Product
   /**
    * Present exactly when the Product takes bookings.
@@ -93,6 +97,23 @@ export interface PublicProductDetail extends PublicProductCollection {
    * bookable Product with nothing scheduled.
    */
   booking: PublicProductBooking | null
+  localeRepresentations: PublicLocaleRepresentation[]
+}
+
+export interface PublicProductDetailPayload {
+  product: Product
+  location: PublicProductLocation | null
+  locations?: PublicProductLocation[]
+  scopeRequired?: boolean
+  onlineAvailable?: boolean
+  currency: CurrencyCode
+  vertical: string
+  brandName: string
+  reviews: PublicProductReview[]
+  booking: PublicProductBooking | null
+  sessions: PublicProductSession[]
+  collectionName: string
+  collectionSiblings: ProductCollectionSibling[]
   localeRepresentations: PublicLocaleRepresentation[]
 }
 
@@ -129,11 +150,6 @@ async function loadProductOrganization(db: DbClient, organizationId: string, rou
   return { organization, presentation, currency: organization.default_currency }
 }
 
-function offersLocationProducts(organization: PublicProductOrganizationRow): boolean {
-  const { capabilities } = resolveOrganizationCmsCapabilities(organization.vertical, organization.theme_id)
-  return capabilities.managers.some(manager => manager.key === 'location.products')
-}
-
 export async function loadPublicProductCollection(
   db: DbClient,
   organizationId: string,
@@ -151,15 +167,17 @@ export async function loadPublicProductCollection(
      ORDER BY title, id
   `, [organizationId, ...(locationSlug ? [locationSlug] : [])])).map(publicProductLocation)
   if (locationSlug && locationRows.length !== 1) return null
-  const locations = offersLocationProducts(resolved.organization) ? locationRows : []
+  const locations = locationRows
   if (locationSlug && locations.length !== 1) return null
   // Location publication is the public gate here: a product carried by the
   // site but withheld at this branch is absent, not shown greyed out.
   const perLocation = await Promise.all(locations.map(location =>
     listLocationProducts(db, { organizationId: resolved.organization.id, locationId: location.id, publishedOnly: true })))
+  const onlineProducts = locationSlug ? [] : (await listOrganizationProducts(db, { organizationId, publishedOnly: true }))
+    .filter(product => Boolean(product.booking?.online_timezone || product.order_url))
   const seen = new Set<string>()
   // Collections and detail routes use the same explicit product kind.
-  const products = await hydrateProductMedia(db, organizationId, perLocation.flat().filter((product) => {
+  const products = await hydrateProductMedia(db, organizationId, [...perLocation.flat(), ...onlineProducts].filter((product) => {
     if (seen.has(product.id)) return false
     seen.add(product.id)
     return productSurfaceOf(resolved.organization.vertical, product) === routeKind
@@ -179,13 +197,15 @@ export async function loadPublicProductDetail(
   previewAuthorized: boolean,
   locationSlug: string,
   productSlug: string,
-  locale = 'en',
+  locale?: string,
 ): Promise<(PublicProductDetail & { location: PublicProductLocation }) | null> {
-  if (locale === 'en') {
+  const sourceLocale = await getSourceLocale(db, organizationId)
+  locale ??= sourceLocale
+  if (locale === sourceLocale) {
     const collection = await loadPublicProductCollection(db, organizationId, routeKind, previewAuthorized, locationSlug)
     const location = collection?.locations[0]
     if (!collection || !location) return null
-    const found = await getProductBySlug(db, collection.organization.id, productSlug)
+    const found = collection.products.find(product => product.slug === productSlug)
     // The product must be published on this site and actually offered at this
     // location: reaching it by slug alone would render a branch's page for
     // something the site withholds, or something that branch does not sell.
@@ -264,48 +284,105 @@ export async function loadPublicProductDetail(
   }
 }
 
-/**
- * Resolve `/experiences/<product-slug>`.
- *
- * An Experience's page is the site's, not a branch's — the slug on the card a
- * guest is holding names one page. So the URL carries no location and this
- * resolves the one location that offers it. Two branches offering the same
- * Experience make the URL ambiguous: that is a 404 here, not a choice made on
- * the merchant's behalf.
- */
+/** One experience page; a guest chooses among its actual booking scopes. */
 export async function loadPublicExperienceDetail(
   env: CloudflareEnv,
   db: DbClient,
   organizationId: string,
   previewAuthorized: boolean,
   productSlug: string,
-  locale = 'en',
+  locale?: string,
+  requestedScope?: string | null,
 ): Promise<PublicProductDetail | null> {
-  const resolved = await loadProductOrganization(db, organizationId, 'experiences', previewAuthorized)
-  if (!resolved) return null
-  const found = await getProductBySlug(db, resolved.organization.id, productSlug)
-  if (!found || !isExperience(found)) return null
-  if (!found.publications.some(entry => entry.organization_id === organizationId && entry.published)) return null
-  const offeredAt = new Set(found.locations.filter(entry => entry.published).map(entry => entry.location_id))
-  const locationRows = (await queryAll<PublicProductLocationRow>(db, `
-    SELECT id, slug, title, timezone, address, phone, maps_url, latitude, longitude
-      FROM business_locations
-     WHERE organization_id = ?  AND status = 'active'
-     ORDER BY title, id
-  `, [resolved.organization.id])).map(publicProductLocation)
-  const locations = offersLocationProducts(resolved.organization) ? locationRows.filter(location => offeredAt.has(location.id)) : []
-  if (locations.length !== 1) return null
-  const location = locations[0]!
-  if (locale === 'en') {
-    return loadPublicProductDetail(env, db, organizationId, 'experiences', previewAuthorized, location.slug, productSlug, locale)
+  locale ??= await getSourceLocale(db, organizationId)
+  const collection = await loadPublicProductCollection(db, organizationId, 'experiences', previewAuthorized)
+  if (!collection) return null
+  const found = collection.products.find(product => product.slug === productSlug && isExperience(product))
+  if (!found) return null
+  return projectPublicOffering(env, db, collection, found, locale, requestedScope, collection.presentation.productPath('', found.slug))
+}
+
+/** An authored page binds its offer by product ID, independent of the theme. */
+export async function loadPublicPageProductDetail(
+  env: CloudflareEnv,
+  db: DbClient,
+  organizationId: string,
+  previewAuthorized: boolean,
+  pagePath: string,
+  locale?: string,
+  requestedScope?: string | null,
+): Promise<PublicProductDetail | null> {
+  locale ??= await getSourceLocale(db, organizationId)
+  const page = await getPublicTenantPageForPath(env, db, organizationId, pagePath, { locale, preview: previewAuthorized })
+  if (!page?.product_id) return null
+  const product = await getProduct(db, organizationId, page.product_id)
+  const collection = await loadPublicProductCollection(db, organizationId, productSurfaceOf(null, product), previewAuthorized)
+  const found = collection?.products.find(product => product.id === page.product_id)
+  if (!collection || !found) return null
+  return projectPublicOffering(env, db, collection, found, locale, requestedScope, product.page?.path ?? pagePath)
+}
+
+async function projectPublicOffering(
+  env: CloudflareEnv,
+  db: DbClient,
+  collection: PublicProductCollection,
+  found: Product,
+  locale: string,
+  requestedScope: string | null | undefined,
+  sourcePath: string,
+): Promise<PublicProductDetail | null> {
+  const organizationId = collection.organization.id
+  const offeredAt = new Set(found.locations.filter(entry => entry.published && entry.active).map(entry => entry.location_id))
+  const locations = collection.locations.filter(location => offeredAt.has(location.id))
+  const onlineAvailable = Boolean(found.booking?.online_timezone)
+  let location: PublicProductLocation | null = null
+  if (requestedScope && requestedScope !== 'online') {
+    location = locations.find(entry => entry.id === requestedScope) ?? null
+    if (!location) return null
+  } else if (requestedScope === 'online' && !onlineAvailable) return null
+  else if (!requestedScope && locations.length === 1 && !onlineAvailable) location = locations[0]!
+  const scopeRequired = !requestedScope && locations.length + Number(onlineAvailable) > 1
+  let product = found
+  let organization = collection.organization
+  let localizedLocations = locations
+  let products = collection.products
+  let collections = collection.collections
+  if (locale !== await getSourceLocale(db, organizationId)) {
+    const localizations = await loadExactPublicLocalizations(env, db, organizationId, locale)
+    const localized = localizations.find(item => item.resourceType === 'product' && item.resourceId === found.id)
+    if (!localized) return null
+    product = projectExactLocalizedResource('product', found, localized)
+    product = { ...product, image: product.image ? projectLocalizedMediaAlt([product.image], localizations)[0] ?? null : null, gallery: projectLocalizedMediaAlt(product.gallery, localizations) }
+    localizedLocations = projectExactLocalizedCollection('business_location', locations, localizations)
+    products = projectExactLocalizedCollection('product', collection.products, localizations)
+    collections = projectExactLocalizedCollection('collection', collection.collections, localizations)
+    if (location) {
+      location = localizedLocations.find(entry => entry.id === location!.id) ?? null
+      if (!location) return null
+    }
+    const translatedOrganization = localizations.find(item => item.resourceType === 'organization' && item.resourceId === organizationId)
+    if (translatedOrganization) organization = projectExactLocalizedResource('organization', organization, translatedOrganization)
   }
-  // The localized reader names its location by the localized route the tenant
-  // published for it, so hand it that route's slug rather than the source one.
-  const localizations = await loadExactPublicLocalizations(env, db, resolved.organization.id, locale)
-  const localizedRoute = localizations.find(item => item.resourceType === 'business_location' && item.resourceId === location.id)?.routePath
-  const localizedLocationSlug = localizedRoute ? localizedRoute.split('/').filter(Boolean).at(-1) : null
-  if (!localizedLocationSlug) return null
-  return loadPublicProductDetail(env, db, organizationId, 'experiences', previewAuthorized, localizedLocationSlug, productSlug, locale)
+  const localeRepresentations = await listPublicLocaleRepresentations(env, db, {
+    organizationId, sourcePath, resource: { type: 'product', id: found.id },
+  })
+  return { ...collection, organization, products, collections, locations: localizedLocations, location, product, booking: found.booking, scopeRequired, onlineAvailable, localeRepresentations }
+}
+
+/** One public response for server rendering and API navigation. */
+export async function publicProductDetailPayload(db: DbClient, env: CloudflareEnv, detail: PublicProductDetail): Promise<PublicProductDetailPayload> {
+  const memberships = new Set(detail.product.collections.map(entry => entry.collection_id))
+  const collection = detail.collections.find(collection => memberships.has(collection.id))
+  return {
+    product: detail.product, location: detail.location, locations: detail.locations,
+    scopeRequired: detail.scopeRequired, onlineAvailable: detail.onlineAvailable,
+    currency: detail.currency, vertical: detail.organization.vertical, brandName: detail.organization.name,
+    reviews: await loadPublicProductReviews(db, detail),
+    booking: detail.booking, sessions: await loadPublicProductSessions(db, detail, env),
+    collectionName: collection?.name ?? '',
+    collectionSiblings: collection ? selectProductCollectionSiblings(detail.products, detail.product, collection.id, { currency: detail.currency, location_id: detail.location?.id ?? null, at: new Date().toISOString() }) : [],
+    localeRepresentations: detail.localeRepresentations,
+  }
 }
 
 export async function loadPublicProductApiCollection(
@@ -327,8 +404,9 @@ export async function loadPublicProductApiDetail(
   previewAuthorized: boolean,
   locationSlug: string,
   productSlug: string,
-  locale = 'en',
+  locale?: string,
 ): Promise<(PublicProductDetail & { location: PublicProductLocation }) | null> {
+  locale ??= await getSourceLocale(db, organizationId)
   const organization = await queryFirst<{ id: string; vertical: string }>(db, `SELECT id, vertical FROM organization WHERE id = ? AND ${publicTenantVisibilitySql('organization', previewAuthorized)} LIMIT 1`, [organizationId])
   const presentation = organization ? resolveProductPresentation(organization.vertical) : null
   if (!organization || !presentation) return null
@@ -357,7 +435,7 @@ export async function loadPublicProductSessions(
   detail: PublicProductDetail,
   env: CloudflareEnv,
 ): Promise<PublicProductSession[]> {
-  if (!detail.booking) return []
+  if (!detail.product.active || !detail.booking || detail.scopeRequired) return []
   // A branch with no zone cannot state when anything starts, so it offers
   // nothing here rather than a time in a zone nobody chose.
   if (!detail.location) {

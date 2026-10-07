@@ -13,6 +13,7 @@ import { isNonProductionHost } from '~/server/utils/tenant-hosts'
 import { recordRequestPhase } from '~/server/utils/request-metrics'
 import { isPublicShellPayload } from '~/utils/public-resource-contracts'
 import { assertExactCanonicalLocale, assertPublicOrganizationLanguageEntitlement } from '~/server/utils/localization'
+import { getSourceLocale } from '~/server/utils/organization-locales'
 import {
   indexStoredPublicLocalizations,
   projectExactLocalizedCollection,
@@ -78,6 +79,8 @@ export async function loadPublicShellSource(
   }
 
   const { organization } = await loadPublicBase(event, organizationId, { previewAuthorized })
+  const sourceLocale = await getSourceLocale(db, organization.id)
+  const entitlement = await assertPublicOrganizationLanguageEntitlement(env, db, organization.id, locale ?? sourceLocale)
   options.signal?.throwIfAborted()
   const shellQueries: BatchQuery[] = []
   const shellIndexes = appendPublicShellQueries(shellQueries, organization.id)
@@ -87,11 +90,9 @@ export async function loadPublicShellSource(
     success: true,
     ...buildPublicShellPayload(organization, shellResults, shellIndexes),
     count: shellResults[shellIndexes.locations]?.results?.length ?? 0,
-    platformMessages: null as Record<string, string> | null,
+    platformMessages: entitlement.platform_messages,
   }
-  if (locale && locale !== 'en') {
-    const entitlement = await assertPublicOrganizationLanguageEntitlement(env, db, organization.id, locale)
-    if (entitlement.source) throw new HTTPError({ statusCode: 404, statusMessage: 'English source routes are unprefixed' })
+  if (locale && locale !== sourceLocale) {
     if (!entitlement.platform_messages) {
       throw new HTTPError({ statusCode: 500, statusMessage: 'Published platform locale messages are unavailable' })
     }

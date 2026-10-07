@@ -182,9 +182,12 @@ export const TARGET_INVARIANT_QUERIES = {
   media_owner_scope: MEDIA_PLACEMENT_OWNER_AUDIT_QUERY,
   document_owner_scope: `WITH scope AS (${CONTENT_DOCUMENT_SCOPE_QUERY}) SELECT d.id FROM content_documents d WHERE (SELECT count(*) FROM scope s WHERE s.id = d.id) <> 1`,
   editorial_representation_scope: `SELECT d.id FROM content_documents d WHERE d.row_role = 'representation' AND NOT EXISTS (
-    SELECT 1 FROM content_documents r WHERE r.id = d.root_id AND r.row_role = 'root' AND r.locale = 'en'
+    SELECT 1 FROM content_documents r WHERE r.id = d.root_id AND r.row_role = 'root'
       AND r.kind = d.kind AND r.organization_id = d.organization_id)`,
-  english_source_locale: `SELECT o.id FROM organization o WHERE NOT EXISTS (SELECT 1 FROM organization_locales l WHERE l.organization_id = o.id AND l.locale = 'en' AND l.is_source = 1)`,
+  organization_source_locale: `SELECT o.id FROM organization o WHERE
+    (o.subdomain IS NOT NULL OR EXISTS(SELECT 1 FROM organization_locales l WHERE l.organization_id=o.id)
+     OR EXISTS(SELECT 1 FROM content_documents d WHERE d.organization_id=o.id AND d.row_role='root'))
+    AND (SELECT count(*) FROM organization_locales l WHERE l.organization_id=o.id AND l.is_source=1 AND l.status='published')<>1`,
   block_parent_scope: `SELECT b.id FROM content_blocks b WHERE b.parent_block_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM content_blocks p WHERE p.id = b.parent_block_id AND p.document_id = b.document_id)`,
   // Every localized resource is scoped by its organization. This used to add a
   // site to that scope for all but Product, which was the same organization
@@ -309,6 +312,7 @@ export function writePayload(target, payloadPath, schemaSql, { withoutJwks = fal
   const leftBehind = {}
   try {
     const lines = ['PRAGMA foreign_keys = OFF;', 'PRAGMA defer_foreign_keys = ON;', ...(earlier ? [] : order.map(table => `DELETE FROM ${qi(table)};`))]
+    let chunkedText = false
     for (const table of [...order].reverse()) {
       const names = columns(target, table)
       let rows = target.prepare(`SELECT * FROM ${qi(table)}`).all()
@@ -333,9 +337,33 @@ export function writePayload(target, payloadPath, schemaSql, { withoutJwks = fal
         if (changed.length || deleted.length) leftBehind[table] = { changed, deleted }
       }
       for (const row of rows) {
-        lines.push(`INSERT INTO ${qi(table)} (${names.map(qi).join(', ')}) VALUES (${names.map(name => sqlLiteral(row[name])).join(', ')});`)
+        let values = names.map(name => sqlLiteral(row[name]))
+        const insert = () => `INSERT INTO ${qi(table)} (${names.map(qi).join(', ')}) VALUES (${values.join(', ')});`
+        // A D1 row may hold 2 MB, but each SQL statement is limited to 100 KB.
+        // Assemble oversized text inside this import, preserving its exact bytes
+        // and JSON constraints. The import table is removed before verification.
+        if (Buffer.byteLength(insert()) > 100_000) {
+          if (!chunkedText) lines.push('CREATE TABLE IF NOT EXISTS __transfer_payload_text (column_name TEXT NOT NULL, part INTEGER NOT NULL, value TEXT NOT NULL, PRIMARY KEY (column_name, part));')
+          chunkedText = true
+          lines.push('DELETE FROM __transfer_payload_text;')
+          values = names.map(name => {
+            if (typeof row[name] !== 'string') return sqlLiteral(row[name])
+            let text = '', bytes = 0, part = 0
+            const flush = () => { lines.push(`INSERT INTO __transfer_payload_text VALUES (${sqlLiteral(name)}, ${part++}, ${sqlLiteral(text)});`); text = ''; bytes = 0 }
+            for (const character of row[name]) {
+              const size = Buffer.byteLength(character)
+              if (bytes + size > 40_000) flush()
+              text += character; bytes += size
+            }
+            flush()
+            return `(SELECT group_concat(value, '') FROM (SELECT value FROM __transfer_payload_text WHERE column_name=${sqlLiteral(name)} ORDER BY part))`
+          })
+        }
+        assert(Buffer.byteLength(insert()) <= 100_000, `D1 statement exceeds 100 KB: ${table}`)
+        lines.push(insert())
       }
     }
+    if (chunkedText) lines.push('DROP TABLE __transfer_payload_text;')
     lines.push('PRAGMA foreign_keys = ON;')
     writeFileSync(payloadPath, lines.join('\n') + '\n', { mode: 0o600 })
 
@@ -425,7 +453,7 @@ export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = n
     let sourceFiles = files
     assert(ledger.length > 0, 'Source migration ledger is missing')
     let recognized = false
-    for (const directory of [MIGRATIONS_DIRECTORY, 'migrations-history/v12', 'migrations-history/v11', 'migrations-history/v10', 'migrations-history/v9', 'migrations-history/v8', 'migrations-history/v7']) {
+    for (const directory of [MIGRATIONS_DIRECTORY, 'migrations-history/v13', 'migrations-history/v12', 'migrations-history/v11', 'migrations-history/v10', 'migrations-history/v9', 'migrations-history/v8', 'migrations-history/v7']) {
       const candidates = readdirSync(resolve(directory)).filter(name => /^\d{4}_.+\.sql$/u.test(name)).sort()
       if (ledger.length > candidates.length || !ledger.every((name, index) => name === candidates[index])) continue
       const expected = new Database(':memory:')
@@ -528,13 +556,13 @@ export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = n
       stage.exec(normalizedTable)
     }
     // An older archived chain reaches v11 through v11's forward migrations, which the v12 baseline absorbed.
-    if (![MIGRATIONS_DIRECTORY, 'migrations-history/v12', 'migrations-history/v11'].includes(sourceDirectory)) {
+    if (![MIGRATIONS_DIRECTORY, 'migrations-history/v13', 'migrations-history/v12', 'migrations-history/v11'].includes(sourceDirectory)) {
       for (const name of readdirSync('migrations-history/v11').filter(name => /^\d{4}_.+\.sql$/u.test(name)).sort().slice(1)) {
         stage.exec(readFileSync(resolve('migrations-history/v11', name), 'utf8'))
       }
     }
     // An older archived chain reaches v12 through v12's forward migrations, which the v13 baseline absorbed.
-    if (sourceDirectory !== MIGRATIONS_DIRECTORY && sourceDirectory !== 'migrations-history/v12') {
+    if (![MIGRATIONS_DIRECTORY, 'migrations-history/v13', 'migrations-history/v12'].includes(sourceDirectory)) {
       for (const name of readdirSync('migrations-history/v12').filter(name => /^\d{4}_.+\.sql$/u.test(name)).sort().slice(1)) {
         stage.exec(readFileSync(resolve('migrations-history/v12', name), 'utf8'))
       }
@@ -549,6 +577,37 @@ export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = n
     }
     const paletteChanges = sitePaletteChanges(stage)
     if (paletteChanges) manifest.transforms.push({ name: 'brand_color_and_theme_tokens_to_site_palette', changes: paletteChanges })
+    // v14 absorbs v13's deployed forward chain. Native Better Auth teams
+    // start empty; existing booking commitments and source languages keep every
+    // recorded fact. The new nullable fields stay unknown until an owner sets
+    // them or a native financial event supplies its actual billing basis.
+    if (![MIGRATIONS_DIRECTORY, 'migrations-history/v13'].includes(sourceDirectory)) {
+      for (const name of readdirSync('migrations-history/v13').filter(name => /^\d{4}_.+\.sql$/u.test(name)).sort().slice(1)) {
+        stage.exec(readFileSync(resolve('migrations-history/v13', name), 'utf8'))
+      }
+    }
+    for (const [table, column, type] of [
+      ['invitation', 'teamId', 'TEXT'],
+      ['product_booking_configs', 'assigned_team_id', 'TEXT'],
+      ['reservations', 'policy_json', 'TEXT'],
+      ['location_reservation_configs', 'duration_minutes', 'INTEGER'],
+      ['location_reservation_configs', 'deposit_amount', 'INTEGER'],
+      ['location_reservation_configs', 'deposit_currency', 'TEXT'],
+      ['location_reservation_configs', 'deposit_tax_behavior', 'TEXT'],
+      ['payment_checkout_holds', 'location_id', 'TEXT'],
+      ['payment_checkout_holds', 'timezone', 'TEXT'],
+      ['payment_checkout_holds', 'converted_reservation_id', 'TEXT'],
+      ['payment_usage_events', 'billing_basis_json', 'TEXT'],
+      ['payment_cost_snapshots', 'billing_basis_json', 'TEXT'],
+    ]) {
+      if (!columns(stage, table).includes(column)) stage.exec(`ALTER TABLE ${qi(table)} ADD COLUMN ${qi(column)} ${type}`)
+    }
+    for (const table of ['team', 'teamMember']) {
+      if (tableNames(stage).includes(table)) continue
+      const definition = baseSql.split('--> statement-breakpoint').find(statement => statement.includes(`CREATE TABLE \`${table}\``))
+      assert(definition, `Native Better Auth ${table} schema is missing`)
+      stage.exec(definition)
+    }
     if (sourceDirectory !== MIGRATIONS_DIRECTORY) {
       for (const name of files.slice(1)) stage.exec(readFileSync(resolve(MIGRATIONS_DIRECTORY, name), 'utf8'))
     }

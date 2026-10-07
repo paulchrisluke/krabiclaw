@@ -1,3 +1,4 @@
+import { reservationAllocationPredicate, reservationReschedulePolicyPredicate, requireLocationReservationConfig } from '~/server/utils/reservations'
 import { refreshProductBusy } from '~/server/domain/member-scheduling'
 import { recordBookingChangeAnswer } from '~/server/domain/booking-analytics'
 import { createHmac, timingSafeEqual } from 'node:crypto'
@@ -6,7 +7,6 @@ import { z } from 'zod'
 import { executeBatch, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { listSessions, sessionMoveQuery, sessionAssignmentQuery } from '~/server/utils/availability'
 import { localDateTimeToInstant } from '~/utils/timezone'
-import { RESERVATION_CAPACITY_CONSUMING_SQL } from '~/shared/bookings'
 import { assertResourceAccess, resolveOrganizationMembership, memberAccessPrincipal } from '~/server/utils/member-access'
 import { resolveBookingPresentation, type BookingKind } from '~/utils/booking-presentation'
 import type { CloudflareEnv } from '~/server/utils/auth'
@@ -53,6 +53,7 @@ const reservationFieldsSchema = z.object({
   }),
   bookingTime: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
   partySize: z.number().int().min(1).max(99),
+  overridePolicy: z.boolean().optional(),
 })
 const fieldsSchema = z.discriminatedUnion('kind', [bookingFieldsSchema, reservationFieldsSchema])
 const requestSchema = z.intersection(fieldsSchema, z.object({ expectedUpdatedAt: z.string().min(1) }))
@@ -130,7 +131,7 @@ async function loadSource(db: DbClient, thread: GuestThreadRow): Promise<Source>
   }
 }
 
-interface Destination { locationId: string | null; title: string; label: string; date: string; time: string; startsAt: string; endsAt?: string; claim?: (bookingId: string, now: string) => BatchQuery; sessionId?: string }
+interface Destination { locationId: string | null; title: string; label: string; date: string; time: string; startsAt: string; endsAt?: string; claim?: (bookingId: string, now: string) => BatchQuery | Promise<BatchQuery>; sessionId?: string }
 
 /**
  * Check that the proposed target can actually take this party, and return the
@@ -165,7 +166,7 @@ async function validateDestination(db: DbClient, thread: GuestThreadRow, before:
       startsAt: target.starts_at, endsAt: target.ends_at, ...localParts(target.starts_at, target.timezone),
       // The same Booking moves under the shared allocation predicate. Exclude
       // its existing allocation; a full destination leaves the record unchanged.
-      claim: (bookingId, now) => sessionMoveQuery({
+      claim: (bookingId, now) => sessionMoveQuery(db, {
         bookingId, organizationId: thread.organization_id, productId: before.productId!,
         sessionId: target.id, partySize: after.partySize,
         replacingBookingId: before.recordId,
@@ -178,25 +179,41 @@ async function validateDestination(db: DbClient, thread: GuestThreadRow, before:
   }
 
   if (before.recordKind !== 'reservation') throw new HTTPError({ statusCode: 409, message: 'This conversation is a booking, not a reservation' })
+  if (!before.locationId) throw new Error('Reservation has no source location')
+  const reschedulePolicy = reservationReschedulePolicyPredicate({ organizationId: thread.organization_id, locationId: before.locationId, reservationId: before.recordId, startsAt: before.startsAt, overridePolicy: after.overridePolicy })
+  if (!await queryFirst(db, `SELECT 1 WHERE ${reschedulePolicy.query}`, reschedulePolicy.params)) throw new HTTPError({ statusCode: 409, message: 'This reservation’s change policy does not allow this request. The business can explicitly approve an exception.', data: { code: 'policy_exception_required' } })
   const location = await queryFirst<{ id: string; title: string; timezone: string | null }>(db,
     'SELECT id, title, timezone FROM business_locations WHERE id = ? AND organization_id = ?',
     [after.locationId, thread.organization_id])
   if (!location) throw new HTTPError({ statusCode: 400, message: 'Choose a location belonging to this organization' })
   if (!location.timezone) throw new HTTPError({ statusCode: 409, message: 'Set the location timezone before changing reservations' })
   const startsAt = localDateTimeToInstant(after.bookingDate, after.bookingTime, location.timezone, 'reject').toISOString()
-  const capacity = await queryFirst<{ slot_capacity: number | null }>(db,
-    'SELECT slot_capacity FROM location_reservation_configs WHERE location_id = ? AND organization_id = ?', [location.id, thread.organization_id])
-  if (!capacity) throw new HTTPError({ statusCode: 409, message: 'This location does not take reservations' })
-  if (capacity.slot_capacity !== null) {
-    const claimed = await queryFirst<{ total: number }>(db, `
-      SELECT COALESCE(SUM(r.party_size), 0) AS total FROM reservations r
-       WHERE r.location_id = ? AND r.starts_at = ? AND r.id <> ? AND ${RESERVATION_CAPACITY_CONSUMING_SQL}
-    `, [location.id, startsAt, before.recordId])
-    if ((claimed?.total ?? 0) + after.partySize > capacity.slot_capacity) {
-      throw new HTTPError({ statusCode: 409, message: 'The requested time or guest count is no longer available' })
-    }
+  const policy = await requireLocationReservationConfig(db, { organizationId: thread.organization_id, locationId: location.id })
+  const paid = await queryFirst(db, "SELECT id FROM payments WHERE organization_id = ? AND subject_type = 'reservation' AND subject_id = ? AND captured_amount > refunded_amount LIMIT 1", [thread.organization_id, before.recordId])
+  if (paid && (after.partySize !== before.partySize || location.id !== before.locationId)) throw new HTTPError({ statusCode: 409, message: 'Refund this paid reservation before changing its quantity or location' })
+  if (!paid && policy.deposit_required && (policy.deposit_trigger_party_size === null || after.partySize >= policy.deposit_trigger_party_size)) {
+    const organization = await queryFirst<{slug:string}>(db, 'SELECT slug FROM organization WHERE id=?', [thread.organization_id])
+    if (!organization) throw new Error('Reservation organization is missing')
+    throw new HTTPError({ statusCode: 409, message: 'This new reservation needs a deposit before it can replace the current one', data: { code: 'financial_action_required', dashboard_url: `/dashboard/${encodeURIComponent(organization.slug)}/bookings/reservation/${encodeURIComponent(thread.id)}` } })
   }
-  return { locationId: location.id, title: location.title, startsAt, ...localParts(startsAt, location.timezone) }
+  const endsAt = new Date(Date.parse(startsAt) + Date.parse(before.endsAt) - Date.parse(before.startsAt)).toISOString()
+  const allocation = await reservationAllocationPredicate(db, { organizationId: thread.organization_id, locationId: location.id, timezone: location.timezone, startsAt, endsAt, partySize: after.partySize, replacingReservationId: before.recordId })
+  if (!await queryFirst(db, `SELECT 1 WHERE ${allocation.query}`, allocation.params)) throw new HTTPError({ statusCode: 409, message: 'The requested time is closed or no longer has capacity for this party' })
+  return { locationId: location.id, title: location.title, startsAt, endsAt, ...localParts(startsAt, location.timezone),
+    claim: async (reservationId, now) => {
+      const currentAllocation = await reservationAllocationPredicate(db, { organizationId: thread.organization_id, locationId: location.id, timezone: location.timezone!, startsAt, endsAt, partySize: after.partySize, replacingReservationId: reservationId })
+      return { query: `UPDATE reservations SET starts_at = ?, ends_at = ?, timezone = ?, party_size = ?, location_id = ?, updated_at = ?
+        WHERE id = ? AND organization_id = ? AND status = 'confirmed' AND ${currentAllocation.query}
+          AND ends_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')
+          AND ${reschedulePolicy.query} AND starts_at = ? AND ends_at = ? AND location_id = ? AND party_size = ?
+          AND (NOT EXISTS (SELECT 1 FROM payments p WHERE p.organization_id=reservations.organization_id AND p.subject_type='reservation' AND p.subject_id=reservations.id AND p.captured_amount>p.refunded_amount) OR (party_size=? AND location_id=?))
+          AND (EXISTS (SELECT 1 FROM payments p WHERE p.organization_id=reservations.organization_id AND p.subject_type='reservation' AND p.subject_id=reservations.id AND p.captured_amount>p.refunded_amount)
+            OR EXISTS (SELECT 1 FROM location_reservation_configs c WHERE c.organization_id=reservations.organization_id AND c.location_id=? AND (c.deposit_required=0 OR c.deposit_trigger_party_size>?)))
+          AND EXISTS (SELECT 1 FROM requests WHERE id = ? AND organization_id = ? AND updated_at = ?)
+          AND NOT EXISTS (SELECT 1 FROM activity_entries WHERE dedupe_key = ?)`,
+        params: [startsAt, endsAt, location.timezone!, after.partySize, location.id, now, reservationId, thread.organization_id, ...currentAllocation.params!, ...reschedulePolicy.params!, before.startsAt, before.endsAt, before.locationId, before.partySize, after.partySize, location.id, location.id, after.partySize, thread.id, thread.organization_id, before.updatedAt, decisionDedupeKey ?? ''] }
+    },
+  }
 }
 
 function linkToken(env: ChangeEnv, threadId: string, requestId: string) {
@@ -263,6 +280,7 @@ export async function requestBookingChange(db: DbClient, env: CloudflareEnv, thr
   const before = await loadSource(db, thread)
   const summary = await sourceSummary(db, thread)
   if (!['pending', 'confirmed'].includes(before.status)) throw new HTTPError({ statusCode: 409, message: 'This reservation or booking can no longer be changed' })
+  if (before.endsAt <= new Date().toISOString()) throw new HTTPError({statusCode:409,message:'This visit has ended and cannot be rescheduled'})
   const membership = await resolveOrganizationMembership(env, { organizationId: thread.organization_id, userId: actorUserId })
   if (!membership) throw new HTTPError({ statusCode: 403, message: 'Organization access required' })
   // Both the current and the proposed location must be within reach, so a
@@ -363,33 +381,22 @@ export async function respondToBookingChange(db: DbClient, env: ChangeEnv, input
     }
 
     const guard = `EXISTS (SELECT 1 FROM activity_entries WHERE id = ?)`
-    const movedBookingId = destination?.claim ? current.recordId : null
+    const movedBookingId = destination?.claim && current.recordKind === 'booking' ? current.recordId : null
 
     const queries: BatchQuery[] = []
-    if (destination && current.recordKind === 'booking' && destination.claim && movedBookingId) {
+    if (destination?.claim) {
       // Move the canonical record and append the decision in one batch. A
       // failed allocation changes no row, so changes() cannot record acceptance.
-      queries.push(destination.claim(movedBookingId, now))
-      queries.push({
+      queries.push(await destination.claim(current.recordId, now))
+      queries.push(current.recordKind === 'booking' ? {
         ...entryInsert,
         query: entryInsert.query.replace('AND source.updated_at = ?', 'AND source.updated_at = ? AND changes() = 1').replace("'guest', ?, ?, ?, ?,", "'guest', ?, ?, json_set(?, '$.after.assigned_member_id', (SELECT assigned_member_id FROM bookings WHERE id=?)), ?,"),
-        params: [...entryInsert.params!.slice(0,5), movedBookingId, ...entryInsert.params!.slice(5)],
-      })
+        params: [...entryInsert.params!.slice(0,5), current.recordId, ...entryInsert.params!.slice(5)],
+      } : { ...entryInsert, query: entryInsert.query.replace('AND source.updated_at = ?', 'AND source.updated_at = ? AND changes() = 1') })
     } else {
       queries.push(entryInsert)
     }
     if (destination) {
-      if (!movedBookingId) {
-        // The reservation keeps its length: moving a 7pm table for two to 8pm
-        // does not silently change how long the table is held.
-        const durationMs = Date.parse(current.endsAt) - Date.parse(current.startsAt)
-        const endsAt = new Date(Date.parse(destination.startsAt) + durationMs).toISOString()
-        queries.push({
-          query: `UPDATE reservations SET starts_at = ?, ends_at = ?, party_size = ?, location_id = ?, updated_at = ?
-                   WHERE id = ? AND ${guard}`,
-          params: [destination.startsAt, endsAt, proposal.after.partySize, destination.locationId, now, current.recordId, id],
-        })
-      }
       queries.push({
         query: `UPDATE requests SET updated_at = ?, payload_json = json_set(payload_json, '$.party_size_is_minimum', json('false'))
                  WHERE id = ? AND organization_id = ? AND ${guard}`,

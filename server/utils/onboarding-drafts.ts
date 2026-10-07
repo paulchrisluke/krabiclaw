@@ -1,3 +1,4 @@
+import { platformLocale } from '~/shared/platform-locales'
 import { parseOpeningHours, parseSpecialHours, type OpeningHours, type SpecialHours } from '~/shared/reservation-hours'
 import type { OrganizationVertical } from '~/utils/vertical-copy'
 import { queryFirst } from '~/server/db'
@@ -214,6 +215,7 @@ export interface DraftDetailsInput {
   specialHours: SpecialHours
   timezone: string | null
   currency: CurrencyCode | null
+  sourceLocale: string | null
 }
 
 export interface PlaceDetailsSnapshot {
@@ -291,6 +293,8 @@ export function buildOnboardingDraftPayload(input: {
   brandDraft?: DraftBrandInput | null
   products?: DraftProductInput[] | null
 }): OnboardingDraftPayload {
+  const sourceLocale = input.details.sourceLocale ? platformLocale(input.details.sourceLocale) : null
+  if (!sourceLocale) throw new HTTPError({ statusCode: 400, statusMessage: 'Choose a supported website language' })
   const brandName = input.details.name || input.name
   const subdomainCandidate = slugify(brandName).slice(0, 40)
   const placeSnapshot = input.place ? asPlaceSnapshot(input.place) : null
@@ -392,7 +396,7 @@ export function buildOnboardingDraftPayload(input: {
       reviews,
       qa,
       content,
-      locales: [{ code: 'en', label: 'English', is_source: true }],
+      locales: [{ code: sourceLocale.locale, label: sourceLocale.label, is_source: true }],
     },
   }
 }
@@ -413,6 +417,10 @@ export function parseOnboardingDraftPayload(raw: string): OnboardingDraftPayload
     throw new Error(`Onboarding draft source does not match its ${parsed.source.type} type`)
   }
   const payload: OnboardingDraftPayload = { ...parsed, version: 3, source: { ...parsed.source, placeId } }
+  const source = payload.preview.locales.filter(locale => locale.is_source)
+  if (source.length !== 1 || !platformLocale(source[0]!.code)) throw new Error('Onboarding primary language is unavailable')
+  payload.source.details.sourceLocale ??= source[0]!.code
+  if (payload.source.details.sourceLocale !== source[0]!.code) throw new Error('Onboarding primary language is inconsistent')
   payload.source.details.openingHours = parseOpeningHours(payload.source.details.openingHours)
   payload.source.details.specialHours = parseSpecialHours(payload.source.details.specialHours)
   if (payload.source.place) payload.source.place.openingHours = parseOpeningHours(payload.source.place.openingHours)

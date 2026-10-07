@@ -165,8 +165,8 @@ export async function paymentTransactions(db: DbClient, principal: FinancialPrin
   const [pictures, buyers, bookings, orders] = ids.length
     ? await Promise.all([
         paymentPictures(db, principal.organizationId, page.payments),
-        queryAll<{ id: string; name: string | null }>(db, `SELECT p.id, COALESCE(u.name, json_extract(r.payload_json, '$.guest.name')) AS name FROM payments p LEFT JOIN user u ON u.id = p.buyer_user_id LEFT JOIN payment_checkout_holds h ON h.payment_id = p.id LEFT JOIN requests r ON r.id = h.request_id WHERE p.id IN (SELECT value FROM json_each(?))`, [json]),
-        queryAll<{ payment_id: string; request_id: string | null }>(db, `SELECT p.id AS payment_id, b.request_id FROM payments p JOIN bookings b ON b.id = p.subject_id AND b.organization_id = p.organization_id WHERE p.subject_type = 'booking' AND p.id IN (SELECT value FROM json_each(?))`, [json]),
+        queryAll<{ id: string; name: string | null }>(db, `SELECT p.id, COALESCE(json_extract(r.payload_json, '$.guest.name'), u.name) AS name FROM payments p LEFT JOIN user u ON u.id = p.buyer_user_id LEFT JOIN payment_checkout_holds h ON h.payment_id = p.id LEFT JOIN requests r ON r.id = h.request_id WHERE p.id IN (SELECT value FROM json_each(?))`, [json]),
+        queryAll<{ payment_id: string; request_id: string | null }>(db, `SELECT p.id AS payment_id, b.request_id FROM payments p JOIN bookings b ON b.id = p.subject_id AND b.organization_id = p.organization_id WHERE p.subject_type = 'booking' AND p.id IN (SELECT value FROM json_each(?)) UNION ALL SELECT p.id, r.request_id FROM payments p JOIN reservations r ON r.id = p.subject_id AND r.organization_id = p.organization_id WHERE p.subject_type = 'reservation' AND p.id IN (SELECT value FROM json_each(?))`, [json,json]),
         queryAll<{ payment_id: string }>(db, `SELECT payment_id FROM payment_orders WHERE payment_id IN (SELECT value FROM json_each(?))`, [json]),
       ])
     : [new Map<string, PaymentPicture>(), [], [], []]
@@ -176,7 +176,7 @@ export async function paymentTransactions(db: DbClient, principal: FinancialPrin
     payments: page.payments.map((payment) => {
       const picture = pictures.get(payment.id)!
       const request = bookings.find(row => row.payment_id === payment.id)?.request_id
-      const to = request ? `${base}/booking/${encodeURIComponent(request)}` : `${base}/${orders.some(row => row.payment_id === payment.id) ? 'order' : 'payment'}/${encodeURIComponent(payment.id)}`
+      const to = request ? `${base}/${payment.subject_type}/${encodeURIComponent(request)}` : `${base}/${orders.some(row => row.payment_id === payment.id) ? 'order' : 'payment'}/${encodeURIComponent(payment.id)}`
       return {
         id: payment.id, created_at: payment.created_at, currency: payment.currency, amount: payment.amount, captured_amount: payment.captured_amount, refunded_amount: payment.refunded_amount, state: payment.state,
         title: picture.title, image_url: picture.imageUrl, buyer_name: buyers.find(row => row.id === payment.id)?.name ?? null,

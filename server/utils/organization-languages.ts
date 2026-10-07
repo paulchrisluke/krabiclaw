@@ -3,7 +3,7 @@ import { prepareContentDocumentDeletion } from '~/server/utils/content/documents
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { getOrganizationBillingStatus } from '~/server/utils/billing'
 import type { CloudflareEnv } from '~/server/utils/auth'
-import { canonicalizeLocale } from '~/server/utils/localization'
+import { canonicalizeLocale, getPersistedSourceLocale } from '~/server/utils/localization'
 import { localizationError } from '~/server/utils/localization-errors'
 
 interface OrganizationLanguageRow {
@@ -12,30 +12,23 @@ interface OrganizationLanguageRow {
   status: 'published' | 'disabled'
   activated_at: string | null
   disabled_at: string | null
+  is_source: number
 }
 
 async function loadLanguage(db: DbClient, organizationId: string, locale: string) {
   return await queryFirst<OrganizationLanguageRow>(db, `
-    SELECT id, locale, status, activated_at, disabled_at FROM organization_locales
+    SELECT id, locale, status, activated_at, disabled_at, is_source FROM organization_locales
      WHERE organization_id = ?  AND locale = ?
   `, [organizationId, locale])
 }
 
-/**
- * Adding a language starts it disabled, which is the authoring state.
- *
- * It used to be created `published`, so the moment an owner picked Japanese the
- * site served `/ja` with nothing in it — footer, sitemap, hreflang and routes
- * all live against zero content, and a locale shows exactly what has been
- * translated into it, so those routes 404. Translating first was impossible
- * because writes required `published`. Add, translate, then publish.
- */
+/** A new language remains private while its content is authored. */
 export async function addOrganizationLanguage(
   db: DbClient, env: CloudflareEnv,
   input: { organizationId: string; locale: unknown },
 ) {
   const locale = canonicalizeLocale(input.locale)
-  if (locale === 'en') localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'English is the immutable source language')
+  if (locale === (await getPersistedSourceLocale(db, input.organizationId)).locale) return loadLanguage(db, input.organizationId, locale)
   const catalog = platformLocale(locale)
   if (!catalog) localizationError(403, 'PLATFORM_LOCALE_UNAVAILABLE', 'The platform locale is unavailable', { locale })
   const projection = await getOrganizationBillingStatus(env, db, input.organizationId)
@@ -51,17 +44,13 @@ export async function addOrganizationLanguage(
   return await loadLanguage(db, input.organizationId, locale)
 }
 
-/**
- * Publishing is what makes a language public. Untranslated fields fall back to
- * the English source, so how much is translated is the owner's call to read off
- * the progress report, not a condition of going public.
- */
+/** Publishing exposes authored translations; absent representations stay absent. */
 export async function publishOrganizationLanguage(
   db: DbClient, env: CloudflareEnv,
   input: { organizationId: string; locale: unknown },
 ) {
   const locale = canonicalizeLocale(input.locale)
-  if (locale === 'en') localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'English is the immutable source language')
+  if (locale === (await getPersistedSourceLocale(db, input.organizationId)).locale) return loadLanguage(db, input.organizationId, locale)
   const catalog = platformLocale(locale)
   if (!catalog) localizationError(403, 'PLATFORM_LOCALE_UNAVAILABLE', 'The platform locale is unavailable', { locale })
   const projection = await getOrganizationBillingStatus(env, db, input.organizationId)
@@ -85,7 +74,9 @@ export async function disableOrganizationLanguage(
   input: { organizationId: string; locale: unknown },
 ) {
   const locale = canonicalizeLocale(input.locale)
-  if (locale === 'en') localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'English cannot be disabled')
+  if (locale === (await getPersistedSourceLocale(db, input.organizationId)).locale) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'The source language cannot be disabled')
+  const language = await loadLanguage(db, input.organizationId, locale)
+  if (!language) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Language not found', { locale })
   const now = new Date().toISOString()
   await execute(db, `UPDATE organization_locales SET status = 'disabled', disabled_at = COALESCE(disabled_at, ?), updated_at = ?
     WHERE organization_id = ?  AND locale = ? AND is_source = 0`, [now, now, input.organizationId, locale])
@@ -97,7 +88,7 @@ export async function deleteDisabledOrganizationLanguageContent(
   input: { organizationId: string; locale: unknown },
 ): Promise<{ deleted: true; locale: string }> {
   const locale = canonicalizeLocale(input.locale)
-  if (locale === 'en') localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'English source content cannot be deleted')
+  if (locale === (await getPersistedSourceLocale(db, input.organizationId)).locale) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'Source content cannot be deleted')
   const language = await loadLanguage(db, input.organizationId, locale)
   if (language && language.status !== 'disabled') localizationError(409, 'LOCALIZATION_VALIDATION_FAILED', 'Disable the language before permanently deleting its content', { locale })
   const documents = await queryAll<{ id: string }>(db, `SELECT id FROM content_documents
@@ -120,14 +111,15 @@ export async function getOrganizationLanguageSettings(
 ) {
   // The plan and the site's languages are independent reads; running them in
   // series made the slowest endpoint in production wait for both in turn.
-  const [projection, languages] = await Promise.all([
+  const [projection, languages, source] = await Promise.all([
     getOrganizationBillingStatus(env, db, input.organizationId),
     queryAll(db, `
       SELECT locale, label, is_source, status FROM organization_locales
        WHERE organization_id = ? 
     `, [input.organizationId]),
+    getPersistedSourceLocale(db, input.organizationId),
   ])
-  const availableCatalogs = PLATFORM_LOCALES.filter(catalog => catalog.locale !== 'en')
+  const availableCatalogs = PLATFORM_LOCALES.filter(catalog => catalog.locale !== source.locale)
     .map(({ locale, label, direction }) => ({ locale, label, direction }))
   return { effective_plan: projection.plan, languages, available_catalogs: availableCatalogs }
 }

@@ -31,8 +31,8 @@ export function seatsSummary(capacity: number | null | undefined): string {
 }
 
 /**
- * Named cancellation terms stored by the calendar editor. The persisted
- * reschedule fields are retained; the reservation flow does not enforce them.
+ * Named reservation terms shared by the calendar and MCP. Free cancellation
+ * controls the deposit refund; changes use the same deadline unless the business approves an exception.
  */
 export const CANCELLATION_TIERS = [
   { id: 'flexible', label: 'Flexible', minutes: 2 * HOUR, points: ['Free cancellation until 2 hours before'] },

@@ -229,8 +229,8 @@
 import type { Collection, Product, ProductPresentation } from '~/server/types/products'
 import { useSchemaOrg } from '~/composables/useSchemaOrg'
 import type { CurrencyCode } from '~/shared/currencies'
-import { formatProductMoney } from '~/utils/product-money'
-import { minorAmountToMajor, selectPrice, type Price } from '~/shared/prices'
+import { formatProductMoney, formatProductPriceRange, summarizeProductPrices } from '~/utils/product-money'
+import { minorAmountToMajor, type Price } from '~/shared/prices'
 import { PRICING_NOTE_HANDLE } from '~/shared/product-details'
 import { groupProductsByCollection, productLocationCollectionPath } from '~/utils/product-presentation'
 import { extractDietarySchemaUrls } from '~/utils/product-seo'
@@ -323,7 +323,7 @@ const isAvailable = (product: Product, collectionLocationId: string | null = nul
   const offeredHere = id
     ? product.locations.some(entry => entry.location_id === id && entry.active)
     : product.locations.some(entry => entry.active && entry.published && locationMap.value.has(entry.location_id))
-  if (!offeredHere) return false
+  if (!offeredHere && !product.booking?.online_timezone && !product.order_url) return false
   // On sale means the merchant is selling it here. A product priced in words —
   // "Market price" — is on sale; an amount is what online checkout needs, and
   // that is a different question.
@@ -333,23 +333,26 @@ const isAvailable = (product: Product, collectionLocationId: string | null = nul
 
 const productHref = (product: Product, collectionLocationId: string | null = null): string | null => {
   const id = productLocationId(product, collectionLocationId)
+  if (product.kind === 'experience') return localePath(props.presentation.productPath('', product.slug)) + (id ? `?location_id=${encodeURIComponent(id)}` : '')
+  if (product.page?.path) return localePath(product.page.path)
   return id ? localePath(props.presentation.productPath(locationSlug(id), product.slug)) : null
 }
 
 /**
  * The offer this page shows, resolved once through the one selection contract.
  *
- * A product with several variants shows its lowest applicable offer as a
- * "from" price — an explicit choice made here, not a fallback: every variant's
- * own price is on the product's own page.
+ * A product with several applicable prices shows their actual range.
  */
-const priceFor = (product: Product, collectionLocationId: string | null = null): Price | null => {
-  const selection = { currency: props.currency, location_id: productLocationId(product, collectionLocationId), at: new Date().toISOString() }
-  // Only variants a customer can choose: a disabled variant's price would
-  // otherwise undercut the one actually on offer.
-  const offers = product.variants.filter(variant => variant.active !== false).flatMap(variant => selectPrice(variant.prices, selection) ?? [])
-  return offers.reduce<Price | null>((lowest, offer) => (!lowest || offer.unit_amount < lowest.unit_amount ? offer : lowest), null)
+const pricesFor = (product: Product, collectionLocationId: string | null = null) => {
+  const locationId = productLocationId(product, collectionLocationId)
+  const scopes = locationId ? [locationId] : [
+    ...product.locations.filter(location => location.published && locationMap.value.has(location.location_id)).map(location => location.location_id),
+    ...(product.booking?.online_timezone || product.order_url ? [null] : []),
+  ]
+  const at = new Date().toISOString()
+  return summarizeProductPrices(product.variants, scopes.map(location_id => ({ currency: props.currency, location_id, at })))
 }
+const priceFor = (product: Product, collectionLocationId: string | null = null): Price | null => pricesFor(product, collectionLocationId).lowest
 /**
  * What this card says about price.
  *
@@ -358,15 +361,21 @@ const priceFor = (product: Product, collectionLocationId: string | null = null):
  * missing amount never becomes zero, "Free" or "Market price" here.
  */
 const priceLabel = (product: Product, collectionLocationId: string | null = null): string | null => {
-  const amount = formatProductMoney(priceFor(product, collectionLocationId))
+  const amount = formatProductPriceRange(pricesFor(product, collectionLocationId), locale.value)
   if (amount) return amount
   const note = product.details[PRICING_NOTE_HANDLE]
   return typeof note === 'string' && note.trim() ? note : null
 }
 // One section per collection, in the merchant's order — see
 // groupProductsByCollection for what membership does and does not imply.
-const groups = computed(() => groupProductsByCollection(props.products, props.collections)
-  .map(group => ({ id: group.id, category: group.name, sort_order: group.sort_order, location_id: group.location_id, products: group.products })))
+const groups = computed(() => {
+  const grouped = groupProductsByCollection(props.products, props.collections)
+    .map(group => ({ id: group.id, category: group.name, sort_order: group.sort_order, location_id: group.location_id, products: group.products }))
+  const included = new Set(grouped.flatMap(group => group.products.map(product => product.id)))
+  const ungrouped = props.products.filter(product => !included.has(product.id))
+  if (ungrouped.length) grouped.push({ id: 'catalog', category: props.presentation.collectionLabel, sort_order: grouped.length, location_id: null, products: ungrouped })
+  return grouped
+})
 const categoryTabs = computed(() => groups.value.map(group => ({
   key: group.id,
   label: group.category,
@@ -436,8 +445,11 @@ function compareAtPrice(product: Product, collectionLocationId: string | null = 
 }
 
 function offerFor(product: Product, collectionLocationId: string | null = null) {
-  const price = priceFor(product, collectionLocationId)
-  return price ? { '@type': 'Offer', price: minorAmountToMajor(price.unit_amount, price.currency), priceCurrency: price.currency } : undefined
+  const { lowest, highest, count } = pricesFor(product, collectionLocationId)
+  if (!lowest || !highest) return undefined
+  return lowest.unit_amount === highest.unit_amount
+    ? { '@type': 'Offer', price: minorAmountToMajor(lowest.unit_amount, lowest.currency), priceCurrency: lowest.currency }
+    : { '@type': 'AggregateOffer', lowPrice: minorAmountToMajor(lowest.unit_amount, lowest.currency), highPrice: minorAmountToMajor(highest.unit_amount, highest.currency), priceCurrency: lowest.currency, offerCount: count }
 }
 
 useSchemaOrg(computed(() => props.presentation.structuredDataType === 'MenuItem'

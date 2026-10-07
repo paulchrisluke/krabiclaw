@@ -115,6 +115,7 @@ function setLocationSlot(request: APIRequestContext, slot: LocationSlot) {
 // The location's own special hours, read before the Today journey replaces them, so
 // cleanup puts back what the tenant had rather than clearing the field. Null is a
 // value here: it means the location had none, which is not the same as "leave it".
+let priorReservationDuration: { value: number | null } | null = null
 let priorSpecialHours: { value: unknown } | null = null
 // loc-demo's hours and reservation capacity are shared with the calendar and MCP specs.
 let releaseDemoLock: (() => Promise<void>) | null = null
@@ -123,6 +124,13 @@ test.afterEach(async ({ page }) => {
   const release = releaseDemoLock
   releaseDemoLock = null
   try {
+    if (priorReservationDuration) {
+      const duration = priorReservationDuration.value
+      priorReservationDuration = null
+      const policy = await page.request.get('/api/editor/organizations/org-demo/locations/loc-demo/reservation-config')
+      await expectStatus(policy,200)
+      await expectStatus(await page.request.put('/api/editor/organizations/org-demo/locations/loc-demo/reservation-config', { data: { duration_minutes: duration, expected_updated_at: (await policy.json()).config.updated_at } }),200)
+    }
     if (!priorSpecialHours) return
     const previous = priorSpecialHours.value
     priorSpecialHours = null
@@ -513,6 +521,13 @@ test('Today uses the CMS patterns and sends one reservation change request', asy
   releaseDemoLock = await acquireTenantMutationLock(testInfo, E2E_DEMO_ORGANIZATION_ID)
   await loginAs(page.request, baseURL)
 
+  const reservationConfig = '/api/editor/organizations/org-demo/locations/loc-demo/reservation-config'
+  const priorPolicy = await page.request.get(reservationConfig)
+  await expectStatus(priorPolicy,200)
+  const policy = (await priorPolicy.json()).config
+  priorReservationDuration = { value: policy.duration_minutes }
+  await expectStatus(await page.request.put(reservationConfig,{data:{duration_minutes:60,expected_updated_at:policy.updated_at}}),200)
+
   const now = Date.now()
   const firstName = `Maya${now}`
   const guestName = `${firstName} Chen`
@@ -573,7 +588,7 @@ test('Today uses the CMS patterns and sends one reservation change request', asy
     }
     const response = await page.request.post('/api/public/reservations', {
       headers: tenantTestExtraHeaders(),
-      data: { name, email, phone: '+12025550123', date, time, guests: '2', location_id: 'loc-demo' },
+      data: { name, email, phone: '+12025550123', date, time, guests: '2', location_id: 'loc-demo', idempotency_key: crypto.randomUUID() },
     })
     await expectStatus(response, 201)
     const { id } = await response.json() as { id: string }

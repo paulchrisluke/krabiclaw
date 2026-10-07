@@ -3,34 +3,30 @@ import type { CloudflareEnv } from '~/server/utils/auth'
 import { HTTPError } from 'nitro'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { bookingWindow, listSessions } from '~/server/utils/availability'
-import { listOrganizationProducts } from '~/server/utils/product-management'
+import { listOrganizationProducts, PUBLIC_PRODUCT_SQL } from '~/server/utils/product-management'
 import { isCurrencyCode } from '~/shared/currencies'
 import { publicTenantVisibilitySql } from '~/server/utils/public-base'
 
 export async function listPublicBookingSessions(db: DbClient, organizationId: string, slug: string, env: CloudflareEnv, requestedScope?: unknown) {
   const product = await queryFirst<{ id: string; organization_id: string; name: string; order_url: string | null; timezone: string | null }>(db, `
     SELECT p.id, p.organization_id, p.name, p.order_url,
-           COALESCE(cfg.online_timezone,
-           (SELECT l.timezone FROM business_locations l
-              JOIN product_locations pl ON pl.location_id = l.id AND pl.product_id = p.id
-             WHERE l.organization_id = p.organization_id AND pl.published = 1 AND pl.active = 1 AND l.status = 'active' ORDER BY l.id LIMIT 1)) AS timezone
+           cfg.online_timezone AS timezone
       FROM products p
       JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
       JOIN product_booking_configs cfg ON cfg.product_id = p.id AND cfg.organization_id = p.organization_id
-     WHERE pub.organization_id = ? AND pub.published = 1 AND p.slug = ? AND p.active = 1
+     WHERE pub.organization_id = ? AND (${PUBLIC_PRODUCT_SQL}) AND p.slug = ? AND p.active = 1
      LIMIT 1
   `, [organizationId, slug])
   if (!product) throw new HTTPError({ statusCode: 404, statusMessage: 'Product not found' })
   if (product.order_url) return { success: true, product: { id: product.id, name: product.name, slug }, sessions: [] }
-  if (!product.timezone) throw new HTTPError({ statusCode: 409, statusMessage: 'Set the configured online or location timezone before offering sessions' })
 
   // A session belongs to a location, and a branch that has stopped selling
   // this product does not offer its occurrences either.
-  const sellingLocations = new Set((await queryAll<{ location_id: string }>(db, `
-    SELECT pl.location_id FROM product_locations pl
+  const sellingLocations = new Map((await queryAll<{ location_id: string; timezone: string | null }>(db, `
+    SELECT pl.location_id, l.timezone FROM product_locations pl
       JOIN business_locations l ON l.id = pl.location_id AND l.organization_id = ? AND l.status = 'active'
      WHERE pl.product_id = ? AND pl.active = 1 AND pl.published = 1
-  `, [organizationId, product.id])).map(row => row.location_id))
+  `, [organizationId, product.id])).map(row => [row.location_id, row.timezone]))
 
   const onlineOnly = requestedScope === 'online'
   const requestedLocation = typeof requestedScope === 'string' && !onlineOnly ? requestedScope : null
@@ -39,15 +35,20 @@ export async function listPublicBookingSessions(db: DbClient, organizationId: st
   }
 
   await refreshProductBusy(db,env,organizationId,product.id)
-  const window = bookingWindow(product.timezone)
+  const zones = requestedLocation ? [sellingLocations.get(requestedLocation)] : onlineOnly ? [product.timezone] : [...sellingLocations.values(), product.timezone].filter(zone => zone !== null)
+  if (!zones.length || zones.some(zone => !zone)) throw new HTTPError({ statusCode: 409, statusMessage: 'Set the online or location timezone before offering sessions' })
+  const windows = zones.map(zone => bookingWindow(zone!))
+  const fromInstant = windows.map(window => window.fromInstant).sort()[0]!
+  const toInstant = windows.map(window => window.toInstant).sort().at(-1)!
   const sessions = await listSessions(db, {
     organizationId: product.organization_id, productId: product.id,
-    fromInstant: window.fromInstant, toInstant: window.toInstant, statuses: ['scheduled'],
+    fromInstant, toInstant, statuses: ['scheduled'],
   })
   return {
     success: true,
     product: { id: product.id, name: product.name, slug },
     sessions: sessions
+      .filter(session => { const window = bookingWindow(session.timezone); return session.starts_at >= window.fromInstant && session.starts_at < window.toInstant })
       .filter(session => onlineOnly ? session.location_id === null : (requestedLocation
         ? session.location_id === requestedLocation
         : session.location_id === null || sellingLocations.has(session.location_id)))
