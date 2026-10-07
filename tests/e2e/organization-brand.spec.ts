@@ -68,16 +68,15 @@ async function renderedTypography(browser: Browser, url: string, headers: Record
       return {
         body: getComputedStyle(layout).fontFamily,
         heading: getComputedStyle(heading).fontFamily,
-        // A "<family> Fallback: <local font>" face is @nuxt/fonts' metric-matched
-        // local fallback, never a download.
         loaded: Array.from(document.fonts)
-          .filter(font => font.status === 'loaded' && !font.family.includes(' Fallback: '))
+          .filter(font => font.status === 'loaded')
           .map(font => ({ family: font.family.replaceAll('"', ''), unicodeRange: font.unicodeRange })),
       }
     }, root)
     for (const fontUrl of new Set(fontUrls)) {
       expect(new URL(fontUrl).origin).toBe(new URL(url).origin)
-      expect(new URL(fontUrl).pathname).toMatch(/^\/_fonts\//)
+      // Faces are bundled build assets from the @fontsource packages.
+      expect(new URL(fontUrl).pathname).toMatch(/^\/_nuxt\/assets\/.+\.woff2$/)
       const font = await guest.request.get(fontUrl, { headers })
       await expectStatus(font, 200)
       expect(font.headers()['cache-control']).toMatch(/max-age=31536000/)

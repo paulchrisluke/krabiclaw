@@ -85,35 +85,10 @@ export default defineNuxtConfig({
 
   ui: {
     colorMode: false,
-  },
-
-  // @nuxt/fonts (installed by @nuxt/ui) resolves every family a stylesheet names,
-  // downloads the faces at build time and serves them from /_fonts. Each surface
-  // sheet carries only its own @font-face rules; a browser fetches a face only
-  // when rendered text uses it, so the site-font catalog in
-  // assets/css/font-presets.css costs nothing until a site selects one, and the
-  // Thai and Vietnamese fallbacks nothing until a page has that text.
-  fonts: {
-    priority: ['google'],
-    throwOnError: true,
-    defaults: {
-      weights: [400, 500, 600, 700],
-      styles: ['normal'],
-      subsets: ['latin', 'thai', 'vietnamese'],
-    },
-    families: [
-      { name: 'Jost', weights: ['100 900'] },
-      { name: 'Instrument Serif', weights: [400], styles: ['normal', 'italic'] },
-      { name: 'Marcellus', weights: [400] },
-      // Japanese fallbacks: the CJK slices carry no subset name, so naming none
-      // keeps them and drops the Latin ones the site font already covers.
-      { name: 'Noto Sans JP', weights: [400, 700], subsets: ['japanese'] },
-      { name: 'Noto Serif JP', weights: [400, 700], subsets: ['japanese'] },
-      // Vietnamese fallbacks for site faces without Vietnamese letters; the
-      // Latin the site font already draws is not fetched again.
-      { name: 'Noto Sans Display', subsets: ['vietnamese'] },
-      { name: 'Noto Serif Display', subsets: ['vietnamese'] },
-    ],
+    // Font faces are the @fontsource packages' own rules, imported by the
+    // stylesheets that use them (assets/css/font-presets.css), so a build
+    // fetches nothing from a font service.
+    fonts: false,
   },
 
   app: {

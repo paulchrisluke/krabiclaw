@@ -52,6 +52,10 @@ const split = computed(() => template.value.slug === 'platform'
 </script>
 
 <style>
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource/inter/700.css";
 .docs-shell { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 .docs-shell h1, .docs-shell h2, .docs-shell h3 { font-family: inherit; }
 .docs-shell h1 { font-weight: 650; }
