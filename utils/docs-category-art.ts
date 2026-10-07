@@ -6,7 +6,6 @@ export const DOCS_CATEGORY_ART: Record<string, { file: string, alt: string }> = 
   'calendar-and-bookings': { file: 'krabiclaw-category-run-business', alt: 'Bookings and customer inquiries panels' },
   'ai-assistants': { file: 'krabiclaw-category-ai-assistants', alt: 'Assistant prompt and review panels' },
   integrations: { file: 'krabiclaw-category-account-settings', alt: 'Account notification preferences and integrations panels' },
-  'payments-and-payouts': { file: 'krabiclaw-category-account-settings', alt: 'Account notification preferences and integrations panels' },
 }
 export function docsCategoryArt(slug: string) {
   const art = DOCS_CATEGORY_ART[slug]
