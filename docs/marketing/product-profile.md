@@ -57,6 +57,10 @@ Owner-stated avatar stature (2026-10-04): Paul is 6 feet tall (182.88cm, approxi
 
 Feature blogs/docs also need relevant images, GIFs or short clips of the actual process, with existing media placement/provenance, descriptive alt text/captions and required posters. Choose chat or CMS footage according to the feature; an avatar is optional. Any avatar prompt must define setting, outfit, action and framing. Use purposeful HyperFrames animation to focus on authentic interaction and sharp results, not a static screenshot slideshow. Use the canonical logo symbol without redundant KrabiClaw text beside it.
 
+Owner-approved reusable ending (2026-10-07): a standalone 3.75-second coastal brand animation with the existing saved-Me voice saying “Say hello to KrabiClaw. Your business, automated.” The owner accepted this ending for reuse across campaigns. The editable source and inspected export are retained in the local `krabiclaw-brand-ending` project; it uses the existing `public/pricing/cta-coastal.png` illustration as one coherent scene, not a reconstruction of the current CMS homepage layers. Approval of this asset does not publish a new campaign.
+
+Owner localization direction (2026-10-07): Thai and Japanese must look like distinct commercials, not the English lawyer/baker/café montage with translated voices. Change the business mix, real working environments, casting, action, human requests, camera and edit rhythm. The shared reusable ending provides continuity. Campaign generation is authorized by the owner's instruction to proceed; do not impose an additional explicit-total-cap approval requirement. Continue tracking actual quotes, jobs and defects, and do not infer social publishing permission.
+
 ## Founder story
 
 **Long version — About page, interviews, and launch posts**
