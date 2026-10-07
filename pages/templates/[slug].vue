@@ -301,7 +301,7 @@ onUnmounted(() => {
   if (import.meta.client) document.documentElement.classList.remove('overflow-hidden')
 })
 
-const organizationUrl = config.public.platformUrl
+const organizationUrl = config.public.siteUrl
 
 // Marketing-page schema only: a Product node describing the template
 // offering itself. This is intentionally not the ProfessionalService/

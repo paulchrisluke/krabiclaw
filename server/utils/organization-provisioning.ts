@@ -1,3 +1,4 @@
+import { platformLocale } from '~/shared/platform-locales'
 // Turning a bare Better Auth organization into a serving tenant: its address,
 // its template, its source locale and its seeded structure. The target
 // organization is always an explicit input from the caller — this module never
@@ -84,10 +85,12 @@ export async function provisionOrganization(
   // `defaultCurrency` is the owner's answer or null. A tenant that goes live on
   // creation has to carry one; onboarding's first save has not asked yet, and
   // stores null until the currency step answers it.
-  params: { organizationId: string; name: string; subdomain: string; vertical: OrganizationVertical; defaultCurrency: CurrencyCode | null; activate?: boolean; origin: { headers: Headers } | null },
+  params: { organizationId: string; name: string; subdomain: string; vertical: OrganizationVertical; defaultCurrency: CurrencyCode | null; sourceLocale: string; activate?: boolean; origin: { headers: Headers } | null },
 ): Promise<OrganizationProvisioningResult> {
   const { organizationId, name, vertical, defaultCurrency } = params
   const normalizedSubdomain = params.subdomain.toLowerCase()
+  const source = platformLocale(params.sourceLocale)
+  if (!source) return { status: 400, data: { error: 'Choose a supported website language' } }
 
   try {
     const adapter = await organizationAdapter(env)
@@ -96,6 +99,8 @@ export async function provisionOrganization(
       return { status: 403, data: { error: 'Organization-level access required to provision this organization' } }
     }
 
+    const existingSource = await queryFirst<{ locale: string }>(db, 'SELECT locale FROM organization_locales WHERE organization_id = ? AND is_source = 1', [organizationId])
+    if (existingSource && existingSource.locale !== source.locale) return { status: 409, data: { error: 'This organization already has a primary language; existing content cannot be relabelled' } }
     const themeId = resolveThemeId(vertical)
     const now = new Date().toISOString()
 
@@ -148,11 +153,12 @@ export async function provisionOrganization(
         },
         {
           query: `
-            INSERT OR IGNORE INTO organization_locales
+            INSERT INTO organization_locales
               (id, organization_id, locale, label, is_source, status, created_at, updated_at)
-            VALUES (?, ?, 'en', 'English', 1, 'published', ?, ?)
+            VALUES (?, ?, ?, ?, 1, 'published', ?, ?)
+            ON CONFLICT(organization_id, locale) DO NOTHING
           `,
-          params: [`locale::${organizationId}::en`, organizationId, now, now],
+          params: [`locale::${organizationId}::${source.locale}`, organizationId, source.locale, source.label, now, now],
         },
       ], { operation: 'provision organization and source locale' })
     } catch (provisioningError) {

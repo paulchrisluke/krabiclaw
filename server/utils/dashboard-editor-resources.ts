@@ -1,3 +1,4 @@
+import { getSourceLocale } from '~/server/utils/organization-locales'
 import { mcpPageWindow } from '~/server/utils/mcp-pagination'
 import { HTTPError } from 'nitro';
 
@@ -37,7 +38,7 @@ export async function loadDashboardEditorContext(event: H3Event, organizationId:
   // requireOrganizationAccess(event, organizationId) has already
   // authorized this caller (location-access.ts), so asserting again here only
   // bought a second read of the same member row.
-  const [locationRows, entitlements] = await Promise.all([
+  const [locationRows, entitlements, sourceLocale] = await Promise.all([
     queryAll<EditorLocationRow>(db, `
       SELECT id, slug, title, status
         FROM business_locations
@@ -45,6 +46,7 @@ export async function loadDashboardEditorContext(event: H3Event, organizationId:
        ORDER BY title ASC
     `, [organization.id]),
     getOrganizationEntitlements(env, organization.id),
+    getSourceLocale(db, organization.id),
   ])
   const locations = locationRows
   if (typeof env.PREVIEW_SECRET !== 'string' || !env.PREVIEW_SECRET) {
@@ -55,6 +57,7 @@ export async function loadDashboardEditorContext(event: H3Event, organizationId:
   return {
     success: true as const,
     context: {
+      sourceLocale,
       organization: {
         id: organization.id,
         name: organization.name,

@@ -83,10 +83,7 @@ export async function resolveMemberId(
   if (!input.env) {
     throw new Error('resolveMemberId requires CloudflareEnv so Better Auth can resolve organization membership')
   }
-  const { createAuth } = await import('~/server/utils/auth')
-  const auth = createAuth(input.env)
-  const authContext = await auth.$context
-  const orgAdapter = getOrgAdapter(authContext as Parameters<typeof getOrgAdapter>[0], {})
+  const orgAdapter = await organizationAdapter(input.env)
   const member = await orgAdapter.findMemberByOrgId({
     userId: input.userId,
     organizationId: input.organizationId,
@@ -148,17 +145,14 @@ export async function assertRoleAllows(
   throw new HTTPError({ statusCode: 403, message: input.message ?? 'Access denied' })
 }
 
-// The adapter has to be built with the same organization options the plugin
-// runs with: getOrgAdapter filters organization output through the options'
-// additionalFields, so an adapter built with {} silently drops
-// every role/team limit the plugin was configured with.
+// All surfaces use the provider adapter with the configured organization options.
 export type OrganizationAdapter = ReturnType<typeof getOrgAdapter<typeof organizationOptions>>
 
 export async function organizationAdapter(env: CloudflareEnv): Promise<OrganizationAdapter> {
   const { createAuth, organizationOptions: options } = await import('~/server/utils/auth')
   const auth = createAuth(env)
   const context = await auth.$context
-  return getOrgAdapter(context as Parameters<typeof getOrgAdapter>[0], options)
+  return getOrgAdapter(context as unknown as Parameters<typeof getOrgAdapter>[0], options)
 }
 
 /**
@@ -444,7 +438,7 @@ export async function resolveAuthorizedWhatsAppRecipient(
   const { findVerifiedAuthUserByPhone } = await import('~/server/utils/auth')
   const user = await findVerifiedAuthUserByPhone(
     input.env,
-    parsePhoneOrThrow(input.phone, { defaultCountry: 'TH' }),
+    parsePhoneOrThrow(input.phone),
   )
   if (!user) return null
   const membership = await resolveOrganizationMembership(input.env, {

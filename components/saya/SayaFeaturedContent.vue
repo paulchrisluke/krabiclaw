@@ -1,5 +1,5 @@
 <template>
-  <AppSection v-if="items.length && !allUnavailable" :bg="bg" :padding="padding">
+  <AppSection v-if="items.length" :bg="bg" :padding="padding">
     <!-- Section header -->
     <div class="mb-10">
       <p class="saya-kicker mb-6">{{ data.kicker }}</p>
@@ -138,12 +138,6 @@ const { localePath, t } = useI18n()
 // link rather than vanishing, so a product the merchant published is never
 // silently missing from its own site.
 const items = computed(() => props.data?.items || [])
-// A location-wide closure marks every item unavailable at once — showing a
-// row of all-badged cards reads as broken, so hide the whole section instead.
-const allUnavailable = computed(() => {
-  const list = items.value
-  return list.length > 0 && list.every(item => item.unavailable)
-})
 const linkTarget = computed(() => props.data?.linkTarget || '')
 
 // --- Carousel state ---

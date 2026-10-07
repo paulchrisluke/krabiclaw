@@ -1,6 +1,7 @@
 import type Stripe from 'stripe'
 import {execute,executeBatch,queryAll,queryFirst,type DbClient} from '~/server/db'
 import {currencyFractionDigits,isCurrencyCode} from '~/shared/currencies'
+import { paymentsBillingBasis, paymentsCostBillingBasis, quotePaymentsBillingFx, readPaymentsBillingBasis } from './fx'
 
 /** Exact provider decimal conversion; never binary floating point or FX. */
 export function stripeFeeMinor(value:string,currency:string):number {
@@ -31,9 +32,9 @@ export function feeReportRows(csv:string):Record<string,string>[] {
  if(!headers || new Set(headers).size!==headers.length || !['fee_transaction_id','incurred_by','currency','amount','tax','incurred_at'].every(h=>headers.includes(h))) throw new Error('Stripe fee report schema mismatch')
  return rows.filter(r=>r.some(Boolean)).map(r=>{if(r.length!==headers.length)throw new Error('Stripe report row width mismatch');return Object.fromEntries(headers.map((h,i)=>[h,r[i]!]))})
 }
-interface Snapshot {source_id:string;organization_id:string|null;payment_id:string|null;amount:number;currency:string;revision:number}
+interface Snapshot {source_id:string;organization_id:string|null;payment_id:string|null;amount:number;currency:string;revision:number;billing_basis_json:string|null}
 /** Native platform report only. An unresolved attribution is durable and never charged. */
-export async function ingestStripeFeeReport(db:DbClient,livemode:boolean,csv:string) {
+export async function ingestStripeFeeReport(db:DbClient,livemode:boolean,csv:string,stripe?:Stripe) {
  const grouped=new Map<string,{incurred_by:string;currency:string;amount:number;incurred_at:string}>()
  for(const row of feeReportRows(csv)){
   const currency=row.currency!.toUpperCase(),source=`stripe-fee:${Number(livemode)}:${row.fee_transaction_id}:${row.incurred_by}:${currency}`
@@ -59,10 +60,20 @@ export async function ingestStripeFeeReport(db:DbClient,livemode:boolean,csv:str
   if(old?.amount===row.amount && (old.organization_id || !tenant)) continue
   // A previously unresolved snapshot has never produced usage.
   const delta=row.amount-(old?.organization_id?old.amount:0)
-  await executeBatch(db,[
-   {query:`INSERT INTO payment_cost_snapshots(source_id,organization_id,payment_id,incurred_by,currency,amount,incurred_at,revision,updated_at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(source_id) DO UPDATE SET organization_id=excluded.organization_id,payment_id=excluded.payment_id,amount=excluded.amount,revision=excluded.revision,updated_at=excluded.updated_at WHERE payment_cost_snapshots.revision=?`,params:[source,tenant,payment?.id??null,row.incurred_by,row.currency,row.amount,row.incurred_at,revision,now,old?.revision??0]},
-   ...(tenant&&delta!==0?[{query:`INSERT INTO payment_usage_events(id,organization_id,payment_id,kind,currency,amount,source_id,provider_occurred_at,created_at) SELECT ?,?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM payment_cost_snapshots WHERE source_id=? AND revision=? AND amount=?) ON CONFLICT(source_id) DO NOTHING`,params:[crypto.randomUUID(),tenant,payment?.id??null,old?.organization_id?'stripe_cost_adjustment':'stripe_cost',row.currency,delta,`${source}:revision:${revision}`,row.incurred_at,now,source,revision,row.amount]}]:[]),
+  if (!isCurrencyCode(row.currency)) throw new Error('Unsupported native fee currency')
+  const oldBasis = old?.organization_id ? readPaymentsBillingBasis(old.billing_basis_json, old.amount, old.currency) : null
+  let quote = oldBasis?.fx_quote ?? null
+  if (tenant && row.currency !== 'USD' && !quote) {
+   if (!stripe) throw new Error('Native Stripe FX quoting is required for this cost currency')
+   quote = await quotePaymentsBillingFx(stripe, row.currency)
+  }
+  const billingBasis = tenant ? paymentsBillingBasis(row.amount, row.currency, quote) : null
+  const usageBasis = tenant ? paymentsCostBillingBasis(old?.organization_id ? old.amount : 0, row.amount, row.currency, quote) : null
+  const results = await executeBatch(db,[
+   {query:`INSERT INTO payment_cost_snapshots(source_id,organization_id,payment_id,incurred_by,currency,amount,billing_basis_json,incurred_at,revision,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(source_id) DO UPDATE SET organization_id=excluded.organization_id,payment_id=excluded.payment_id,amount=excluded.amount,billing_basis_json=excluded.billing_basis_json,revision=excluded.revision,updated_at=excluded.updated_at WHERE payment_cost_snapshots.revision=?`,params:[source,tenant,payment?.id??null,row.incurred_by,row.currency,row.amount,billingBasis ? JSON.stringify(billingBasis) : null,row.incurred_at,revision,now,old?.revision??0]},
+   ...(tenant&&delta!==0?[{query:`INSERT INTO payment_usage_events(id,organization_id,payment_id,kind,currency,amount,billing_basis_json,source_id,provider_occurred_at,created_at) SELECT ?,?,?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM payment_cost_snapshots WHERE source_id=? AND revision=? AND amount=?) ON CONFLICT(source_id) DO NOTHING`,params:[crypto.randomUUID(),tenant,payment?.id??null,old?.organization_id?'stripe_cost_adjustment':'stripe_cost',row.currency,delta,JSON.stringify(usageBasis),`${source}:revision:${revision}`,row.incurred_at,now,source,revision,row.amount]}]:[]),
   ],{operation:'Reconcile native attributable Stripe costs'})
+  if (results[0]?.meta.changes !== 1) throw new Error('Stripe cost was revised concurrently; reconcile the current native receipt before processing this report')
   if(tenant)attributed++;else unattributed++
  }
  return {attributed,unattributed}
@@ -82,7 +93,7 @@ export async function reconcileStripeCosts(db:DbClient,stripe:Stripe,livemode:bo
   if(url.protocol!=='https:' || (url.hostname!=='files.stripe.com' && url.hostname!=='api.stripe.com')) throw new Error('Unexpected native Stripe report file origin')
   const response=await fetch(url,{headers:{Authorization:`Bearer ${apiKey}`},redirect:'error',signal:AbortSignal.timeout(10000)})
   if(!response.ok) throw new Error(`Stripe fee report download failed (${response.status})`)
-  await ingestStripeFeeReport(db,livemode,await response.text())
+  await ingestStripeFeeReport(db,livemode,await response.text(),stripe)
   await execute(db,"UPDATE payment_fee_reports SET status='processed',error=NULL,updated_at=? WHERE id=?",[now,report.id])
  }
  // Reports lag at least 96 hours. Revisit the last 35 days for late fee corrections.

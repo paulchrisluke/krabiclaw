@@ -1,3 +1,5 @@
+import { getSourceLocale } from '~/server/utils/organization-locales'
+import type { ProductKind } from '~/shared/product-details'
 import { HTTPError } from 'nitro';
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
@@ -19,9 +21,12 @@ import {
 import { listPublicLocaleRepresentations, resolvePublicDocumentSourcePath } from '~/server/utils/public-locale-representations'
 import { listPublicSocialPosts } from '~/server/utils/post-management'
 import { resolvePublicTemplate } from '~/utils/template-registry'
-import { EXPERIENCE_PRESENTATION, resolveProductPresentation } from '~/utils/product-presentation'
+import { EXPERIENCE_PRESENTATION, presentationForProduct } from '~/utils/product-presentation'
 import { formatMinorAmount } from '~/shared/prices'
-import type { CurrencyCode } from '~/shared/currencies'
+import { isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
+import { listCollections, listOrganizationProducts } from '~/server/utils/product-management'
+import { PRICING_NOTE_HANDLE } from '~/shared/product-details'
+import { summarizeProductPrices } from '~/utils/product-money'
 import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
 import { addressPlaceName, parsePostalAddress } from '~/utils/postal-address'
 
@@ -60,16 +65,18 @@ export interface PublicTenantPageProductRow {
   name: string
   slug: string
   description: string
-  /** Non-zero exactly when the product takes bookings — an experience. */
-  is_bookable: number
+  kind: ProductKind
   /**
    * The one location publishing this product, or null when several do. A
    * product offered in two places has no single route, so its card links
    * nowhere rather than to a location the merchant did not name.
    */
   location_slug: string | null
-  /** The lowest current offer in the site's currency, in minor units. */
+  public_path: string | null
+  available: boolean
+  pricing_note: string | null
   unit_amount: number | null
+  max_unit_amount: number | null
   compare_at_unit_amount: number | null
   currency: string | null
   media: MediaPlacementItem[]
@@ -90,15 +97,15 @@ export async function listPublicTenantPageReferenceRows(
   db: DbClient,
   organizationId: string,
   pageIds: readonly string[],
-  locale = 'en',
+  locale?: string,
 ): Promise<PublicTenantPageReferenceRow[]> {
+  locale ??= await getSourceLocale(db, organizationId)
   if (pageIds.length === 0) return []
   // The referenced root, rendered in the requested locale through its own
-  // representation row. A page with no translation keeps its English title and
-  // route rather than disappearing from the grid unexplained.
+  // representation row. A missing translation links to the source document.
   const rows = await queryAll<Omit<PublicTenantPageReferenceRow, 'media'>>(db, `
     SELECT root.id, root.product_id, COALESCE(rep.title, root.title) AS title, COALESCE(rep.summary, root.summary) AS summary,
-           COALESCE(rep.slug, root.slug) AS slug, COALESCE(rep.path, root.path) AS path
+           COALESCE(rep.slug, root.slug) AS slug, CASE WHEN rep.id IS NULL THEN root.path WHEN rep.path = '/' THEN '/' || rep.locale ELSE '/' || rep.locale || rep.path END AS path
       FROM content_documents root
       LEFT JOIN content_documents rep ON rep.root_id = root.id AND rep.row_role = 'representation' AND rep.locale = ?
      WHERE root.organization_id = ? AND root.row_role = 'root' AND root.kind = 'page'
@@ -117,70 +124,70 @@ export async function listPublicTenantPageReferenceRows(
  * The grid stores references only, so names and descriptions come from the
  * product every time it renders and cannot go stale.
  */
+async function loadTenantPageProductCatalog(db: DbClient, organizationId: string, locale?: string, localizations: readonly ExactPublicLocalization[] | null = null) {
+  locale ??= await getSourceLocale(db, organizationId)
+  const [products, collections, locations, pageRepresentations] = await Promise.all([
+    listOrganizationProducts(db, { organizationId, publishedOnly: true }),
+    listCollections(db, { organizationId }),
+    queryAll<{ id: string; slug: string }>(db, "SELECT id,slug FROM business_locations WHERE organization_id=? AND status='active'", [organizationId]),
+    localizations ? queryAll<{ product_id: string; path: string }>(db, `SELECT root.product_id, rep.path
+      FROM content_documents root JOIN content_documents rep ON rep.root_id=root.id AND rep.row_role='representation' AND rep.locale=?
+      WHERE root.organization_id=? AND root.kind='page' AND root.product_id IS NOT NULL AND rep.path IS NOT NULL AND ${publicTenantPageSql('root')}`, [locale, organizationId]) : Promise.resolve([]),
+  ])
+  const media = await loadPublicSocialMedia(db, organizationId, 'product', products.map(product => product.id))
+  if (localizations) for (const entry of media.values()) entry.media = projectLocalizedMediaAlt(entry.media, localizations)
+  const localizedProducts = localizations ? projectExactLocalizedCollection('product', products, localizations) : products
+  const localizedLocations = localizations ? projectExactLocalizedCollection('business_location', locations, localizations) : locations
+  return { products: localizedProducts, collections, locations: localizedLocations, media, locale, localized: localizations !== null, pageRepresentations }
+}
+
 export async function listPublicTenantPageProductRows(
   db: DbClient,
   organizationId: string,
   selection: { collectionId?: string | null; productIds?: readonly string[] },
   currency: string,
+  catalog?: Awaited<ReturnType<typeof loadTenantPageProductCatalog>>,
 ): Promise<PublicTenantPageProductRow[]> {
-  const productIds = selection.productIds ?? []
-  if (!selection.collectionId && productIds.length === 0) return []
-  // The card's price and its route come from the same read as its name. They
-  // were resolved in the homepage component instead, over a separate catalogue
-  // payload the route had to request, which is why a product grid on any other
-  // page showed cards with no price and a link to /products/<slug> — a route
-  // no Saya site serves.
-  const now = new Date().toISOString()
-  // A collection belongs to a branch, so a grid that names one is that
-  // branch's counter: the dish is routed, priced and labelled as the branch
-  // whose section it is being read in — the same rule the menu page applies
-  // (`ProductCollectionPage.vue` productLocationId). Without it a dish served
-  // at two branches had no single route, so its card was not a link at all,
-  // and its price was the cheapest branch's rather than this one's.
-  const collectionLocationId = selection.collectionId
-    ? (await queryFirst<{ location_id: string | null }>(
-        db,
-        'SELECT location_id FROM collections WHERE id = ? AND organization_id = ? LIMIT 1',
-        [selection.collectionId, organizationId],
-      ))?.location_id ?? null
-    : null
-  const rows = await queryAll<Omit<PublicTenantPageProductRow, 'media'>>(db, `
-    SELECT p.id, p.name, p.slug, p.description,
-           EXISTS (SELECT 1 FROM product_booking_configs bc WHERE bc.product_id = p.id AND bc.organization_id = p.organization_id) AS is_bookable,
-           COALESCE(
-             (SELECT bl.slug FROM product_locations pl
-                JOIN business_locations bl ON bl.id = pl.location_id AND bl.organization_id = ? AND bl.status = 'active'
-               WHERE pl.product_id = p.id AND pl.organization_id = p.organization_id AND pl.published = 1 AND pl.active = 1
-                 AND pl.location_id = ?),
-             (SELECT CASE WHEN count(*) = 1 THEN min(bl.slug) END FROM product_locations pl
-                JOIN business_locations bl ON bl.id = pl.location_id AND bl.organization_id = ? AND bl.status = 'active'
-               WHERE pl.product_id = p.id AND pl.organization_id = p.organization_id AND pl.published = 1 AND pl.active = 1)
-           ) AS location_slug,
-           offer.unit_amount, offer.compare_at_unit_amount, offer.currency
-      FROM products p
-      JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
-      LEFT JOIN collection_products cp ON cp.product_id = p.id AND cp.collection_id = ?
-      LEFT JOIN (
-        SELECT pv.product_id, pr.unit_amount, pr.compare_at_unit_amount, pr.currency,
-               row_number() OVER (
-                 PARTITION BY pv.product_id
-                 -- This branch's own price first, then the price that applies
-                 -- everywhere, and only then the cheapest of the rest.
-                 ORDER BY CASE WHEN pr.location_id IS ? THEN 0 WHEN pr.location_id IS NULL THEN 1 ELSE 2 END ASC,
-                          pr.unit_amount ASC
-               ) AS rank
-          FROM prices pr
-          JOIN product_variants pv ON pv.id = pr.product_variant_id AND pv.organization_id = pr.organization_id AND pv.active = 1
-         WHERE pr.active = 1 AND pr.type = 'one_time' AND pr.currency = ?
-           AND (pr.valid_from_at IS NULL OR pr.valid_from_at <= ?)
-           AND (pr.valid_until_at IS NULL OR pr.valid_until_at > ?)
-      ) offer ON offer.product_id = p.id AND offer.rank = 1
-     WHERE pub.organization_id = ? AND pub.published = 1 AND p.active = 1
-       AND (cp.product_id IS NOT NULL OR p.id IN (SELECT value FROM json_each(?)))
-     ORDER BY cp.sort_order ASC, p.name ASC
-  `, [organizationId, collectionLocationId, organizationId, selection.collectionId ?? null, collectionLocationId, currency, now, now, organizationId, d1JsonStringSet(productIds)])
-  const placements = await loadPublicSocialMedia(db, organizationId, 'product', rows.map(row => row.id))
-  return rows.map(row => ({ ...row, media: placements.get(row.id)?.media ?? [] }))
+  const productIds = new Set(selection.productIds ?? [])
+  if (!selection.collectionId && !productIds.size) return []
+  if (!isCurrencyCode(currency)) throw new Error('The public catalog requires a supported currency')
+  const source = catalog ?? await loadTenantPageProductCatalog(db, organizationId)
+  const collection = selection.collectionId ? source.collections.find(item => item.id === selection.collectionId) : null
+  if (selection.collectionId && !collection) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page collection reference is unavailable' })
+  const locations = new Map(source.locations.map(location => [location.id, location]))
+  const at = new Date().toISOString()
+  const selected = source.products.filter(product => productIds.has(product.id) || product.collections.some(item => item.collection_id === collection?.id))
+    .sort((left, right) => (left.collections.find(item => item.collection_id === collection?.id)?.sort_order ?? 0)
+      - (right.collections.find(item => item.collection_id === collection?.id)?.sort_order ?? 0) || left.name.localeCompare(right.name))
+  return selected.flatMap(product => {
+    const offered = product.locations.filter(location => location.published && locations.has(location.location_id))
+    if (collection?.location_id && !offered.some(location => location.location_id === collection.location_id)) return []
+    const online = Boolean(product.booking?.online_timezone || product.order_url)
+    if (!offered.length && !online) return []
+    const locationId = collection?.location_id ?? (offered.length === 1 && !online ? offered[0]!.location_id : null)
+    const scopes = locationId ? [locationId] : [...offered.map(location => location.location_id), ...(online ? [null] : [])]
+    const prices = summarizeProductPrices(product.variants, scopes.map(location_id => ({ currency, location_id, at })))
+    const locationSlug = locationId ? locations.get(locationId)?.slug ?? null : null
+    const presentation = presentationForProduct(null, product)
+    const sourcePath = product.page?.path ?? (product.kind === 'experience'
+      ? EXPERIENCE_PRESENTATION.productPath('', product.slug) + (locationId ? `?location_id=${encodeURIComponent(locationId)}` : '')
+      : locationSlug && presentation ? presentation.productPath(locationSlug, product.slug) : null)
+    const localizedPage = source.pageRepresentations.find(page => page.product_id === product.id)
+    let publicPath = sourcePath
+    if (source.localized) {
+      if (product.page) publicPath = localizedPage ? `/${source.locale}${localizedPage.path}` : null
+      else publicPath = sourcePath ? `/${source.locale}${sourcePath}` : null
+    }
+    const note = product.details[PRICING_NOTE_HANDLE]
+    return [{ id: product.id, name: product.name, slug: product.slug, description: product.description, kind: product.kind,
+      location_slug: locationSlug, public_path: publicPath,
+      available: product.active && (locationId ? offered.some(location => location.location_id === locationId && location.active) : online || offered.some(location => location.active)),
+      pricing_note: typeof note === 'string' ? note : null,
+      unit_amount: prices.lowest?.unit_amount ?? null, max_unit_amount: prices.highest?.unit_amount ?? null,
+      compare_at_unit_amount: prices.lowest?.compare_at_unit_amount ?? null, currency: prices.lowest?.currency ?? null,
+      media: source.media.get(product.id)?.media ?? [],
+    }]
+  })
 }
 
 async function hydrateBlocks(
@@ -238,14 +245,14 @@ async function hydrateBlocks(
   // collections, and a flat union rendered both collections in both grids.
   const currency = organizationRow.default_currency
   // Null on a template that sells nothing; its pages carry no product grid.
-  const productPresentation = resolveProductPresentation(organizationRow.vertical)
   if ((collectionIds.size || productIds.size) && !currency) {
     throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page site has no currency' })
   }
+  const productCatalog = collectionIds.size || productIds.size ? await loadTenantPageProductCatalog(db, organizationId, locale, localizations) : undefined
   const productsByCollection = new Map(await Promise.all([...collectionIds].map(async collectionId =>
-    [collectionId, await listPublicTenantPageProductRows(db, organizationId, { collectionId }, currency!)] as const)))
+    [collectionId, await listPublicTenantPageProductRows(db, organizationId, { collectionId }, currency!, productCatalog)] as const)))
   const productById = new Map((productIds.size
-    ? await listPublicTenantPageProductRows(db, organizationId, { productIds: [...productIds] }, currency!)
+    ? await listPublicTenantPageProductRows(db, organizationId, { productIds: [...productIds] }, currency!, productCatalog)
     : []).map(product => [product.id, product]))
   const sourceLocations = locationIds.size
     ? await queryAll<{ id: string; title: string; slug: string; address: string | null; description: string | null; short_description: string | null; asset_id: string | null; public_url: string | null; thumbnail_url: string | null; kind: string | null; alt_text: string | null }>(db, `
@@ -354,10 +361,9 @@ async function hydrateBlocks(
       // names neither lists nothing — the same rule a page_grid follows.
       const collectionId = typeof data.collection_id === 'string' && data.collection_id.trim() ? data.collection_id : null
       const selected = Array.isArray(data.product_ids) && data.product_ids.length > 0
-        ? data.product_ids.map((id) => {
+        ? data.product_ids.flatMap((id) => {
             const product = typeof id === 'string' ? productById.get(id) : undefined
-            if (!product) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page product reference is unavailable' })
-            return product
+            return product ? [product] : []
           })
         : collectionId
           ? productsByCollection.get(collectionId)
@@ -371,17 +377,17 @@ async function hydrateBlocks(
         // site-wide; every other product is read under the one location that
         // publishes it, and a product published in several places has no
         // single route, so its card carries none.
-        url: product.is_bookable
-          ? EXPERIENCE_PRESENTATION.productPath('', product.slug)
-          : product.location_slug && productPresentation
-            ? productPresentation.productPath(product.location_slug, product.slug)
-            : '',
+        kind: product.kind,
+        url: product.public_path ?? '',
+        unavailable: !product.available,
         value: product.unit_amount === null || !product.currency
-          ? undefined
-          : formatMinorAmount(product.unit_amount, product.currency as CurrencyCode),
+          ? product.pricing_note ?? undefined
+          : product.max_unit_amount !== null && product.max_unit_amount !== product.unit_amount
+            ? `${formatMinorAmount(product.unit_amount, product.currency as CurrencyCode, locale)} – ${formatMinorAmount(product.max_unit_amount, product.currency as CurrencyCode, locale)}`
+            : formatMinorAmount(product.unit_amount, product.currency as CurrencyCode, locale),
         compare_at: product.compare_at_unit_amount === null || !product.currency
           ? undefined
-          : formatMinorAmount(product.compare_at_unit_amount, product.currency as CurrencyCode),
+          : formatMinorAmount(product.compare_at_unit_amount, product.currency as CurrencyCode, locale),
         labelKey: 'saya.posts.cta_default',
         // A grid item carries the one image it is drawn with, which for a
         // product is its `image` placement — the same cover `hydrateProductMedia`
@@ -473,12 +479,12 @@ export async function getPublicTenantPageForPath(
     ? await getTenantPageForEditor(db, await resolveVariantId(db, organizationId, path, options.locale))
     : await getPublishedTenantPage(db, organizationId, path, options.locale)
   if (!page) return null
-  const localizations = page.locale === 'en'
+  const localizations = page.id === page.page_id
     ? null
     : options.localizations ?? await loadExactPublicLocalizations(env, db, page.organization_id, page.locale)
   // The home page has no card of its own: it is the organization's page, and
   // its image is the organization's.
-  const [blocks, media, sourceLocale] = await Promise.all([
+  const [blocks, media] = await Promise.all([
     hydrateBlocks(env, db, organizationId, page.path, page.locale, page.blocks, options.hydrationResources, localizations),
     page.path === '/'
       ? loadPublicSocialMedia(db, organizationId, 'organization', [organizationId]).then(organization => new Map([[page.id, {
@@ -486,28 +492,21 @@ export async function getPublicTenantPageForPath(
           social_image: organization.get(organizationId)?.social_image ?? null,
         }]]))
       : loadPublicSocialMedia(db, organizationId, 'content_document', [page.id]),
-    queryFirst<{ locale: string }>(db, `
-      SELECT locale FROM organization_locales
-       WHERE organization_id = ?  AND is_source = 1
-       LIMIT 1
-    `, [page.organization_id]),
+
   ])
-  const localizedMedia = page.locale === 'en'
+  const localizedMedia = page.id === page.page_id
     ? media.get(page.id) ?? { media: [], social_image: null }
     : {
         ...(media.get(page.id) ?? { media: [], social_image: null }),
         media: projectLocalizedMediaAlt(media.get(page.id)?.media ?? [], localizations ?? []),
       }
-  if (page.locale !== 'en') {
+  if (page.id !== page.page_id) {
     for (const block of blocks) {
       block.media = projectLocalizedMediaAlt(
         block.media.map(item => ({ ...item, alt_text: item.alt_text ?? null })),
         localizations ?? [],
       )
     }
-  }
-  if (!sourceLocale) {
-    throw new HTTPError({ statusCode: 500, statusMessage: 'Organization primary language is missing' })
   }
   const localeRepresentations = await listPublicLocaleRepresentations(env, db, {
     organizationId: page.organization_id,
@@ -519,6 +518,7 @@ export async function getPublicTenantPageForPath(
 }
 
 async function resolveVariantId(db: DbClient, organizationId: string, path: string, locale?: string | null): Promise<string> {
+  locale ??= await getSourceLocale(db, organizationId)
   const row = await queryFirst<{ id: string } | null>(db, `
     SELECT v.id
       FROM content_documents v

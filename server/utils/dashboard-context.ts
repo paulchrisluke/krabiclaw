@@ -77,6 +77,7 @@ export interface DashboardLocationRow {
   slug: string
   title: string
   status: string
+  timezone: string | null
   address: string | null
   media: PublicSocialMedia['media']
   social_image: PublicSocialMedia['social_image']
@@ -315,7 +316,7 @@ export async function listDashboardLocations(
 ) {
 
   const locations = await queryAll<Omit<DashboardLocationRow, 'media' | 'social_image' | 'address'> & { address: string | null }>(db, `
-    SELECT id, slug, title, status, address
+    SELECT id, slug, title, status, timezone, address
     FROM business_locations
     WHERE organization_id = ? AND status = 'active'
     ORDER BY title ASC

@@ -72,7 +72,7 @@ test('document scopes, translations, block ownership and concurrent edits persis
     await db.prepare("INSERT INTO media_assets (id,organization_id,kind,provider,source) VALUES ('shared-image','one','image','cloudflare_r2','uploaded')").run()
     const sourceLinks = await createContentDocumentWithBlocks(db, { id: 'links', organizationId: 'one',
       kind: 'page', rowRole: 'root', locale: 'en', title: 'Links', path: '/links', metadata: { recipe: 'links', page_type: 'custom' } },
-    [{ id: 'link-a', type: 'cta', data: { label: 'A', url: '/a', status: 'active' } }, { id: 'link-b', type: 'cta', data: { label: 'B', url: '/b', status: 'active' } }])
+    [{ id: 'link-a', type: 'cta', data: { label: 'A', url: '/a' } }, { id: 'link-b', type: 'cta', data: { label: 'B', url: '/b' } }])
     const translatedLinks = await createContentDocumentWithBlocks(db, { id: 'links-th', organizationId: 'one',
       kind: 'page', rowRole: 'representation', rootId: sourceLinks.document.id, locale: 'th', title: 'Translated links', path: '/links' },
     [{ id: 'link-a-th', source_block_id: 'link-a', type: 'cta', data: { label: 'Translated A' } },
@@ -108,12 +108,12 @@ test('document scopes, translations, block ownership and concurrent edits persis
     assert.equal(await db.prepare("SELECT title FROM content_documents WHERE id = 'links'").first('title'), 'Links')
     assert.equal(await db.prepare("SELECT count(*) AS count FROM media_placements WHERE id = 'translated-descendant-image'").first('count'), 1)
     await updateContentDocument(db, sourceLinks.document.id, { expected_updated_at: sourceLinks.document.updated_at,
-      blocks: [{ id: 'link-b', type: 'cta', data: { label: 'B', url: '/b', status: 'active' } }, { id: 'link-a', type: 'cta', data: { label: 'A', url: '/new-a', status: 'active' } }] })
+      blocks: [{ id: 'link-b', type: 'cta', data: { label: 'B', url: '/b' } }, { id: 'link-a', type: 'cta', data: { label: 'A', url: '/new-a' } }] })
     assert.equal((await listBlocksForDocument(db, translatedLinks.document.id))[0]?.id, 'link-a-th')
     const reordered = await getContentDocumentById(db, sourceLinks.document.id)
     assert.ok(reordered)
     await updateContentDocument(db, reordered.id, { expected_updated_at: reordered.updated_at,
-      blocks: [{ id: 'link-b', type: 'cta', data: { label: 'B', url: '/b', status: 'active' } }] })
+      blocks: [{ id: 'link-b', type: 'cta', data: { label: 'B', url: '/b' } }] })
     assert.deepEqual(await listBlocksForDocument(db, translatedLinks.document.id), [])
     assert.equal(await db.prepare("SELECT count(*) AS count FROM media_placements WHERE id = 'translated-descendant-image'").first('count'), 0)
     const unreferencedSource = await getContentDocumentById(db, sourceLinks.document.id)

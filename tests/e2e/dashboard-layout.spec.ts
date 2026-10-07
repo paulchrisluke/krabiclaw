@@ -235,7 +235,7 @@ test.describe('dashboard pane hierarchy', () => {
       // The record opens beside Past activity; its own Back returns to that list.
       await page.locator('#dashboard-panel-account-booking-details [data-testid="dashboard-navbar-back"]').click()
       await expect(page).toHaveURL('/dashboard/account/activity')
-    } else {
+    } else if (!cancelled.length) {
       await expect(page.getByText('No past activity yet', { exact: true })).toBeVisible()
     }
     await mobileNav.getByRole('link', { name: 'Today', exact: true }).click()
@@ -513,7 +513,7 @@ test.describe('dashboard pane hierarchy', () => {
     expect(discarded.status(), await discarded.text()).toBe(200)
     const name = `E2E Organization ${Date.now().toString(36)}`
     const draft = await page.request.post('/api/dashboard/onboarding/drafts/active', {
-      data: { sourceType: 'manual', vertical: 'restaurant', name, details: { country: 'TH', city: 'Ao Nang', streetAddress: '88 Moo 2' } },
+      data: { sourceType: 'manual', vertical: 'restaurant', name, details: { sourceLocale: 'en', country: 'TH', city: 'Ao Nang', streetAddress: '88 Moo 2' } },
     })
     expect(draft.status(), await draft.text()).toBe(200)
     const { organizationId } = await draft.json() as { organizationId: string }

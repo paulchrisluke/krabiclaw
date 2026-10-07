@@ -47,6 +47,7 @@ test('deployed MCP transport prices variants, and refuses to invent a missing am
     toolName: 'create_product',
     args: { kind: 'dish',
       organization_id: organizationId,
+      idempotency_key: `pricing-salmon-${runId}`,
       name: `MCP Pricing Salmon Roll ${runId}`,
       description: 'Fresh salmon with rice', unit_label: 'portion', metadata: { kitchen: 'sushi' },
       options: [{ name: 'Portion', values: [{ value: 'Six pieces' }, { value: 'Twelve pieces' }] }],
@@ -102,7 +103,7 @@ test('deployed MCP transport prices variants, and refuses to invent a missing am
   const unpriced = await mcpRequest(request, baseURL!, {
     method: 'tools/call',
     toolName: 'create_product',
-    args: { kind: 'dish', organization_id: organizationId, name: `MCP Pricing Chef's Choice ${runId}`, variants: [{ name: 'Standard' }] },
+    args: { kind: 'dish', organization_id: organizationId, idempotency_key: `pricing-unpriced-${runId}`, name: `MCP Pricing Chef's Choice ${runId}`, variants: [{ name: 'Standard' }] },
   })
   expect(unpriced.status()).toBe(200)
   const unpricedProduct = mcpData<{ product: Product }>(await unpriced.json()).product
@@ -116,6 +117,7 @@ test('deployed MCP transport prices variants, and refuses to invent a missing am
     toolName: 'create_product',
     args: { kind: 'dish',
       organization_id: organizationId,
+      idempotency_key: `pricing-ambiguous-${runId}`,
       name: `MCP Pricing Ambiguous Roll ${runId}`,
       variants: [{ name: 'Standard', prices: [
         { unit_amount: 500, currency: 'USD' },

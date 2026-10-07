@@ -195,6 +195,7 @@ export const invitation = sqliteTable("invitation", {
 	status: text().default("pending").notNull(),
 	expiresAt: integer({ mode: "timestamp" }).notNull(),
 	inviterId: text().notNull().references(() => user.id, { onDelete: "cascade" } ),
+	teamId: text(),
 	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
 }, (table) => [
 	index("invitation_organizationId_idx").on(table.organizationId),
@@ -289,6 +290,23 @@ export const member = sqliteTable("member", {
 	index("member_organizationId_idx").on(table.organizationId),
 	uniqueIndex("member_id_organizationId_unique").on(table.id, table.organizationId),
 ]);
+
+export const team = sqliteTable("team", {
+	id: text().primaryKey(),
+	name: text().notNull(),
+	organizationId: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	memberCount: integer().default(0).notNull(),
+	createdAt: integer({ mode: "timestamp" }).notNull(),
+	updatedAt: integer({ mode: "timestamp" }),
+}, table => [index("team_organizationId_idx").on(table.organizationId), unique("team_org_id_unique").on(table.organizationId, table.id)]);
+
+export const teamMember = sqliteTable("teamMember", {
+	id: text().primaryKey(),
+	teamId: text().notNull().references(() => team.id, { onDelete: "cascade" }),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade" }),
+	membershipKey: text().unique(),
+	createdAt: integer({ mode: "timestamp" }),
+}, table => [index("teamMember_teamId_idx").on(table.teamId), index("teamMember_userId_idx").on(table.userId)]);
 
 // ---------------------------------------------------------------------------
 // Catalog: products, variants, options, prices, publication, collections.
@@ -694,6 +712,7 @@ export const product_booking_configs = sqliteTable("product_booking_configs", {
 	calendar_group: text(),
 	scheduling_mode: text().default("legacy").notNull(),
 	assigned_member_id: text(),
+	assigned_team_id: text().references(() => team.id, { onDelete: "set null" }),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	created_by: text().notNull(),
@@ -701,6 +720,7 @@ export const product_booking_configs = sqliteTable("product_booking_configs", {
 }, (table) => [
 	check("product_booking_configs_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
 	foreignKey({ columns: [table.organization_id, table.product_id], foreignColumns: [products.organization_id, products.id], name: "product_booking_configs_product_scope_fk" }).onDelete("cascade"),
+	foreignKey({ columns: [table.organization_id, table.assigned_team_id], foreignColumns: [team.organizationId, team.id], name: "product_booking_configs_team_scope_fk" }).onDelete("no action"),
 	// Parent key for rules and sessions: they scope by (organization, product)
 	// so a rule can never attach to another tenant's Product.
 	unique("product_booking_configs_org_product_unique").on(table.organization_id, table.product_id),
@@ -840,8 +860,10 @@ export const product_sessions = sqliteTable("product_sessions", {
 	// One session per product, location and instant. Ticket tiers are variants
 	// sharing this session, never a session each. Partial indexes again, because
 	// location_id is nullable and NULLs are distinct under UNIQUE.
-	uniqueIndex("product_sessions_location_instant_unique").on(table.product_id, table.location_id, table.starts_at).where(sql`location_id IS NOT NULL`),
-	uniqueIndex("product_sessions_neutral_instant_unique").on(table.product_id, table.starts_at).where(sql`location_id IS NULL`),
+	uniqueIndex("product_sessions_location_instant_unique").on(table.product_id, table.location_id, table.starts_at).where(sql`location_id IS NOT NULL AND assigned_member_id IS NULL`),
+	uniqueIndex("product_sessions_neutral_instant_unique").on(table.product_id, table.starts_at).where(sql`location_id IS NULL AND assigned_member_id IS NULL`),
+	uniqueIndex("product_sessions_provider_location_instant_unique").on(table.product_id, table.location_id, table.starts_at, table.assigned_member_id).where(sql`location_id IS NOT NULL AND assigned_member_id IS NOT NULL`),
+	uniqueIndex("product_sessions_provider_neutral_instant_unique").on(table.product_id, table.starts_at, table.assigned_member_id).where(sql`location_id IS NULL AND assigned_member_id IS NOT NULL`),
 	index("product_sessions_product_start_idx").on(table.product_id, table.starts_at, table.status),
 	index("product_sessions_location_start_idx").on(table.location_id, table.starts_at, table.status),
 	check("product_sessions_interval_check", sql`ends_at > starts_at`),
@@ -946,12 +968,16 @@ export const bookings = sqliteTable("bookings", {
 //   their own records.
 // Read/write: server/utils/reservations.ts.
 export const location_reservation_configs = sqliteTable("location_reservation_configs", {
+	duration_minutes: integer(),
 	location_id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
 	slot_capacity: integer(),
 	advance_notice_minutes: integer(),
 	minimum_guest_age: integer(),
 	deposit_required: integer({ mode: "boolean" }).default(false).notNull(),
+	deposit_amount: integer(),
+	deposit_currency: text(),
+	deposit_tax_behavior: text().$type<'inclusive' | 'exclusive'>(),
 	deposit_trigger_party_size: integer(),
 	free_cancellation_until_minutes: integer(),
 	reschedule_allowed: integer({ mode: "boolean" }).default(true).notNull(),
@@ -968,9 +994,11 @@ export const location_reservation_configs = sqliteTable("location_reservation_co
 	// Parent key for overrides.
 	unique("location_reservation_configs_org_location_unique").on(table.organization_id, table.location_id),
 	check("location_reservation_configs_booleans_check", sql`deposit_required IN (0, 1) AND reschedule_allowed IN (0, 1) AND accessibility_contact_required IN (0, 1)`),
+	check("location_reservation_configs_duration_check", sql`duration_minutes IS NULL OR duration_minutes > 0`),
 	check("location_reservation_configs_slot_capacity_check", sql`slot_capacity IS NULL OR slot_capacity >= 0`),
 	check("location_reservation_configs_minutes_check", sql`(advance_notice_minutes IS NULL OR advance_notice_minutes >= 0) AND (free_cancellation_until_minutes IS NULL OR free_cancellation_until_minutes >= 0) AND (reschedule_cutoff_minutes IS NULL OR reschedule_cutoff_minutes >= 0)`),
 	check("location_reservation_configs_party_check", sql`deposit_trigger_party_size IS NULL OR deposit_trigger_party_size > 0`),
+	check("location_reservation_configs_deposit_check", sql`(deposit_amount IS NULL OR deposit_amount > 0) AND (deposit_currency IS NULL OR (length(deposit_currency) = 3 AND deposit_currency = upper(deposit_currency))) AND (deposit_tax_behavior IS NULL OR deposit_tax_behavior IN ('inclusive', 'exclusive'))`),
 	check("location_reservation_configs_age_check", sql`minimum_guest_age IS NULL OR minimum_guest_age >= 0`),
 ]);
 
@@ -995,6 +1023,8 @@ export const reservations = sqliteTable("reservations", {
 	starts_at: text().notNull(),
 	ends_at: text().notNull(),
 	party_size: integer().notNull(),
+	// The guest's agreement at creation, not the location's mutable policy.
+	policy_json: text(),
 	// 'pending' | 'confirmed' | 'cancelled' | 'completed' (registry in shared/).
 	status: text().default("confirmed").notNull(),
 	cancelled_at: text(),
@@ -1003,6 +1033,7 @@ export const reservations = sqliteTable("reservations", {
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
 	check("reservations_status_check", sql`status IN ('confirmed', 'cancelled')`),
+	check("reservations_policy_check", sql`policy_json IS NULL OR (json_valid(policy_json) AND json_type(policy_json) = 'object' AND json_type(policy_json, '$.reschedule_allowed') IN ('true', 'false') AND json_type(policy_json, '$.free_cancellation_until_minutes') IN ('null', 'integer') AND json_type(policy_json, '$.reschedule_cutoff_minutes') IN ('null', 'integer')) IS 1`),
 	check("reservations_instants_check", sql`(strftime('%Y-%m-%dT%H:%M:%fZ', starts_at, '+0 days') IS starts_at) AND (strftime('%Y-%m-%dT%H:%M:%fZ', ends_at, '+0 days') IS ends_at) AND (cancelled_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', cancelled_at, '+0 days') IS cancelled_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
 	foreignKey({ columns: [table.organization_id, table.location_id], foreignColumns: [business_locations.organization_id, business_locations.id], name: "reservations_location_scope_fk" }).onDelete("cascade"),
 	foreignKey({ columns: [table.organization_id, table.request_id], foreignColumns: [requests.organization_id, requests.id], name: "reservations_request_scope_fk" }).onDelete("no action"),
@@ -1612,6 +1643,7 @@ export const organization_locales = sqliteTable("organization_locales", {
 	locale: text().notNull(),
 	label: text(),
 	is_source: integer({ mode: "boolean" }).default(false).notNull(),
+	document_role: text().generatedAlwaysAs(sql`CASE WHEN is_source = 1 THEN 'root' ELSE 'representation' END`),
 	status: text().default("disabled").notNull(),
 	activated_at: text(),
 	disabled_at: text(),
@@ -1620,9 +1652,9 @@ export const organization_locales = sqliteTable("organization_locales", {
 }, (table) => [
 	check("organization_locales_instants_check", sql`(activated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', activated_at, '+0 days') IS activated_at) AND (disabled_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', disabled_at, '+0 days') IS disabled_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
 	unique("organization_locales_organization_id_locale_unique").on(table.organization_id, table.locale),
+	unique("organization_locales_locale_role_unique").on(table.organization_id, table.locale, table.document_role),
 	uniqueIndex("idx_organization_locales_one_source_per_org").on(table.organization_id).where(sql`is_source = 1`),
 	check("organization_locales_status_check", sql`status IN ('published', 'disabled') AND (is_source = 0 OR status = 'published')`),
-	check("organization_locales_english_source_check", sql`locale <> 'en' OR (is_source = 1 AND status = 'published')`),
 ]);
 
 export const mcp_tool_call_events = sqliteTable("mcp_tool_call_events", {
@@ -1842,7 +1874,7 @@ export const content_documents = sqliteTable("content_documents", {
 	uniqueIndex("content_documents_product_root_unique").on(table.organization_id, table.product_id).where(sql`row_role = 'root' AND product_id IS NOT NULL`),
 	unique("content_documents_scope_role_unique").on(table.organization_id, table.id, table.row_role, table.kind),
 	foreignKey({ columns: [table.organization_id, table.root_id, table.root_role, table.kind], foreignColumns: [table.organization_id, table.id, table.row_role, table.kind], name: "content_documents_root_scope_fk" }).onDelete("cascade"),
-	foreignKey({ columns: [table.organization_id, table.locale], foreignColumns: [organization_locales.organization_id, organization_locales.locale], name: "content_documents_locale_scope_fk" }).onDelete("cascade"),
+	foreignKey({ columns: [table.organization_id, table.locale, table.row_role], foreignColumns: [organization_locales.organization_id, organization_locales.locale, organization_locales.document_role], name: "content_documents_locale_scope_fk" }).onDelete("cascade"),
 	uniqueIndex("content_documents_root_locale_unique").on(table.root_id, table.locale).where(sql`row_role = 'representation'`),
 	uniqueIndex("content_documents_route_unique").on(table.organization_id, table.locale, table.path).where(sql`row_role IN ('root','representation') AND path IS NOT NULL`),
 	uniqueIndex("content_documents_slug_unique").on(table.organization_id, table.kind, table.locale, table.slug).where(sql`row_role IN ('root','representation') AND slug IS NOT NULL`),
@@ -1850,7 +1882,7 @@ export const content_documents = sqliteTable("content_documents", {
 	index("content_documents_org_kind_status_idx").on(table.kind, table.row_role, table.status, table.sort_order),
 	index("content_documents_location_kind_status_idx").on(table.location_id, table.kind, table.row_role, table.status, table.sort_order),
 	check("content_documents_metadata_check", sql`json_valid(metadata_json) AND json_type(metadata_json) IS 'object'`),
-	check("content_documents_role_check", sql`(row_role = 'root' AND root_id IS NULL AND root_role IS NULL AND locale = 'en') OR (row_role = 'representation' AND root_id IS NOT NULL AND root_id <> id AND root_role = 'root' AND locale IS NOT NULL AND locale <> 'en' AND product_id IS NULL AND location_id IS NULL AND scope_path IS NULL AND status IS NULL AND visibility IS NULL AND source IS NULL AND author_id IS NULL AND published_at IS NULL AND first_published_at IS NULL)`),
+	check("content_documents_role_check", sql`(row_role = 'root' AND root_id IS NULL AND root_role IS NULL AND locale IS NOT NULL) OR (row_role = 'representation' AND root_id IS NOT NULL AND root_id <> id AND root_role = 'root' AND locale IS NOT NULL AND product_id IS NULL AND location_id IS NULL AND scope_path IS NULL AND status IS NULL AND visibility IS NULL AND source IS NULL AND author_id IS NULL AND published_at IS NULL AND first_published_at IS NULL)`),
 	check("content_documents_path_check", sql`path IS NULL OR (path LIKE '/%' AND path NOT LIKE '//%')`),
 	check("content_documents_page_copy_check", sql`kind <> 'page' OR (path IS NOT NULL AND title IS NOT NULL)`),
 	check("content_documents_qa_scope_check", sql`kind <> 'qa' OR row_role <> 'root' OR ((location_id IS NULL OR scope_path IS NULL) AND (scope_path IS NULL OR scope_path LIKE '/%'))`),
@@ -1943,6 +1975,7 @@ export const resource_localizations = sqliteTable("resource_localizations", {
 	resource_type: text().notNull(),
 	resource_id: text().notNull(),
 	locale: text().notNull(),
+	document_role: text().generatedAlwaysAs(sql`'representation'`),
 	values_json: text().notNull(),
 	route_path: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
@@ -1952,8 +1985,8 @@ export const resource_localizations = sqliteTable("resource_localizations", {
 }, (table) => [
 	check("resource_localizations_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
 	foreignKey({
-		columns: [table.organization_id, table.locale],
-		foreignColumns: [organization_locales.organization_id, organization_locales.locale],
+		columns: [table.organization_id, table.locale, table.document_role],
+		foreignColumns: [organization_locales.organization_id, organization_locales.locale, organization_locales.document_role],
 		name: "resource_localizations_organization_locale_fk",
 	}).onDelete("cascade"),
 	unique("resource_localizations_org_resource_locale_unique").on(
@@ -1966,7 +1999,6 @@ export const resource_localizations = sqliteTable("resource_localizations", {
 		.on(table.organization_id, table.locale, table.route_path)
 		.where(sql`route_path IS NOT NULL`),
 	check("resource_localizations_values_json_check", sql`json_valid(values_json) AND json_type(values_json) = 'object'`),
-	check("resource_localizations_non_english_check", sql`locale <> 'en'`),
 	check("resource_localizations_route_path_check", sql`route_path IS NULL OR (route_path LIKE '/' || locale || '/%' AND route_path NOT LIKE '%?%' AND route_path NOT LIKE '%#%' AND route_path NOT LIKE '%//%')`),
 	index("resource_localizations_org_locale_type_idx").on(table.organization_id, table.locale, table.resource_type),
 	index("resource_localizations_resource_idx").on(table.resource_type, table.resource_id),
@@ -2294,10 +2326,12 @@ export const payment_attempts = sqliteTable("payment_attempts", {
 export const payment_checkout_holds = sqliteTable("payment_checkout_holds", {
  id: text().primaryKey(),
  organization_id: text().notNull(),
- product_id: text().notNull(),
- variant_id: text().notNull(),
- price_id: text().notNull(),
- session_id: text().notNull(),
+ product_id: text(),
+ variant_id: text(),
+ price_id: text(),
+ session_id: text(),
+ location_id: text(),
+ timezone: text(),
  assigned_member_id: text(),
  buyer_user_id: text().references(() => user.id, { onDelete: "set null" }),
  request_id: text(),
@@ -2312,10 +2346,13 @@ export const payment_checkout_holds = sqliteTable("payment_checkout_holds", {
  expires_at: text().notNull(),
  created_at: text().notNull(),
  converted_booking_id: text(),
+ converted_reservation_id: text(),
 }, t => [
  index("payment_holds_capacity_idx").on(t.session_id, t.status, t.expires_at),
  index("payment_holds_calendar_idx").on(t.organization_id, t.calendar_group, t.status, t.expires_at),
+ index("payment_holds_reservation_idx").on(t.organization_id, t.location_id, t.starts_at, t.status, t.expires_at),
  check("payment_holds_quantity_check", sql`quantity > 0 AND amount > 0`),
+ check("payment_holds_subject_check", sql`(product_id IS NOT NULL AND variant_id IS NOT NULL AND price_id IS NOT NULL AND session_id IS NOT NULL AND converted_reservation_id IS NULL) OR (product_id IS NULL AND variant_id IS NULL AND price_id IS NULL AND session_id IS NULL AND location_id IS NOT NULL AND timezone IS NOT NULL AND calendar_group IS NULL AND assigned_member_id IS NULL AND converted_booking_id IS NULL)`),
 ]);
 
 export const payment_orders = sqliteTable("payment_orders", {
@@ -2376,6 +2413,7 @@ export const payment_usage_events = sqliteTable("payment_usage_events", {
  kind: text().$type<'captured_volume' | 'stripe_cost' | 'stripe_cost_adjustment'>().notNull(),
  currency: text().notNull(),
  amount: integer().notNull(),
+ billing_basis_json: text(),
  source_id: text().notNull().unique(),
  provider_occurred_at: text().notNull(),
  delivery_at: text(),
@@ -2445,6 +2483,7 @@ export const payment_cost_snapshots = sqliteTable("payment_cost_snapshots", {
  incurred_by: text().notNull(),
  currency: text().notNull(),
  amount: integer().notNull(),
+ billing_basis_json: text(),
  incurred_at: text().notNull(),
  revision: integer().default(1).notNull(),
  updated_at: text().notNull(),

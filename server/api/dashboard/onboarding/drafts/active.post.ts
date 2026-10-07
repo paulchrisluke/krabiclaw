@@ -1,3 +1,4 @@
+import { platformLocale } from '~/shared/platform-locales'
 import { parseOpeningHours, parseSpecialHours } from '~/shared/reservation-hours'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
@@ -39,6 +40,7 @@ function parseCountry(value: unknown): string | null {
 function detailsFromBody(
   raw: Record<string, unknown> | null, existing: DraftDetailsInput | null, name: string, place: PlaceDetailsSnapshot | Awaited<ReturnType<typeof getPlaceDetails>> | null, ): DraftDetailsInput {
   return {
+    sourceLocale: raw?.sourceLocale === undefined ? existing?.sourceLocale ?? null : stringOrNull(raw.sourceLocale),
     name, country: raw?.country === undefined ? existing?.country ?? null : parseCountry(raw.country), city: stringOrNull(raw?.city) ?? existing?.city ?? null, streetAddress: stringOrNull(raw?.streetAddress) ?? existing?.streetAddress ?? null, addressLine2: stringOrNull(raw?.addressLine2) ?? existing?.addressLine2 ?? null, region: stringOrNull(raw?.region) ?? existing?.region ?? null, postalCode: stringOrNull(raw?.postalCode) ?? existing?.postalCode ?? null, phone: stringOrNull(raw?.phone) ?? existing?.phone ?? null, websiteUrl: stringOrNull(raw?.websiteUrl) ?? existing?.websiteUrl ?? null, openingHours: parseOpeningHours(raw?.openingHours === undefined ? (existing ? existing.openingHours : place?.openingHours ?? null) : raw.openingHours), specialHours: parseSpecialHours(raw?.specialHours === undefined ? existing?.specialHours ?? null : raw.specialHours), timezone: stringOrNull(raw?.timezone) ?? (existing ? existing.timezone : place?.timezone ?? null), currency: raw?.currency === undefined ? existing?.currency ?? null : parseCurrency(raw.currency), }
 }
 
@@ -179,6 +181,8 @@ export default defineHandler(async (event) => {
   }
 
   const details = detailsFromBody(rawDetails, existingPayload?.source.details ?? null, name, place)
+  if (!details.sourceLocale || !platformLocale(details.sourceLocale)) return jsonResponse({ error: 'Choose a supported website language' }, { status: 400 })
+  if (existingPayload && existingPayload.source.details.sourceLocale !== details.sourceLocale) return jsonResponse({ error: 'Existing draft content cannot be relabelled into another language' }, { status: 409 })
   const brandDraft = brandFromBody(body.brandDraft && typeof body.brandDraft === 'object' ? body.brandDraft : null, existingPayload)
   if (body?.products !== undefined && !Array.isArray(body.products)) {
     return jsonResponse({ error: 'products must be an array' }, { status: 400 })
@@ -210,6 +214,7 @@ export default defineHandler(async (event) => {
     name: payload.preview.brandName,
     vertical,
     subdomain_candidate: draft.subdomainCandidate,
+    source_locale: details.sourceLocale,
   })
   if ('error' in target) return jsonResponse({ error: target.error }, { status: target.status })
 

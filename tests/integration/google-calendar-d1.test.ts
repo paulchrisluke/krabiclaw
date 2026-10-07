@@ -3,7 +3,7 @@ import test from 'node:test'
 import { Miniflare } from 'miniflare'
 import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api'
 import * as schema from '../../server/db/schema.ts'
-import { claimSessionCapacity, setBookingStatus, updateSession } from '../../server/utils/availability.ts'
+import { claimSessionCapacity, setBookingStatus } from '../../server/utils/availability.ts'
 import { CalendarSelectionConflict, connectCalendar, calendarSubjects, runCalendarCleanupJobs, disconnectCalendar, readCalendarIntegration, storeCalendarSelection, syncCalendarOrganization } from '../../server/utils/google-calendar.ts'
 import { requireIntegrationAccount, type CloudflareEnv } from '../../server/utils/auth.ts'
 import { cleanupOrganizationBeforeDelete } from '../../server/utils/tenant-deletion.ts'
@@ -21,7 +21,7 @@ test('committed consultation projection is tenant scoped, private, idempotent an
     await db.prepare("INSERT INTO organization(id,name,slug) VALUES('org','Org','org'),('other','Other','other')").run()
     await db.prepare("INSERT INTO products(kind,id,organization_id,name,slug,created_by,updated_by) VALUES('service','p','org','Consultation','consultation','actor','actor'),('experience','class','org','Class','class','actor','actor')").run()
     await db.prepare("INSERT INTO product_variants(id,organization_id,product_id,name,created_by,updated_by) VALUES('v','org','p','Consultation','actor','actor')").run()
-    await db.prepare("INSERT INTO product_booking_configs(product_id,organization_id,calendar_group,online_timezone,confirmation_mode,created_by,updated_by) VALUES('p','org','consultations','America/New_York','review','actor','actor'),('class','org',NULL,'America/New_York','instant','actor','actor')").run()
+    await db.prepare("INSERT INTO product_booking_configs(product_id,organization_id,duration_minutes,calendar_group,online_timezone,confirmation_mode,created_by,updated_by) VALUES('p','org',30,'consultations','America/New_York','review','actor','actor'),('class','org',30,NULL,'America/New_York','instant','actor','actor')").run()
     await db.prepare("INSERT INTO product_sessions(id,organization_id,product_id,timezone,starts_at,ends_at,capacity,created_by,updated_by) VALUES('s','org','p','America/New_York','2099-11-01T14:00:00.000Z','2099-11-01T14:30:00.000Z',1,'actor','actor')").run()
     await db.prepare(`INSERT INTO requests(id,kind,organization_id,conversation_state,payload_json) VALUES('thread','booking','org','needs_attention','{"guest":{"name":"Jane Doe","email":"private@example.test","phone":null},"notes":"PRIVATE MATTER"}')`).run()
     const { bookingId } = await claimSessionCapacity(db, { organizationId: 'org', productId: 'p', sessionId: 's', productVariantId: 'v', partySize: 1, requestId: 'thread' })
@@ -84,7 +84,7 @@ test('committed consultation projection is tenant scoped, private, idempotent an
     await syncCalendarOrganization(env, 'org', 25, provider)
     assert.equal(events.size, 1)
     assert.equal(events.get(String(link?.event_id))?.description, 'Status: confirmed\nTeam member: Owner\nhttps://krabiclaw.test/dashboard/org/messages/thread')
-    await updateSession(db, { organizationId: 'org', sessionId: 's', actorId: 'actor', startsAt: '2099-11-01T15:00:00.000Z', endsAt: '2099-11-01T15:30:00.000Z' })
+    await db.prepare("UPDATE bookings SET assigned_member_id=NULL,updated_at=? WHERE id=?").bind(new Date().toISOString(), bookingId).run()
     cancelDuringPut = true
     await syncCalendarOrganization(env, 'org', 25, provider)
     assert.equal(events.size, 0, 'late update is compensated after committed cancellation')
@@ -101,7 +101,6 @@ test('committed consultation projection is tenant scoped, private, idempotent an
     assert.equal(events.size, 1)
     // Disable while a create is in flight: the late result is removed, and
     // its original identity remains locally for audit.
-    await updateSession(db, { organizationId: 'org', sessionId: 's', actorId: 'actor', startsAt: '2099-11-01T16:00:00.000Z', endsAt: '2099-11-01T16:30:00.000Z' })
     await disconnectCalendar(db, 'org')
     await syncCalendarOrganization(env, 'org', 25, provider)
     await storeCalendarSelection(db, 'org', { account_id: 'linked-account', calendar_id: 'chosen', calendar_name: 'Calendar' })
@@ -165,7 +164,7 @@ test('bounded Calendar backfill resumes and cancelled historical Sessions are cl
     await db.batch(statements.map(statement => db.prepare(statement)))
     await db.prepare("INSERT INTO organization(id,name,slug) VALUES('org','Org','org')").run()
     await db.prepare("INSERT INTO products(kind,id,organization_id,name,slug,created_by,updated_by) VALUES('service','p','org','Consultation','consultation','actor','actor')").run()
-    await db.prepare("INSERT INTO product_booking_configs(product_id,organization_id,calendar_group,online_timezone,confirmation_mode,created_by,updated_by) VALUES('p','org',NULL,'UTC','review','actor','actor')").run()
+    await db.prepare("INSERT INTO product_booking_configs(product_id,organization_id,duration_minutes,calendar_group,online_timezone,confirmation_mode,created_by,updated_by) VALUES('p','org',30,NULL,'UTC','review','actor','actor')").run()
     await db.prepare("INSERT INTO product_variants(id,organization_id,product_id,name,created_by,updated_by) VALUES('v','org','p','Consultation','actor','actor')").run()
     const bookings: string[] = []
     for (let i = 0; i < 55; i++) {
@@ -201,7 +200,8 @@ test('bounded Calendar backfill resumes and cancelled historical Sessions are cl
     for(const event of events.values())assert.equal((event as {description:string}).description,'Status: pending','a booking without a guest thread has no fabricated dashboard link')
     await setBookingStatus(db, { organizationId: 'org', bookingId: bookings[0]!, status: 'confirmed' })
     for (let i = 0; i < 3; i++) await syncCalendarOrganization(env, 'org', 25, provider)
-    await updateSession(db, { organizationId: 'org', sessionId: 's00', actorId: 'actor', startsAt: '2020-01-01T10:00:00.000Z', endsAt: '2020-01-01T10:30:00.000Z' })
+    // Imported historical state, independently of the live change workflow.
+    await db.prepare("UPDATE product_sessions SET starts_at='2020-01-01T10:00:00.000Z',ends_at='2020-01-01T10:30:00.000Z' WHERE id='s00'").run()
     await syncCalendarOrganization(env, 'org', 25, provider)
     assert.equal(events.size, 55, 'confirmed ended scheduled consultation retains its event')
     // Legacy/imported state: a confirmed booking can reference a cancelled Session.
@@ -224,7 +224,7 @@ test('scheduled Calendar sync reports thrown and event failures while projecting
     for (const org of ['a-broken', 'b-failed', 'c-healthy']) {
       await db.prepare('INSERT INTO organization(id,name,slug) VALUES(?,?,?)').bind(org, org, org).run()
       await db.prepare("INSERT INTO products(kind,id,organization_id,name,slug,created_by,updated_by) VALUES('service',?,?,?,'consultation','actor','actor')").bind(org, org, org).run()
-      await db.prepare("INSERT INTO product_booking_configs(product_id,organization_id,calendar_group,online_timezone,created_by,updated_by) VALUES(?,?,'consultations','UTC','actor','actor')").bind(org, org).run()
+      await db.prepare("INSERT INTO product_booking_configs(product_id,organization_id,duration_minutes,calendar_group,online_timezone,created_by,updated_by) VALUES(?,?,30,'consultations','UTC','actor','actor')").bind(org, org).run()
       await db.prepare("INSERT INTO product_variants(id,organization_id,product_id,name,created_by,updated_by) VALUES(?,?,?,'Consultation','actor','actor')").bind(org, org, org).run()
       await db.prepare("INSERT INTO product_sessions(id,organization_id,product_id,timezone,starts_at,ends_at,capacity,created_by,updated_by) VALUES(?,?,?,'UTC','2099-11-01T10:00:00.000Z','2099-11-01T10:30:00.000Z',1,'actor','actor')").bind(org, org, org).run()
       await claimSessionCapacity(db, { organizationId: org, productId: org, sessionId: org, productVariantId: org, partySize: 1 })

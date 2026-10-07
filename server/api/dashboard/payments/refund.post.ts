@@ -6,7 +6,7 @@ import {requestRefundAuthorization,approveRefundAuthorization,refundPayment,exec
 import {queryFirst} from '~/server/db'
 import {executeGuestThreadOperation} from '~/server/domain/guest-threads/operations'
 import {createStripeClient} from '~/server/utils/stripe-client'
-import {bookingRefundKey,type BookingRefundAction} from '~/server/domain/payments/booking-refund'
+import {visitRefundKey,type VisitRefundAction} from '~/server/domain/payments/visit-refund'
 export default defineHandler(async event=>{
  requireFinancialBrowserOrigin(event)
  const {env,db,organization,userId}=await getDashboardContext(event,{})
@@ -17,14 +17,14 @@ export default defineHandler(async event=>{
  if(!env.STRIPE_SECRET_KEY) throw new HTTPError({statusCode:503,statusMessage:'Stripe is not configured'})
  await approveRefundAuthorization(db,principal,body.authorization_id)
  const authorization=await queryFirst<{action:string;payment_id:string;amount:number;note:string|null}>(db,'SELECT action,payment_id,amount,note FROM payment_authorizations WHERE id=? AND organization_id=? AND user_id=?',[body.authorization_id,organization.id,userId])
- if(authorization?.action==='reject_booking'||authorization?.action==='cancel_booking'){
-  const action:BookingRefundAction=authorization.action==='reject_booking'?'reject':'cancel'
+ if(authorization?.action==='reject_booking'||authorization?.action==='cancel_booking'||authorization?.action==='cancel_reservation'){
+  const action:VisitRefundAction=authorization.action==='reject_booking'?'reject':'cancel'
   const payment=await requirePayment(db,organization.id,authorization.payment_id)
-  if(payment.subject_type!=='booking'||!payment.subject_id) throw new HTTPError({statusCode:409,statusMessage:'Authorization is not for a booking payment'})
-  const booking=await queryFirst<{request_id:string|null}>(db,'SELECT request_id FROM bookings WHERE id=? AND organization_id=?',[payment.subject_id,organization.id])
+  if((payment.subject_type!=='booking'&&payment.subject_type!=='reservation')||!payment.subject_id || (authorization.action==='cancel_reservation')!==(payment.subject_type==='reservation')) throw new HTTPError({statusCode:409,statusMessage:'Authorization is not for a booking payment'})
+  const booking=await queryFirst<{request_id:string|null}>(db,`SELECT request_id FROM ${payment.subject_type==='booking'?'bookings':'reservations'} WHERE id=? AND organization_id=?`,[payment.subject_id,organization.id])
   if(!booking?.request_id) throw new HTTPError({statusCode:409,statusMessage:'Paid booking request is unavailable'})
   const outcome=await executeGuestThreadOperation(db,{threadId:booking.request_id,organizationId:organization.id,action,actorUserId:userId,idempotencyKey:`paid-${action}:${body.authorization_id}`,financialAuthorizationId:body.authorization_id,...(authorization.note?{body:authorization.note}:{}),env})
-  const key=bookingRefundKey(action,payment.subject_id)
+  const key=visitRefundKey(action,payment.subject_type,payment.subject_id)
   const refund=await queryFirst(db,'SELECT id FROM payment_refunds WHERE payment_id=? AND idempotency_key=?',[payment.id,key])
   if(!refund) throw new HTTPError({statusCode:409,statusMessage:outcome.ok?'Refund intent missing':`Booking ${action==='reject'?'rejection':'cancellation'} could not be committed`})
   const submitted=await executeRefund(db,createStripeClient(env.STRIPE_SECRET_KEY, 'payments'),payment,authorization.amount,key,'requested_by_customer',userId,env,authorization.note)

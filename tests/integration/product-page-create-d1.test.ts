@@ -115,8 +115,10 @@ test('a refused page creates no product, and one page per product holds at the w
 
     await db.prepare("INSERT INTO subscription (id, plan, referenceId, status, periodEnd) VALUES ('sub', 'growth', ?, 'active', ?)")
       .bind(ORG, Math.floor(Date.now() / 1000) + 86400).run()
-    const product = await createProduct(db, { organizationId: ORG, actor: ACTOR, product: { kind: 'service', name: 'Probate' } })
-    assert.equal(product.page, null)
+    // A legacy imported service has no page yet; concurrent page writers
+    // must still obey the native one-page-per-product constraint.
+    await db.prepare("INSERT INTO products(kind,id,organization_id,name,slug,created_by,updated_by) VALUES('service','legacy-probate',?,'Probate','probate',?,?)").bind(ORG,ACTOR.actorId,ACTOR.actorId).run()
+    const product = { id: 'legacy-probate' }
 
     // Two pages prepared for one product, each passing its own checks before
     // either is written: the database keeps the second from binding.

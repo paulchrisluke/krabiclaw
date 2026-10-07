@@ -17,6 +17,7 @@ import {
   setProductLocation,
   setProductPublication,
   updateProduct,
+  updateMenu,
 } from '../../server/utils/product-management.ts'
 import { AmbiguousPriceError } from '../../shared/prices.ts'
 
@@ -34,7 +35,7 @@ async function boot() {
   const statements = await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))
   await db.batch(statements.map(statement => db.prepare(statement)))
   await db.prepare(`INSERT INTO organization (id, name, slug, subdomain, settings_json, theme_id, default_currency, status, onboarding_status, url_structure, vertical, updated_at)
-    VALUES (?, 'Org', 'org', 'org', '{"config":{"default_timezone":"Asia/Bangkok"}}', 'theme', 'THB', 'active', 'complete', 'flat', 'restaurant', ?)`)
+    VALUES (?, 'Org', 'org', 'org', '{"config":{"default_timezone":"Asia/Bangkok"}}', 'saya-theme-v1', 'THB', 'active', 'complete', 'flat', 'restaurant', ?)`)
     .bind(ORG, NOW).run()
   await db.prepare("INSERT INTO user (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?, 'Actor', 'actor@example.test', 0, 0, 0)").bind(ACTOR.actorId).run()
   for (const loc of ['loc-a', 'loc-b']) {
@@ -232,15 +233,13 @@ test('reconcile converges instead of duplicating, and deletion respects the cano
       'a product missing from the import is deactivated, not deleted')
     assert.equal(await db.prepare('SELECT count(*) n FROM products').first<number>('n'), 2)
 
-    // A canonical page blocks deletion loudly rather than vanishing.
+    // Removing the offering removes its canonical page in the same operation.
     await db.prepare(`INSERT INTO organization_locales (id, organization_id, locale, is_source, status, created_at, updated_at)
       VALUES ('sl-en', ?, 'en', 1, 'published', ?, ?)`).bind(ORG, NOW, NOW).run()
     await db.prepare(`INSERT INTO content_documents (id, organization_id, kind, row_role, locale, product_id, title, path, sort_order, metadata_json, created_at, updated_at)
       VALUES ('doc-1', ?, 'page', 'root', 'en', 'src-1', 'One', '/one', 0, '{"page_type":"custom"}', ?, ?)`).bind(ORG, NOW, NOW).run()
-    await assert.rejects(deleteProduct(db, { organizationId: ORG, productId: 'src-1' }), /Unbind or delete the product page/)
-
-    await db.prepare("DELETE FROM content_documents WHERE id = 'doc-1'").run()
     await deleteProduct(db, { organizationId: ORG, productId: 'src-1' })
+    assert.equal(await db.prepare("SELECT count(*) n FROM content_documents WHERE id='doc-1'").first<number>('n'),0)
     assert.equal(await db.prepare('SELECT count(*) n FROM products').first<number>('n'), 1)
     assert.equal(await db.prepare('SELECT count(*) n FROM product_variants').first<number>('n'), 1, 'the deleted product took its variants with it')
   } finally { await runtime.dispose() }
@@ -499,5 +498,28 @@ test('an id from another tenant is refused, not upserted onto', { timeout: 120_0
       "another tenant's variant was not touched")
     assert.equal(await db.prepare("SELECT count(*) n FROM product_variants WHERE product_id = ?").bind(mine.id).first<number>('n'), 1,
       'the refused edit left this product with its own variant')
+  } finally { await runtime.dispose() }
+})
+
+
+test('a menu update commits all sections, prices and public offerings once', { timeout: 120_000 }, async () => {
+  const { runtime, db } = await boot()
+  try {
+    const sections = Array.from({ length: 7 }, (_, section) => ({ name: `Section ${section + 1}`, items: Array.from({ length: section === 6 ? 7 : 10 }, (_, item) => ({ name: `Dish ${section}-${item}`, variants: [{ name: 'Default', prices: [{ unit_amount: 10000 + item, currency: 'THB' }] }] })) }))
+    const input = { organizationId: ORG, locationId: 'loc-a', sections, idempotencyKey: 'photo-menu', actor: ACTOR }
+    const outcome = await updateMenu(db, input)
+    assert.equal(outcome.sections.length, 7)
+    const publicProducts = await listLocationProducts(db, { organizationId: ORG, locationId: 'loc-a', publishedOnly: true })
+    assert.equal(publicProducts.length, 67)
+    assert.ok(publicProducts.every(product => product.kind === 'dish' && product.active && product.variants[0]?.prices[0]?.currency === 'THB'))
+    assert.deepEqual(outcome.sections.map(section => section.collection.name), sections.map(section => section.name))
+    for (const [index, section] of outcome.sections.entries()) assert.deepEqual(section.products.map(product => product.name), sections[index]!.items.map(item => item.name))
+    assert.equal((await updateMenu(db, input)).replayed, true)
+    assert.equal(await db.prepare('SELECT count(*) n FROM products').first<number>('n'), 67)
+    await assert.rejects(updateMenu(db, { ...input, sections: [{ ...sections[0]!, name: 'Different menu' }] }), /different menu update/)
+    const collection = outcome.sections[0]!.collection
+    const before = (await listCollectionProducts(db, { organizationId: ORG, collectionId: collection.id })).map(product => product.id)
+    await assert.rejects(setCollectionProducts(db, { organizationId: ORG, collectionId: collection.id, productIds: ['missing-id'], actor: ACTOR }), /missing products/)
+    assert.deepEqual((await listCollectionProducts(db, { organizationId: ORG, collectionId: collection.id })).map(product => product.id), before)
   } finally { await runtime.dispose() }
 })

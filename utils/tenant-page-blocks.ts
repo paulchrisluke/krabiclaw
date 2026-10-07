@@ -200,6 +200,7 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
   }, { accessibility: 'required', seo: 'structured' }),
 
   markdown: blockDefinitionWithMetadata('markdown', 'Text', 'Paragraphs, lists and links.', ALL_RECIPES, {
+    title: text('Title'),
     markdown: { kind: 'markdown', label: 'Text', required: true, section: 'content' },
     // The writer requires this; it was declared nowhere, so nothing could tell
     // an author or an assistant that a text block must name its editor mode.
@@ -238,6 +239,7 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
 
   how_to: blockDefinitionWithMetadata('how_to', 'How-to', 'Steps in order.', ALL_RECIPES, {
     title: text('Title', { section: 'settings' }),
+    description: prose('Introduction', { section: 'copy' }),
     label: text('Label', { section: 'settings' }),
     estimated_time: text('Estimated time', { section: 'settings' }),
     // Their own leaf: settings held five controls, and DESIGN.md's answer to a
@@ -271,6 +273,7 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
   callout: blockDefinitionWithMetadata('callout', 'Callout', 'A highlighted message.', ALL_RECIPES, {
     title: text('Title'),
     body: prose('Message'),
+    items: { kind: 'list', label: 'Supporting facts', section: 'items', of: GRID_ITEM_FIELDS },
     tone: {
       kind: 'enum', label: 'Tone', translatable: false, section: 'copy', default: 'neutral',
       options: ['neutral', 'info', 'success', 'warning', 'danger'].map(value => ({ value, label: value.replace(/^\w/, c => c.toUpperCase()) })),
@@ -306,7 +309,9 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
   }),
 
   feature_grid: blockDefinitionWithMetadata('feature_grid', 'Features', 'A grid you write, or rows read from your site.', ALL_RECIPES, {
-    title: text('Section title', { section: 'copy' }),
+    title: text('Section title', { section: 'headline' }),
+    title_muted: text('Closing title', { section: 'headline' }),
+    eyebrow: text('Eyebrow', { section: 'copy' }),
     description: prose('Description', { section: 'copy' }),
     source: {
       kind: 'enum', label: 'Rows', translatable: false, section: 'settings', default: 'manual',
@@ -319,6 +324,7 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
       ],
     },
     items: { kind: 'list', label: 'Items', section: 'items', of: GRID_ITEM_FIELDS, availableWhen: { field: 'source', equals: ['manual'] } },
+    limit: { kind: 'number', label: 'Article count', translatable: false, section: 'settings', min: 1, availableWhen: { field: 'source', equals: ['organization_posts'] } },
     // How Krabiclaw's own pages draw written items: as icon cards, or as
     // pictures with their words beneath.
     layout: {
@@ -657,6 +663,12 @@ const STRING_FIELDS = new Set([
 const ARRAY_FIELDS = new Set(['page_ids', 'product_ids', 'location_ids'])
 
 export function validateContentBlockData(type: string, data: Record<string, unknown>): Record<string, unknown> {
+  const fields = TENANT_PAGE_BLOCK_REGISTRY[type as TenantPageBlockType]?.fields
+  if (!fields) throw new Error(`Block type ${type} is not registered.`)
+  for (const key of Object.keys(data)) {
+    const field = fields[key]
+    if (!field || field.kind === 'media' || field.store === 'level') throw new Error(`${type}.${key} is not a stored field.`)
+  }
   assertNoEmbeddedMediaFields(data, type)
   if (type === 'image' && 'url' in data) throw new Error('image.url must use the block media array.')
   for (const key of STRING_FIELDS) {

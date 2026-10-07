@@ -26,8 +26,9 @@ const brandName = computed(() => String(organization?.name ?? '').trim())
 const items = computed(() => blockRecords(props.block.data.items).map((item) => {
   const media = blockRecords(item.media)[0] ?? null
   const url = blockText(item.url)
-  const isExperience = url.startsWith('/experiences/')
+  const isExperience = item.kind === 'experience'
   return {
+    kind: blockText(item.kind),
     name: blockText(item.title),
     description: blockText(item.description),
     price: blockText(item.value) || null,
@@ -47,12 +48,12 @@ const items = computed(() => blockRecords(props.block.data.items).map((item) => 
     ctaText: isExperience ? t('saya.common.view_experience') : t('saya.common.view_dish'),
     // A product with no current offer cannot be bought today, whatever the
     // card says next to it.
-    unavailable: !blockText(item.value),
+    unavailable: item.unavailable === true,
     category: blockText(item.category) || null,
   }
 }).filter(item => item.name))
 
-const allExperiences = computed(() => items.value.length > 0 && items.value.every(item => item.href?.startsWith('/experiences/')))
+const allExperiences = computed(() => items.value.length > 0 && items.value.every(item => item.kind === 'experience'))
 const featured = computed(() => ({
   items: items.value,
   kicker: blockText(props.block.data.description)

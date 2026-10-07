@@ -176,7 +176,7 @@ test('MCP financial reads return bounded reports and authenticated detail links 
   assert.deepEqual(detail.refunds,[{id:'report-refund',amount:1000,status:'succeeded'}])
   assert.equal(detail.dashboard_url,'https://proof.example/dashboard/payments/bookings/payment/report')
   const usage = await call('get_payments_usage')
-  assert.deepEqual(usage.pending,[{currency:'USD',kind:'stripe_cost',event_count:1,amount:100,action_required:true}])
+  assert.deepEqual(usage.pending,[{currency:'USD',kind:'stripe_cost',event_count:1,amount:100,billing_currency:'USD',billing_amount:100,action_required:true}])
   assert.equal(usage.dashboard_url,'https://proof.example/dashboard/payments/payments/invoices')
   const originalFetch = globalThis.fetch
   const payoutReads:string[]=[]
@@ -367,7 +367,7 @@ test('buyer conversations hide merchant facts and preserve public unread receipt
   const view=await getGuestThreadDetail(db,'buyer-conversation',ORG,{buyerUserId:'verified'})
   assert(view)
   assert.deepEqual(view.entries.filter(entry=>entry.kind!=='submission').map(entry=>entry.id),[publicReply.id,capture.id])
-  assert(view.entries.every(entry=>entry.actorUserId===null&&entry.deliveries.length===0))
+  assert(view.entries.every(entry=>(entry.actorUserId===null||(entry.actorKind==='guest'&&entry.actorUserId==='verified'))&&entry.deliveries.length===0))
   assert.deepEqual(view.deliveryFailures,[])
   assert.deepEqual(view.availableActions,[])
   assert.equal(view.conversationState,null)
@@ -397,7 +397,7 @@ test('buyer conversations hide merchant facts and preserve public unread receipt
   assert.equal(message.channel,'web')
   const ownReplyView=await getGuestThreadDetail(db,'buyer-conversation',ORG,{buyerUserId:'verified'})
   assert.equal(ownReplyView?.entries.find(entry=>entry.id===message.id)?.actorUserId,'verified')
-  assert(ownReplyView?.entries.filter(entry=>entry.id!==message.id).every(entry=>entry.actorUserId===null))
+  assert(ownReplyView?.entries.every(entry=>entry.actorUserId===null||(entry.actorKind==='guest'&&entry.actorUserId==='verified')))
   const projection=await db.prepare("SELECT updated_at,conversation_state FROM requests WHERE id='buyer-conversation'").first()
   assert.equal(projection?.updated_at,message.occurred_at)
   const notices=(await db.prepare("SELECT * FROM activity_entries WHERE kind='notification' AND parent_id=?").bind(message.id).all()).results
@@ -565,7 +565,7 @@ test('owner-serviced credits leave the usage batch without hiding credits or sta
   assert.equal(ingests.length,0)
   const status=await paymentsUsageStatus(db,env,ORG)
   assert.equal(status.account?.status,'closed')
-  assert.deepEqual(status.pending,[{currency:'USD',kind:'captured_volume',event_count:1,amount:10000,error:null},{currency:'USD',kind:'stripe_cost_adjustment',event_count:100,amount:-10000,error}])
+  assert.deepEqual(status.pending,[{currency:'USD',kind:'captured_volume',event_count:1,amount:10000,billing_amount:10000,invalid_basis:0,error:null},{currency:'USD',kind:'stripe_cost_adjustment',event_count:100,amount:-10000,billing_amount:-10000,invalid_basis:0,error}])
   assert.deepEqual(status.credits.map(event=>({id:event.id,source_id:event.source_id,amount:event.amount,error:event.error})),credits.map(credit=>({id:credit.id,source_id:credit.source,amount:-100,error})))
   // A subsequent native read reports the same contract open; held credits stay owner-serviced.
   ended=false

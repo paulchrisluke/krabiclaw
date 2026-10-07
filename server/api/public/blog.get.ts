@@ -1,3 +1,4 @@
+import { getSourceLocale } from '~/server/utils/organization-locales'
 // GET /api/public/blog?collection=blog|docs — the requesting tenant's published articles
 //
 // This was two routes. `/api/public/blog` served Krabiclaw's own articles
@@ -38,7 +39,7 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'Unknown collection' }, { status: 400 })
   }
   const collection = requested === undefined ? 'blog' : requested
-  const locale = assertExactCanonicalLocale(query.locale ?? 'en')
+  const locale = assertExactCanonicalLocale(query.locale ?? await getSourceLocale(db, organizationId))
 
   try {
     const [posts, index, categories, localeRepresentations] = await Promise.all([

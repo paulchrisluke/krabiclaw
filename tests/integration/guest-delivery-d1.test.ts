@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { creationRequestHash } from '../../server/utils/organization-events.ts'
 import { createHmac } from 'node:crypto'
 import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api'
 import * as schema from '../../server/db/schema.ts'
@@ -61,9 +62,9 @@ test('a guest-thread email is sent once per event: replays send nothing, a faile
     await db.batch(booking.map(write => db.prepare(write.query).bind(...write.params)))
     // The seats live on the reservation, not the thread: a change proposal is
     // read from and applied to this row.
-    await upsertLocationReservationConfig(db, { organizationId: 'org-proof', locationId: 'booking-location', patch: { slot_capacity: 10 }, actorId: 'user-proof' })
-    await db.prepare(`INSERT INTO reservations (id,organization_id,location_id,request_id,timezone,starts_at,ends_at,party_size,status)
-      VALUES ('reservation-change-proof','org-proof','booking-location','change-proof','Asia/Bangkok','2099-01-05T09:00:00.000Z','2099-01-05T11:00:00.000Z',1,'confirmed')`).run()
+    await upsertLocationReservationConfig(db, { organizationId: 'org-proof', locationId: 'booking-location', patch: { slot_capacity: 10, duration_minutes: 120 }, actorId: 'user-proof' })
+    await db.prepare(`INSERT INTO reservations (id,organization_id,location_id,request_id,timezone,starts_at,ends_at,party_size,status,policy_json)
+      VALUES ('reservation-change-proof','org-proof','booking-location','change-proof','Asia/Bangkok','2099-01-05T09:00:00.000Z','2099-01-05T11:00:00.000Z',1,'confirmed',?)`).bind(JSON.stringify({reschedule_allowed:true,reschedule_cutoff_minutes:0,free_cancellation_until_minutes:0})).run()
     const propose = async (key: string, partySize: number) => {
       const current = await getGuestRequest(db, 'change-proof')
       assert(current)
@@ -141,6 +142,7 @@ test('a guest-thread email is sent once per event: replays send nothing, a faile
       actorUserId: 'user-proof',
       channel: 'email',
       body: 'A delayed reply',
+      payloadJson: { request_hash: await creationRequestHash({body:'A delayed reply',photos:[]}) },
       eventName: 'thread.member_reply',
       dedupeKey: `guest-thread-operation:contact-proof:${delayedOperationKey}`,
     })
@@ -173,6 +175,7 @@ test('a guest-thread email is sent once per event: replays send nothing, a faile
       actorUserId: 'user-proof',
       channel: 'email',
       body: 'A failed reply',
+      payloadJson: { request_hash: await creationRequestHash({body:'A failed reply',photos:[]}) },
       eventName: 'thread.member_reply',
       dedupeKey: `guest-thread-operation:contact-proof:${failedOperationKey}`,
     })

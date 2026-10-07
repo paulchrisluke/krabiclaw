@@ -1,3 +1,4 @@
+import { getSourceLocale } from '~/server/utils/organization-locales'
 import { readIntegration } from '~/server/utils/organization-integrations'
 import { HTTPError } from 'nitro'
 import { createContentDocumentWithBlocks, prepareContentDocumentDeletion, updateContentDocument, type ContentDocumentChanges } from '~/server/utils/content/documents'
@@ -137,7 +138,7 @@ async function allocatePostSlug(db: DbClient, organizationId: string, postId: st
   for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt += 1) {
     const slug = attempt === 0 ? base : `${base}-${attempt + 1}`
     const existing = await queryFirst<{ id: string }>(db,
-      "SELECT id FROM content_documents WHERE kind = 'social_post' AND locale = 'en' AND organization_id = ? AND slug = ? AND id != ? LIMIT 1",
+      "SELECT id FROM content_documents WHERE kind = 'social_post' AND row_role = 'root' AND organization_id = ? AND slug = ? AND id != ? LIMIT 1",
       [organizationId, slug, postId])
     if (!existing) return slug
     if (requested) throw new PostValidationError(`slug ${slug} is already used by another post`)
@@ -356,7 +357,7 @@ export async function createPost(
     const slug = await allocatePostSlug(db, organizationId, id, data.slug ?? null, data.title ?? null, data.body ?? null)
     try {
       await createContentDocumentWithBlocks(db, {
-        id, rowRole: 'root', kind: 'social_post', locale: 'en', organizationId,
+        id, rowRole: 'root', kind: 'social_post', locale: await getSourceLocale(db, organizationId), organizationId,
         locationId: data.location_id ?? null, slug, title: data.title ?? null, summary: data.body ?? null,
         status: 'draft', visibility: data.visibility ?? 'listed', source: 'manual', createdBy, updatedBy: createdBy,
         metadata: data.call_to_action ? { call_to_action: data.call_to_action } : {},
@@ -507,6 +508,7 @@ interface PublicPostRow {
 
 async function projectPublicPosts(env: CloudflareEnv, db: DbClient, organizationId: string, rows: PublicPostRow[], locale: string): Promise<PublicSocialPost[]> {
   if (!rows.length) return []
+  const sourceLocale = await getSourceLocale(db, organizationId)
   const rootIds = rows.map(row => row.id)
   const [origin, media, social, publications, localizations, facebook, instagram] = await Promise.all([
     resolveOrganizationPublicOrigin(db, organizationId),
@@ -516,14 +518,14 @@ async function projectPublicPosts(env: CloudflareEnv, db: DbClient, organization
     queryAll<{ post_id: string; channel: 'facebook' | 'instagram'; provider_permalink: string | null; provider_target_id: string }>(db, `SELECT post_id, channel, provider_permalink, provider_target_id
       FROM post_publications WHERE organization_id = ? AND state = 'published' AND channel IN ('facebook', 'instagram') AND post_id IN (SELECT value FROM json_each(?)) ORDER BY channel`,
     [organizationId, d1JsonStringSet(rootIds)]),
-    locale === 'en' ? Promise.resolve([]) : loadExactPublicLocalizations(env, db, organizationId, locale),
+    locale === sourceLocale ? Promise.resolve([]) : loadExactPublicLocalizations(env, db, organizationId, locale),
     readIntegration(db, organizationId, 'facebook'),
     readIntegration(db, organizationId, 'instagram'),
   ])
   return rows.map((row) => {
     const rootAction = callToActionOf(row.root_metadata_json)
     const localizedLabel = row.representation_id === row.id ? null : callToActionOf(row.metadata_json)?.label ?? null
-    const path = (locale === 'en' ? '' : `/${locale}`) + postPublicPath(row.slug)
+    const path = (locale === sourceLocale ? '' : `/${locale}`) + postPublicPath(row.slug)
     return {
       id: row.id,
       slug: row.slug,
@@ -586,11 +588,12 @@ export async function getPublicSocialPost(
 ) {
   const organization = await queryFirst<{ id: string }>(db, "SELECT id FROM organization WHERE id = ? AND status = 'active' LIMIT 1", [organizationId])
   if (!organization) return null
+  const sourceLocale = await getSourceLocale(db, organizationId)
   const row = await queryFirst<PublicPostRow>(db, `${PUBLIC_POST_SELECT}
     WHERE root.kind = 'social_post' AND root.row_role = 'root' AND root.organization_id = ?
-      AND ${locale === 'en' ? 'root.slug = ?' : "p.row_role = 'representation' AND p.path = ?"}
+      AND ${locale === sourceLocale ? 'root.slug = ?' : "p.row_role = 'representation' AND p.path = ?"}
       ${previewAuthorized ? '' : "AND root.status = 'published'"} LIMIT 1`,
-  [locale, organizationId, locale === 'en' ? slug : postPublicPath(slug)])
+  [locale, organizationId, locale === sourceLocale ? slug : postPublicPath(slug)])
   if (!row) return null
   const [post] = await projectPublicPosts(env, db, organizationId, [row], locale)
   const source = await queryFirst<{ slug: string }>(db, 'SELECT slug FROM content_documents WHERE id = ?', [row.id])

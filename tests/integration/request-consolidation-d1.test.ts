@@ -8,7 +8,7 @@ import { executeGuestThreadOperation } from '../../server/domain/guest-threads/o
 import { getGuestThreadOperationSummary, listGuestThreads } from '../../server/domain/guest-threads/repository.ts'
 import { resolveGuestThreadMailbox } from '../../server/domain/guest-threads/mailbox.ts'
 import { claimReservation, upsertLocationReservationConfig } from '../../server/utils/reservations.ts'
-import { claimSessionCapacity, setBookingStatus } from '../../server/utils/availability.ts'
+import { CapacityUnavailableError, claimSessionCapacity, setBookingStatus } from '../../server/utils/availability.ts'
 import { buildCanonicalNotificationInsert } from '../../server/utils/notification-center.ts'
 import { acknowledgeNotification } from '../../server/utils/notification-acknowledgement.ts'
 
@@ -70,7 +70,7 @@ test('a thread and the record it refers to commit and cancel as one', { timeout:
             params: [id, NOW, bookingId, id],
           },
         ],
-      }).then(() => true, () => false)
+      }).then(() => true, error => { if (error instanceof CapacityUnavailableError) return false; throw error })
     }
     const claims = await Promise.all([bookSession('booking-first'), bookSession('booking-second')])
     assert.equal(claims.filter(Boolean).length, 1)
@@ -103,7 +103,7 @@ test('a thread and the record it refers to commit and cancel as one', { timeout:
 
     // A reservation is the other half of the same split: a location policy is
     // what opens reservations, and the claim commits the thread with the row.
-    await upsertLocationReservationConfig(db, { organizationId: ORG, locationId: LOCATION, patch: { slot_capacity: 1 }, actorId: ACTOR })
+    await upsertLocationReservationConfig(db, { organizationId: ORG, locationId: LOCATION, patch: { slot_capacity: 1, duration_minutes: 120 }, actorId: ACTOR })
     const reservationThread = 'reservation-proof'
     await db.batch(requestInsertQueries({
       id: reservationThread, kind: 'reservation', organization_id: ORG, location_id: LOCATION,

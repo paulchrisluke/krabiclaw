@@ -12,6 +12,26 @@ const OUTPUT_PATH = 'chatgpt-app-submission.json'
 // Reviewed effects are authored here; annotation values still come from the registry.
 // A newly exposed tool must receive an explicit review before regeneration succeeds.
 const effects = {
+  list_organization_members: 'Reads Better Auth memberships, pending invitations and their actual email delivery receipts for the selected business.',
+  invite_organization_member: 'Creates or explicitly resends a Better Auth invitation, emails its recipient and returns the saved invitation and delivery receipt.',
+  update_organization_member_role: 'Changes a Better Auth membership role, subject to native owner permissions and last-owner protection.',
+  remove_organization_member: 'Removes a Better Auth membership, subject to native permissions and last-owner protection.',
+  cancel_organization_invitation: 'Cancels a pending Better Auth invitation in the selected business.',
+  list_teams: 'Reads Better Auth teams and their members in the selected business.',
+  create_team: 'Creates a named Better Auth team in the selected business.',
+  update_team: 'Overwrites the selected Better Auth team name.',
+  set_team_member: 'Adds or removes an existing business teammate from a Better Auth team. Existing bookings retain their saved provider.',
+  delete_team: 'Deletes a Better Auth team and removes its offering assignments. Existing bookings retain their saved provider.',
+  set_organization_language: 'Adds a private website language or changes its publication status; public routes show only authored translations.',
+  delete_organization_language: 'Deletes a disabled website language and its translations while preserving source content.',
+  list_guest_conversations: 'Reads authorized contact, reservation and booking conversations and their inbox state.',
+  get_guest_conversation: 'Reads an authorized conversation, its messages, operational record, proposals, attachments and delivery receipts.',
+  reply_to_guest: 'Saves a reply and optional photo in the guest conversation, emails the guest and updates the inbox state using the supplied retry key.',
+  set_guest_conversation_archived: 'Changes the selected conversation’s archive state using the supplied retry key; it does not cancel the operational record.',
+  create_product_session: 'Adds dated sessions for the offering’s assigned providers using a durable retry key and canonical availability checks.',
+  update_product_session: 'Overwrites selected session time, capacity or state using its current revision. Guest commitments prevent incompatible edits.',
+  create_table_reservation: 'Allocates a table reservation and guest conversation using configured duration, hours, capacity and policy; sends canonical notices. Required deposits hand off before operational or financial writes.',
+  update_menu: 'Atomically creates or updates menu items, section membership and order, prices, location offerings and website publication using a durable retry key. Omitted products remain untouched.',
   get_member_scheduling: 'Reads authorized team scheduling records; ordinary members can read only themselves. Public profile approval and interval-only Calendar status share CMS records.',
   set_member_scheduling: 'Replaces authorized member hours, timezone, time off and approved public profile using optimistic revision. Existing Booking assignments remain fixed.',
   set_member_busy_calendars: 'Selects already-linked Google busy calendars or disconnects input, then rechecks interval-only busy data. Grants no OAuth access.',
@@ -41,7 +61,7 @@ const effects = {
   create_article_category: 'Creates an empty category in the selected organization\'s blog or documentation; articles are placed in it separately.',
   create_collection: 'Creates an empty collection for the selected organization; products are added to it separately.',
   create_post: 'Creates a private draft short post with its media; nothing is public until it is published.',
-  create_product: 'Creates a product with an explicit kind, variants, prices and named details; publication and placements are assigned separately.',
+  create_product: 'Atomically creates a product, variants, prices and supplied location, publication and booking setup using a durable retry key. Services receive their public detail page; experience publication requires real booking readiness.',
   create_site_page: 'Creates a tenant page and its structured content document.',
   delete_article_category: 'Deletes an empty category of the selected organization\'s blog or documentation; a category that still has articles is refused.',
   delete_blog_post: 'Deletes the selected tenant blog article and its associated content.',
@@ -52,7 +72,6 @@ const effects = {
   delete_product: 'Deletes the selected product and its owned variants, prices, attributes and placements; booking history or a referencing site page prevents deletion.',
   delete_resource_localization: 'Deletes the selected translated resource representation.',
   get_blog_post: 'Reads the selected tenant blog article and content for editing.',
-  list_contact_inquiries: 'Reads authorized customer contact inquiries, including personal contact information.',
   get_location: 'Reads the selected location, including operational contact and notification settings.',
   get_post: 'Reads the selected short post and the state of its external publications.',
   get_social_connections: 'Reads which website, Facebook Page and Instagram account the organization can publish to, and whether Meta currently accepts each connection, without returning any token.',
@@ -92,10 +111,10 @@ const effects = {
   list_organizations: 'Lists organizations accessible to the authenticated user without provisioning one.',
   list_site_pages: 'Lists tenant pages for the selected organization.',
   publish_blog_post: 'Publishes the selected draft blog article on the website.',
-  publish_post: 'Publishes the selected post only to the explicitly requested website, Facebook Page or Instagram targets and records their outcomes.',
+  publish_post: 'Publishes the selected post only to the explicitly requested website, Facebook Page, Instagram or Discord targets and records their outcomes.',
   reconcile_post_publication: 'Reads Facebook or Instagram to record the proven outcome of one publication; it never publishes.',
   put_resource_localization: 'Creates or overwrites translated resource values and supplied translated content.',
-  reconcile_products: 'Creates or updates catalog products by supplied product_id; entries without an ID create new products on each call. Disables sale of omitted products only when deactivate_missing is requested.',
+  reconcile_products: 'Atomically creates or updates catalog products using supplied IDs and a durable retry key. Disables omitted products only when deactivate_missing is requested.',
   remove_media: 'Removes an asset placement from public content while retaining the underlying media asset.',
   remove_product_location: 'Removes a product from a location, so the location no longer offers it.',
   reorder_article_categories: 'Overwrites the order the categories of the selected organization\'s blog or documentation are presented in.',
@@ -124,11 +143,14 @@ const effects = {
   update_reservation_policy: 'Creates or overwrites the reservation policy of the selected location, which is what opens reservations there.',
   update_organization_settings: 'Overwrites supplied site branding, contact email, default currency, announcement, public status or SEO fields.',
   update_site_page: 'Overwrites tenant page metadata or supplied structured content, subject to version and removal checks.',
-  save_media_attachment: 'Stores a conversation file in Cloudflare media storage and returns a public URL, even before assignment to a page.',
+  save_media_attachment: 'Stores a host attachment using a durable retry key and returns its actual public URL. An optional placement can replace a single website asset or append it to a gallery.',
 
 }
 
 const openWorldEffects = {
+  invite_organization_member: 'Emails the invitation recipient through the native Better Auth invitation hook and shared delivery lifecycle.',
+  reply_to_guest: 'Downloads a supplied host photo when present and emails the reply and attachments to the conversation’s guest.',
+  create_table_reservation: 'Sends owner alerts and the requested acknowledgement to the supplied guest address.',
   set_member_busy_calendars: 'Reads free/busy intervals from the member’s selected Google calendars using existing granted scopes; writes no Google events.',
   reassign_product_booking: 'Sends the changed-assignment notice through the existing guest delivery lifecycle after the atomic reassignment.',
   get_payment_payouts: 'The seller-scoped Stripe account is queried for native balance and payouts.',
@@ -140,7 +162,7 @@ const openWorldEffects = {
   request_product_booking_change: 'Emails a change proposal to the booking guest for acceptance.',
   cancel_table_reservation: 'Sends a cancellation email to the reservation guest.',
   request_table_reservation_change: 'Emails a change proposal to the reservation guest for acceptance.',
-  publish_post: 'Can send the requested caption and media to the public audience of an explicitly selected Facebook Page or Instagram account. Website-only publication remains within the selected site.',
+  publish_post: 'Sends the requested caption and media to an explicitly selected Facebook Page, Instagram account or Discord channel. Website-only publication remains within the selected site.',
   delete_channel_post: 'Removes a public Facebook Page post through Meta and updates its local publication receipt.',
   save_media_attachment: 'Downloads the host-supplied file URL and stores the attachment at a public Cloudflare media URL.',
   list_channel_posts: 'Reads posts from Meta for the explicitly selected connected Facebook Page or Instagram account only.',
@@ -162,9 +184,7 @@ function justifications(tool) {
     open_world_justification: annotations.openWorldHint
       ? openWorldEffects[tool.name]
       : `${effect} Its scope is the authenticated KrabiClaw workspace, not arbitrary external entities or the public web.`,
-    destructive_justification: annotations.destructiveHint
-      ? `${effect} The result is irreversible or hard to reverse, so the tool requires the user's confirmation.`
-      : `${effect} No existing record is deleted, cancelled or refunded by it.`,
+    destructive_justification: effect,
   }
 }
 

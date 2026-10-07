@@ -65,6 +65,7 @@ export function useOnboardingDraft() {
       specialHours: parseSpecialHours(state.value.hours.specialHours),
       timezone: state.value.hours.timezone.trim() || null,
       currency: details.currency ?? null,
+      sourceLocale: details.sourceLocale,
     }
   }
 
@@ -304,6 +305,7 @@ export function useOnboardingDraft() {
     state.value.vertical = draft.vertical === 'experience' || draft.vertical === 'service' ? draft.vertical : 'restaurant'
     state.value.source = draft.sourceType === 'google_places' ? 'google_places' : 'manual'
     state.value.placeId = typeof draft.placeId === 'string' && draft.placeId ? draft.placeId : null
+    state.value.details.sourceLocale = typeof details.sourceLocale === 'string' ? details.sourceLocale : null
     state.value.details.name = text(details.name)
     state.value.details.city = text(details.city)
     state.value.details.streetAddress = text(details.streetAddress)

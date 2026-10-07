@@ -16,8 +16,8 @@ async function clientJourney(page: Page, options: {
   await expect(page.locator('[data-hydrated]')).toHaveAttribute('data-hydrated', 'true')
   await page.locator(`a[href="${options.listPath}"]`).first().click()
   await expect(page).toHaveURL(new RegExp(`${options.listPath}/?$`))
-  await page.locator(`a[href="${options.detailPath}"]`).first().click()
-  await expect(page).toHaveURL(new RegExp(`${options.detailPath}/?$`))
+  await page.locator(`a[href^="${options.detailPath}"]`).first().click()
+  await expect(page).toHaveURL(new RegExp(`${options.detailPath}/?(?:\\?.*)?$`))
   await expect(page.locator('main')).toContainText(options.detailText)
 }
 

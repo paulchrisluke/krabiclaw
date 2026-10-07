@@ -1,3 +1,4 @@
+import { getSourceLocale } from '~/server/utils/organization-locales'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 import { parseGoogleReviewMetadata } from '~/shared/google-review'
 import { executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
@@ -224,7 +225,8 @@ export async function getPublicBlawbyShellData(
   organizationId: string,
   options: { locale?: string | null; localizations?: readonly ExactPublicLocalization[] } = {},
 ): Promise<PublicBlawbyShellData> {
-  const locale = options.locale?.trim() || 'en'
+  const sourceLocale = await getSourceLocale(db, organizationId)
+  const locale = options.locale ?? sourceLocale
   const localizations = options.localizations ?? []
   const organizationLocalization = localizations.find(item => item.resourceType === 'organization' && item.resourceId === organizationId) ?? null
   // Navigation is the site's published pages. A practice area is one of them,
@@ -240,7 +242,7 @@ export async function getPublicBlawbyShellData(
     `, [organizationId]),
   ])
   if (!verification) throw new Error(`Organization ${organizationId} was not found for its Blawby shell`)
-  const localizedRepresentation = locale !== 'en'
+  const localizedRepresentation = locale !== sourceLocale
   const identity = localizedRepresentation
     ? {
         ...sourceIdentity,
@@ -287,8 +289,9 @@ export async function getPublicBlawbyDocumentData(
 ): Promise<{ shell: PublicBlawbyShellData; route: PublicBlawbyRouteData } | null> {
   const organization = await getActiveBlawbyOrganization(db, organizationId, { previewAuthorized: options.previewAuthorized })
   if (!organization) return null
-  const locale = options.locale?.trim() || 'en'
-  const localizations = locale === 'en'
+  const sourceLocale = await getSourceLocale(db, organizationId)
+  const locale = options.locale ?? sourceLocale
+  const localizations = locale === sourceLocale
     ? []
     : await loadExactPublicLocalizations(env, db, organizationId, locale)
 
@@ -376,7 +379,8 @@ export async function getPublicBlawbyRouteData(
   const needsReviews = ['home', 'about', 'contact', 'schedule'].includes(recipe)
   // Declared once, per template, in utils/template-registry.ts.
   const pagePath = recipe === 'page' ? options.slug ?? null : BLAWBY_TEMPLATE.pageDocuments.recipes[recipe] ?? null
-  const localized = options.locale !== undefined && options.locale !== 'en'
+  const sourceLocale = await getSourceLocale(db, organizationId)
+  const localized = options.locale != null && options.locale !== sourceLocale
 
   const [page, reviewRows] = await Promise.all([
     pagePath

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "804a5ed3-31bd-4358-a4ea-c42ac6baddcb",
+  "id": "a92dbdc3-ee89-473b-8b45-fc4c595465c8",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -2560,11 +2560,13 @@
           "tableTo": "organization_locales",
           "columnsFrom": [
             "organization_id",
-            "locale"
+            "locale",
+            "row_role"
           ],
           "columnsTo": [
             "organization_id",
-            "locale"
+            "locale",
+            "document_role"
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
@@ -2583,7 +2585,7 @@
         },
         "content_documents_role_check": {
           "name": "content_documents_role_check",
-          "value": "(row_role = 'root' AND root_id IS NULL AND root_role IS NULL AND locale = 'en') OR (row_role = 'representation' AND root_id IS NOT NULL AND root_id <> id AND root_role = 'root' AND locale IS NOT NULL AND locale <> 'en' AND product_id IS NULL AND location_id IS NULL AND scope_path IS NULL AND status IS NULL AND visibility IS NULL AND source IS NULL AND author_id IS NULL AND published_at IS NULL AND first_published_at IS NULL)"
+          "value": "(row_role = 'root' AND root_id IS NULL AND root_role IS NULL AND locale IS NOT NULL) OR (row_role = 'representation' AND root_id IS NOT NULL AND root_id <> id AND root_role = 'root' AND locale IS NOT NULL AND product_id IS NULL AND location_id IS NULL AND scope_path IS NULL AND status IS NULL AND visibility IS NULL AND source IS NULL AND author_id IS NULL AND published_at IS NULL AND first_published_at IS NULL)"
         },
         "content_documents_path_check": {
           "name": "content_documents_path_check",
@@ -3414,6 +3416,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "teamId": {
+          "name": "teamId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "createdAt": {
           "name": "createdAt",
           "type": "integer",
@@ -3543,6 +3552,13 @@
     "location_reservation_configs": {
       "name": "location_reservation_configs",
       "columns": {
+        "duration_minutes": {
+          "name": "duration_minutes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "location_id": {
           "name": "location_id",
           "type": "text",
@@ -3585,6 +3601,27 @@
           "notNull": true,
           "autoincrement": false,
           "default": false
+        },
+        "deposit_amount": {
+          "name": "deposit_amount",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "deposit_currency": {
+          "name": "deposit_currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "deposit_tax_behavior": {
+          "name": "deposit_tax_behavior",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         },
         "deposit_trigger_party_size": {
           "name": "deposit_trigger_party_size",
@@ -3712,6 +3749,10 @@
           "name": "location_reservation_configs_booleans_check",
           "value": "deposit_required IN (0, 1) AND reschedule_allowed IN (0, 1) AND accessibility_contact_required IN (0, 1)"
         },
+        "location_reservation_configs_duration_check": {
+          "name": "location_reservation_configs_duration_check",
+          "value": "duration_minutes IS NULL OR duration_minutes > 0"
+        },
         "location_reservation_configs_slot_capacity_check": {
           "name": "location_reservation_configs_slot_capacity_check",
           "value": "slot_capacity IS NULL OR slot_capacity >= 0"
@@ -3723,6 +3764,10 @@
         "location_reservation_configs_party_check": {
           "name": "location_reservation_configs_party_check",
           "value": "deposit_trigger_party_size IS NULL OR deposit_trigger_party_size > 0"
+        },
+        "location_reservation_configs_deposit_check": {
+          "name": "location_reservation_configs_deposit_check",
+          "value": "(deposit_amount IS NULL OR deposit_amount > 0) AND (deposit_currency IS NULL OR (length(deposit_currency) = 3 AND deposit_currency = upper(deposit_currency))) AND (deposit_tax_behavior IS NULL OR deposit_tax_behavior IN ('inclusive', 'exclusive'))"
         },
         "location_reservation_configs_age_check": {
           "name": "location_reservation_configs_age_check",
@@ -6559,7 +6604,7 @@
       "checkConstraints": {
         "organization_integrations_provider_check": {
           "name": "organization_integrations_provider_check",
-          "value": "provider IN ('facebook', 'instagram', 'google_analytics', 'google_search_console', 'google_calendar')"
+          "value": "provider IN ('facebook', 'instagram', 'discord', 'google_analytics', 'google_search_console', 'google_calendar')"
         },
         "organization_integrations_values_check": {
           "name": "organization_integrations_values_check",
@@ -6622,6 +6667,17 @@
           "autoincrement": false,
           "default": false
         },
+        "document_role": {
+          "name": "document_role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "generated": {
+            "as": "(CASE WHEN is_source = 1 THEN 'root' ELSE 'representation' END)",
+            "type": "virtual"
+          }
+        },
         "status": {
           "name": "status",
           "type": "text",
@@ -6677,6 +6733,15 @@
             "locale"
           ],
           "isUnique": true
+        },
+        "organization_locales_locale_role_unique": {
+          "name": "organization_locales_locale_role_unique",
+          "columns": [
+            "organization_id",
+            "locale",
+            "document_role"
+          ],
+          "isUnique": true
         }
       },
       "foreignKeys": {
@@ -6704,10 +6769,6 @@
         "organization_locales_status_check": {
           "name": "organization_locales_status_check",
           "value": "status IN ('published', 'disabled') AND (is_source = 0 OR status = 'published')"
-        },
-        "organization_locales_english_source_check": {
-          "name": "organization_locales_english_source_check",
-          "value": "locale <> 'en' OR (is_source = 1 AND status = 'published')"
         }
       }
     },
@@ -7177,28 +7238,42 @@
           "name": "product_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         },
         "variant_id": {
           "name": "variant_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         },
         "price_id": {
           "name": "price_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         },
         "session_id": {
           "name": "session_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "location_id": {
+          "name": "location_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "timezone": {
+          "name": "timezone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "assigned_member_id": {
@@ -7299,6 +7374,13 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "converted_reservation_id": {
+          "name": "converted_reservation_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {
@@ -7323,6 +7405,17 @@
           "columns": [
             "organization_id",
             "calendar_group",
+            "status",
+            "expires_at"
+          ],
+          "isUnique": false
+        },
+        "payment_holds_reservation_idx": {
+          "name": "payment_holds_reservation_idx",
+          "columns": [
+            "organization_id",
+            "location_id",
+            "starts_at",
             "status",
             "expires_at"
           ],
@@ -7363,6 +7456,10 @@
         "payment_holds_quantity_check": {
           "name": "payment_holds_quantity_check",
           "value": "quantity > 0 AND amount > 0"
+        },
+        "payment_holds_subject_check": {
+          "name": "payment_holds_subject_check",
+          "value": "(product_id IS NOT NULL AND variant_id IS NOT NULL AND price_id IS NOT NULL AND session_id IS NOT NULL AND converted_reservation_id IS NULL) OR (product_id IS NULL AND variant_id IS NULL AND price_id IS NULL AND session_id IS NULL AND location_id IS NOT NULL AND timezone IS NOT NULL AND calendar_group IS NULL AND assigned_member_id IS NULL AND converted_booking_id IS NULL)"
         }
       }
     },
@@ -7481,6 +7578,13 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "billing_basis_json": {
+          "name": "billing_basis_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "incurred_at": {
@@ -8128,6 +8232,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "billing_basis_json": {
+          "name": "billing_basis_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "source_id": {
           "name": "source_id",
           "type": "text",
@@ -8669,7 +8780,7 @@
         },
         "post_publications_channel_check": {
           "name": "post_publications_channel_check",
-          "value": "channel IN ('facebook', 'instagram')"
+          "value": "channel IN ('facebook', 'instagram', 'discord')"
         },
         "post_publications_state_check": {
           "name": "post_publications_state_check",
@@ -9284,6 +9395,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "assigned_team_id": {
+          "name": "assigned_team_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "text",
@@ -9339,6 +9457,19 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
+        "product_booking_configs_assigned_team_id_team_id_fk": {
+          "name": "product_booking_configs_assigned_team_id_team_id_fk",
+          "tableFrom": "product_booking_configs",
+          "tableTo": "team",
+          "columnsFrom": [
+            "assigned_team_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
         "product_booking_configs_product_scope_fk": {
           "name": "product_booking_configs_product_scope_fk",
           "tableFrom": "product_booking_configs",
@@ -9352,6 +9483,21 @@
             "id"
           ],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "product_booking_configs_team_scope_fk": {
+          "name": "product_booking_configs_team_scope_fk",
+          "tableFrom": "product_booking_configs",
+          "tableTo": "team",
+          "columnsFrom": [
+            "organization_id",
+            "assigned_team_id"
+          ],
+          "columnsTo": [
+            "organizationId",
+            "id"
+          ],
+          "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
@@ -10057,7 +10203,7 @@
             "starts_at"
           ],
           "isUnique": true,
-          "where": "location_id IS NOT NULL"
+          "where": "location_id IS NOT NULL AND assigned_member_id IS NULL"
         },
         "product_sessions_neutral_instant_unique": {
           "name": "product_sessions_neutral_instant_unique",
@@ -10066,7 +10212,28 @@
             "starts_at"
           ],
           "isUnique": true,
-          "where": "location_id IS NULL"
+          "where": "location_id IS NULL AND assigned_member_id IS NULL"
+        },
+        "product_sessions_provider_location_instant_unique": {
+          "name": "product_sessions_provider_location_instant_unique",
+          "columns": [
+            "product_id",
+            "location_id",
+            "starts_at",
+            "assigned_member_id"
+          ],
+          "isUnique": true,
+          "where": "location_id IS NOT NULL AND assigned_member_id IS NOT NULL"
+        },
+        "product_sessions_provider_neutral_instant_unique": {
+          "name": "product_sessions_provider_neutral_instant_unique",
+          "columns": [
+            "product_id",
+            "starts_at",
+            "assigned_member_id"
+          ],
+          "isUnique": true,
+          "where": "location_id IS NULL AND assigned_member_id IS NOT NULL"
         },
         "product_sessions_product_start_idx": {
           "name": "product_sessions_product_start_idx",
@@ -11212,6 +11379,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "policy_json": {
+          "name": "policy_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "status": {
           "name": "status",
           "type": "text",
@@ -11350,6 +11524,10 @@
           "name": "reservations_status_check",
           "value": "status IN ('confirmed', 'cancelled')"
         },
+        "reservations_policy_check": {
+          "name": "reservations_policy_check",
+          "value": "policy_json IS NULL OR (json_valid(policy_json) AND json_type(policy_json) = 'object' AND json_type(policy_json, '$.reschedule_allowed') IN ('true', 'false') AND json_type(policy_json, '$.free_cancellation_until_minutes') IN ('null', 'integer') AND json_type(policy_json, '$.reschedule_cutoff_minutes') IN ('null', 'integer')) IS 1"
+        },
         "reservations_instants_check": {
           "name": "reservations_instants_check",
           "value": "(strftime('%Y-%m-%dT%H:%M:%fZ', starts_at, '+0 days') IS starts_at) AND (strftime('%Y-%m-%dT%H:%M:%fZ', ends_at, '+0 days') IS ends_at) AND (cancelled_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', cancelled_at, '+0 days') IS cancelled_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)"
@@ -11405,6 +11583,17 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
+        },
+        "document_role": {
+          "name": "document_role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "generated": {
+            "as": "('representation')",
+            "type": "virtual"
+          }
         },
         "values_json": {
           "name": "values_json",
@@ -11497,11 +11686,13 @@
           "tableTo": "organization_locales",
           "columnsFrom": [
             "organization_id",
-            "locale"
+            "locale",
+            "document_role"
           ],
           "columnsTo": [
             "organization_id",
-            "locale"
+            "locale",
+            "document_role"
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
@@ -11517,10 +11708,6 @@
         "resource_localizations_values_json_check": {
           "name": "resource_localizations_values_json_check",
           "value": "json_valid(values_json) AND json_type(values_json) = 'object'"
-        },
-        "resource_localizations_non_english_check": {
-          "name": "resource_localizations_non_english_check",
-          "value": "locale <> 'en'"
         },
         "resource_localizations_route_path_check": {
           "name": "resource_localizations_route_path_check",
@@ -12276,7 +12463,7 @@
           "name": "country",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         },
         "livemode": {
@@ -12384,7 +12571,7 @@
       "checkConstraints": {
         "stripe_connected_accounts_country_check": {
           "name": "stripe_connected_accounts_country_check",
-          "value": "length(country) = 2 AND country = upper(country) AND country NOT GLOB '*[^A-Z]*'"
+          "value": "country IS NULL OR (length(country) = 2 AND country = upper(country) AND country NOT GLOB '*[^A-Z]*')"
         },
         "stripe_connected_accounts_livemode_check": {
           "name": "stripe_connected_accounts_livemode_check",
@@ -12961,6 +13148,183 @@
         }
       },
       "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "team": {
+      "name": "team",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "organizationId": {
+          "name": "organizationId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "memberCount": {
+          "name": "memberCount",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "team_organizationId_idx": {
+          "name": "team_organizationId_idx",
+          "columns": [
+            "organizationId"
+          ],
+          "isUnique": false
+        },
+        "team_org_id_unique": {
+          "name": "team_org_id_unique",
+          "columns": [
+            "organizationId",
+            "id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "team_organizationId_organization_id_fk": {
+          "name": "team_organizationId_organization_id_fk",
+          "tableFrom": "team",
+          "tableTo": "organization",
+          "columnsFrom": [
+            "organizationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "teamMember": {
+      "name": "teamMember",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "teamId": {
+          "name": "teamId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "userId": {
+          "name": "userId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "membershipKey": {
+          "name": "membershipKey",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "teamMember_membershipKey_unique": {
+          "name": "teamMember_membershipKey_unique",
+          "columns": [
+            "membershipKey"
+          ],
+          "isUnique": true
+        },
+        "teamMember_teamId_idx": {
+          "name": "teamMember_teamId_idx",
+          "columns": [
+            "teamId"
+          ],
+          "isUnique": false
+        },
+        "teamMember_userId_idx": {
+          "name": "teamMember_userId_idx",
+          "columns": [
+            "userId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "teamMember_teamId_team_id_fk": {
+          "name": "teamMember_teamId_team_id_fk",
+          "tableFrom": "teamMember",
+          "tableTo": "team",
+          "columnsFrom": [
+            "teamId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "teamMember_userId_user_id_fk": {
+          "name": "teamMember_userId_user_id_fk",
+          "tableFrom": "teamMember",
+          "tableTo": "user",
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}

@@ -176,7 +176,7 @@ function explicitSummary(value: string | null | undefined, empty = 'Not set') { 
 const STATUS_LABELS: Record<OrganizationStatus, string> = { active: 'Live', inactive: 'Draft', suspended: 'Suspended' }
 const domainSummary = computed(() => dashboard.organization.value?.custom_domain || dashboard.organization.value?.public_url || 'Not connected')
 const organizationLinks = useDashboardOrganizationLinks()
-const CONSULTATION_MODE_SUMMARIES = { native: 'Guests book on your website', external_url: 'External booking link', native_disabled: 'Off' } as const
+const CONSULTATION_MODE_SUMMARIES = { native: 'Online service selector', external_url: 'External scheduler', native_disabled: 'Selector hidden' } as const
 const brandItems = computed<EditorNavigationItem[]>(() => [
   { id: 'name', label: 'Brand name', summary: explicitSummary(loadedSettings.value?.name), icon: 'i-lucide-type', to: `${brandPath.value}/name` },
   { id: 'logo', label: 'Logo', summary: loadedSettings.value?.media?.some(item => item.slot === 'logo') ? 'Logo selected' : 'Not set', icon: 'i-lucide-image', to: `${brandPath.value}/logo` },
@@ -206,10 +206,8 @@ const settingsItems = computed<EditorNavigationItem[]>(() => [
   { id: 'localization', label: 'Languages', summary: 'Languages the site is published in', icon: 'i-lucide-languages', to: `${settingsPath.value}/localization` },
   { id: 'currency', label: 'Currency', summary: explicitSummary(loadedSettings.value?.default_currency), icon: 'i-lucide-coins', to: `${settingsPath.value}/currency` },
   { id: 'search', label: 'Search appearance', summary: explicitSummary(loadedSettings.value?.seo_title), icon: 'i-lucide-search', to: `${settingsPath.value}/search` },
-  // Present only when the organization carries consultation settings: the
-  // domain says whether there is a website booking to switch, not the template.
   ...(loadedSettings.value?.consultation_mode
-    ? [{ id: 'booking', label: 'Website booking', summary: CONSULTATION_MODE_SUMMARIES[loadedSettings.value.consultation_mode], icon: 'i-lucide-calendar-check', to: `${settingsPath.value}/booking` }]
+    ? [{ id: 'booking', label: 'Schedule page', summary: CONSULTATION_MODE_SUMMARIES[loadedSettings.value.consultation_mode], icon: 'i-lucide-calendar-check', to: `${settingsPath.value}/booking` }]
     : []),
 ])
 

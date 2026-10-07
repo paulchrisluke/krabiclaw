@@ -4,7 +4,7 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { hashPassword } from 'better-auth/crypto'
 import { DISCORD_BOT_PERMISSIONS } from '~/server/utils/discord-bot'
 import { loginMethodForPath } from '~/shared/auth/login-method'
-import { admin, anonymous, genericOAuth, getOrgAdapter, hasPermission, jwt, lastLoginMethod, organization, phoneNumber } from 'better-auth/plugins'
+import { admin, anonymous, bearer, genericOAuth, getOrgAdapter, hasPermission, jwt, lastLoginMethod, organization, phoneNumber } from 'better-auth/plugins'
 import { stripe as betterAuthStripe } from '@better-auth/stripe'
 import { oauthProvider } from '@better-auth/oauth-provider'
 import { cimd } from '@better-auth/cimd'
@@ -38,7 +38,6 @@ import { cleanupOrganizationBeforeDelete } from '~/server/utils/tenant-deletion'
 import { reconcileZarazAnalytics } from '~/server/utils/zaraz-analytics'
 
 type MemberRow = InferSelectModel<typeof schema.member>
-type InvitationRow = InferSelectModel<typeof schema.invitation>
 
 type IntegrationCallbackContext = GenericEndpointContext['context'] & { integrationAccountId?: string }
 
@@ -73,6 +72,7 @@ export function oauthSigningConfig(authBaseUrl: string) {
 export const organizationOptions = {
   ac: organizationAccessControl,
   roles: organizationRoles,
+  teams: { enabled: true, defaultTeam: { enabled: false }, allowRemovingAllTeams: true },
 } as const
 
 
@@ -230,10 +230,13 @@ function trustedOriginsForAuth(env: CloudflareEnv): string[] | ((_request?: Requ
 export function createAuth(env: CloudflareEnv) {
   if (!env?.DB) throw new HTTPError({ statusCode: 503, statusMessage: 'Database unavailable' })
   const d1 = unwrapInstrumentedD1(env.DB)
-
   const cached = authCache.get(d1)
-  if (cached) return cached as ReturnType<typeof betterAuth>
+  if (cached) return cached as ReturnType<typeof buildAuth>
+  return buildAuth(env)
+}
 
+function buildAuth(env: CloudflareEnv) {
+  const d1 = unwrapInstrumentedD1(env.DB)
   const db = d1 === env.DB && env.db ? env.db : createDb(d1)
   // Members are indexed for the dashboard's search; a change to one is a change
   // to every site of the organization. Better Auth has already committed the
@@ -245,16 +248,29 @@ export function createAuth(env: CloudflareEnv) {
   }
   const configuredOrganizationOptions = {
     ...organizationOptions,
+    organizationHooks: {
+      afterAddTeamMember: async ({ team, user }: { team: { organizationId: string }; user: { id: string } }) => {
+        const { materializeMemberSessions } = await import('~/server/utils/availability')
+        await materializeMemberSessions(db, { organizationId: team.organizationId, userId: user.id, actorId: 'system' })
+        await recordMemberChange(team.organizationId)
+      },
+      afterRemoveTeamMember: async ({ team }: { team: { organizationId: string } }) => recordMemberChange(team.organizationId),
+      afterDeleteTeam: async ({ team }: { team: { organizationId: string } }) => recordMemberChange(team.organizationId),
+      afterUpdateTeam: async ({ organization }: { organization: { id: string } }) => recordMemberChange(organization.id),
+    },
     sendInvitationEmail: async (data: {
       id: string
       role: string
       email: string
       organization: { id: string; name: string }
       inviter: { user: { name: string; email: string } }
+      invitation: { expiresAt: Date; inviterId: string }
     }) => {
       await notifyOrganizationInvited(env, db, {
         organizationId: data.organization.id,
         invitationId: data.id,
+        expiresAt: data.invitation.expiresAt.toISOString(),
+        inviterUserId: data.invitation.inviterId,
         email: data.email,
         role: data.role,
         organizationName: data.organization.name,
@@ -430,21 +446,6 @@ export function createAuth(env: CloudflareEnv) {
           }
         }
       },
-      invitation: {
-        create: {
-          after: async (invitation: InvitationRow) => {
-            const audit = organizationEventQuery({
-              organizationId: invitation.organizationId,
-              actorId: invitation.inviterId,
-              eventType: 'member.invited',
-              entityType: 'invitation',
-              entityId: invitation.id,
-              metadata: { role: invitation.role ?? null },
-            })
-            await execute(db, audit.query, audit.params)
-          }
-        }
-      }
     },
     emailAndPassword: {
       enabled: true,
@@ -507,6 +508,7 @@ export function createAuth(env: CloudflareEnv) {
       },
     },
     plugins: [
+      bearer(),
       lastLoginMethod({ customResolveMethod: ctx => loginMethodForPath(ctx.path) }),
       jwt({
         // The plugin's default after-hook mints a fresh JWT on every
@@ -628,7 +630,7 @@ export function createAuth(env: CloudflareEnv) {
         expiresIn: 300,
         phoneNumberValidator: async (phone) => {
           try {
-            parsePhoneOrThrow(phone, { defaultCountry: 'TH' })
+            parsePhoneOrThrow(phone)
             return true
           } catch {
             return false

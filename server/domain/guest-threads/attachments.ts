@@ -17,7 +17,7 @@ export const MAX_MESSAGE_PHOTOS = 10
 export function assertMessagePhotos(photos: MessagePhoto[]): Array<MessagePhoto & { contentType: string }> {
   if (photos.length > MAX_MESSAGE_PHOTOS) throw new MessagePhotoRejection(`A message can carry at most ${MAX_MESSAGE_PHOTOS} photos.`)
   return photos.map((photo) => {
-    if (photo.bytes.byteLength > MAX_IMAGE_BYTES) throw new MessagePhotoRejection(`${photo.filename} is larger than 20 MB.`)
+    if (photo.bytes.byteLength > MAX_IMAGE_BYTES) throw new MessagePhotoRejection(`${photo.filename} is larger than 10 MB.`)
     const contentType = sniffMediaMimeType(photo.bytes)
     if (!MESSAGE_PHOTO_TYPES.has(contentType)) throw new MessagePhotoRejection(`${photo.filename} is not a JPEG, PNG, WebP, GIF or AVIF photo.`)
     return { ...photo, contentType }
@@ -82,7 +82,15 @@ export async function attachGuestPhotos(
   try {
     await executeBatch(db, messagePhotoPlacements(organizationId, entryId, assetIds, new Date().toISOString()), { operation: 'guest message photos' })
   } catch (error) {
-    await discardMessagePhotos(db, env, organizationId, assetIds, uploader.userId, error)
+    let saved: {asset_id:string}[]
+    try {
+      saved = await queryAll<{asset_id:string}>(db, "SELECT asset_id FROM media_placements WHERE organization_id=? AND owner_type='activity_entry' AND owner_id=? AND slot='attachments'", [organizationId, entryId])
+    } catch (readError) {
+      throw new AggregateError([error, readError], 'The attachment commit could not be read; its photos have been retained', { cause: readError })
+    }
+    const retained = new Set(saved.map(photo => photo.asset_id))
+    await discardMessagePhotos(db, env, organizationId, assetIds.filter(id => !retained.has(id)), uploader.userId, error)
+    if (assetIds.every(id => retained.has(id))) return
     throw error
   }
 }

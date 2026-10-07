@@ -5,7 +5,7 @@ import type { OrganizationVertical } from '~/utils/vertical-copy'
 import type { DraftBrandForm } from '~/lib/components/workspace/onboarding/DraftBrandCard.vue'
 
 export type OnboardingStepId =
-  | 'type' | 'business'
+  | 'type' | 'language' | 'business'
   | 'location' | 'contact' | 'hours'
   | 'currency' | 'products' | 'look'
   | 'review'
@@ -62,6 +62,7 @@ export interface OnboardingFlowState {
     phone: string
     /** null until the currency step is answered. Never seeded with a product default. */
     currency: CurrencyCode | null
+    sourceLocale: string | null
   }
   hours: { timezone: string; hours: OpeningHours; specialHours: SpecialHours }
   brand: DraftBrandForm
@@ -115,6 +116,12 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
     advanceOnChoice: true,
     title: () => 'What kind of business is this?',
     complete: state => Boolean(state.vertical),
+  },
+  {
+    id: 'language', section: 'business', flows: ['new-site'],
+    advanceOnChoice: true,
+    title: () => 'What language is your website in?',
+    complete: state => state.details.sourceLocale !== null,
   },
   {
     // One search. Picking Google's prediction is the confirmation and seeds the
@@ -205,7 +212,7 @@ function emptyState(flow: OnboardingFlowId): OnboardingFlowState {
     placeId: null,
     details: {
       name: '', city: '', streetAddress: '', addressLine2: '', region: '', postalCode: '',
-      country: '', phone: '', currency: null,
+      country: '', phone: '', currency: null, sourceLocale: null,
     },
     hours: { timezone: '', hours: null, specialHours: null },
     brand: {

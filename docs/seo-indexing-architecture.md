@@ -83,7 +83,7 @@ Every public page uses `useSocialMetadata()` for its canonical and social metada
 
 Tenant pages receive a canonical link from `layouts/saya.vue`. The canonical strips query parameters by using `route.path` and resolves against the current request origin.
 
-Do not use `runtimeConfig.public.platformUrl` for tenant canonical, Open Graph, breadcrumb, structured-data, or sitemap URLs. That value is the platform origin.
+Do not use `runtimeConfig.public.siteUrl` for tenant canonical, Open Graph, breadcrumb, structured-data, or sitemap URLs. That value is the platform origin.
 
 ## Generated-card consistency
 

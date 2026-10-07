@@ -195,12 +195,13 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
 export const usePublicPageRequest = () => {
   const route = useRoute();
   const locale = useState<string>('public-locale', () => 'en')
+  const sourceLocale = useState<string | null>('public-source-locale', () => null)
 
   return computed<PublicPageRequest>(() => {
     const effectivePath = route.path
     const explicitLocale = typeof route.params.locale === 'string'
       ? route.params.locale
-      : locale.value !== 'en' && effectivePath.startsWith(`/${locale.value}`)
+      : locale.value !== sourceLocale.value && (effectivePath === `/${locale.value}` || effectivePath.startsWith(`/${locale.value}/`))
         ? locale.value
         : null
     const localePath = explicitLocale
@@ -214,7 +215,7 @@ export const usePublicPageRequest = () => {
     return {
       ...request,
       datasets: request.datasets,
-      locale: localePath.localeSegment ?? locale.value,
+      locale: localePath.localeSegment,
     }
   });
 };
@@ -257,7 +258,7 @@ export const buildPublicPageUrl = (
   if (params.location) qs.set("location", params.location);
   if (params.datasets.length) qs.set("datasets", [...params.datasets].sort().join(','));
   if (params.blogSlug) qs.set("blogSlug", params.blogSlug);
-  if (params.locale && params.locale !== 'en') qs.set('locale', params.locale)
+  if (params.locale) qs.set('locale', params.locale)
   const q = qs.toString();
   return `/api/public/${resourceKind}${q ? `?${q}` : ""}`;
 };

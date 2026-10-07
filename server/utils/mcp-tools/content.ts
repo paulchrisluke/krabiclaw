@@ -1,4 +1,5 @@
-import { CONTENT_BLOCK_TYPES, describeContentBlockTextFields } from '~/shared/content-registries'
+import { getSourceLocale } from '~/server/utils/organization-locales'
+import { CONTENT_BLOCK_TYPES, contentBlockDataSchema } from '~/shared/content-registries'
 import { pageEditorPath } from '~/server/utils/dashboard-links'
 import type { McpToolDefinition } from './shared'
 import { contentBlockMediaInputObject, contentBlockUpdatedAtInput, locationReservationConfigObject, locationReservationConfigWriteSchema, pageInfoObject, paginationInputSchema, renderedBookingPolicySummaryObject, organizationTool } from './shared'
@@ -31,7 +32,8 @@ import {
   type ContentBlockType,
 } from '~/server/utils/content/documents'
 import { prepareTenantBlogContentBlocks } from '~/server/utils/content/publishing'
-import { executeBatch } from '~/server/db'
+import { executeBatch, queryFirst } from '~/server/db'
+import { resolvePublicTemplate } from '~/utils/template-registry'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 import { refreshSocialCard } from '~/server/utils/social-card'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
@@ -56,16 +58,17 @@ export const TENANT_PAGE_BLOCKS_SCHEMA = {
     type: 'object',
     properties: {
       id: { type: 'string' },
-      type: { type: 'string' },
+      type: { type: 'string', enum: [...CONTENT_BLOCK_TYPES] },
       source_block_id: { type: ['string', 'null'] },
       parent_block_id: { type: ['string', 'null'] },
       level: { type: ['integer', 'null'], minimum: 1, maximum: 6 },
-      data: { type: 'object', description: describeContentBlockTextFields(CONTENT_BLOCK_TYPES) },
+      data: { type: 'object' },
       media: { type: 'array', items: contentBlockMediaInputObject },
       updated_at: contentBlockUpdatedAtInput,
     },
     required: ['type', 'data'],
     additionalProperties: false,
+    allOf: CONTENT_BLOCK_TYPES.map(type => ({ anyOf: [{ properties: { type: { not: { const: type } } } }, { properties: { data: contentBlockDataSchema(type) } }] })),
   },
   description: 'Complete canonical block array. Each existing block must retain its id unless its removal is explicitly confirmed. Block data never contains asset IDs or delivery URLs. Omit media to preserve that block\'s current placements; provide media explicitly to replace them, or call set_media with owner_type "content_block", the block id, and the intended slot.',
 }
@@ -77,7 +80,7 @@ export const TENANT_PAGE_BLOCKS_SCHEMA = {
 // article; these are for changing one thing in it.
 const CONTENT_BLOCK_WRITE_SCHEMA = {
   type: { type: 'string', enum: [...CONTENT_BLOCK_TYPES] },
-  data: { type: 'object', description: describeContentBlockTextFields(CONTENT_BLOCK_TYPES) },
+  data: { type: 'object' },
   media: { type: 'array', items: contentBlockMediaInputObject, description: 'Required on image blocks: one item, the picture. Send a block\'s media as a read returned it.' },
   level: { type: ['integer', 'null'], minimum: 1, maximum: 6, description: 'Heading blocks only.' },
 }
@@ -104,11 +107,12 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
       description: "Add a content block to an existing blog article or site page when the user requests an insertion. Read the document first and use after_block_id to insert after an existing block; omit it to append. An image in the first article block becomes its cover. Returns the updated document with block IDs and timestamps.",
       domain: 'content',
       minimumRole: 'admin',
-      confirmRequired: false,
       inputSchema: {
         document_id: { type: 'string', description: 'The blog post id or site page variant id.' },
         after_block_id: { type: ['string', 'null'], description: 'The block this one follows. Omit to append at the end.' },
         ...CONTENT_BLOCK_WRITE_SCHEMA,
+        data: { type: 'object' },
+        allOf: CONTENT_BLOCK_TYPES.map(type => ({ anyOf: [{ properties: { type: { not: { const: type } } } }, { properties: { data: contentBlockDataSchema(type) } }] })),
       },
       required: ['document_id', 'type', 'data'],
       outputSchema: CONTENT_BLOCKS_OUTPUT,
@@ -118,7 +122,6 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
       description: 'Replace one selected block’s complete data and any supplied media in an article or site page, keeping its ID and position. Omitted data fields are removed; omitted media is preserved. Read the block first and keep fields outside the requested change. Requires its own updated_at; a stale token conflicts. Returns the whole updated document. Published content changes immediately.',
       domain: 'content',
       minimumRole: 'admin',
-      confirmRequired: true,
       inputSchema: {
         block_id: { type: 'string' },
         expected_updated_at: { type: 'string', description: 'The block\'s updated_at from the last read.' },
@@ -133,7 +136,6 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
       description: 'Permanently delete the selected content block and all blocks nested under it from an article or site page. Requires the block’s own updated_at from the latest read; stale tokens conflict. Returns the remaining document and timestamps. Published content changes immediately.',
       domain: 'content',
       minimumRole: 'admin',
-      confirmRequired: true,
       inputSchema: {
         block_id: { type: 'string' },
         expected_updated_at: { type: 'string', description: 'The block\'s updated_at from the last read.' },
@@ -143,19 +145,17 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'list_site_pages',
-      description: "List authored site-page variants for the requested language, with their paths and document identities. Each language is managed explicitly; this tool does not generate translations.",
+      description: "List authored pages and built-in public routes. Catalog routes display published products; they do not require custom page creation.",
       domain: 'content',
       minimumRole: 'admin',
-      confirmRequired: false,
       inputSchema: { locale: { type: ['string', 'null'] }, ...paginationInputSchema },
-      outputSchema: { type: 'object', properties: { pages: { type: 'array', items: { type: 'object' } }, page_info: pageInfoObject }, required: ['pages', 'page_info'] },
+      outputSchema: { type: 'object', properties: { pages: { type: 'array', items: { type: 'object' } }, built_in_pages: { type: 'array', items: { type: 'object', properties: { path: { type: 'string' }, recipe: { type: ['string', 'null'] }, public_url: { type: ['string', 'null'] } }, required: ['path', 'recipe', 'public_url'] } }, page_info: pageInfoObject }, required: ['pages', 'built_in_pages', 'page_info'] },
     }),
   organizationTool({
       name: 'get_site_page',
       description: "Read one site-page language variant, including its path, title, ordered blocks and current timestamp. Use its returned IDs and concurrency information for edits.",
       domain: 'content',
       minimumRole: 'admin',
-      confirmRequired: false,
       inputSchema: { variant_id: { type: 'string' } },
       required: ['variant_id'],
       outputSchema: TENANT_PAGE_LIFECYCLE_OUTPUT,
@@ -165,7 +165,6 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
       description: "Create an authored site page in the named language, returning its document, blocks and editor information. A secondary language must name an existing source page. Supply the actual content for that language; no translation is generated. Pages on a live site can become public immediately; blog articles and short announcements use their own tools.",
       domain: 'content',
       minimumRole: 'admin',
-      confirmRequired: true,
       inputSchema: {
         page_id: { type: ['string', 'null'] },
         variant_id: { type: ['string', 'null'] },
@@ -181,7 +180,6 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
       description: "Replace a site-page language variant when the user wants to edit its content or metadata. Read it first and supply the complete blocks, path, title, pageType, recipe, sortOrder and expected_updated_at. Omitted summary is cleared. Omitted product_id retains the linked product; null removes the link. A changed path creates a language-specific redirect. To remove blocks, supply the exact removed_block_ids and confirmation_token from the page read.",
       domain: 'content',
       minimumRole: 'admin',
-      confirmRequired: true,
       inputSchema: {
         variant_id: { type: 'string' },
         product_id: { type: ['string', 'null'], description: 'Explicit canonical Product binding on the source page only. Omit to retain; null unbinds. Translations inherit the source binding; slugs never imply a relationship.' },
@@ -199,7 +197,6 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
       description: 'Delete the selected site page or translation. Deleting a translation removes that translation; deleting the source locale removes the page and every translation with it, and the response names the locales that went. A page the site template renders cannot be deleted, because its route would then have nothing to show.',
       domain: 'content',
       minimumRole: 'admin',
-      confirmRequired: true,
       inputSchema: {
         variant_id: { type: 'string' },
         expected_updated_at: { type: 'string', description: 'The document timestamp from the last read, so a page edited since is refused rather than silently removed.' },
@@ -225,7 +222,6 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
       description: 'Read one location’s table reservation settings and guest-facing policy summary, including capacity, advance notice and cancellation terms. A null policy means this location does not take reservations. Product session bookings use get_product for their separate configuration.',
       domain: 'content',
       minimumRole: 'admin',
-      confirmRequired: false,
       inputSchema: {
         location_id: { type: 'string' },
         locale: { type: 'string' },
@@ -243,17 +239,17 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'update_reservation_policy',
-      description: 'Create or amend the reservation policy for one location — the calendar settings\' advance notice, seats per time slot and cancellation policy, and guest-facing notes. Deposit and reschedule fields are stored settings; the reservation flow does not collect deposits or enforce reschedule cutoffs. Creating it is what lets the location take reservations. Omitted fields keep their stored value; a field set to null is cleared to "not stated", which is not a default.',
+      description: 'Set one location’s reservation duration, capacity, notice, deposit and cancellation terms. Use the current updated_at when amending it. A deposit needs its amount, currency, tax treatment and ready Payments. Omitted fields keep their value; null clears an optional rule.',
       domain: 'content',
       minimumRole: 'admin',
-      confirmRequired: false,
       inputSchema: {
+        expected_updated_at: { type: ["string", "null"], description: "Current policy updated_at; null when creating." },
         location_id: { type: 'string' },
         locale: { type: 'string' },
         ...locationReservationConfigWriteSchema,
-        cancellation_policy: { type: 'string', enum: CANCELLATION_TIER_IDS, description: 'Flexible: 2 hours. Moderate: 1 day. Firm: 2 days. Sets the stored free-cancellation and reschedule cutoffs together; do not also pass those fields. The guest cancellation route does not enforce these cutoffs.' },
+        cancellation_policy: { type: 'string', enum: CANCELLATION_TIER_IDS, description: 'Flexible: 2 hours. Moderate: 1 day. Firm: 2 days. Sets the deposit-refund and reschedule cutoffs together; do not also pass those fields.' },
       },
-      required: ['location_id'],
+      required: ['location_id', 'expected_updated_at'],
       outputSchema: {
         type: 'object',
         properties: {
@@ -392,7 +388,12 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
       try {
         const pages = await listTenantPages(organization.db, organization.organizationId, { locale: optionalString(args, "locale") });
         const page = paginateMcpCollection(pages, args, { resource: `tenant-pages:${organization.organizationId}:${optionalString(args, 'locale') ?? ''}` });
-        return { pages: page.items.map(row => ({ ...row, admin_edit_url: pageEditUrl(organization.organizationSlug, row) })), page_info: page.page_info };
+        const site = await queryFirst<{ vertical: string; theme_id: string }>(organization.db, 'SELECT vertical, theme_id FROM organization WHERE id = ?', [organization.organizationId]);
+        if (!site) throw new HTTPError({ statusCode: 404, message: 'Organization not found' });
+        const template = resolvePublicTemplate({ vertical: site.vertical, themeId: site.theme_id });
+        const paths = new Set([...template.sitemap.exactPaths, ...Object.values(template.pageDocuments.recipes)]);
+        const built_in_pages = [...paths].map(path => ({ path, recipe: Object.entries(template.pageDocuments.recipes).find(([, value]) => value === path)?.[0] ?? null, public_url: organization.publicUrl ? new URL(path, organization.publicUrl).toString() : null }));
+        return { built_in_pages, pages: page.items.map(row => ({ ...row, admin_edit_url: pageEditUrl(organization.organizationSlug, row) })), page_info: page.page_info };
       } catch (error) {
         return rethrowAsInvalidParams(error);
       }
@@ -474,7 +475,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
       }
     case "get_reservation_policy": {
       const locationId = requiredString(args, "location_id");
-      const locale = optionalString(args, "locale") ?? "en";
+      const locale = optionalString(args, "locale") ?? await getSourceLocale(organization.db, organization.organizationId);
       const config = await getLocationReservationConfig(organization.db, {
         organizationId: organization.organizationId,
         locationId,
@@ -489,7 +490,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
     }
     case "update_reservation_policy": {
       const locationId = requiredString(args, "location_id");
-      const locale = optionalString(args, "locale") ?? "en";
+      const locale = optionalString(args, "locale") ?? await getSourceLocale(organization.db, organization.organizationId);
       // A named policy is its two cutoffs, written as the dashboard writes them.
       const tier = args.cancellation_policy;
       if (tier !== undefined && !CANCELLATION_TIER_IDS.includes(tier as CancellationTierId)) {
@@ -499,14 +500,14 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
         throw new Error("Pass cancellation_policy or the cancellation cutoffs, not both");
       }
       const patch = await validateLocationReservationConfigPatch({
-        ...omit(args as Record<string, unknown>, ["location_id", "locale", "cancellation_policy"]),
+        ...omit(args as Record<string, unknown>, ["location_id", "locale", "cancellation_policy", "expected_updated_at"]),
         ...(tier === undefined ? {} : cancellationPatch(tier as CancellationTierId)),
       });
       const config = await upsertLocationReservationConfig(organization.db, {
         organizationId: organization.organizationId,
         locationId,
         patch,
-        actorId: organization.userId,
+        actorId: organization.userId, env: organization.env, expectedUpdatedAt: optionalString(args, "expected_updated_at"),
       });
       const policyContext = await mutationContextPayload(organization, { locationId });
       return renderStructuredResponse(

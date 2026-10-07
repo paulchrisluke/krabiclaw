@@ -320,7 +320,7 @@ export async function sendWhatsAppNotification(
   const accessToken = env.WHATSAPP_ACCESS_TOKEN
 
   const attemptId = crypto.randomUUID()
-  const normalizedPhone = parsePhoneOrThrow(opts.toPhone, { defaultCountry: 'TH' })
+  const normalizedPhone = parsePhoneOrThrow(opts.toPhone)
   const vars = normalizeTemplateVars(opts.vars ?? {})
 
   if (!shouldSendRealWhatsApp(env)) {
@@ -389,7 +389,7 @@ export async function sendWhatsAppOtp(
   const accessToken = env.WHATSAPP_ACCESS_TOKEN
 
   if (!shouldSendRealWhatsApp(env)) {
-    console.log('whatsapp_delivery_log_only', { kind: 'otp', to: maskPhone(parsePhoneOrThrow(toPhone, { defaultCountry: 'TH' })) })
+    console.log('whatsapp_delivery_log_only', { kind: 'otp', to: maskPhone(parsePhoneOrThrow(toPhone)) })
     return
   }
 
@@ -397,7 +397,7 @@ export async function sendWhatsAppOtp(
     throw new Error('WhatsApp env vars not configured')
   }
 
-  const normalized = parsePhoneOrThrow(toPhone, { defaultCountry: 'TH' })
+  const normalized = parsePhoneOrThrow(toPhone)
   const templatePayload = TEMPLATES.otp_code({ code })
 
   const response = await fetch(`${GRAPH_BASE}/${phoneNumberId}/messages`, {
@@ -433,7 +433,7 @@ export async function sendWhatsAppText(
     const messageId = logOnlyWhatsAppMessageId('text')
     let normalized: string
     try {
-      normalized = parsePhoneOrThrow(toPhone, { defaultCountry: 'TH' })
+      normalized = parsePhoneOrThrow(toPhone)
     } catch (err) {
       return { success: false, status: 'failed', error: err instanceof Error ? err.message : String(err) }
     }
@@ -446,7 +446,7 @@ export async function sendWhatsAppText(
   }
 
   try {
-    const normalized = parsePhoneOrThrow(toPhone, { defaultCountry: 'TH' })
+    const normalized = parsePhoneOrThrow(toPhone)
     const response = await fetch(`${GRAPH_BASE}/${phoneNumberId}/messages`, {
       method: 'POST',
       headers: {

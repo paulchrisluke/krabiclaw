@@ -23,7 +23,7 @@ import { requireMcpOrganization, requireMcpUser, type McpUserContext } from '~/s
 import { resolveMcpWorkspace } from '~/server/utils/mcp-context'
 import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
-import { validateArguments } from '~/server/utils/mcp-tool-validation'
+import { fromJsonSchema, type JsonSchemaType } from '@modelcontextprotocol/server'
 import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
 import { hasOrganizationEntitlement } from '~/server/utils/billing'
 import {
@@ -31,7 +31,6 @@ import {
   humanizeEntitlement,
   normalizeWorkspaceArguments,
   resolveOrganizationPublicOrigin,
-  validateRequiredArguments,
   workspaceContextPayload,
   workspaceLocationsPayload,
   workspaceOrganizationsPayload,
@@ -86,6 +85,22 @@ export function getMcpTool(name: string) {
   return MCP_TOOLS.find((tool) => tool.name === name) ?? null
 }
 
+const inputSchemas = new Map(MCP_TOOLS.map(tool => [tool.name, fromJsonSchema<Record<string, unknown>>(tool.inputSchema as JsonSchemaType)]))
+
+// Workspace selection is a domain default. The SDK still validates every
+// field and every nested constraint against the advertised JSON Schema.
+export function mcpToolInputSchema(event: H3Event, tool: McpToolDefinition, user?: McpUserContext) {
+  const schema = inputSchemas.get(tool.name)!
+  return { '~standard': {
+    ...schema['~standard'],
+    validate: async (value: unknown) => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return schema['~standard'].validate(value)
+      const args = await normalizeWorkspaceArguments(event, tool.name, tool.inputSchema, value as Record<string, unknown>, user)
+      return schema['~standard'].validate(args)
+    },
+  } }
+}
+
 // Exported so non-MCP callers (chowbot-adapter.ts) dispatch through the same
 // domain-handler registry instead of hand-copying it — one list of which
 // domain owns which tool, not two.
@@ -123,17 +138,8 @@ export async function executeMcpToolCall(
     );
   }
 
-  validateArguments(tool.inputSchema, rawArguments);
-
-  const normalizedArguments = await normalizeWorkspaceArguments(
-    event,
-    toolName,
-    tool.inputSchema,
-    rawArguments,
-    authenticatedUser,
-  );
-
-  validateRequiredArguments(tool.inputSchema, normalizedArguments);
+  // Called by registered SDK tools after schema validation and workspace resolution.
+  const normalizedArguments = rawArguments;
 
   if (toolName === "list_organizations") {
     const user = authenticatedUser ?? await requireMcpUser(event);

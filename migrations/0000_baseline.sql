@@ -352,10 +352,10 @@ CREATE TABLE `content_documents` (
 	FOREIGN KEY (`organization_id`,`location_id`) REFERENCES `business_locations`(`organization_id`,`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`organization_id`,`product_id`) REFERENCES `products`(`organization_id`,`id`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (`organization_id`,`root_id`,`root_role`,`kind`) REFERENCES `content_documents`(`organization_id`,`id`,`row_role`,`kind`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`organization_id`,`locale`) REFERENCES `organization_locales`(`organization_id`,`locale`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`locale`,`row_role`) REFERENCES `organization_locales`(`organization_id`,`locale`,`document_role`) ON UPDATE no action ON DELETE cascade,
 	CONSTRAINT "content_documents_instants_check" CHECK((published_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', published_at, '+0 days') IS published_at) AND (first_published_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', first_published_at, '+0 days') IS first_published_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
 	CONSTRAINT "content_documents_metadata_check" CHECK(json_valid(metadata_json) AND json_type(metadata_json) IS 'object'),
-	CONSTRAINT "content_documents_role_check" CHECK((row_role = 'root' AND root_id IS NULL AND root_role IS NULL AND locale = 'en') OR (row_role = 'representation' AND root_id IS NOT NULL AND root_id <> id AND root_role = 'root' AND locale IS NOT NULL AND locale <> 'en' AND product_id IS NULL AND location_id IS NULL AND scope_path IS NULL AND status IS NULL AND visibility IS NULL AND source IS NULL AND author_id IS NULL AND published_at IS NULL AND first_published_at IS NULL)),
+	CONSTRAINT "content_documents_role_check" CHECK((row_role = 'root' AND root_id IS NULL AND root_role IS NULL AND locale IS NOT NULL) OR (row_role = 'representation' AND root_id IS NOT NULL AND root_id <> id AND root_role = 'root' AND locale IS NOT NULL AND product_id IS NULL AND location_id IS NULL AND scope_path IS NULL AND status IS NULL AND visibility IS NULL AND source IS NULL AND author_id IS NULL AND published_at IS NULL AND first_published_at IS NULL)),
 	CONSTRAINT "content_documents_path_check" CHECK(path IS NULL OR (path LIKE '/%' AND path NOT LIKE '//%')),
 	CONSTRAINT "content_documents_page_copy_check" CHECK(kind <> 'page' OR (path IS NOT NULL AND title IS NOT NULL)),
 	CONSTRAINT "content_documents_qa_scope_check" CHECK(kind <> 'qa' OR row_role <> 'root' OR ((location_id IS NULL OR scope_path IS NULL) AND (scope_path IS NULL OR scope_path LIKE '/%'))),
@@ -488,6 +488,7 @@ CREATE TABLE `invitation` (
 	`status` text DEFAULT 'pending' NOT NULL,
 	`expiresAt` integer NOT NULL,
 	`inviterId` text NOT NULL,
+	`teamId` text,
 	`createdAt` integer DEFAULT (unixepoch()) NOT NULL,
 	FOREIGN KEY (`organizationId`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`inviterId`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade
@@ -507,12 +508,16 @@ CREATE TABLE `jwks` (
 );
 --> statement-breakpoint
 CREATE TABLE `location_reservation_configs` (
+	`duration_minutes` integer,
 	`location_id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
 	`slot_capacity` integer,
 	`advance_notice_minutes` integer,
 	`minimum_guest_age` integer,
 	`deposit_required` integer DEFAULT 0 NOT NULL,
+	`deposit_amount` integer,
+	`deposit_currency` text,
+	`deposit_tax_behavior` text,
 	`deposit_trigger_party_size` integer,
 	`free_cancellation_until_minutes` integer,
 	`reschedule_allowed` integer DEFAULT 1 NOT NULL,
@@ -527,9 +532,11 @@ CREATE TABLE `location_reservation_configs` (
 	FOREIGN KEY (`organization_id`,`location_id`) REFERENCES `business_locations`(`organization_id`,`id`) ON UPDATE no action ON DELETE cascade,
 	CONSTRAINT "location_reservation_configs_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
 	CONSTRAINT "location_reservation_configs_booleans_check" CHECK(deposit_required IN (0, 1) AND reschedule_allowed IN (0, 1) AND accessibility_contact_required IN (0, 1)),
+	CONSTRAINT "location_reservation_configs_duration_check" CHECK(duration_minutes IS NULL OR duration_minutes > 0),
 	CONSTRAINT "location_reservation_configs_slot_capacity_check" CHECK(slot_capacity IS NULL OR slot_capacity >= 0),
 	CONSTRAINT "location_reservation_configs_minutes_check" CHECK((advance_notice_minutes IS NULL OR advance_notice_minutes >= 0) AND (free_cancellation_until_minutes IS NULL OR free_cancellation_until_minutes >= 0) AND (reschedule_cutoff_minutes IS NULL OR reschedule_cutoff_minutes >= 0)),
 	CONSTRAINT "location_reservation_configs_party_check" CHECK(deposit_trigger_party_size IS NULL OR deposit_trigger_party_size > 0),
+	CONSTRAINT "location_reservation_configs_deposit_check" CHECK((deposit_amount IS NULL OR deposit_amount > 0) AND (deposit_currency IS NULL OR (length(deposit_currency) = 3 AND deposit_currency = upper(deposit_currency))) AND (deposit_tax_behavior IS NULL OR deposit_tax_behavior IN ('inclusive', 'exclusive'))),
 	CONSTRAINT "location_reservation_configs_age_check" CHECK(minimum_guest_age IS NULL OR minimum_guest_age >= 0)
 );
 --> statement-breakpoint
@@ -944,7 +951,7 @@ CREATE TABLE `organization_integrations` (
 	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
-	CONSTRAINT "organization_integrations_provider_check" CHECK(provider IN ('facebook', 'instagram', 'google_analytics', 'google_search_console', 'google_calendar')),
+	CONSTRAINT "organization_integrations_provider_check" CHECK(provider IN ('facebook', 'instagram', 'discord', 'google_analytics', 'google_search_console', 'google_calendar')),
 	CONSTRAINT "organization_integrations_values_check" CHECK(trim(account_id) <> '' AND trim(target_id) <> '' AND trim(target_name) <> '' AND trim(revision) <> ''),
 	CONSTRAINT "organization_integrations_measurement_check" CHECK((provider = 'google_analytics') = (measurement_id IS NOT NULL)),
 	CONSTRAINT "organization_integrations_verification_check" CHECK((provider = 'google_search_console') = (verified IS NOT NULL) AND (verification_token IS NULL OR provider = 'google_search_console') AND (verified IS NULL OR verified IN (0, 1))),
@@ -961,6 +968,7 @@ CREATE TABLE `organization_locales` (
 	`locale` text NOT NULL,
 	`label` text,
 	`is_source` integer DEFAULT 0 NOT NULL,
+	`document_role` text GENERATED ALWAYS AS (CASE WHEN is_source = 1 THEN 'root' ELSE 'representation' END) VIRTUAL,
 	`status` text DEFAULT 'disabled' NOT NULL,
 	`activated_at` text,
 	`disabled_at` text,
@@ -968,12 +976,12 @@ CREATE TABLE `organization_locales` (
 	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
 	CONSTRAINT "organization_locales_instants_check" CHECK((activated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', activated_at, '+0 days') IS activated_at) AND (disabled_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', disabled_at, '+0 days') IS disabled_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
-	CONSTRAINT "organization_locales_status_check" CHECK(status IN ('published', 'disabled') AND (is_source = 0 OR status = 'published')),
-	CONSTRAINT "organization_locales_english_source_check" CHECK(locale <> 'en' OR (is_source = 1 AND status = 'published'))
+	CONSTRAINT "organization_locales_status_check" CHECK(status IN ('published', 'disabled') AND (is_source = 0 OR status = 'published'))
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `idx_organization_locales_one_source_per_org` ON `organization_locales` (`organization_id`) WHERE is_source = 1;--> statement-breakpoint
 CREATE UNIQUE INDEX `organization_locales_organization_id_locale_unique` ON `organization_locales` (`organization_id`,`locale`);--> statement-breakpoint
+CREATE UNIQUE INDEX `organization_locales_locale_role_unique` ON `organization_locales` (`organization_id`,`locale`,`document_role`);--> statement-breakpoint
 CREATE TABLE `organization_redirects` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
@@ -1043,10 +1051,12 @@ CREATE TABLE `payment_billing_accounts` (
 CREATE TABLE `payment_checkout_holds` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
-	`product_id` text NOT NULL,
-	`variant_id` text NOT NULL,
-	`price_id` text NOT NULL,
-	`session_id` text NOT NULL,
+	`product_id` text,
+	`variant_id` text,
+	`price_id` text,
+	`session_id` text,
+	`location_id` text,
+	`timezone` text,
 	`assigned_member_id` text,
 	`buyer_user_id` text,
 	`request_id` text,
@@ -1061,14 +1071,17 @@ CREATE TABLE `payment_checkout_holds` (
 	`expires_at` text NOT NULL,
 	`created_at` text NOT NULL,
 	`converted_booking_id` text,
+	`converted_reservation_id` text,
 	FOREIGN KEY (`buyer_user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE set null,
 	FOREIGN KEY (`payment_id`) REFERENCES `payments`(`id`) ON UPDATE no action ON DELETE restrict,
-	CONSTRAINT "payment_holds_quantity_check" CHECK(quantity > 0 AND amount > 0)
+	CONSTRAINT "payment_holds_quantity_check" CHECK(quantity > 0 AND amount > 0),
+	CONSTRAINT "payment_holds_subject_check" CHECK((product_id IS NOT NULL AND variant_id IS NOT NULL AND price_id IS NOT NULL AND session_id IS NOT NULL AND converted_reservation_id IS NULL) OR (product_id IS NULL AND variant_id IS NULL AND price_id IS NULL AND session_id IS NULL AND location_id IS NOT NULL AND timezone IS NOT NULL AND calendar_group IS NULL AND assigned_member_id IS NULL AND converted_booking_id IS NULL))
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `payment_checkout_holds_payment_id_unique` ON `payment_checkout_holds` (`payment_id`);--> statement-breakpoint
 CREATE INDEX `payment_holds_capacity_idx` ON `payment_checkout_holds` (`session_id`,`status`,`expires_at`);--> statement-breakpoint
 CREATE INDEX `payment_holds_calendar_idx` ON `payment_checkout_holds` (`organization_id`,`calendar_group`,`status`,`expires_at`);--> statement-breakpoint
+CREATE INDEX `payment_holds_reservation_idx` ON `payment_checkout_holds` (`organization_id`,`location_id`,`starts_at`,`status`,`expires_at`);--> statement-breakpoint
 CREATE TABLE `payment_claims` (
 	`token_hash` text PRIMARY KEY NOT NULL,
 	`payment_id` text NOT NULL,
@@ -1086,6 +1099,7 @@ CREATE TABLE `payment_cost_snapshots` (
 	`incurred_by` text NOT NULL,
 	`currency` text NOT NULL,
 	`amount` integer NOT NULL,
+	`billing_basis_json` text,
 	`incurred_at` text NOT NULL,
 	`revision` integer DEFAULT 1 NOT NULL,
 	`updated_at` text NOT NULL,
@@ -1182,6 +1196,7 @@ CREATE TABLE `payment_usage_events` (
 	`kind` text NOT NULL,
 	`currency` text NOT NULL,
 	`amount` integer NOT NULL,
+	`billing_basis_json` text,
 	`source_id` text NOT NULL,
 	`provider_occurred_at` text NOT NULL,
 	`delivery_at` text,
@@ -1249,7 +1264,7 @@ CREATE TABLE `post_publications` (
 	FOREIGN KEY (`organization_id`,`post_id`,`post_row_role`,`post_kind`) REFERENCES `content_documents`(`organization_id`,`id`,`row_role`,`kind`) ON UPDATE no action ON DELETE no action,
 	CONSTRAINT "post_publications_instants_check" CHECK((published_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', published_at, '+0 days') IS published_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
 	CONSTRAINT "post_publications_constants_check" CHECK(post_row_role = 'root' AND post_kind = 'social_post'),
-	CONSTRAINT "post_publications_channel_check" CHECK(channel IN ('facebook', 'instagram')),
+	CONSTRAINT "post_publications_channel_check" CHECK(channel IN ('facebook', 'instagram', 'discord')),
 	CONSTRAINT "post_publications_state_check" CHECK(state IN ('preparing', 'publishing', 'published', 'failed', 'unknown', 'removed')),
 	CONSTRAINT "post_publications_identity_check" CHECK(length(trim(provider_app_id)) > 0 AND length(trim(provider_subject_id)) > 0 AND length(trim(provider_target_id)) > 0 AND (provider_post_id IS NULL OR length(trim(provider_post_id)) > 0)),
 	CONSTRAINT "post_publications_handles_check" CHECK(json_valid(provider_handles_json) AND json_type(provider_handles_json) IS 'object'),
@@ -1347,12 +1362,15 @@ CREATE TABLE `product_booking_configs` (
 	`calendar_group` text,
 	`scheduling_mode` text DEFAULT 'legacy' NOT NULL,
 	`assigned_member_id` text,
+	`assigned_team_id` text,
 	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	`created_by` text NOT NULL,
 	`updated_by` text NOT NULL,
 	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`assigned_team_id`) REFERENCES `team`(`id`) ON UPDATE no action ON DELETE set null,
 	FOREIGN KEY (`organization_id`,`product_id`) REFERENCES `products`(`organization_id`,`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`assigned_team_id`) REFERENCES `team`(`organizationId`,`id`) ON UPDATE no action ON DELETE no action,
 	CONSTRAINT "product_booking_configs_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
 	CONSTRAINT "product_booking_configs_duration_check" CHECK(duration_minutes IS NULL OR duration_minutes > 0),
 	CONSTRAINT "product_booking_configs_capacity_check" CHECK(default_capacity IS NULL OR default_capacity >= 0),
@@ -1463,8 +1481,10 @@ CREATE TABLE `product_sessions` (
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `product_sessions_occurrence_unique` ON `product_sessions` (`product_id`,`source_occurrence_key`) WHERE source_occurrence_key IS NOT NULL;--> statement-breakpoint
-CREATE UNIQUE INDEX `product_sessions_location_instant_unique` ON `product_sessions` (`product_id`,`location_id`,`starts_at`) WHERE location_id IS NOT NULL;--> statement-breakpoint
-CREATE UNIQUE INDEX `product_sessions_neutral_instant_unique` ON `product_sessions` (`product_id`,`starts_at`) WHERE location_id IS NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX `product_sessions_location_instant_unique` ON `product_sessions` (`product_id`,`location_id`,`starts_at`) WHERE location_id IS NOT NULL AND assigned_member_id IS NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX `product_sessions_neutral_instant_unique` ON `product_sessions` (`product_id`,`starts_at`) WHERE location_id IS NULL AND assigned_member_id IS NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX `product_sessions_provider_location_instant_unique` ON `product_sessions` (`product_id`,`location_id`,`starts_at`,`assigned_member_id`) WHERE location_id IS NOT NULL AND assigned_member_id IS NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX `product_sessions_provider_neutral_instant_unique` ON `product_sessions` (`product_id`,`starts_at`,`assigned_member_id`) WHERE location_id IS NULL AND assigned_member_id IS NOT NULL;--> statement-breakpoint
 CREATE INDEX `product_sessions_product_start_idx` ON `product_sessions` (`product_id`,`starts_at`,`status`);--> statement-breakpoint
 CREATE INDEX `product_sessions_location_start_idx` ON `product_sessions` (`location_id`,`starts_at`,`status`);--> statement-breakpoint
 CREATE UNIQUE INDEX `product_sessions_org_id_unique` ON `product_sessions` (`organization_id`,`id`);--> statement-breakpoint
@@ -1612,6 +1632,7 @@ CREATE TABLE `reservations` (
 	`starts_at` text NOT NULL,
 	`ends_at` text NOT NULL,
 	`party_size` integer NOT NULL,
+	`policy_json` text,
 	`status` text DEFAULT 'confirmed' NOT NULL,
 	`cancelled_at` text,
 	`cancellation_reason` text,
@@ -1622,6 +1643,7 @@ CREATE TABLE `reservations` (
 	FOREIGN KEY (`organization_id`,`location_id`) REFERENCES `business_locations`(`organization_id`,`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`organization_id`,`request_id`) REFERENCES `requests`(`organization_id`,`id`) ON UPDATE no action ON DELETE no action,
 	CONSTRAINT "reservations_status_check" CHECK(status IN ('confirmed', 'cancelled')),
+	CONSTRAINT "reservations_policy_check" CHECK(policy_json IS NULL OR (json_valid(policy_json) AND json_type(policy_json) = 'object' AND json_type(policy_json, '$.reschedule_allowed') IN ('true', 'false') AND json_type(policy_json, '$.free_cancellation_until_minutes') IN ('null', 'integer') AND json_type(policy_json, '$.reschedule_cutoff_minutes') IN ('null', 'integer')) IS 1),
 	CONSTRAINT "reservations_instants_check" CHECK((strftime('%Y-%m-%dT%H:%M:%fZ', starts_at, '+0 days') IS starts_at) AND (strftime('%Y-%m-%dT%H:%M:%fZ', ends_at, '+0 days') IS ends_at) AND (cancelled_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', cancelled_at, '+0 days') IS cancelled_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
 	CONSTRAINT "reservations_interval_check" CHECK(ends_at > starts_at),
 	CONSTRAINT "reservations_party_size_check" CHECK(party_size > 0),
@@ -1638,16 +1660,16 @@ CREATE TABLE `resource_localizations` (
 	`resource_type` text NOT NULL,
 	`resource_id` text NOT NULL,
 	`locale` text NOT NULL,
+	`document_role` text GENERATED ALWAYS AS ('representation') VIRTUAL,
 	`values_json` text NOT NULL,
 	`route_path` text,
 	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	`created_by_user_id` text NOT NULL,
 	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	`updated_by_user_id` text NOT NULL,
-	FOREIGN KEY (`organization_id`,`locale`) REFERENCES `organization_locales`(`organization_id`,`locale`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`locale`,`document_role`) REFERENCES `organization_locales`(`organization_id`,`locale`,`document_role`) ON UPDATE no action ON DELETE cascade,
 	CONSTRAINT "resource_localizations_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
 	CONSTRAINT "resource_localizations_values_json_check" CHECK(json_valid(values_json) AND json_type(values_json) = 'object'),
-	CONSTRAINT "resource_localizations_non_english_check" CHECK(locale <> 'en'),
 	CONSTRAINT "resource_localizations_route_path_check" CHECK(route_path IS NULL OR (route_path LIKE '/' || locale || '/%' AND route_path NOT LIKE '%?%' AND route_path NOT LIKE '%#%' AND route_path NOT LIKE '%//%'))
 );
 --> statement-breakpoint
@@ -1754,7 +1776,7 @@ CREATE TABLE `stripe_connected_accounts` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
 	`stripe_account_id` text,
-	`country` text NOT NULL,
+	`country` text,
 	`livemode` integer NOT NULL,
 	`status` text DEFAULT 'creating' NOT NULL,
 	`card_payments_status` text,
@@ -1764,7 +1786,7 @@ CREATE TABLE `stripe_connected_accounts` (
 	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
-	CONSTRAINT "stripe_connected_accounts_country_check" CHECK(length(country) = 2 AND country = upper(country) AND country NOT GLOB '*[^A-Z]*'),
+	CONSTRAINT "stripe_connected_accounts_country_check" CHECK(country IS NULL OR (length(country) = 2 AND country = upper(country) AND country NOT GLOB '*[^A-Z]*')),
 	CONSTRAINT "stripe_connected_accounts_livemode_check" CHECK(livemode IN (0, 1)),
 	CONSTRAINT "stripe_connected_accounts_status_check" CHECK(status IN ('creating', 'creation_failed', 'action_required', 'pending_review', 'restricted', 'ready')),
 	CONSTRAINT "stripe_connected_accounts_capability_check" CHECK(card_payments_status IS NULL OR card_payments_status IN ('active', 'pending', 'restricted', 'unsupported')),
@@ -1857,6 +1879,31 @@ CREATE TABLE `subscription` (
 CREATE UNIQUE INDEX `subscription_stripeSubscriptionId_unique` ON `subscription` (`stripeSubscriptionId`);--> statement-breakpoint
 CREATE INDEX `subscription_referenceId_idx` ON `subscription` (`referenceId`);--> statement-breakpoint
 CREATE INDEX `subscription_status_idx` ON `subscription` (`status`);--> statement-breakpoint
+CREATE TABLE `team` (
+	`id` text PRIMARY KEY NOT NULL,
+	`name` text NOT NULL,
+	`organizationId` text NOT NULL,
+	`memberCount` integer DEFAULT 0 NOT NULL,
+	`createdAt` integer NOT NULL,
+	`updatedAt` integer,
+	FOREIGN KEY (`organizationId`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX `team_organizationId_idx` ON `team` (`organizationId`);--> statement-breakpoint
+CREATE UNIQUE INDEX `team_org_id_unique` ON `team` (`organizationId`,`id`);--> statement-breakpoint
+CREATE TABLE `teamMember` (
+	`id` text PRIMARY KEY NOT NULL,
+	`teamId` text NOT NULL,
+	`userId` text NOT NULL,
+	`membershipKey` text,
+	`createdAt` integer,
+	FOREIGN KEY (`teamId`) REFERENCES `team`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`userId`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `teamMember_membershipKey_unique` ON `teamMember` (`membershipKey`);--> statement-breakpoint
+CREATE INDEX `teamMember_teamId_idx` ON `teamMember` (`teamId`);--> statement-breakpoint
+CREATE INDEX `teamMember_userId_idx` ON `teamMember` (`userId`);--> statement-breakpoint
 CREATE TABLE `usage_events` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
