@@ -40,6 +40,7 @@
           <p class="saya-kicker mb-3">{{ collectionName }}</p>
           <h1 class="saya-display-md text-3xl text-default sm:text-4xl lg:text-5xl">{{ displayTitle }}</h1>
           <p v-if="pageDocument?.summary || tagline" class="mx-auto mt-4 max-w-2xl text-base text-muted sm:text-lg">{{ pageDocument?.summary || tagline }}</p>
+          <ProductVariantPrices v-if="!booking" :product="product" :location-id="location?.id ?? null" :currency="currency" class="mx-auto mt-6 max-w-xl text-base" />
           <div class="mt-4 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm text-muted">
               <template v-if="averageRating">
                 <span class="inline-flex items-center gap-1 font-medium text-default">
@@ -226,7 +227,8 @@
             <p class="saya-kicker">{{ collectionName }}</p>
             <h1 class="saya-display saya-italic mt-3 text-3xl sm:text-4xl lg:text-5xl text-default leading-tight">{{ product.name }}</h1>
             <p class="mt-2 text-sm sm:text-base text-muted">{{ location?.title ?? organizationName }}</p>
-            <div v-if="priceLabel" class="mt-6 flex items-baseline gap-3 text-2xl font-semibold tabular-nums">
+            <ProductVariantPrices :product="product" :location-id="location?.id ?? null" :currency="currency" class="mt-6 text-lg" />
+            <div v-if="!offer && priceLabel" class="mt-6 flex items-baseline gap-3 text-2xl font-semibold tabular-nums">
               <span v-if="compareAtLabel" class="text-base font-normal text-muted line-through">{{ compareAtLabel }}</span>
               <span>{{ priceLabel }}</span>
             </div>
@@ -341,6 +343,7 @@ import { PUBLIC_BOOKING_WINDOW_DAYS } from '~/shared/bookings'
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import { isRecord, publicApiRequest } from '~/utils/api-clients'
 import MediaGallery from '~/components/MediaGallery.vue'
+import ProductVariantPrices from '~/components/products/ProductVariantPrices.vue'
 
 const props = defineProps<{
   organizationId: string
@@ -392,11 +395,7 @@ const breadcrumbs = computed(() => [
   { to: localePath(props.pageDocument?.path ?? props.presentation.productPath(props.location?.slug ?? '', props.product.slug)), label: displayTitle.value },
 ])
 
-/**
- * The offer this page quotes, resolved once through the one selection
- * contract. A product with several variants shows its lowest applicable offer;
- * each variant's own price is on this page under its option.
- */
+/** The headline offer and the booking form use the same currency and scope. */
 const offer = computed<Price | null>(() => {
   const selection = { currency: props.currency, location_id: props.location?.id ?? null, at: new Date().toISOString() }
   // Only variants a customer can actually choose: a disabled variant's price

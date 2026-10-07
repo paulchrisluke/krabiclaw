@@ -143,6 +143,13 @@
                 <p v-if="product.description" class="mt-1.5 max-w-xl text-sm leading-relaxed text-muted">
                   {{ product.description }}
                 </p>
+                <ProductVariantPrices
+                  v-if="product.variants.filter(variant => variant.active).length > 1 || new Set(product.variants.flatMap(variant => variant.prices.filter(price => price.active).map(price => price.currency))).size > 1"
+                  :product="product"
+                  :location-id="productLocationId(product, group.location_id)"
+                  :currency="currency"
+                  class="mt-2 text-sm"
+                />
               </div>
             </article>
           </div>
@@ -236,6 +243,7 @@ import { groupProductsByCollection, productLocationCollectionPath } from '~/util
 import { extractDietarySchemaUrls } from '~/utils/product-seo'
 import { getVerticalCopy } from '~/utils/vertical-copy'
 import { resolveSeoUrl } from '~/composables/useSeoUrls'
+import ProductVariantPrices from '~/components/products/ProductVariantPrices.vue'
 
 interface LocationSummary { id: string; slug: string; title: string }
 
