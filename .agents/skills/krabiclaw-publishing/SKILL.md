@@ -1,6 +1,6 @@
 ---
 name: krabiclaw-publishing
-description: Plan, write and distribute KrabiClaw feature launches, blog articles, help guides and social posts through canonical MCP tools. Use when deciding when and where to publish, whether a HyperFrames video is useful, and which notifications or Product News broadcasts publication can trigger.
+description: Prepare a focused editorial outline, verified facts and real screenshot/video assets, then assign a GitHub writing issue to the human writer. Use for KrabiClaw feature launches and blog planning; handle approved human copy and distribution through canonical MCP tools afterward.
 ---
 
 # Publishing KrabiClaw news
@@ -44,23 +44,53 @@ question when there is new value; do not repost the same announcement to fill
 a calendar. Explicit schedules use the intended audience's timezone and the
 actual available scheduling mechanism; this skill creates no recurring task.
 
-## Write the article
+## Prepare a human writing handoff
 
-Use conversational, concrete prose grounded in work the reader recognizes.
-Open with their situation, show what they can now do, then explain enough to
-try it. Use a specific title, short summary, supported example, limitations
-and one relevant next step. Prefer an actual result over generic promises of
-productivity, revenue or effortless automation. Keep implementation details
-out of customer copy unless they affect a decision.
+The default deliverable is one focused GitHub writing issue, not an AI-written
+article or a bundle of finished channel captions. The owner confirmed the human
+writer is GitHub `bamboochow` on 2026-10-07. Verify that account is assignable in
+this repository and check for an existing issue before creating another. A new
+writer assignment or issue must be authorized by the owner; this skill alone
+does not authorize contacting a person. Do not assign an AI agent to write the
+article or impersonate the writer's personal experience.
 
-A launch article is a story, not a changelog dump or a replacement manual.
-Link the how-to where detailed setup belongs. A help guide has prerequisites,
-exact steps, the expected result and useful recovery paths, with live captures
-as required by write-help-docs. Put relevant process media beside the explanation.
-Choose a deliberate cover/leading image; the first image block can become the
-article cover. Check the cover's email and social crop as well as the page.
-Use descriptive alt text, captions and internal links. Reuse canonical facts;
-verify current pricing from its provider-owned source before mentioning amounts.
+Give the writer a brief they can use without reading the conversation:
+
+1. One audience, one problem and one article angle. State the customer outcome
+   in a sentence; omit a kitchen-sink feature list.
+2. A working title and a short outline of three or four beats. Describe what
+   each beat must establish; let the human choose the language and narrative.
+   Use the canonical profile for voice, not a prewritten article to imitate.
+3. A short fact sheet with actual prerequisites, limits and direct source links.
+   Separate verified behavior from proposed examples and missing evidence.
+4. A small media packet: genuine screenshots or recordings placed against the
+   outline beat they support, with captions, source environment/date and safe
+   accessible links. Provide the actual assets when available, not just a list
+   telling the writer to take screenshots. Do not include private customer data.
+5. A clear asset decision: screenshot, HyperFrames clip, or neither, and why.
+   Name the exact missing capture when an essential screen is inaccessible.
+6. Deliverables and finish criteria: a human-written article and summary, one
+   CTA to an existing verified destination, factual review and owner acceptance.
+   Derive channel excerpts after the article is accepted; do not scatter a brief
+   into separate article/social/email writing assignments by default.
+
+Use one canonical issue as the handoff. Keep private working assets in the
+approved marketing archive and give the writer verified access through the
+appropriate private destination. Public issues may contain already-public
+sources/media; do not expose private archive links or grant public sharing to
+make an attachment convenient. Include necessary publication consequences in a
+short operator note, separate from the outline the human is writing.
+
+When creating the issue, include the confirmed assignee in the create request,
+then read it back to verify both the body and assignee. Report the issue URL.
+Do not label a handoff complete if the person cannot access essential assets.
+If an access or capture is blocked, state the specific gap and finish the useful
+outline and verified assets; do not fabricate proof to fill the packet.
+
+The writer owns the prose. The agent owns source checks, media preparation,
+factual review and, when authorized, CMS assembly and distribution. Write full
+copy only when the owner explicitly asks the agent to do so. A subsequent
+publication request does not convert rejected AI copy into accepted human copy.
 
 ## When to make a HyperFrames video
 
@@ -111,7 +141,7 @@ not a claim that a deployed broadcast was sent or received:
 Before a new listed platform blog publish, make the automatic Product News
 consequence explicit in the brief and resolve authorization from the session.
 Authorization only for social posting does not authorize this email audience.
-If send authorization is missing, finish the article draft and social assets,
+If send authorization is missing, finish the reviewed content and assets,
 then request the specific missing approval. Do not publish and hope to cancel
 the cron afterward. If the owner wants web-only publication, check the current
 supported publication controls; do not invent an email-suppression flag or
@@ -169,7 +199,8 @@ in the MCP surface inspected here; use the existing mechanism, not a new tool.
    the approved private campaign record. Verify the email separately; neither
    a social receipt nor public website status proves an email broadcast.
 
-For a launch, prepare the article, useful guides and channel assets together.
+For a launch, prepare the writer brief, useful sources and media together;
+assemble channel excerpts from the accepted human article afterward.
 Publish the destination first, verify it, then release its social posts; account
 for automatic email timing before the first article publish. Regional variants
 need native requests, relevant settings and checked language, not identical
@@ -187,10 +218,12 @@ refunds and payouts are distinct claims with distinct prerequisites. Sandbox
 qualification is not a real customer payment or a promise of every wallet in
 every country. Confirm current customer availability and plan before release.
 
-A coherent new story could follow a service owner making a time bookable and
+A focused writer outline could follow a service owner making a time bookable and
 a guest reserving and paying, **if that complete journey is verified**. Link
 the focused booking/payment setup guides. Capture a safe demonstrated flow,
-edit one short action-to-result video, and excerpt that for Facebook/Instagram.
+edit one short action-to-result video when it clarifies the story. Assign the
+outline and actual assets to the human writer before adapting accepted copy for
+Facebook/Instagram.
 Use a relevant “Set up bookings” or “Read the guide” destination. Plan one
 Product News launch consequence, not separate duplicate emails for each guide.
 This example is an editorial plan; it authorizes no content publication,
