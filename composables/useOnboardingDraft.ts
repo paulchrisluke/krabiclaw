@@ -4,6 +4,8 @@ import { parseOpeningHours, parseSpecialHours, type OpeningHours } from '~/share
 import { parsePhone } from '~/utils/phone'
 import { useOnboardingState, type OnboardingPlacePreview } from '~/composables/useOnboardingFlow'
 import { formatPostalAddress, postalAddressFromAnswers } from '~/utils/postal-address'
+import { isOrganizationFontPreset } from '~/shared/organization-fonts'
+import { LOGO_SHAPES, type LogoShape } from '~/shared/media-placement-contract'
 
 /**
  * Every server call the flow makes, and the shapes they answer with. The step
@@ -69,7 +71,9 @@ export function useOnboardingDraft() {
   function serializeBrandDraft() {
     const brand = state.value.brand
     return {
-      brandColor: brand.brandColor.trim() || null,
+      paletteStarter: brand.paletteStarter,
+      fontPreset: brand.fontPreset,
+      logoShape: brand.logoShape,
       logoNote: brand.logoNote.trim() || null,
       logoPreviewUrl: brand.logoPreviewUrl.trim() || null,
       heroPhotoNote: brand.heroPhotoNote.trim() || null,
@@ -314,7 +318,9 @@ export function useOnboardingDraft() {
     state.value.hours.timezone = text(details.timezone)
     state.value.hours.hours = openingHours
     state.value.hours.specialHours = specialHours
-    state.value.brand.brandColor = text(config.brand_color)
+    state.value.brand.paletteStarter = text(config.palette_starter) || null
+    state.value.brand.fontPreset = isOrganizationFontPreset(config.font_preset) ? config.font_preset : null
+    state.value.brand.logoShape = (LOGO_SHAPES as readonly unknown[]).includes(config.logo_shape) ? config.logo_shape as LogoShape : null
     state.value.brand.logoNote = text(config.draft_logo_note)
     state.value.brand.heroPhotoNote = text(config.draft_hero_photo_note)
     state.value.brand.heroHeadline = text(config.draft_hero_headline)

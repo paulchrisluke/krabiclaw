@@ -9,7 +9,7 @@ import { getWhatsAppWorkspaceState, patchWhatsAppWorkspaceState, getMcpWorkspace
 
 test('organization settings and workspace patches preserve independent owners and hold no provider credentials', async () => {
   const miniflare = new Miniflare({ workers: [{ config: {
-    name: 'owner-settings-test', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'owner-settings-test', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': {
       type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }',
     } } }, env: { DB: { type: 'd1' } },
@@ -20,8 +20,8 @@ test('organization settings and workspace patches preserve independent owners an
     await db.batch(statements.map(statement => db.prepare(statement)))
     await db.prepare("INSERT INTO organization(id,name,slug,subdomain) VALUES('org','Org','org','org')").run()
     await db.prepare("INSERT INTO user(id,name,email) VALUES('user','User','user@example.test')").run()
-    await Promise.all([setConfig(db, 'org', 'brand_color', '#123456'), setConfig(db, 'org', 'default_timezone', 'Asia/Bangkok')])
-    assert.equal((await getConfig(db, 'org')).brand_color, '#123456')
+    await Promise.all([setConfig(db, 'org', 'press_email', 'press@example.test'), setConfig(db, 'org', 'default_timezone', 'Asia/Bangkok')])
+    assert.equal((await getConfig(db, 'org')).press_email, 'press@example.test')
     assert.equal((await getConfig(db, 'org')).default_timezone, 'Asia/Bangkok')
     // The measurement id is the Analytics integration's, and choosing a GA4
     // property is the only thing that writes it — so it is readable here and
@@ -29,7 +29,7 @@ test('organization settings and workspace patches preserve independent owners an
     await storeIntegration(db, 'org', 'google_analytics', { account_id: 'google-account', target_id: '100', target_name: 'OAuth', measurement_id: 'G-OAUTH' })
     assert.equal((await getConfig(db, 'org')).google_analytics_measurement_id, 'G-OAUTH')
     await assert.rejects(db.prepare("UPDATE organization SET consultation_settings_json=json('{}') WHERE id='org'").run(), /organization_consultation_settings_check/)
-    await assert.rejects(setConfig(db, 'other', 'brand_color', '#000000'))
+    await assert.rejects(setConfig(db, 'other', 'press_email', 'other@example.test'))
     assert.equal(await deleteIntegration(db, 'org', 'google_analytics'), true)
     const selection = { account_id: 'google-account', target_id: '123', target_name: 'Site', measurement_id: 'G-SELECTED' }
     // Two selections landing together: the revision guard means one wins.
@@ -47,7 +47,7 @@ test('organization settings and workspace patches preserve independent owners an
     assert.equal((await readIntegration(db, 'org', 'google_analytics'))?.measurement_id, 'G-SELECTED')
     assert.equal(await deleteIntegration(db, 'org', 'google_analytics', { revision: stored!.revision }), true)
     assert.equal(await readIntegration(db, 'org', 'google_analytics'), null)
-    await setConfig(db, 'org', 'brand_color', '#abcdef')
+    await setConfig(db, 'org', 'press_email', 'desk@example.test')
 
     await patchWhatsAppWorkspaceState(db, { userId: 'user', pendingConfirmation: { intent: 'one' } })
     await Promise.all([patchWhatsAppWorkspaceState(db, { userId: 'user', lastInboundId: 'inbound' }), upsertMcpWorkspacePreference(db, { userId: 'user', organizationId: 'org', locationId: null })])

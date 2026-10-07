@@ -79,7 +79,11 @@ export interface GuestBookingInput {
   contactEmail?: string | null
   cancelUrl?: string | null
   heroImageUrl?: string | null
+  /** The platform sign-up the guest's email joins this booking to. */
+  accountUrl?: string | null
 }
+
+const accountAction = (url: string | null | undefined) => url ? { url, label: 'Create an account' } : undefined
 
 function guestVisitFacts(input: GuestBookingInput): NotificationFact[] {
   return facts(
@@ -105,6 +109,7 @@ export function guestReservationReceivedMessage(input: GuestBookingInput): Notif
     hero: input.heroImageUrl ? { imageUrl: input.heroImageUrl, alt: input.organizationName } : null,
     facts: guestVisitFacts(input),
     primaryAction: input.cancelUrl ? { url: input.cancelUrl, label: 'Manage your reservation' } : undefined,
+    secondaryAction: accountAction(input.accountUrl),
     sections: contactSection(input),
     finePrint: input.cancelUrl ? 'The link above stays valid for 30 days.' : undefined,
     category: 'account_security',
@@ -134,6 +139,7 @@ export function guestBookingReceivedMessage(input: GuestBookingInput & { product
     intro: input.status === 'pending' ? `Thanks, ${input.guestName}. ${input.organizationName} will review your request shortly.` : `Thanks, ${input.guestName}. Your booking with ${input.organizationName} is confirmed.`,
     facts: guestVisitFacts(input),
     primaryAction: input.cancelUrl ? { url: input.cancelUrl, label: 'Manage your booking' } : undefined,
+    secondaryAction: accountAction(input.accountUrl),
     sections: contactSection(input),
     finePrint: input.cancelUrl ? 'The link above stays valid for 30 days.' : undefined,
     category: 'account_security',
@@ -163,6 +169,7 @@ export function guestContactReceivedMessage(input: {
   productTitle: string | null
   message: string
   consentAcknowledged: boolean
+  accountUrl?: string | null
 }): NotificationMessage {
   return {
     title: 'Your message was sent',
@@ -174,6 +181,7 @@ export function guestContactReceivedMessage(input: {
       fact('productTitle', 'Regarding', input.productTitle),
       input.consentAcknowledged ? fact('consent', 'Contact/privacy notice', 'Acknowledged') : null,
     ),
+    primaryAction: accountAction(input.accountUrl),
     sections: [{ title: 'Your message', body: input.message }],
     category: 'account_security',
     organizationName: input.organizationName,

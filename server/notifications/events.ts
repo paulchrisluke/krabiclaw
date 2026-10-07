@@ -165,7 +165,7 @@ export function contactReceivedMessage(input: ContactEventInput): NotificationMe
 export interface GuestReplyEventInput {
   guestName: string
   guestEmail: string | null
-  inboundChannel: 'email' | 'whatsapp'
+  inboundChannel: 'email' | 'whatsapp' | 'web'
   messagePreview: string
   organizationName: string | null
   replyUrl: string | null
@@ -174,7 +174,7 @@ export interface GuestReplyEventInput {
 export function guestReplyMessage(input: GuestReplyEventInput): NotificationMessage {
   // The site name has no slot of its own, so it rides in the subject alongside
   // how the guest wrote in. An owner with several sites needs to know which.
-  const subject = [input.inboundChannel === 'whatsapp' ? 'WhatsApp reply' : 'Email reply', input.organizationName].filter(Boolean).join(' · ')
+  const subject = [input.inboundChannel === 'whatsapp' ? 'WhatsApp reply' : input.inboundChannel==='web'?'Website reply':'Email reply', input.organizationName].filter(Boolean).join(' · ')
   return {
     title: `New guest reply from ${input.guestName}`,
     preheader: input.messagePreview.slice(0, 120),
@@ -214,6 +214,38 @@ export function reviewReceivedMessage(input: ReviewEventInput): NotificationMess
     ),
     primaryAction: input.reviewsUrl ? { url: input.reviewsUrl, label: 'View review' } : undefined,
     category: 'reviews',
+    organizationName: input.organizationName,
+  }
+}
+
+export interface BookingReassignedEventInput {
+  guestName: string
+  productTitle: string
+  date: string
+  time: string
+  partySize: string
+  fromName: string | null
+  toName: string
+  replyUrl: string | null
+  organizationName: string
+}
+
+export function bookingReassignedMessage(input: BookingReassignedEventInput): NotificationMessage {
+  return {
+    title: `${input.guestName}’s booking is now with ${input.toName}`,
+    preheader: `${input.productTitle} · ${input.date} at ${input.time}`,
+    hero: null,
+    facts: facts(
+      fact('context', 'Booking', input.productTitle, true),
+      fact('guestName', 'Guest', input.guestName, true),
+      fact('date', 'Date', input.date, true),
+      fact('time', 'Time', input.time, true),
+      fact('partySize', 'Party size', input.partySize, true),
+      fact('toName', 'Team member', input.toName, true),
+      fact('fromName', 'Previously', input.fromName),
+    ),
+    primaryAction: input.replyUrl ? { url: input.replyUrl, label: 'Open in dashboard' } : undefined,
+    category: 'reservations_bookings',
     organizationName: input.organizationName,
   }
 }
@@ -278,6 +310,31 @@ export function domainUpdateMessage(input: DomainEventInput): NotificationMessag
       fact('headline', 'Update', input.headline),
     ),
     primaryAction: { url: input.dashboardUrl, label: 'Open domain settings' },
+    category: 'organization_and_billing',
+  }
+}
+
+export interface OnboardingCompletedInput {
+  organizationName: string
+  ownerName: string
+  ownerEmail: string
+  siteUrl: string
+  viewCustomerUrl: string
+}
+
+/** Tells the KrabiClaw operator a new business finished onboarding and is live. */
+export function onboardingCompletedMessage(input: OnboardingCompletedInput): NotificationMessage {
+  return {
+    title: `${input.organizationName} is live on KrabiClaw`,
+    preheader: `${input.ownerName} finished onboarding`,
+    hero: null,
+    facts: facts(
+      fact('business', 'Business', input.organizationName, true),
+      fact('owner', 'Owner', `${input.ownerName} (${input.ownerEmail})`, true),
+      fact('site', 'Site', input.siteUrl),
+    ),
+    primaryAction: { url: input.viewCustomerUrl, label: 'View customer' },
+    secondaryAction: { url: input.siteUrl, label: 'Open site' },
     category: 'organization_and_billing',
   }
 }

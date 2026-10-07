@@ -6,7 +6,7 @@
         <li v-for="(column, columnIndex) in columns" :key="columnIndex">
           <ul class="flex flex-col gap-y-8" role="list">
             <li v-for="item in column" :key="item.id">
-              <article class="rounded-2xl bg-white p-6 shadow-xl shadow-slate-900/10">
+              <article class="rounded-2xl bg-elevated p-6 shadow-xl shadow-slate-900/10">
                 <h3 class="blawby-display text-lg font-bold leading-7 text-[var(--blawby-primary)]">{{ item.question }}</h3>
                 <BlawbyRichText
                   :content="item.answer"

@@ -2,7 +2,6 @@ import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-res
 import { executeBatch, queryAll, type BatchQuery } from '~/server/db'
 import { getClientIp, hashClientIp, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 import { getReviewRequestByToken, hashReviewRequestToken } from '~/server/utils/review-requests'
-import { getAuthSession } from '~/server/utils/auth'
 import { notifyReviewReceived } from '~/server/utils/notifications'
 
 function batchAssertion(condition: string, params: unknown[], message: string): BatchQuery {
@@ -150,11 +149,7 @@ export default defineHandler(async (event) => {
   await notifyReviewReceived(env, db, {
     organizationId: result.context.organization_id, organizationName: result.context.organization_name, locationId: result.context.location_id, reviewId, authorName, rating, content, })
 
-  // Signing in from here links the review only when this browser's session is
-  // the anonymous user it belongs to; Better Auth's link moves it then.
-  const sessionUser = (await getAuthSession(event, env))?.user as { id: string; isAnonymous?: boolean | null } | undefined
-  const linkable = Boolean(sessionUser?.isAnonymous && reviewUserId && sessionUser.id === reviewUserId)
-  return jsonResponse({ success: true, reviewId, status: 'pending', linkable }, { status: 201 })
+  return jsonResponse({ success: true, reviewId, status: 'pending' }, { status: 201 })
 })
 import { defineHandler } from 'nitro';
 import { getHeader } from 'nitro/h3';

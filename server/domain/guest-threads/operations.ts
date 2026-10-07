@@ -1,9 +1,11 @@
+import { bookingRefundQueries } from '~/server/domain/payments/booking-refund'
+import { recordBookingCancelled, recordBookingDecision } from '~/server/domain/booking-analytics'
 import { executeBatch, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { isReservedTestDomain, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import type { ReplyEmailEnv } from '~/server/utils/submission-messages'
 import { getGuestRequest, getThreadOperationalRecord, requestActions, requestSummary, type GuestRequest, type ThreadOperationalRecord } from '~/server/domain/requests'
-import { deliverGuestThreadEmail, getDeliveryById, getDeliveryClaimEligibility, getDeliveryRetryEligibility, isDeliveryClaimInFlight } from './deliveries'
-import { findEntryByDedupeKey, getEntryById } from './entries'
+import { deliverGuestThreadEmail, getDeliveryById, isDeliverySent } from './deliveries'
+import { findEntryByDedupeKey } from './entries'
 import { discardMessagePhotos, listMessagePhotos, MessagePhotoRejection, messagePhotoPlacements, uploadMessagePhotos, type MessagePhoto } from './attachments'
 import type { UploadResolvedMediaInput } from '~/server/utils/media-upload'
 import { mailboxTransitionQueries, updateThreadProjectionIfLatestEntry } from './repository'
@@ -26,19 +28,18 @@ import type {
 // member to reach for. Archive and unarchive say where the conversation is
 // filed, not what state it is in, and touch neither the booking nor
 // conversation_state.
-export const GUEST_THREAD_ACTIONS = new Set(['confirm', 'reject', 'cancel', 'reply', 'retry_delivery', 'archive', 'unarchive'])
+export const GUEST_THREAD_ACTIONS = new Set(['confirm', 'reject', 'cancel', 'reply', 'archive', 'unarchive'])
 
-type SuccessfulOperationOutcome = { ok: true; status: 200 | 202; thread: GuestThreadRow; availableActions: string[] }
+type SuccessfulOperationOutcome = { ok: true; status: 200; thread: GuestThreadRow; availableActions: string[] }
 
 export type OperationOutcome =
   | SuccessfulOperationOutcome
-  | { ok: false; status: 404; reason: 'thread_not_found' | 'source_not_found' | 'delivery_not_found' }
+  | { ok: false; status: 404; reason: 'thread_not_found' | 'source_not_found' }
   | { ok: false; status: 409; reason: 'invalid_transition'; message: string }
-  | { ok: false; status: 400; reason: 'no_guest_email' | 'empty_body' | 'missing_delivery_id' }
+  | { ok: false; status: 400; reason: 'no_guest_email' | 'empty_body' }
   | { ok: false; status: 400; reason: 'missing_idempotency_key' }
   | { ok: false; status: 400; reason: 'invalid_photo'; message: string }
   | { ok: false; status: 502; reason: 'delivery_failed'; message: string }
-  | { ok: false; status: 504; reason: 'delivery_unknown'; message: string }
 
 export type ExecuteOperationInput = {
   threadId: string
@@ -47,10 +48,11 @@ export type ExecuteOperationInput = {
   body?: string
   /** The photos a reply carries, in the order they were chosen. */
   photos?: MessagePhoto[]
-  deliveryId?: string
   env: ReplyEmailEnv & UploadResolvedMediaInput['env']
   idempotencyKey?: string
   actorUserId: string
+  financialAuthorizationId?: string
+  financialWritesAllowed?: boolean
 }
 
 interface ThreadContext {
@@ -105,13 +107,12 @@ function conflict(message = 'Idempotency key was reused with a different request
 async function successfulOutcome(
   db: DbClient,
   context: ThreadContext,
-  status: SuccessfulOperationOutcome['status'] = 200,
 ): Promise<SuccessfulOperationOutcome> {
   const thread = await getGuestRequest(db, context.thread.id, context.thread.organization_id)
   const record = await getThreadOperationalRecord(db, context.thread.id)
   return {
     ok: true,
-    status,
+    status: 200,
     thread: thread ?? context.thread,
     availableActions: requestActions(record, new Date().toISOString()),
   }
@@ -153,6 +154,7 @@ function operationEntryQuery(
   dedupeKey: string,
   now: string,
   subject: string | null,
+  financialGuard: BatchQuery | null = null,
 ): BatchQuery {
   return {
     query: `
@@ -168,6 +170,7 @@ function operationEntryQuery(
         -- not both write an entry for the same transition.
         AND EXISTS (SELECT 1 FROM ${plan.kind === 'reservation' ? 'reservations' : 'bookings'} src
                      WHERE src.request_id = gt.id AND src.status = ? AND ${sourceStillRunningSql(plan, 'src')})
+        AND (${financialGuard?.query ?? '1=1'})
       ON CONFLICT(dedupe_key) DO NOTHING
     `,
     params: [
@@ -185,6 +188,7 @@ function operationEntryQuery(
       plan.kind,
       plan.beforeStatus,
       now,
+      ...(financialGuard?.params ?? []),
     ],
   }
 }
@@ -337,28 +341,41 @@ async function sendStatusUpdate(
   input: ExecuteOperationInput,
   entry: GuestThreadEntryRow,
   delivery: GuestThreadDeliveryRow,
-): Promise<GuestThreadDeliveryRow | OperationOutcome> {
-  if (getDeliveryClaimEligibility(delivery) !== 'claimable') return delivery
-  const subject = recordedEmailSubject(entry)
-  if (!entry.body || !subject) return conflict('Status update has no recorded email content')
-  const payload = JSON.parse(entry.payload_json!) as { action?: string; afterStatus?: string }
-  if (payload.action && (
-    payload.afterStatus !== context.record?.status
-    || entry.body !== operationBody(payload.action, context.thread, context.record)
-  )) return conflict('Status update was superseded by a booking change')
-  const summary = await requestSummary(db, context.thread)
-  if (!summary.guestEmail) return { ok: false, status: 400, reason: 'no_guest_email' }
-  const fromName = await getOrganizationBrandName(db, context.thread.organization_id)
-  return await deliverGuestThreadEmail(db, {
-    delivery,
-    env: input.env,
-    to: summary.guestEmail,
-    fromName,
-    subject,
-    email: await renderStatusUpdate(input.env, db, context.thread.organization_id, fromName, subject, entry.body),
-    submissionType: context.thread.kind,
-    submissionId: context.thread.id,
-  })
+): Promise<OperationOutcome> {
+  let outcome = delivery
+  if (!isDeliverySent(delivery)) {
+    const subject = recordedEmailSubject(entry)
+    if (!entry.body || !subject) return conflict('Status update has no recorded email content')
+    const payload = JSON.parse(entry.payload_json!) as { action?: string; afterStatus?: string }
+    if (payload.action && (
+      payload.afterStatus !== context.record?.status
+      || entry.body !== operationBody(payload.action, context.thread, context.record)
+    )) return conflict('Status update was superseded by a booking change')
+    const summary = await requestSummary(db, context.thread)
+    if (!summary.guestEmail) return { ok: false, status: 400, reason: 'no_guest_email' }
+    const fromName = await getOrganizationBrandName(db, context.thread.organization_id)
+    outcome = await deliverGuestThreadEmail(db, {
+      delivery,
+      env: input.env,
+      to: summary.guestEmail,
+      fromName,
+      subject,
+      email: await renderStatusUpdate(input.env, db, context.thread.organization_id, fromName, subject, entry.body),
+      submissionType: context.thread.kind,
+      submissionId: context.thread.id,
+    })
+  }
+  if (isDeliverySent(outcome)) return await successfulOutcome(db, context)
+  return { ok: false, status: 502, reason: 'delivery_failed', message: outcome.error ?? 'Email provider rejected the status update' }
+}
+
+/** A business's decision on a booking, for its analytics: recorded once per booking, on the first run and on any retry. */
+async function recordBookingOutcome(db: DbClient, context: ThreadContext, input: ExecuteOperationInput, decidedAt: string) {
+  if (!context.record || context.record.kind !== 'booking') return
+  const booking = { organizationId: input.organizationId, bookingId: context.record.id, actorUserId: input.actorUserId ?? null }
+  if (input.action === 'confirm') await recordBookingDecision(db, { ...booking, decision: 'confirmed', decidedAt })
+  else if (input.action === 'reject') await recordBookingDecision(db, { ...booking, decision: 'declined', decidedAt })
+  else if (input.action === 'cancel') await recordBookingCancelled(db, { ...booking, cancelledBy: 'business' })
 }
 
 async function executeSourceMutation(
@@ -374,8 +391,8 @@ async function executeSourceMutation(
     const delivery = await getDeliveryById(db, deliveryDedupeKey(input))
     if (!delivery) throw new Error('Status update delivery receipt was not created')
     const outcome = await sendStatusUpdate(db, context, input, existing, delivery)
-    if ('ok' in outcome) return outcome
-    return await successfulOutcome(db, context)
+    await recordBookingOutcome(db, context, input, existing.occurred_at)
+    return outcome
   }
 
   const plan = sourceMutationPlan(context, input.action)
@@ -391,10 +408,14 @@ async function executeSourceMutation(
   const subject = plan.requiresNotification
     ? operationSubject(plan.action, await getOrganizationBrandName(db, context.thread.organization_id))
     : null
+  // Declining or cancelling a paid booking returns the payment in the same batch, once the operator approved it.
+  const refundPlan = plan.kind === 'booking' && (plan.action === 'reject' || plan.action === 'cancel') && context.record
+    ? await bookingRefundQueries(db,{action:plan.action,organizationId:input.organizationId,actorUserId:input.actorUserId,bookingId:context.record.id,authorizationId:input.financialAuthorizationId,financialWritesAllowed:input.financialWritesAllowed,note:input.body,entryId,now}) : {queries:[],guard:null}
   const queries = [
-    operationEntryQuery(context, plan, input, entryId, dedupeKey, now, subject),
+    operationEntryQuery(context, plan, input, entryId, dedupeKey, now, subject,refundPlan.guard),
     sourceUpdateQuery(context, plan, input, entryId, now),
     ...(plan.afterStatus === 'cancelled' ? [resolveThreadQuery(context.thread.id, entryId, now)] : []),
+    ...refundPlan.queries,
   ]
   const revokeReview = revokeReviewRequestQuery(context, plan, entryId, now)
   if (revokeReview) queries.push(revokeReview)
@@ -412,9 +433,12 @@ async function executeSourceMutation(
     const refreshed = await loadThreadContext(db, input.threadId, input.organizationId)
     if ('ok' in refreshed) return refreshed
     const outcome = await sendStatusUpdate(db, refreshed, input, applied, delivery)
-    if ('ok' in outcome) return outcome
+    await recordBookingOutcome(db, context, input, applied.occurred_at)
+    return outcome
   }
-  return await successfulOutcome(db, context)
+  const outcome = await successfulOutcome(db, context)
+  await recordBookingOutcome(db, context, input, applied.occurred_at)
+  return outcome
 }
 
 async function executeReply(
@@ -498,66 +522,11 @@ async function executeReply(
     submissionId: context.thread.id,
   })
 
-  if (outcome.status === 'sent' || outcome.status === 'accepted' || outcome.status === 'delivered' || outcome.status === 'read') {
+  if (isDeliverySent(outcome)) {
     await updateThreadProjectionIfLatestEntry(db, context.thread.id, entry.id, { conversationState: 'waiting_on_guest' })
     return await successfulOutcome(db, context)
   }
-  if (isDeliveryClaimInFlight(outcome)) return await successfulOutcome(db, context, 202)
-  if (outcome.status === 'failed') {
-    return { ok: false, status: 502, reason: 'delivery_failed', message: outcome.error ?? 'Email provider rejected the reply' }
-  }
-  return { ok: false, status: 504, reason: 'delivery_unknown', message: outcome.error ?? 'Email delivery outcome is unknown' }
-}
-
-async function retryDelivery(
-  db: DbClient,
-  context: ThreadContext,
-  input: ExecuteOperationInput,
-): Promise<OperationOutcome> {
-  if (!input.deliveryId) return { ok: false, status: 400, reason: 'missing_delivery_id' }
-  const delivery = await getDeliveryById(db, input.deliveryId)
-  if (!delivery) {
-    return { ok: false, status: 404, reason: 'delivery_not_found' }
-  }
-  const entry = await getEntryById(db, delivery.entry_id)
-  if (!entry || entry.request_id !== context.thread.id) return { ok: false, status: 404, reason: 'delivery_not_found' }
-  if (isDeliveryClaimInFlight(delivery)) return await successfulOutcome(db, context, 202)
-  const retryEligibility = getDeliveryRetryEligibility(delivery)
-  if (retryEligibility === 'unsupported') {
-    return conflict('Only guest-facing email deliveries can be retried here')
-  }
-  if (retryEligibility === 'settled') {
-    return conflict('This email delivery is not currently eligible for retry')
-  }
-
-  const summary = await requestSummary(db, context.thread)
-  if (!summary.guestEmail) return { ok: false, status: 400, reason: 'no_guest_email' }
-  const fromName = await getOrganizationBrandName(db, context.thread.organization_id)
-  if (delivery.purpose === 'status_update' && !entry.body) return conflict('Delivery entry has no email body')
-  const retried = delivery.purpose === 'status_update'
-    ? await sendStatusUpdate(db, context, input, entry, delivery)
-    : await deliverGuestThreadEmail(db, {
-        delivery,
-        env: input.env,
-        to: summary.guestEmail,
-        fromName,
-        subject: replySubject(context.thread.kind, fromName),
-        email: await renderMemberReply(input.env, db, context.thread.organization_id, fromName, entry),
-        submissionType: context.thread.kind,
-        submissionId: context.thread.id,
-      })
-  if ('ok' in retried) return retried
-  if (delivery.purpose === 'member_reply' && (retried.status === 'sent' || retried.status === 'accepted')) {
-    await updateThreadProjectionIfLatestEntry(db, context.thread.id, entry.id, { conversationState: 'waiting_on_guest' })
-  }
-  if (retried.status === 'failed') {
-    return { ok: false, status: 502, reason: 'delivery_failed', message: retried.error ?? 'Email provider rejected the retry' }
-  }
-  if (isDeliveryClaimInFlight(retried)) return await successfulOutcome(db, context, 202)
-  if (retried.status === 'unknown') {
-    return { ok: false, status: 504, reason: 'delivery_unknown', message: retried.error ?? 'Email retry outcome is unknown' }
-  }
-  return await successfulOutcome(db, context)
+  return { ok: false, status: 502, reason: 'delivery_failed', message: outcome.error ?? 'Email provider rejected the reply' }
 }
 
 const ENDED_OCCURRENCE_MESSAGE = 'This conversation is past because its booking has ended'
@@ -625,7 +594,6 @@ export async function executeGuestThreadOperation(db: DbClient, input: ExecuteOp
   if ('ok' in context) return context
 
   if (input.action === 'reply') return await executeReply(db, context, input)
-  if (input.action === 'retry_delivery') return await retryDelivery(db, context, input)
   if (input.action === 'archive' || input.action === 'unarchive') {
     return await executeMailboxTransition(db, context, input, input.action)
   }

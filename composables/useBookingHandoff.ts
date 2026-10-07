@@ -12,6 +12,7 @@ export interface BookingConfirmation {
   organizationName: string
   policySummary?: ApiRecord | null
   guestName: string
+  guestEmail?: string
   /**
    * The instant booked and the zone it belongs to.
    *

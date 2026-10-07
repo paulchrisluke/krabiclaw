@@ -2,7 +2,7 @@
   <div :class="centered ? 'mx-auto max-w-2xl md:text-center' : 'max-w-2xl'">
     <p v-if="eyebrow" class="mb-3 text-sm font-semibold uppercase text-[var(--blawby-accent-strong)]">{{ eyebrow }}</p>
     <component :is="tag" class="blawby-display text-3xl font-bold text-[var(--blawby-primary)] sm:text-4xl">
-      {{ split.before }}<span v-if="split.accent" class="text-[var(--blawby-accent)]">{{ split.accent }}</span>{{ split.after }}
+      {{ split.before }}<span v-if="split.accent" class="text-[var(--blawby-accent-strong)]">{{ split.accent }}</span>{{ split.after }}
     </component>
     <p v-if="description" class="mt-4 text-lg leading-8 text-[var(--blawby-primary)]">{{ description }}</p>
   </div>

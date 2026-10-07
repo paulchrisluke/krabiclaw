@@ -13,14 +13,14 @@ export default defineHandler(async (event) => {
   const { env, db, organization } = await getDashboardContext(event, {})
   // Connecting the organization's Stripe account is an integration change:
   // owner and admin, per utils/organization-access.ts.
-  await assertRoleAllows({ organizationId: organization.id, role: organization.role, permissions: { integrations: ['update'] } })
+  await assertRoleAllows({ organizationId: organization.id, role: organization.role, permissions: { payments: ['integration'] } })
   if (!env.STRIPE_SECRET_KEY || !env.NUXT_PUBLIC_PLATFORM_DOMAIN) {
     throw new HTTPError({ statusCode: 503, statusMessage: 'Stripe Connect is not configured' })
   }
   const account = await getStripeConnectedAccount(db, organization.id)
   if (!account?.stripeAccountId) throw new HTTPError({ statusCode: 409, statusMessage: 'Stripe onboarding has not started' })
   const onboardingUrl = await createStripeConnectOnboardingLink(
-    createStripeClient(env.STRIPE_SECRET_KEY),
+    createStripeClient(env.STRIPE_SECRET_KEY, 'payments'),
     { stripeAccountId: account.stripeAccountId, ...buildStripeConnectOnboardingUrls(env.NUXT_PUBLIC_PLATFORM_DOMAIN, organization.slug) },
   )
   return sendRedirect(event, onboardingUrl, 303)

@@ -10,6 +10,8 @@ import { originatingOwnerId, recordAndDeliverConversion, recordOrganizationConve
 import { findStripeGa4CheckoutAttribution } from '../../server/utils/stripe-ga4-intents.ts'
 import { getAnalyticsReport } from '../../server/utils/analytics-report.ts'
 import { recordTenantPageview, type TenantPageviewInput } from '../../server/utils/pageview-tracking.ts'
+import { completeOnboarding } from '../../server/utils/organization-provisioning.ts'
+import { hashEmail } from '../../server/utils/email-delivery.ts'
 
 const SESSION = '11111111-1111-4111-8111-111111111111'
 const VISITOR = '22222222-2222-4222-8222-222222222222'
@@ -20,7 +22,7 @@ const browser = { headers: new Headers({ cookie: `kc_session_id=${SESSION}; kc_v
 
 async function openDb() {
   const runtime = new Miniflare({ workers: [{ config: {
-    name: 'conversion-proof', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'conversion-proof', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } },
     env: { DB: { type: 'd1' } },
   } }] })
@@ -479,6 +481,52 @@ test('checkout attribution uses the newest matching intent even when attribution
     await insert('intent-d', '2026-09-10T03:00:00.000Z', null, 'upgrade')
     await insert('intent-e', '2026-09-10T03:00:00.000Z', null, 'initial_subscription', 'sub-other')
     assert.deepEqual(await findStripeGa4CheckoutAttribution(db, 'sub-intents', 'initial_subscription'), attribution)
+  } finally {
+    await runtime.dispose()
+  }
+})
+
+test('a completed onboarding emails each operator once, with a link to that customer, whatever the measurement does', { timeout: 60_000 }, async (t) => {
+  const { runtime, db } = await openDb()
+  const sent: Array<{ idempotencyKey: string | null; body: { to: string[]; subject: string; html: string; text: string } }> = []
+  t.mock.method(globalThis, 'fetch', async (url: string, init: RequestInit) => {
+    assert.equal(url, 'https://api.resend.com/emails')
+    sent.push({ idempotencyKey: new Headers(init.headers).get('Idempotency-Key'), body: JSON.parse(String(init.body)) })
+    return Response.json({ id: `email-${sent.length}` })
+  })
+  try {
+    await db.prepare(`INSERT INTO organization (id, name, slug, subdomain, theme_id, status) VALUES ('org-platform', 'KrabiClaw', 'krabiclaw', 'www', ?, 'active')`).bind(PLATFORM_TEMPLATE.themeId).run()
+    await db.prepare(`INSERT INTO organization (id, name, slug, subdomain, status) VALUES ('org-customer', 'Clay Corner', 'clay-corner', 'clay-corner', 'active')`).run()
+    await db.prepare(`INSERT INTO organization_domains (id, organization_id, domain, type, role, status) VALUES ('dom-1', 'org-customer', 'clay-corner.krabiclaw.com', 'system', 'canonical', 'active')`).run()
+    await db.prepare(`INSERT INTO user (id, name, email) VALUES ('user-owner', 'Mina Park', 'mina@clay-corner.com')`).run()
+    await db.prepare(`INSERT INTO member (id, "organizationId", "userId", role) VALUES ('m-owner', 'org-customer', 'user-owner', 'owner')`).run()
+    const env = { DB: db, EMAIL_DELIVERY_MODE: 'provider', RESEND_API_KEY: 're_test_operator', NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://krabiclaw.com', PLATFORM_OWNER_EMAILS: 'ops@krabiclaw.com, OPS@KrabiClaw.com ' } as unknown as Parameters<typeof completeOnboarding>[0]
+
+    const completion = await completeOnboarding(env, db, 'org-customer', null)
+    assert.deepEqual(completion.operator_email, { status: 'sent' })
+    assert.equal(sent.length, 1, 'a repeated operator address, however cased, is one email')
+    const [email] = sent
+    assert.deepEqual(email!.body.to, ['ops@krabiclaw.com'])
+    assert.equal(email!.body.subject, 'Clay Corner is live on KrabiClaw')
+    assert.equal(email!.idempotencyKey, `onboarding-complete:org-customer:${hashEmail('ops@krabiclaw.com')}`)
+    for (const expected of ['Mina Park (mina@clay-corner.com)', 'https://clay-corner.krabiclaw.com/',
+      'https://krabiclaw.com/dashboard/krabiclaw/platform-accounts?user=user-owner&amp;organization=org-customer']) {
+      assert.ok(email!.body.html.includes(expected), `email carries ${expected}`)
+    }
+    // The conversion is recorded on its own path, once per organization.
+    assert.equal(await db.prepare("SELECT count(*) FROM analytics_events WHERE json_extract(payload_json, '$.event_name') = 'onboarding_complete' AND json_extract(payload_json, '$.entity_id') = 'org-customer'").first('count(*)'), 1)
+
+    // KrabiClaw activating itself is not a customer: no email.
+    assert.deepEqual((await completeOnboarding(env, db, 'org-platform', null)).operator_email, { status: 'sent' })
+    assert.equal(sent.length, 1)
+
+    // An unconfigured operator address fails visibly and does not stop the measurement.
+    await db.prepare(`INSERT INTO organization (id, name, slug, subdomain, status) VALUES ('org-second', 'Second', 'second', 'second', 'active')`).run()
+    await db.prepare(`INSERT INTO member (id, "organizationId", "userId", role) VALUES ('m-second', 'org-second', 'user-owner', 'owner')`).run()
+    const unconfigured = await completeOnboarding({ ...env, PLATFORM_OWNER_EMAILS: '' }, db, 'org-second', null)
+    assert.deepEqual(unconfigured.operator_email, { status: 'failed', reason: 'PLATFORM_OWNER_EMAILS is not configured' })
+    assert.equal(await db.prepare("SELECT count(*) FROM analytics_events WHERE json_extract(payload_json, '$.event_name') = 'onboarding_complete' AND json_extract(payload_json, '$.entity_id') = 'org-second'").first('count(*)'), 1)
+    assert.equal(sent.length, 1)
   } finally {
     await runtime.dispose()
   }

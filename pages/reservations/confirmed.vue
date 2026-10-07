@@ -16,6 +16,7 @@
       :next-steps-notes-html="resolvedPolicySummary?.additional_notes_html ?? ''"
       :cta-label="resCopy.reservationExploreLabel"
       :cta-to="menuCtaTo"
+      :guest-email="confirmation.guestEmail"
     >
       <template #title>
         {{ resCopy.thankYouLabel(confirmation.guestName) }}
@@ -177,5 +178,11 @@ async function share() {
   }
 }
 
-useSeoMeta({ title: 'Reservation confirmed', robots: 'noindex' })
+useSocialMetadata({
+  path: '/reservations/confirmed',
+  title: 'Reservation confirmed',
+  description: 'Your reservation has been confirmed.',
+  socialImage: null,
+  discoverability: 'private',
+})
 </script>

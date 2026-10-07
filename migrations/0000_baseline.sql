@@ -87,7 +87,7 @@ CREATE INDEX `analytics_events_org_session_idx` ON `analytics_events` (`organiza
 CREATE INDEX `analytics_events_org_visitor_idx` ON `analytics_events` (`organization_id`,`kind`,`visitor_id`);--> statement-breakpoint
 CREATE INDEX `analytics_events_conversion_name_idx` ON `analytics_events` (`kind`,(payload_json ->> '$.event_name'),`created_at`);--> statement-breakpoint
 CREATE INDEX `analytics_events_conversion_entity_idx` ON `analytics_events` (`organization_id`,(payload_json ->> '$.entity_type'),(payload_json ->> '$.entity_id')) WHERE kind IN ('conversion', 'interaction');--> statement-breakpoint
-CREATE UNIQUE INDEX `analytics_events_conversion_entity_unique` ON `analytics_events` (`organization_id`,(payload_json ->> '$.event_name'),(payload_json ->> '$.entity_type'),(payload_json ->> '$.entity_id')) WHERE kind = 'conversion' AND (payload_json ->> '$.entity_type') IS NOT NULL AND (payload_json ->> '$.entity_id') IS NOT NULL AND (payload_json ->> '$.event_name') IN ('contact_submit', 'reservation_submit', 'booking_submit', 'sign_up', 'onboarding_complete', 'purchase', 'refund');--> statement-breakpoint
+CREATE UNIQUE INDEX `analytics_events_conversion_entity_unique` ON `analytics_events` (`organization_id`,(payload_json ->> '$.event_name'),(payload_json ->> '$.entity_type'),(payload_json ->> '$.entity_id')) WHERE kind = 'conversion' AND (payload_json ->> '$.entity_type') IS NOT NULL AND (payload_json ->> '$.entity_id') IS NOT NULL AND (payload_json ->> '$.event_name') IN ('contact_submit', 'reservation_submit', 'booking_submit', 'sign_up', 'onboarding_complete', 'purchase', 'refund', 'payment_paid', 'payment_refunded', 'booking_confirmed', 'booking_declined', 'booking_cancelled', 'booking_change_accepted', 'booking_change_declined', 'payments_fee_invoice_paid');--> statement-breakpoint
 CREATE TABLE `analytics_summaries` (
 	`id` text PRIMARY KEY NOT NULL,
 	`kind` text NOT NULL,
@@ -172,6 +172,7 @@ CREATE TABLE `bookings` (
 	`product_id` text NOT NULL,
 	`product_session_id` text NOT NULL,
 	`product_variant_id` text NOT NULL,
+	`assigned_member_id` text,
 	`user_id` text,
 	`request_id` text,
 	`party_size` integer NOT NULL,
@@ -238,12 +239,10 @@ CREATE TABLE `business_locations` (
 	`seo_title` text,
 	`seo_description` text,
 	`canonical_url` text,
-	`feature_overrides` text,
 	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
 	CONSTRAINT "business_locations_instants_check" CHECK((last_synced_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', last_synced_at, '+0 days') IS last_synced_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
 	CONSTRAINT "business_locations_address_check" CHECK(address IS NULL OR (json_valid(address) AND json_type(address) IS 'object' AND json_type(address, '$.regionCode') IS 'text' AND trim(address ->> '$.regionCode') <> '' AND json_type(address, '$.addressLines') IS 'array' AND json_array_length(address, '$.addressLines') > 0 AND (json_type(address, '$.languageCode') IS NULL OR json_type(address, '$.languageCode') IS 'text') AND (json_type(address, '$.locality') IS NULL OR json_type(address, '$.locality') IS 'text') AND (json_type(address, '$.sublocality') IS NULL OR json_type(address, '$.sublocality') IS 'text') AND (json_type(address, '$.administrativeArea') IS NULL OR json_type(address, '$.administrativeArea') IS 'text') AND (json_type(address, '$.postalCode') IS NULL OR json_type(address, '$.postalCode') IS 'text'))),
 	CONSTRAINT "business_locations_categories_check" CHECK(categories IS NULL OR (json_valid(categories) AND json_type(categories) IS 'array')),
-	CONSTRAINT "business_locations_feature_overrides_check" CHECK(feature_overrides IS NULL OR (json_valid(feature_overrides) AND json_type(feature_overrides) IS 'object')),
 	CONSTRAINT "business_locations_opening_hours_check" CHECK(opening_hours IS NULL OR (json_valid(opening_hours) AND json_type(opening_hours) IS 'object' AND json_type(opening_hours, '$.periods') IS 'array')),
 	CONSTRAINT "business_locations_special_hours_check" CHECK(special_hours IS NULL OR (json_valid(special_hours) AND json_type(special_hours) IS 'array'))
 );
@@ -377,6 +376,62 @@ CREATE UNIQUE INDEX `content_documents_links_org_unique` ON `content_documents` 
 CREATE INDEX `content_documents_org_kind_status_idx` ON `content_documents` (`kind`,`row_role`,`status`,`sort_order`);--> statement-breakpoint
 CREATE INDEX `content_documents_location_kind_status_idx` ON `content_documents` (`location_id`,`kind`,`row_role`,`status`,`sort_order`);--> statement-breakpoint
 CREATE UNIQUE INDEX `content_documents_scope_role_unique` ON `content_documents` (`organization_id`,`id`,`row_role`,`kind`);--> statement-breakpoint
+CREATE TABLE `google_calendar_cleanup_jobs` (
+	`id` text PRIMARY KEY NOT NULL,
+	`organization_id` text NOT NULL,
+	`account_id` text NOT NULL,
+	`calendar_id` text NOT NULL,
+	`event_id` text NOT NULL,
+	`state` text DEFAULT 'pending' NOT NULL,
+	`attempts` integer DEFAULT 0 NOT NULL,
+	`last_error` text,
+	`next_attempt_at` text,
+	`lease_token` text,
+	`lease_until` text,
+	`completed_at` text,
+	`created_at` text NOT NULL,
+	`updated_at` text NOT NULL,
+	CONSTRAINT "google_calendar_cleanup_state_check" CHECK(state IN ('pending', 'error', 'deleted'))
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `google_calendar_cleanup_provider_unique` ON `google_calendar_cleanup_jobs` (`calendar_id`,`event_id`);--> statement-breakpoint
+CREATE INDEX `google_calendar_cleanup_due_idx` ON `google_calendar_cleanup_jobs` (`state`,`next_attempt_at`);--> statement-breakpoint
+CREATE TABLE `google_calendar_event_links` (
+	`id` text PRIMARY KEY NOT NULL,
+	`organization_id` text NOT NULL,
+	`integration_revision` text NOT NULL,
+	`account_id` text NOT NULL,
+	`calendar_id` text NOT NULL,
+	`event_id` text NOT NULL,
+	`booking_kind` text NOT NULL,
+	`operational_id` text NOT NULL,
+	`request_id` text,
+	`booking_revision` text NOT NULL,
+	`synced_revision` text,
+	`state` text DEFAULT 'pending' NOT NULL,
+	`last_error` text,
+	`attempts` integer DEFAULT 0 NOT NULL,
+	`next_attempt_at` text,
+	`lease_token` text,
+	`lease_until` text,
+	`last_synced_at` text,
+	`created_at` text NOT NULL,
+	`updated_at` text NOT NULL,
+	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
+	CONSTRAINT "google_calendar_kind_check" CHECK(booking_kind IN ('booking', 'reservation')),
+	CONSTRAINT "google_calendar_state_check" CHECK(state IN ('pending', 'synced', 'cleanup', 'deleted', 'error'))
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `google_calendar_subject_unique` ON `google_calendar_event_links` (`organization_id`,`integration_revision`,`booking_kind`,`operational_id`) WHERE state <> 'deleted';--> statement-breakpoint
+CREATE UNIQUE INDEX `google_calendar_provider_unique` ON `google_calendar_event_links` (`calendar_id`,`event_id`);--> statement-breakpoint
+CREATE INDEX `google_calendar_due_idx` ON `google_calendar_event_links` (`organization_id`,`state`,`next_attempt_at`);--> statement-breakpoint
+CREATE TABLE `google_calendar_setup` (
+	`organization_id` text PRIMARY KEY NOT NULL,
+	`account_id` text NOT NULL,
+	`started_at` text NOT NULL,
+	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
 CREATE TABLE `guest_thread_deliveries` (
 	`id` text PRIMARY KEY NOT NULL,
 	`entry_id` text NOT NULL,
@@ -562,10 +617,12 @@ CREATE TABLE `media_placements` (
 	`asset_id` text NOT NULL,
 	`sort_order` integer DEFAULT 0 NOT NULL,
 	`status` text DEFAULT 'active' NOT NULL,
+	`presentation_json` text,
 	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`organization_id`,`asset_id`) REFERENCES `media_assets`(`organization_id`,`id`) ON UPDATE no action ON DELETE cascade,
+	CONSTRAINT "media_placements_presentation_check" CHECK(presentation_json IS NULL OR (json_valid(presentation_json) AND json_extract(presentation_json, '$.shape') IN ('original', 'square', 'circle') AND json_type(presentation_json, '$.focus.x') IN ('integer', 'real') AND json_type(presentation_json, '$.focus.y') IN ('integer', 'real')) IS TRUE),
 	CONSTRAINT "media_placements_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
 	CONSTRAINT "media_placements_owner_type_check" CHECK(owner_type IN ('organization', 'business_location', 'product', 'content_document', 'content_block', 'review', 'review_request', 'activity_entry')),
 	CONSTRAINT "media_placements_sort_order_check" CHECK(sort_order >= 0)
@@ -586,6 +643,33 @@ CREATE TABLE `member` (
 --> statement-breakpoint
 CREATE INDEX `member_userId_organizationId_idx` ON `member` (`userId`,`organizationId`);--> statement-breakpoint
 CREATE INDEX `member_organizationId_idx` ON `member` (`organizationId`);--> statement-breakpoint
+CREATE UNIQUE INDEX `member_id_organizationId_unique` ON `member` (`id`,`organizationId`);--> statement-breakpoint
+CREATE TABLE `member_scheduling` (
+	`member_id` text PRIMARY KEY NOT NULL,
+	`organization_id` text NOT NULL,
+	`timezone` text NOT NULL,
+	`weekly_json` text NOT NULL,
+	`time_off_json` text NOT NULL,
+	`windows_json` text NOT NULL,
+	`windows_until` text NOT NULL,
+	`public_name` text,
+	`public_photo_url` text,
+	`public_bio` text,
+	`public_approved` integer DEFAULT 0 NOT NULL,
+	`calendar_account_id` text,
+	`calendar_ids_json` text DEFAULT '[]' NOT NULL,
+	`calendar_revision` text NOT NULL,
+	`busy_json` text DEFAULT '[]' NOT NULL,
+	`busy_from` text,
+	`busy_until` text,
+	`busy_checked_at` text,
+	`busy_error` text,
+	`updated_at` text NOT NULL,
+	`updated_by` text NOT NULL,
+	FOREIGN KEY (`member_id`,`organization_id`) REFERENCES `member`(`id`,`organizationId`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX `member_scheduling_org_idx` ON `member_scheduling` (`organization_id`);--> statement-breakpoint
 CREATE TABLE `oauthAccessToken` (
 	`id` text PRIMARY KEY NOT NULL,
 	`clientId` text NOT NULL,
@@ -762,27 +846,23 @@ CREATE TABLE `organization` (
 	`seo_title` text,
 	`seo_description` text,
 	`canonical_url` text,
-	`feature_overrides` text,
 	`analytics_data_start_at` text,
 	CONSTRAINT "organization_slug_required_check" CHECK(trim(slug) <> ''),
 	CONSTRAINT "organization_instants_check" CHECK((updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at) AND (analytics_data_start_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', analytics_data_start_at, '+0 days') IS analytics_data_start_at)),
 	CONSTRAINT "organization_settings_json_check" CHECK(json_valid(settings_json) AND json_type(settings_json) IS 'object'),
 	CONSTRAINT "organization_consultation_settings_check" CHECK(consultation_settings_json IS NULL OR (json_valid(consultation_settings_json) AND json_type(consultation_settings_json) IS 'object' AND json_extract(consultation_settings_json, '$.mode') IN ('external_url', 'native_disabled', 'native') AND json_type(consultation_settings_json, '$.cta_label') IS 'text' AND json_type(consultation_settings_json, '$.schedule_path') IS 'text' AND json_extract(consultation_settings_json, '$.schedule_path') LIKE '/%' AND json_type(consultation_settings_json, '$.confirmation_path') IS 'text' AND json_extract(consultation_settings_json, '$.confirmation_path') LIKE '/%' AND json_type(consultation_settings_json, '$.tracking_enabled') IN ('true', 'false') AND (json_type(consultation_settings_json, '$.metadata_json') IS NULL OR json_type(consultation_settings_json, '$.metadata_json') IN ('null', 'object')) AND (json_type(consultation_settings_json, '$.external_url') IS NULL OR json_type(consultation_settings_json, '$.external_url') IN ('null', 'text'))) IS TRUE),
-	CONSTRAINT "organization_config_brand_color_check" CHECK(json_type(settings_json, '$.config.brand_color') IS NULL OR json_type(settings_json, '$.config.brand_color') IS 'text'),
+	CONSTRAINT "organization_config_palette_check" CHECK(json_type(settings_json, '$.config.palette') IS NULL OR (json_type(settings_json, '$.config.palette.light') IS 'object' AND json_type(settings_json, '$.config.palette.dark') IS 'object') IS TRUE),
+	CONSTRAINT "organization_config_font_preset_check" CHECK(json_type(settings_json, '$.config.font_preset') IS NULL OR json_type(settings_json, '$.config.font_preset') IS 'text'),
 	CONSTRAINT "organization_config_press_email_check" CHECK(json_type(settings_json, '$.config.press_email') IS NULL OR json_type(settings_json, '$.config.press_email') IS 'text'),
 	CONSTRAINT "organization_config_partnerships_email_check" CHECK(json_type(settings_json, '$.config.partnerships_email') IS NULL OR json_type(settings_json, '$.config.partnerships_email') IS 'text'),
 	CONSTRAINT "organization_config_catering_email_check" CHECK(json_type(settings_json, '$.config.catering_email') IS NULL OR json_type(settings_json, '$.config.catering_email') IS 'text'),
 	CONSTRAINT "organization_config_careers_email_check" CHECK(json_type(settings_json, '$.config.careers_email') IS NULL OR json_type(settings_json, '$.config.careers_email') IS 'text'),
 	CONSTRAINT "organization_config_default_timezone_check" CHECK(json_type(settings_json, '$.config.default_timezone') IS 'text' AND length(json_extract(settings_json, '$.config.default_timezone')) > 0),
 	CONSTRAINT "organization_compliance_metadata_check" CHECK(json_type(settings_json, '$.compliance.metadata_json') IS NULL OR json_type(settings_json, '$.compliance.metadata_json') IN ('null', 'object')),
-	CONSTRAINT "organization_theme_saya_check" CHECK(json_type(settings_json, '$.theme_by_template.saya') IS NULL OR (json_type(settings_json, '$.theme_by_template.saya') IS 'object' AND json_type(settings_json, '$.theme_by_template.saya.tokens') IS 'object' AND json_extract(settings_json, '$.theme_by_template.saya.status') IN ('active', 'disabled')) IS TRUE),
-	CONSTRAINT "organization_theme_blawby_check" CHECK(json_type(settings_json, '$.theme_by_template.blawby') IS NULL OR (json_type(settings_json, '$.theme_by_template.blawby') IS 'object' AND json_type(settings_json, '$.theme_by_template.blawby.tokens') IS 'object' AND json_extract(settings_json, '$.theme_by_template.blawby.status') IN ('active', 'disabled')) IS TRUE),
 	CONSTRAINT "organization_config_object_check" CHECK(json_type(settings_json, '$.config') IS NULL OR json_type(settings_json, '$.config') IS 'object'),
-	CONSTRAINT "organization_theme_by_template_object_check" CHECK(json_type(settings_json, '$.theme_by_template') IS NULL OR json_type(settings_json, '$.theme_by_template') IS 'object'),
 	CONSTRAINT "organization_compliance_object_check" CHECK(json_type(settings_json, '$.compliance') IS NULL OR json_type(settings_json, '$.compliance') IS 'object'),
 	CONSTRAINT "organization_compliance_check" CHECK(json_type(settings_json, '$.compliance') IS NULL OR (json_extract(settings_json, '$.compliance.address_visibility') IN ('visible', 'hidden') AND (json_extract(settings_json, '$.compliance.service_area_type') IS NULL OR json_extract(settings_json, '$.compliance.service_area_type') IN ('AdministrativeArea', 'City', 'Country', 'Place', 'State')) AND json_type(settings_json, '$.compliance.same_as') IN ('array', 'null') AND json_type(settings_json, '$.compliance.contact_points') IN ('array', 'null')) IS TRUE),
-	CONSTRAINT "organization_compliance_nonprofit_check" CHECK(json_extract(settings_json, '$.compliance.nonprofit_status') IS NULL OR json_extract(settings_json, '$.compliance.nonprofit_status') IN ('https://schema.org/Nonprofit501c1', 'https://schema.org/Nonprofit501c2', 'https://schema.org/Nonprofit501c3', 'https://schema.org/Nonprofit501c4', 'https://schema.org/Nonprofit501c5', 'https://schema.org/Nonprofit501c6', 'https://schema.org/Nonprofit501c7', 'https://schema.org/Nonprofit501c8', 'https://schema.org/Nonprofit501c9', 'https://schema.org/Nonprofit501c10', 'https://schema.org/Nonprofit501c11', 'https://schema.org/Nonprofit501c12', 'https://schema.org/Nonprofit501c13', 'https://schema.org/Nonprofit501c14', 'https://schema.org/Nonprofit501c15', 'https://schema.org/Nonprofit501c16', 'https://schema.org/Nonprofit501c17', 'https://schema.org/Nonprofit501c18', 'https://schema.org/Nonprofit501c19', 'https://schema.org/Nonprofit501c20', 'https://schema.org/Nonprofit501c21', 'https://schema.org/Nonprofit501c22', 'https://schema.org/Nonprofit501c23', 'https://schema.org/Nonprofit501c24', 'https://schema.org/Nonprofit501c25', 'https://schema.org/Nonprofit501c26', 'https://schema.org/Nonprofit501c27', 'https://schema.org/Nonprofit501c28', 'https://schema.org/NonprofitANBI', 'https://schema.org/NonprofitSBBI')),
-	CONSTRAINT "organization_feature_overrides_check" CHECK(feature_overrides IS NULL OR (json_valid(feature_overrides) AND json_type(feature_overrides) IS 'object'))
+	CONSTRAINT "organization_compliance_nonprofit_check" CHECK(json_extract(settings_json, '$.compliance.nonprofit_status') IS NULL OR json_extract(settings_json, '$.compliance.nonprofit_status') IN ('https://schema.org/Nonprofit501c1', 'https://schema.org/Nonprofit501c2', 'https://schema.org/Nonprofit501c3', 'https://schema.org/Nonprofit501c4', 'https://schema.org/Nonprofit501c5', 'https://schema.org/Nonprofit501c6', 'https://schema.org/Nonprofit501c7', 'https://schema.org/Nonprofit501c8', 'https://schema.org/Nonprofit501c9', 'https://schema.org/Nonprofit501c10', 'https://schema.org/Nonprofit501c11', 'https://schema.org/Nonprofit501c12', 'https://schema.org/Nonprofit501c13', 'https://schema.org/Nonprofit501c14', 'https://schema.org/Nonprofit501c15', 'https://schema.org/Nonprofit501c16', 'https://schema.org/Nonprofit501c17', 'https://schema.org/Nonprofit501c18', 'https://schema.org/Nonprofit501c19', 'https://schema.org/Nonprofit501c20', 'https://schema.org/Nonprofit501c21', 'https://schema.org/Nonprofit501c22', 'https://schema.org/Nonprofit501c23', 'https://schema.org/Nonprofit501c24', 'https://schema.org/Nonprofit501c25', 'https://schema.org/Nonprofit501c26', 'https://schema.org/Nonprofit501c27', 'https://schema.org/Nonprofit501c28', 'https://schema.org/NonprofitANBI', 'https://schema.org/NonprofitSBBI'))
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `organization_slug_unique` ON `organization` (`slug`);--> statement-breakpoint
@@ -858,14 +938,17 @@ CREATE TABLE `organization_integrations` (
 	`measurement_id` text,
 	`verified` integer,
 	`verification_token` text,
+	`status` text,
+	`last_error` text,
 	`revision` text NOT NULL,
 	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
-	CONSTRAINT "organization_integrations_provider_check" CHECK(provider IN ('facebook', 'instagram', 'google_analytics', 'google_search_console')),
+	CONSTRAINT "organization_integrations_provider_check" CHECK(provider IN ('facebook', 'instagram', 'google_analytics', 'google_search_console', 'google_calendar')),
 	CONSTRAINT "organization_integrations_values_check" CHECK(trim(account_id) <> '' AND trim(target_id) <> '' AND trim(target_name) <> '' AND trim(revision) <> ''),
 	CONSTRAINT "organization_integrations_measurement_check" CHECK((provider = 'google_analytics') = (measurement_id IS NOT NULL)),
 	CONSTRAINT "organization_integrations_verification_check" CHECK((provider = 'google_search_console') = (verified IS NOT NULL) AND (verification_token IS NULL OR provider = 'google_search_console') AND (verified IS NULL OR verified IN (0, 1))),
+	CONSTRAINT "organization_integrations_calendar_check" CHECK((provider = 'google_calendar') = (status IS NOT NULL) AND (status IS NULL OR status IN ('active', 'disabled', 'error')) AND (provider = 'google_calendar' OR (status IS NULL AND last_error IS NULL))),
 	CONSTRAINT "organization_integrations_instants_check" CHECK(strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at AND strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)
 );
 --> statement-breakpoint
@@ -915,6 +998,232 @@ CREATE TABLE `organization_redirects` (
 CREATE INDEX `organization_redirects_organization_id_idx` ON `organization_redirects` (`organization_id`);--> statement-breakpoint
 CREATE INDEX `organization_redirects_owner_idx` ON `organization_redirects` (`owner_type`,`owner_id`);--> statement-breakpoint
 CREATE UNIQUE INDEX `organization_redirects_org_locale_from_path_unique` ON `organization_redirects` (`organization_id`,`locale`,`from_path`);--> statement-breakpoint
+CREATE TABLE `payment_attempts` (
+	`id` text PRIMARY KEY NOT NULL,
+	`payment_id` text NOT NULL,
+	`idempotency_key` text NOT NULL,
+	`stripe_checkout_id` text,
+	`checkout_url` text,
+	`return_token` text NOT NULL,
+	`status` text DEFAULT 'creating' NOT NULL,
+	`expires_at` text NOT NULL,
+	`error` text,
+	`created_at` text NOT NULL,
+	`updated_at` text NOT NULL,
+	FOREIGN KEY (`payment_id`) REFERENCES `payments`(`id`) ON UPDATE no action ON DELETE restrict
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `payment_attempts_idempotency_key_unique` ON `payment_attempts` (`idempotency_key`);--> statement-breakpoint
+CREATE TABLE `payment_authorizations` (
+	`id` text PRIMARY KEY NOT NULL,
+	`organization_id` text NOT NULL,
+	`user_id` text,
+	`payment_id` text NOT NULL,
+	`action` text NOT NULL,
+	`amount` integer NOT NULL,
+	`note` text,
+	`expires_at` text NOT NULL,
+	`approved_at` text,
+	`consumed_at` text,
+	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`payment_id`) REFERENCES `payments`(`id`) ON UPDATE no action ON DELETE restrict
+);
+--> statement-breakpoint
+CREATE TABLE `payment_billing_accounts` (
+	`organization_id` text PRIMARY KEY NOT NULL,
+	`stripe_billing_customer_id` text NOT NULL,
+	`metronome_customer_id` text,
+	`metronome_contract_id` text,
+	`contract_start_at` text NOT NULL,
+	`currency` text NOT NULL,
+	`status` text NOT NULL,
+	`updated_at` text NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE `payment_checkout_holds` (
+	`id` text PRIMARY KEY NOT NULL,
+	`organization_id` text NOT NULL,
+	`product_id` text NOT NULL,
+	`variant_id` text NOT NULL,
+	`price_id` text NOT NULL,
+	`session_id` text NOT NULL,
+	`assigned_member_id` text,
+	`buyer_user_id` text,
+	`request_id` text,
+	`payment_id` text NOT NULL,
+	`quantity` integer NOT NULL,
+	`amount` integer NOT NULL,
+	`currency` text NOT NULL,
+	`calendar_group` text,
+	`starts_at` text NOT NULL,
+	`ends_at` text NOT NULL,
+	`status` text DEFAULT 'active' NOT NULL,
+	`expires_at` text NOT NULL,
+	`created_at` text NOT NULL,
+	`converted_booking_id` text,
+	FOREIGN KEY (`buyer_user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`payment_id`) REFERENCES `payments`(`id`) ON UPDATE no action ON DELETE restrict,
+	CONSTRAINT "payment_holds_quantity_check" CHECK(quantity > 0 AND amount > 0)
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `payment_checkout_holds_payment_id_unique` ON `payment_checkout_holds` (`payment_id`);--> statement-breakpoint
+CREATE INDEX `payment_holds_capacity_idx` ON `payment_checkout_holds` (`session_id`,`status`,`expires_at`);--> statement-breakpoint
+CREATE INDEX `payment_holds_calendar_idx` ON `payment_checkout_holds` (`organization_id`,`calendar_group`,`status`,`expires_at`);--> statement-breakpoint
+CREATE TABLE `payment_claims` (
+	`token_hash` text PRIMARY KEY NOT NULL,
+	`payment_id` text NOT NULL,
+	`expires_at` text NOT NULL,
+	`claimed_at` text,
+	`claimed_user_id` text,
+	FOREIGN KEY (`payment_id`) REFERENCES `payments`(`id`) ON UPDATE no action ON DELETE restrict,
+	FOREIGN KEY (`claimed_user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE set null
+);
+--> statement-breakpoint
+CREATE TABLE `payment_cost_snapshots` (
+	`source_id` text PRIMARY KEY NOT NULL,
+	`organization_id` text,
+	`payment_id` text,
+	`incurred_by` text NOT NULL,
+	`currency` text NOT NULL,
+	`amount` integer NOT NULL,
+	`incurred_at` text NOT NULL,
+	`revision` integer DEFAULT 1 NOT NULL,
+	`updated_at` text NOT NULL,
+	FOREIGN KEY (`payment_id`) REFERENCES `payments`(`id`) ON UPDATE no action ON DELETE restrict
+);
+--> statement-breakpoint
+CREATE TABLE `payment_disputes` (
+	`id` text PRIMARY KEY NOT NULL,
+	`payment_id` text NOT NULL,
+	`stripe_dispute_id` text NOT NULL,
+	`amount` integer NOT NULL,
+	`currency` text NOT NULL,
+	`reason` text NOT NULL,
+	`status` text NOT NULL,
+	`evidence_due_at` text,
+	`updated_at` text NOT NULL,
+	FOREIGN KEY (`payment_id`) REFERENCES `payments`(`id`) ON UPDATE no action ON DELETE restrict
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `payment_disputes_provider_unique` ON `payment_disputes` (`payment_id`,`stripe_dispute_id`);--> statement-breakpoint
+CREATE TABLE `payment_fee_reports` (
+	`id` text PRIMARY KEY NOT NULL,
+	`stripe_report_id` text,
+	`livemode` integer NOT NULL,
+	`interval_start` integer NOT NULL,
+	`interval_end` integer NOT NULL,
+	`status` text NOT NULL,
+	`error` text,
+	`created_at` text NOT NULL,
+	`updated_at` text NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE `payment_order_lines` (
+	`id` text PRIMARY KEY NOT NULL,
+	`order_id` text NOT NULL,
+	`product_id` text NOT NULL,
+	`variant_id` text NOT NULL,
+	`price_id` text NOT NULL,
+	`title` text NOT NULL,
+	`unit_amount` integer NOT NULL,
+	`quantity` integer NOT NULL,
+	`currency` text NOT NULL,
+	`tax_behavior` text NOT NULL,
+	FOREIGN KEY (`order_id`) REFERENCES `payment_orders`(`id`) ON UPDATE no action ON DELETE restrict,
+	CONSTRAINT "payment_order_lines_amount_check" CHECK(unit_amount >= 0 AND quantity > 0)
+);
+--> statement-breakpoint
+CREATE TABLE `payment_orders` (
+	`id` text PRIMARY KEY NOT NULL,
+	`organization_id` text NOT NULL,
+	`buyer_user_id` text,
+	`payment_id` text NOT NULL,
+	`currency` text NOT NULL,
+	`amount` integer NOT NULL,
+	`created_at` text NOT NULL,
+	FOREIGN KEY (`buyer_user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`payment_id`) REFERENCES `payments`(`id`) ON UPDATE no action ON DELETE restrict
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `payment_orders_payment_id_unique` ON `payment_orders` (`payment_id`);--> statement-breakpoint
+CREATE TABLE `payment_refunds` (
+	`id` text PRIMARY KEY NOT NULL,
+	`payment_id` text NOT NULL,
+	`idempotency_key` text NOT NULL,
+	`stripe_refund_id` text,
+	`amount` integer NOT NULL,
+	`reason` text NOT NULL,
+	`note` text,
+	`status` text NOT NULL,
+	`error` text,
+	`attempted_at` text,
+	`created_by` text,
+	`created_at` text NOT NULL,
+	`updated_at` text NOT NULL,
+	FOREIGN KEY (`payment_id`) REFERENCES `payments`(`id`) ON UPDATE no action ON DELETE restrict,
+	FOREIGN KEY (`created_by`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE set null,
+	CONSTRAINT "payment_refunds_amount_check" CHECK(amount > 0)
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `payment_refunds_idempotency_key_unique` ON `payment_refunds` (`idempotency_key`);--> statement-breakpoint
+CREATE UNIQUE INDEX `payment_refunds_provider_unique` ON `payment_refunds` (`payment_id`,`stripe_refund_id`);--> statement-breakpoint
+CREATE TABLE `payment_servicing_tenants` (
+	`organization_id` text NOT NULL,
+	`stripe_account_id` text NOT NULL,
+	`livemode` integer NOT NULL,
+	`retained_at` text NOT NULL,
+	PRIMARY KEY(`stripe_account_id`, `livemode`)
+);
+--> statement-breakpoint
+CREATE TABLE `payment_usage_events` (
+	`id` text PRIMARY KEY NOT NULL,
+	`organization_id` text NOT NULL,
+	`payment_id` text,
+	`kind` text NOT NULL,
+	`currency` text NOT NULL,
+	`amount` integer NOT NULL,
+	`source_id` text NOT NULL,
+	`provider_occurred_at` text NOT NULL,
+	`delivery_at` text,
+	`error` text,
+	`billing_timestamp` text,
+	`credit_note_id` text,
+	`dead_letter_at` text,
+	`created_at` text NOT NULL,
+	FOREIGN KEY (`payment_id`) REFERENCES `payments`(`id`) ON UPDATE no action ON DELETE restrict
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `payment_usage_events_source_id_unique` ON `payment_usage_events` (`source_id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `payment_usage_events_credit_note_id_unique` ON `payment_usage_events` (`credit_note_id`);--> statement-breakpoint
+CREATE TABLE `payments` (
+	`id` text PRIMARY KEY NOT NULL,
+	`organization_id` text NOT NULL,
+	`buyer_user_id` text,
+	`stripe_account_id` text NOT NULL,
+	`livemode` integer NOT NULL,
+	`subject_type` text NOT NULL,
+	`subject_id` text,
+	`location_id` text,
+	`currency` text NOT NULL,
+	`amount` integer NOT NULL,
+	`price_snapshot_json` text NOT NULL,
+	`tax_amount` integer DEFAULT 0 NOT NULL,
+	`captured_amount` integer DEFAULT 0 NOT NULL,
+	`refunded_amount` integer DEFAULT 0 NOT NULL,
+	`state` text DEFAULT 'pending' NOT NULL,
+	`stripe_payment_intent_id` text,
+	`stripe_charge_id` text,
+	`receipt_url` text,
+	`created_at` text NOT NULL,
+	`updated_at` text NOT NULL,
+	FOREIGN KEY (`buyer_user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE set null,
+	CONSTRAINT "payments_amounts_check" CHECK(amount >= 0 AND captured_amount >= 0 AND refunded_amount >= 0 AND refunded_amount <= captured_amount),
+	CONSTRAINT "payments_currency_check" CHECK(length(currency) = 3 AND currency = upper(currency))
+);
+--> statement-breakpoint
+CREATE INDEX `payments_tenant_created_idx` ON `payments` (`organization_id`,`created_at`);--> statement-breakpoint
+CREATE INDEX `payments_buyer_idx` ON `payments` (`buyer_user_id`,`created_at`);--> statement-breakpoint
+CREATE UNIQUE INDEX `payments_provider_unique` ON `payments` (`stripe_account_id`,`livemode`,`stripe_payment_intent_id`);--> statement-breakpoint
 CREATE TABLE `post_publications` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
@@ -1036,6 +1345,8 @@ CREATE TABLE `product_booking_configs` (
 	`online_payment_required` integer DEFAULT 0 NOT NULL,
 	`online_timezone` text,
 	`calendar_group` text,
+	`scheduling_mode` text DEFAULT 'legacy' NOT NULL,
+	`assigned_member_id` text,
 	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	`created_by` text NOT NULL,
@@ -1127,6 +1438,7 @@ CREATE TABLE `product_sessions` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
 	`product_id` text NOT NULL,
+	`assigned_member_id` text,
 	`location_id` text,
 	`availability_rule_id` text,
 	`source_occurrence_key` text,
@@ -1289,6 +1601,7 @@ CREATE INDEX `requests_org_kind_idx` ON `requests` (`kind`,`location_id`,`update
 CREATE INDEX `requests_org_user_idx` ON `requests` (`organization_id`,`user_id`);--> statement-breakpoint
 CREATE INDEX `requests_org_archive_activity_idx` ON `requests` (`organization_id`,`archived_at`,`updated_at`);--> statement-breakpoint
 CREATE INDEX `requests_org_created_idx` ON `requests` (`organization_id`,`created_at`);--> statement-breakpoint
+CREATE INDEX `requests_guest_email_idx` ON `requests` (lower(payload_json ->> '$.guest.email'));--> statement-breakpoint
 CREATE TABLE `reservations` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
@@ -1437,25 +1750,6 @@ CREATE TABLE `session` (
 --> statement-breakpoint
 CREATE UNIQUE INDEX `session_token_unique` ON `session` (`token`);--> statement-breakpoint
 CREATE INDEX `session_userId_idx` ON `session` (`userId`);--> statement-breakpoint
-CREATE TABLE `stripe_catalog_mappings` (
-	`id` text PRIMARY KEY NOT NULL,
-	`organization_id` text NOT NULL,
-	`local_entity` text NOT NULL,
-	`local_id` text NOT NULL,
-	`stripe_account_id` text NOT NULL,
-	`livemode` integer NOT NULL,
-	`stripe_id` text NOT NULL,
-	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
-	CONSTRAINT "stripe_catalog_mappings_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
-	CONSTRAINT "stripe_catalog_mappings_livemode_check" CHECK(livemode IN (0, 1)),
-	CONSTRAINT "stripe_catalog_mappings_ids_check" CHECK(trim(local_id) <> '' AND trim(stripe_id) <> '' AND trim(stripe_account_id) <> '')
-);
---> statement-breakpoint
-CREATE INDEX `stripe_catalog_mappings_org_idx` ON `stripe_catalog_mappings` (`organization_id`,`local_entity`);--> statement-breakpoint
-CREATE UNIQUE INDEX `stripe_catalog_mappings_local_unique` ON `stripe_catalog_mappings` (`local_entity`,`local_id`,`stripe_account_id`,`livemode`);--> statement-breakpoint
-CREATE UNIQUE INDEX `stripe_catalog_mappings_stripe_unique` ON `stripe_catalog_mappings` (`stripe_account_id`,`livemode`,`stripe_id`);--> statement-breakpoint
 CREATE TABLE `stripe_connected_accounts` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
@@ -1482,6 +1776,16 @@ CREATE TABLE `stripe_connected_accounts` (
 CREATE UNIQUE INDEX `stripe_connected_accounts_stripe_account_id_unique` ON `stripe_connected_accounts` (`stripe_account_id`);--> statement-breakpoint
 CREATE INDEX `stripe_connected_accounts_status_idx` ON `stripe_connected_accounts` (`status`,`updated_at`);--> statement-breakpoint
 CREATE UNIQUE INDEX `stripe_connected_accounts_org_unique` ON `stripe_connected_accounts` (`organization_id`);--> statement-breakpoint
+CREATE TABLE `stripe_connected_customers` (
+	`user_id` text NOT NULL,
+	`stripe_account_id` text NOT NULL,
+	`livemode` integer NOT NULL,
+	`stripe_customer_id` text NOT NULL,
+	`created_at` text NOT NULL,
+	PRIMARY KEY(`user_id`, `stripe_account_id`, `livemode`),
+	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
 CREATE TABLE `stripe_ga4_subscription_intents` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
@@ -1516,23 +1820,20 @@ CREATE TABLE `stripe_webhook_events` (
 	`id` text PRIMARY KEY NOT NULL,
 	`stripe_event_id` text NOT NULL,
 	`event_type` text,
-	`processor` text DEFAULT 'platform_billing' NOT NULL,
+	`processor` text NOT NULL,
 	`status` text DEFAULT 'pending' NOT NULL,
 	`payload` text,
 	`error` text,
 	`claimed_at` text,
 	`lease_expires_at` text,
 	`claim_token` text,
-	`next_attempt_at` text,
-	`dead_lettered_at` text,
 	`attempt_count` integer DEFAULT 0 NOT NULL,
 	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-	CONSTRAINT "stripe_webhook_events_instants_check" CHECK((claimed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', claimed_at, '+0 days') IS claimed_at) AND (lease_expires_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', lease_expires_at, '+0 days') IS lease_expires_at) AND (next_attempt_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', next_attempt_at, '+0 days') IS next_attempt_at) AND (dead_lettered_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', dead_lettered_at, '+0 days') IS dead_lettered_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at)),
+	CONSTRAINT "stripe_webhook_events_instants_check" CHECK((claimed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', claimed_at, '+0 days') IS claimed_at) AND (lease_expires_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', lease_expires_at, '+0 days') IS lease_expires_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at)),
 	CONSTRAINT "stripe_webhook_events_payload_check" CHECK(payload IS NULL OR (json_valid(payload)))
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `stripe_webhook_events_stripe_event_id_unique` ON `stripe_webhook_events` (`stripe_event_id`);--> statement-breakpoint
-CREATE INDEX `stripe_webhook_events_retry_idx` ON `stripe_webhook_events` (`status`,`next_attempt_at`,`processor`);--> statement-breakpoint
 CREATE TABLE `subscription` (
 	`id` text PRIMARY KEY NOT NULL,
 	`plan` text NOT NULL,

@@ -8,8 +8,8 @@ import { getPost, postPayloadFingerprint, type Post, type PostMedia } from '~/se
 import { providerCaption } from '~/shared/posts'
 import { MetaDeadline, MetaGraphError } from '~/server/utils/meta-graph'
 import {
-  createUnpublishedPhoto, createUnpublishedVideo, deletePageObject, facebookPageToken, listLinkedFacebookPages,
-  publishPagePost, publishVideo, readPagePost, readVideo, type FacebookPageTarget,
+  createUnpublishedPhoto, createVideo, deletePageObject, facebookPageToken, finishReel, isFacebookReel, listLinkedFacebookPages,
+  publishPagePost, readPagePost, readVideo, startReel, uploadReelFromUrl, type FacebookPageTarget,
 } from '~/server/utils/facebook-pages'
 import {
   createMediaContainer, getInstagramAccount, instagramAccessToken, publishContainer, readContainerStatus, readMedia, type InstagramTarget,
@@ -22,10 +22,13 @@ import { readIntegration } from '~/server/utils/organization-integrations'
  * professional account the organization connected — one operation, shared by
  * MCP and the dashboard, returning one result.
  *
- * External publication uses Meta's own two-step primitives: prepare an object
- * that is not public, save its identity, then publish that same object. The
- * saved identity is what makes a retry safe: a later call resumes or reads the
- * object it already has instead of creating another public post. There is no
+ * External publication uses Meta's own primitives: prepare what can be
+ * prepared without going public, save its identity, then make the one call
+ * that publishes it. For Page photos that is the post attaching them; for an
+ * Instagram container it is media_publish; for a Facebook Reel it is the
+ * upload session's finish; for any other Facebook video it is the upload
+ * itself. The saved identity is what makes a retry safe: a later call resumes
+ * or reads the object it already has instead of creating another public post. There is no
  * scheduler and no queue; an invocation does what fits in its budget and says
  * what it left.
  */
@@ -131,7 +134,7 @@ export async function getSocialConnections(env: CloudflareEnv, organizationId: s
       supported_operations: channel === 'facebook' ? ['list', 'read', 'publish', 'delete'] : ['list', 'read', 'publish'],
       deletion_unavailable_reason: channel === 'instagram' ? 'Meta supports media deletion only with Facebook Login; this account uses Instagram Login. Delete it in Instagram.' : null,
       problems,
-      connect_url: `${links.dashboardBase}/settings/integrations/${channel}`,
+      connect_url: `${links.dashboardBase}/integrations/${channel}`,
     }
   }))
   return { website: { channel: 'organization' as const, target_id: organizationId, label: 'Website' }, channels }
@@ -365,32 +368,7 @@ async function publishToFacebook(context: ChannelContext, target: FacebookPageTa
   const { post, handles, deadline } = context
   const fence = claimed(context.db, context.publication.id, context.attemptId)
   const video = post.media.find(item => item.kind === 'video')
-  if (video) {
-    if (!handles.video_id) {
-      handles.video_id = await createUnpublishedVideo(target, { fileUrl: video.public_url, description: context.caption, title: post.title }, deadline)
-      await fence.saveHandles(handles)
-    }
-    const state = await readVideo(target, handles.video_id, deadline)
-    if (state.published) {
-      await fence.published({ providerPostId: state.postId ?? handles.video_id, permalink: state.permalink, publishedAt: nowIso(), handles })
-      return outcome(context, 'published', { public_url: validPermalink(state.permalink) })
-    }
-    if (state.processing === 'error') {
-      await fence.failed('provider_processing_failed', state.error ?? 'Facebook could not process the video', handles)
-      return outcome(context, 'failed', { code: 'provider_processing_failed', message: state.error ?? 'Facebook could not process the video' })
-    }
-    if (state.processing === 'processing') {
-      await fence.release()
-      return outcome(context, 'processing', { code: 'video_processing', message: 'Facebook is still processing the video. Call publish_post again to finish it; it will publish this same video.' })
-    }
-    const deferred = await deferFinalWithoutTime(context, fence)
-    if (deferred) return deferred
-    await fence.beginFinal()
-    return await finalize(context, async () => { await publishVideo(target, handles.video_id!, deadline); return null }, async () => {
-      const read = await readVideo(target, handles.video_id!, deadline)
-      return { published: read.published, providerPostId: read.postId ?? handles.video_id!, permalink: read.permalink, retryable: !read.published && read.processing === 'ready' }
-    })
-  }
+  if (video) return await publishVideoToFacebook(context, target, fence, video)
   // An unpublished feed post an earlier version prepared can never be
   // published; it goes, and the photos it carried go with it — Meta refuses
   // them as `attached_media` afterwards — so the real post gets new ones.
@@ -427,6 +405,31 @@ async function publishToFacebook(context: ChannelContext, target: FacebookPageTa
     // Calling again would create a second post: a created post is never sent again.
     return { published: read.isPublished, providerPostId: read.id, permalink: read.permalink, publishedAt: read.createdTime, retryable: false, createsAnother: true }
   })
+}
+
+/**
+ * One Facebook video, published by Meta's own final call: a Reel's finish,
+ * which answers with the Page post, or a published upload, which Facebook
+ * posts once it has processed it. Meta's answer is the publication. A session
+ * an earlier call left unfinished is never public; each call runs its own.
+ */
+async function publishVideoToFacebook(context: ChannelContext, target: FacebookPageTarget, fence: ReturnType<typeof claimed>, video: PostMedia): Promise<ChannelResult> {
+  const { post, handles, deadline } = context
+  const deferred = await deferFinalWithoutTime(context, fence)
+  if (deferred) return deferred
+  if (isFacebookReel(video)) {
+    handles.video_id = await startReel(target, deadline)
+    await uploadReelFromUrl(target, handles.video_id, video.public_url, deadline)
+    await fence.saveHandles(handles)
+    await fence.beginFinal()
+    const { postId } = await finishReel(target, handles.video_id, { description: context.caption, title: post.title }, deadline)
+    await fence.published({ providerPostId: postId ?? handles.video_id, permalink: null, publishedAt: nowIso(), handles })
+    return outcome(context, 'published', { public_url: null })
+  }
+  await fence.beginFinal()
+  handles.video_id = await createVideo(target, { fileUrl: video.public_url, description: context.caption, title: post.title }, deadline)
+  await fence.published({ providerPostId: handles.video_id, permalink: null, publishedAt: nowIso(), handles })
+  return outcome(context, 'published', { public_url: null })
 }
 
 const pause = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
@@ -640,7 +643,9 @@ async function publishExternal(
     // non-publication; the objects already prepared stay saved for the retry.
     const failure = failureOf(error)
     const current = await readPublication(db, organizationId, { id: claim.publication.id })
-    if (current?.state === 'publishing' && current.attempt_id === claim.attemptId) {
+    // Meta answering the final call with an error is Meta saying nothing was
+    // published; only a final call Meta never answered is unknown.
+    if (current?.state === 'publishing' && current.attempt_id === claim.attemptId && !(error instanceof MetaGraphError && error.failure !== 'transport')) {
       await fence.unknown('final_unconfirmed', `The publication stopped after its final call began: ${failure.message}`)
       return outcome(context, 'unknown', { code: 'final_unconfirmed', message: failure.message })
     }
@@ -800,8 +805,8 @@ export async function reconcilePostPublication(env: CloudflareEnv, organizationI
   if (publication.channel === 'facebook') {
     const target = await facebookTargetFor(env, connection)
     const postId = providerPostId ?? publication.provider_post_id ?? handles.post_id ?? null
-    if (postId) {
-      if (!postId.startsWith(`${target.pageId}_`) && postId !== handles.video_id) throw new HTTPError({ statusCode: 409, statusMessage: `${postId} is not a post of the Page ${target.pageId}` })
+    if (postId && postId !== handles.video_id) {
+      if (!postId.startsWith(`${target.pageId}_`)) throw new HTTPError({ statusCode: 409, statusMessage: `${postId} is not a post of the Page ${target.pageId}` })
       const read = await readPagePost(target, postId, deadline)
       if (read.isPublished) await record('published', { providerPostId: read.id, permalink: read.permalink, publishedAt: read.createdTime })
       else if (publication.state === 'failed') await record('failed', { providerPostId: read.id, code: publication.error_code ?? undefined, message: publication.error_message ?? undefined })

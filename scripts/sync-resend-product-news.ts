@@ -51,7 +51,7 @@ const session = await startRemoteProxySession({ DB: { type: 'd1', database_id: d
 const runtime = new Miniflare({ workers: [{
   dev: { remoteProxyConnectionString: session.remoteProxyConnectionString },
   config: {
-    name: 'sync-resend-product-news', type: 'worker', compatibilityDate: config.compatibility_date ?? '2024-11-01',
+    name: 'sync-resend-product-news', compatibilityDate: config.compatibility_date ?? '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } },
     env: { DB: { type: 'd1', id: database.database_id, dev: { remote: true } } },
   },

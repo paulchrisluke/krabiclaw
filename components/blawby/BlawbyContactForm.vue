@@ -1,14 +1,14 @@
 <template>
-  <section class="bg-white px-6 pb-24 sm:pb-32" aria-labelledby="blawby-contact-form-heading">
+  <section class="bg-elevated px-6 pb-24 sm:pb-32" aria-labelledby="blawby-contact-form-heading">
     <form class="mx-auto grid max-w-3xl gap-5 rounded-2xl bg-[var(--blawby-primary-100)] p-8 sm:p-10" @submit.prevent="submitContact">
       <h2 id="blawby-contact-form-heading" class="blawby-display text-3xl font-bold text-[var(--blawby-primary)]">Send a message</h2>
-      <p v-if="submitMessage" role="alert" class="rounded-lg border border-[var(--blawby-border)] bg-white p-4 text-sm text-[var(--blawby-primary)]">{{ submitMessage }}</p>
-      <label class="grid gap-2 text-sm font-semibold text-[var(--blawby-primary)]">Name<input v-model.trim="form.name" required maxlength="100" autocomplete="name" type="text" class="rounded-md border border-[var(--blawby-border)] bg-white px-4 py-3 font-normal"></label>
-      <label class="grid gap-2 text-sm font-semibold text-[var(--blawby-primary)]">Email<input v-model.trim="form.email" required maxlength="200" autocomplete="email" type="email" class="rounded-md border border-[var(--blawby-border)] bg-white px-4 py-3 font-normal"></label>
-      <label class="grid gap-2 text-sm font-semibold text-[var(--blawby-primary)]">Subject<select v-model="form.subject" class="rounded-md border border-[var(--blawby-border)] bg-white px-4 py-3 font-normal"><option value="general">General question</option><option value="partnerships">Partnerships</option><option value="press">Press</option></select></label>
-      <label class="grid gap-2 text-sm font-semibold text-[var(--blawby-primary)]">Message<textarea v-model.trim="form.message" required minlength="10" maxlength="2000" rows="8" class="rounded-md border border-[var(--blawby-border)] bg-white px-4 py-3 font-normal" /></label>
-      <label class="flex items-start gap-3 text-sm leading-6 text-slate-600">
-        <input v-model="form.consent" required type="checkbox" class="mt-1 size-4 rounded border-gray-300 text-[var(--blawby-primary)] focus:ring-[var(--blawby-primary)]">
+      <p v-if="submitMessage" role="alert" class="rounded-lg border border-[var(--blawby-border)] bg-elevated p-4 text-sm text-[var(--blawby-primary)]">{{ submitMessage }}</p>
+      <label class="grid gap-2 text-sm font-semibold text-[var(--blawby-primary)]">Name<input v-model.trim="form.name" required maxlength="100" autocomplete="name" type="text" class="rounded-md border border-[var(--blawby-border)] bg-elevated px-4 py-3 font-normal"></label>
+      <label class="grid gap-2 text-sm font-semibold text-[var(--blawby-primary)]">Email<input v-model.trim="form.email" required maxlength="200" autocomplete="email" type="email" class="rounded-md border border-[var(--blawby-border)] bg-elevated px-4 py-3 font-normal"></label>
+      <label class="grid gap-2 text-sm font-semibold text-[var(--blawby-primary)]">Subject<select v-model="form.subject" class="rounded-md border border-[var(--blawby-border)] bg-elevated px-4 py-3 font-normal"><option value="general">General question</option><option value="partnerships">Partnerships</option><option value="press">Press</option></select></label>
+      <label class="grid gap-2 text-sm font-semibold text-[var(--blawby-primary)]">Message<textarea v-model.trim="form.message" required minlength="10" maxlength="2000" rows="8" class="rounded-md border border-[var(--blawby-border)] bg-elevated px-4 py-3 font-normal" /></label>
+      <label class="flex items-start gap-3 text-sm leading-6 text-muted">
+        <input v-model="form.consent" required type="checkbox" class="mt-1 size-4 rounded border-accented text-[var(--blawby-primary)] focus:ring-[var(--blawby-primary)]">
         <span>I understand that submitting this form does not create an attorney-client relationship and agree to be contacted about this message.</span>
       </label>
       <BlawbyButton as="button" type="submit" :disabled="submitting" class="w-full">{{ submitting ? 'Sending...' : 'Send message' }}</BlawbyButton>

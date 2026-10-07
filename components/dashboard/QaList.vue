@@ -1,7 +1,7 @@
 <template>
   <div class="space-y-6">
     <!-- Which page these questions belong to. A location's questions are its own; only the site's are filed by page. -->
-    <div v-if="!locationId" class="flex justify-end">
+    <div v-if="!locationScope" class="flex justify-end">
       <USelect v-model="selectedPagePath" :items="pageScopes" class="w-48" aria-label="Q&A page scope" />
     </div>
 
@@ -9,9 +9,8 @@
     v-model:editing="editing"
     title="Q&A"
     :items="listItems"
-    :pending="pending"
     :error="qaError ? getErrorMessage(qaError, 'Q&A request failed') : null"
-    :empty-title="locationId ? 'No Q&A yet' : 'No site Q&A yet'"
+    :empty-title="locationScope ? 'No Q&A yet' : 'No site Q&A yet'"
     empty-icon="i-lucide-circle-help"
     add-label="Add a question"
     reorderable
@@ -39,22 +38,37 @@ import DashboardListEditor from '~/components/dashboard/DashboardListEditor.vue'
 import { getErrorMessage } from '~/utils/errors'
 import { isQaDeleted, isQaResponse, type QaRow } from '~/utils/organization-qa'
 /** Set when this list is a location's Q&A rather than the site's. */
-const props = defineProps<{ locationId?: string }>()
+// The location the URL scopes this to with `?location_id=`, or none for the whole site.
+const locationScope = useLocationScope()
 
 const dashboardApi = useDashboardApi()
 const level = useRouteLevel()
+const route = useRoute()
+const router = useRouter()
 const organizationId = await useDashboardOrganizationId()
-const selectedPagePath = ref('general')
+const selectedPagePath = computed({
+  get() {
+    if (locationScope.value || route.query.page_path === undefined) return 'general'
+    const pagePath = route.query.page_path
+    if (typeof pagePath !== 'string' || !pagePath.trim() || !pagePath.startsWith('/') || pagePath.startsWith('//')) {
+      throw createError({ statusCode: 400, statusMessage: 'Choose one page for these questions.', fatal: true })
+    }
+    return pagePath
+  },
+  set(value: string) {
+    void router.replace({ query: { ...route.query, page_path: value === 'general' ? undefined : value } })
+  },
+})
 
-const qaEndpoint = computed(() => props.locationId
-  ? `/api/editor/organizations/${organizationId}/locations/${props.locationId}/qa`
+const qaEndpoint = computed(() => locationScope.value
+  ? `/api/editor/organizations/${organizationId}/locations/${locationScope.value}/qa`
   : `/api/editor/organizations/${organizationId}/qa`)
 
 // The three reads are independent, so they are issued together.
 const tenantPagesAsyncData = useAsyncData(
   () => `dashboard-tenant-pages-${organizationId}`,
   async () => {
-    if (props.locationId) return []
+    if (locationScope.value) return []
     return await dashboardApi<Array<{ path: string; title: string }>>(
       `/api/editor/organizations/${organizationId}/tenant-pages`,
       {
@@ -73,7 +87,7 @@ const tenantPagesAsyncData = useAsyncData(
 const existingQaScopesAsyncData = useAsyncData(
   () => `dashboard-qa-scopes-${organizationId}`,
   async () => {
-    if (props.locationId) return []
+    if (locationScope.value) return []
     return await dashboardApi<Array<{ page_path: string | null }>>(
       `/api/editor/organizations/${organizationId}/qa/scopes`,
       {
@@ -90,7 +104,7 @@ const existingQaScopesAsyncData = useAsyncData(
 
 const pagePath = computed(() => selectedPagePath.value === 'general' ? null : selectedPagePath.value)
 const qaAsyncData = useAsyncData(
-  () => props.locationId ? `dashboard-location-qa-${organizationId}-${props.locationId}` : `dashboard-organization-qa-${organizationId}-${selectedPagePath.value}`,
+  () => locationScope.value ? `dashboard-location-qa-${organizationId}-${locationScope.value}` : `dashboard-organization-qa-${organizationId}-${selectedPagePath.value}`,
   () => dashboardApi<{ qa: QaRow[] }>(qaEndpoint.value, {
     query: pagePath.value ? { page_path: pagePath.value } : undefined,
     validate: isQaResponse,
@@ -100,7 +114,7 @@ const qaAsyncData = useAsyncData(
 const [
   { data: tenantPages },
   { data: existingQaScopes },
-  { data, pending, refresh, error: qaError },
+  { data, refresh, error: qaError },
 ] = await Promise.all([tenantPagesAsyncData, existingQaScopesAsyncData, qaAsyncData])
 
 const pageScopes = computed(() => {
@@ -128,7 +142,7 @@ const listItems = computed(() => qaRows.value.map(row => ({
   id: row.id,
   title: row.question,
   removable: row.source !== 'import',
-  to: `${level.path.value}/${row.id}`,
+  to: router.resolve({ path: `${level.path.value}/${row.id}`, query: route.query }).fullPath,
   row,
 })))
 
@@ -140,7 +154,7 @@ const deleteError = ref<string | null>(null)
 // record has a URL and adding and editing are the same screen. The page the
 // list is filtered to rides along as the new record's intended scope.
 function openNew() {
-  void navigateTo({ path: `${level.path.value}/new`, query: pagePath.value ? { page_path: pagePath.value } : undefined })
+  void navigateTo({ path: `${level.path.value}/new`, query: { ...(locationScope.value ? { location_id: locationScope.value } : {}), ...(pagePath.value ? { page_path: pagePath.value } : {}) } })
 }
 
 async function removeItem(item: { id: string }) {
@@ -167,7 +181,7 @@ async function move(item: { id: string }, direction: -1 | 1) {
   if (!current || !target) return
   await dashboardApi(`${qaEndpoint.value}/reorder`, {
     method: 'POST',
-    body: { ...(props.locationId ? {} : { page_path: pagePath.value }), updates: [{ id: current.id, sort_order: target.sort_order }, { id: target.id, sort_order: current.sort_order }] },
+    body: { ...(locationScope.value ? {} : { page_path: pagePath.value }), updates: [{ id: current.id, sort_order: target.sort_order }, { id: target.id, sort_order: current.sort_order }] },
     validate: (value): value is { updated: number } =>
       isRecord(value) && typeof value.updated === 'number',
   })

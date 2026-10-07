@@ -5,7 +5,6 @@ import { calculateMapEmbedUrl } from '~/server/utils/google-places'
 import type { PublicShellPayload } from '~/utils/public-resource-contracts'
 import { resolveOrganizationCmsCapabilities } from '~/server/utils/cms-capabilities'
 import { isCurrencyCode } from '~/shared/currencies'
-import { resolveOrganizationFontPreset } from '~/shared/organization-fonts'
 import { parsePostalAddress } from '~/utils/postal-address'
 import type { PublicMediaPlacement } from '~/server/utils/public-social-image'
 import { publicSocialMediaFromPlacements } from '~/utils/social-metadata'
@@ -43,14 +42,14 @@ export function appendPublicShellQueries(
                      bl.review_count, bl.status,
                      bl.description, bl.short_description,
                      bl.last_synced_at, bl.seo_title, bl.seo_description,
-                     bl.canonical_url, bl.feature_overrides
+                     bl.canonical_url
                 FROM business_locations bl
                WHERE bl.organization_id = ?  AND bl.status = 'active'
                ORDER BY bl.title ASC`, [organizationId]),
     config: push(`SELECT setting.key, setting.value
                 FROM organization s, json_each(s.settings_json, '$.config') setting
                WHERE s.id = ?
-                 AND setting.key IN ('brand_color', 'font_preset', 'press_email', 'partnerships_email', 'catering_email', 'careers_email', 'default_timezone')
+                 AND setting.key IN ('press_email', 'partnerships_email', 'catering_email', 'careers_email', 'default_timezone')
               `, [organizationId]),
     // Where this site has something to show: the Product is published to the
     // site, offered and published at the location, and active itself. All three
@@ -137,7 +136,6 @@ export function buildPublicShellPayload(
   const config: Record<string, string> = Object.fromEntries(
     configRows.filter(({ key }) => !key.startsWith('__')).map(({ key, value }) => [key, value]),
   )
-  config.font_preset = resolveOrganizationFontPreset(config.font_preset)
   if (!isCurrencyCode(organization.default_currency)) throw new Error(`Unsupported organization currency: ${organization.default_currency}`)
   config.default_currency = organization.default_currency
   if (organization.contact_email) config.contact_email = organization.contact_email
@@ -170,14 +168,11 @@ export function buildPublicShellPayload(
     ...(() => {
       const rows = (results[indexes.productLocations]?.results ?? []) as Array<{ location_id: string; bookable: number; unbookable: number }>
       const byLocation = new Map(rows.map(row => [String(row.location_id), row]))
-      const carries = (pick: (_row: { bookable: number; unbookable: number }) => number) => rawLocations.some((location) => {
+      const { capabilities } = resolveOrganizationCmsCapabilities(String(organization.vertical), organization.theme_id)
+      const offersLocationProducts = capabilities.managers.some(manager => manager.key === 'location.products')
+      const carries = (pick: (_row: { bookable: number; unbookable: number }) => number) => offersLocationProducts && rawLocations.some((location) => {
         const row = byLocation.get(String(location.id))
-        if (!row || pick(row) !== 1) return false
-        const { capabilities } = resolveOrganizationCmsCapabilities(String(organization.vertical), organization.theme_id, {
-          organizationEnabledFeatures: organization.feature_overrides,
-          locationEnabledFeatures: location.feature_overrides as string | null,
-        })
-        return capabilities.managers.some(manager => manager.key === 'location.products')
+        return row !== undefined && pick(row) === 1
       })
       return { hasProducts: carries(row => row.unbookable), hasBookableProducts: carries(row => row.bookable) }
     })(),

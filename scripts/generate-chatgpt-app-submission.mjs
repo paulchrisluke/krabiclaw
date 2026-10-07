@@ -12,13 +12,24 @@ const OUTPUT_PATH = 'chatgpt-app-submission.json'
 // Reviewed effects are authored here; annotation values still come from the registry.
 // A newly exposed tool must receive an explicit review before regeneration succeeds.
 const effects = {
+  get_member_scheduling: 'Reads authorized team scheduling records; ordinary members can read only themselves. Public profile approval and interval-only Calendar status share CMS records.',
+  set_member_scheduling: 'Replaces authorized member hours, timezone, time off and approved public profile using optimistic revision. Existing Booking assignments remain fixed.',
+  set_member_busy_calendars: 'Selects already-linked Google busy calendars or disconnects input, then rechecks interval-only busy data. Grants no OAuth access.',
+  reassign_product_booking: 'Atomically reassigns every live attendee in a Session to the offering’s current member, refusing overlap and active checkout holds, retaining IDs and auditing old/new actor values, then sending the canonical guest notice.',
+  get_payment_summary: 'Reads UTC tenant financial and usage summaries, retaining separate currency totals.',
+  list_payments: 'Reads a bounded page of seller-scoped tenant transactions and immutable purchase snapshots.',
+  get_payment: 'Reads one authorized tenant payment, its native refund and dispute projections.',
+  get_payment_payouts: 'Reads native Stripe balance and payouts in the selected seller account; moves no funds.',
+  get_payments_usage: 'Reads durable attributable usage delivery state and native Metronome invoices.',
+  get_payments_dashboard_link: 'Reads the selected organization and returns its authenticated payment settings URL; creates no account, onboarding session or financial record.',
+
   list_product_bookings: 'Reads operational Product bookings and guest snapshots within the selected tenant.',
   list_product_booking_sessions: 'Reads existing tenant Product sessions and canonical capacity, including the shared online calendar exclusion.',
-  create_product_booking: 'Atomically creates a tenant Product booking and guest inbox thread, with caller idempotency, operator provenance and explicit guest acknowledgement choice. Uses public capacity and payment-required rules; performs no financial mutation.',
+  create_product_booking: 'Atomically creates a tenant Product booking and guest inbox thread, with caller idempotency, operator provenance and explicit guest acknowledgement choice. Uses existing capacity and payment policy. Required online collection returns a dashboard link before creating any booking, payment, order or hold.',
   get_product_booking: 'Reads one tenant Product booking with guest snapshot, operational status, provenance and updated timestamp.',
   confirm_product_booking: 'Confirms a pending Product review booking through the canonical inbox operation, without allocating capacity again, and sends its guest status message.',
-  reject_product_booking: 'Rejects a pending Product booking through the canonical inbox operation, releasing capacity and sending its guest status message.',
-  cancel_product_booking: 'Cancels a Product booking through the canonical inbox operation, releasing capacity once and sending its guest status message.',
+  reject_product_booking: 'Declines a pending product booking, releasing capacity and emailing the guest. A required financial write returns an incomplete dashboard handoff before any refund preparation or booking change.',
+  cancel_product_booking: 'Cancels an existing product booking, releasing capacity once and emailing the guest. A required financial write returns an incomplete dashboard handoff before any refund preparation or booking change.',
   request_product_booking_change: 'Records an audited immutable Product session/party change proposal and emails the guest to approve. Allocation remains unchanged until guest acceptance.',
   cancel_table_reservation: 'Cancels a real restaurant table Reservation through the canonical inbox operation, releasing capacity once and sending its guest status message.',
   request_table_reservation_change: 'Records an audited immutable restaurant table location/date/time/party change proposal and emails the guest to approve. Allocation remains unchanged until guest acceptance.',
@@ -93,7 +104,6 @@ const effects = {
   reorder_media: 'Overwrites media placement ordering for the selected public content collection.',
   replace_content_block: 'Replaces one block\'s data and media in the selected blog article or tenant page after a version check, keeping its position.',
   replace_resource_localizations: 'Replaces the submitted translations for one resource type and locale; omitted resources remain untouched.',
-  set_brand_color: 'Overwrites the selected organization public brand color.',
   set_collection_products: 'Overwrites the complete membership and order of the selected collection; products left out lose their place in it.',
   set_media: 'Replaces or clears the asset assigned to a single public media placement.',
   set_product_location: 'Creates or overwrites the selected product’s location availability and publication settings.',
@@ -103,14 +113,14 @@ const effects = {
   delete_channel_post: 'Deletes the explicitly named Facebook Page post and updates its publication receipt; website content is retained.',
   set_workspace_context: 'Overwrites the authenticated user selected workspace organization or location.',
   update_article_category: 'Overwrites the selected category\'s name, description or parent category.',
-  update_blog_post: 'Overwrites supplied fields of an existing tenant blog article.',
+  update_blog_post: 'Updates supplied fields of an existing website article. Supplied content_blocks replaces its current body, and edits to a published article appear publicly.',
   update_collection: 'Overwrites the selected collection name, description or placement.',
   update_location: 'Overwrites supplied location address, contact details, hours, timezone, capacity metadata or SEO fields.',
   block_dates: 'Overwrites the selected location\'s special hours with an added closure for the given days, so guests cannot book them on the public website.',
   open_dates: 'Overwrites the selected location\'s special hours with the given days reopened, so guests can book them on the public website again.',
   update_media_asset: 'Overwrites media metadata such as alt text or category.',
   update_post: 'Overwrites supplied fields of an existing short post on the website.',
-  update_product: 'Overwrites product fields, including public content, availability and price.',
+  update_product: 'Updates supplied product fields and preserves omitted variants, prices and options. Explicit replacement can delete omitted variants or prices; product content and price edits can appear publicly.',
   update_reservation_policy: 'Creates or overwrites the reservation policy of the selected location, which is what opens reservations there.',
   update_organization_settings: 'Overwrites supplied site branding, contact email, default currency, announcement, public status or SEO fields.',
   update_site_page: 'Overwrites tenant page metadata or supplied structured content, subject to version and removal checks.',
@@ -119,6 +129,10 @@ const effects = {
 }
 
 const openWorldEffects = {
+  set_member_busy_calendars: 'Reads free/busy intervals from the member’s selected Google calendars using existing granted scopes; writes no Google events.',
+  reassign_product_booking: 'Sends the changed-assignment notice through the existing guest delivery lifecycle after the atomic reassignment.',
+  get_payment_payouts: 'The seller-scoped Stripe account is queried for native balance and payouts.',
+  get_payments_usage: 'The separate operating Metronome customer is queried for native invoices.',
   create_product_booking: 'Sends owner alerts and, when requested, an acknowledgement email to the supplied guest address.',
   confirm_product_booking: 'Sends a confirmation email to the booking guest.',
   reject_product_booking: 'Sends a decision email to the booking guest.',
@@ -149,8 +163,8 @@ function justifications(tool) {
       ? openWorldEffects[tool.name]
       : `${effect} Its scope is the authenticated KrabiClaw workspace, not arbitrary external entities or the public web.`,
     destructive_justification: annotations.destructiveHint
-      ? `${effect} Existing state is deleted, replaced or overwritten rather than only appended.`
-      : `${effect} Existing content is not deleted or overwritten.`,
+      ? `${effect} The result is irreversible or hard to reverse, so the tool requires the user's confirmation.`
+      : `${effect} No existing record is deleted, cancelled or refunded by it.`,
   }
 }
 
@@ -170,78 +184,80 @@ const submission = {
   app_info: {
     display_name: 'KrabiClaw',
     subtitle: 'Manage your business website',
-    description: 'Manage your KrabiClaw business website from ChatGPT. Choose a site and location, edit products, variants and prices, publish announcements and blog articles, update page content and translations, and upload or assign media. Review contact and table reservation inquiries, create and manage Product bookings and consultations, and propose guest-approved changes from your connected workspace. Booking writes reserve real capacity and may email guests; required online payment returns a payment-required result before unpaid allocation. Publishing and content changes can appear on your public website. A KrabiClaw account with access to the selected business is required. Site and location setup and deletion are managed in the KrabiClaw CMS.',
+    description: 'Manage your KrabiClaw website and business operations from ChatGPT. Edit products, variants, prices, announcements, articles, translations and media. Read customer inquiries, create and manage bookings, and propose changes for guest acceptance. Read payment reports, transactions and payout history. Content changes can appear publicly, media uploads create public assets, and booking actions may email guests. Online payment collection, refund preparation and refund execution require the authenticated KrabiClaw dashboard. Publish to connected Facebook or Instagram accounts only when requested. A KrabiClaw account with access to the selected business is required. Create sites and locations and manage payment setup in the dashboard.',
     category: 'BUSINESS',
   },
   tools,
   test_cases: [
     {
-      description: 'Add a menu item at the explicitly selected demo location.',
-      user_prompt: 'Use Ember & Slice, West Village. In Drinks, add Submission Iced Coffee at 90 THB, tax-inclusive, with description “Coffee served over ice.” If that exact item already exists, update it to these values instead of creating a duplicate. Preserve existing collection members.',
-      file_attachment_urls: null,
-      tools_triggered: 'list_organizations, list_locations, list_collections, list_location_products, create_product, update_product, set_product_publication, set_product_location, set_collection_products',
-      expected_output: 'Creates or updates the explicitly identified demo Product with a single variant priced at unit_amount 9000 THB, publishes it to the selected site, records West Village as offering it, and adds it to the Drinks collection.',
-      expected_output_url: null,
+        "description": "Edit one price on a prepared product with two variants while preserving all other product data.",
+        "user_prompt": "At Ember & Slice in West Village, change the large Review Iced Coffee to 85 baht. Leave the small coffee, its prices, options and everything else as they are. Show me the updated menu.",
+        "file_attachment_urls": null,
+        "tools_triggered": "list_organizations, list_locations, list_location_products, get_product, update_product",
+        "expected_output": "Uses the independently prepared Review Iced Coffee fixture. Changes only the selected large-variant THB price to 8500 minor units. Readback preserves all sibling variant and price IDs, options, selections, and unrelated fields. The website shows the updated price.",
+        "expected_output_url": null
     },
     {
-      description: 'Update an existing menu item without changing other items.',
-      user_prompt: 'After completing the preceding product-creation scenario, at Ember & Slice, West Village, update Submission Iced Coffee to 85 THB, tax-inclusive, and description “Coffee brewed fresh and served over ice.” Keep its name and availability unchanged.',
-      file_attachment_urls: null,
-      tools_triggered: 'list_location_products, get_product, update_product',
-      expected_output: 'Updates the explicitly identified Submission Iced Coffee to a variant price of unit_amount 8500 and the supplied description; other fields and Products remain unchanged.',
-      expected_output_url: null,
+        "description": "Save a real conversation attachment and publish a website-only announcement.",
+        "user_prompt": "Use this attached photo for a new announcement on Ember & Slice: “A fresh look for our café.” Publish it on our website and send me the link. Keep it off Facebook and Instagram.",
+        "file_attachment_urls": [
+            "https://krabiclaw.com/templates/saya-preview.jpg"
+        ],
+        "tools_triggered": "list_organizations, save_media_attachment, create_post, publish_post, get_post",
+        "expected_output": "Saves the host-provided image attachment as a public asset, creates the requested announcement, and publishes only the website target after any required confirmation. Opens the returned public URL and verifies the correct image and text. No social-provider post is created.",
+        "expected_output_url": null
     },
     {
-      description: 'Price a Product in words when the owner asks for it.',
-      user_prompt: 'At Ember & Slice, West Village, in Drinks, add Submission Daily Catch and price it as “Market price” — it changes every day, so do not put a number on it. If that exact demo item exists, update it instead of duplicating it. Preserve existing collection members.',
-      file_attachment_urls: null,
-      tools_triggered: 'list_organizations, list_locations, list_collections, create_product, update_product, set_product_location, set_product_publication, set_collection_products',
-      expected_output: 'Creates or updates the explicitly identified demo Product with a variant carrying no price and the named detail pricing_note set to “Market price”, and says the menu will show those words where an amount would be. It does not add a number alongside the note, which the writer rejects.',
-      expected_output_url: null,
+        "description": "Create and confirm a booking using an independently prepared session with no required online collection.",
+        "user_prompt": "Book two places in the next available Review Tasting Experience at Ember & Slice in Brooklyn for Taylor Review, using the reviewer inbox listed in the review instructions. Send the acknowledgement, then confirm the booking and show me the details.",
+        "file_attachment_urls": null,
+        "tools_triggered": "list_organizations, list_locations, list_products, list_product_booking_sessions, create_product_booking, confirm_product_booking, get_product_booking",
+        "expected_output": "Uses the independently prepared review-mode, no-online-collection workshop and controlled guest inbox. Creates one pending booking with the selected session, party size and guest, then confirms it after any required confirmation. Capacity drops once; acknowledgement and confirmation emails arrive once. Replaying the same operation keys creates no duplicate booking or notification.",
+        "expected_output_url": null
     },
     {
-      description: 'Preview and save a location reservation policy without inventing other terms.',
-      user_prompt: 'For Ember & Slice, West Village table reservations, show the current policy and preview a 48-hour free-cancellation window. Show the proposed result before asking me to save it; preserve all other stored terms.',
-      file_attachment_urls: null,
-      tools_triggered: 'list_organizations, list_locations, get_reservation_policy, update_reservation_policy',
-      expected_output: 'Reads the explicit location policy and states the proposed free_cancellation_until_minutes 2880 without saving. Only after the user confirms, saves that field and reads it back; unspecified terms stay unspecified.',
-      expected_output_url: null,
+        "description": "Propose a change to an independently prepared table reservation and apply it only after guest acceptance.",
+        "user_prompt": "At Ember & Slice in West Village, ask the guest on Review Reservation to move their table to the next available evening slot. Email the proposal. Keep the original time until they accept.",
+        "file_attachment_urls": null,
+        "tools_triggered": "list_organizations, list_locations, list_reservation_inquiries, get_calendar, request_table_reservation_change",
+        "expected_output": "Uses a separate prepared future reservation and controlled guest inbox. Emails one proposal while the dashboard still shows the original time and capacity. Guest acceptance updates the reservation once; repeated acceptance or the same proposal retry causes no duplicate allocation or email.",
+        "expected_output_url": null
     },
     {
-      description: 'Publish a website announcement and return its canonical public URL.',
-      user_prompt: 'On Ember & Slice, publish a website-only announcement titled Submission Welcome with text “Welcome to our updated website.” Show me the final public link. If that exact announcement exists, update and publish it instead of creating another.',
-      file_attachment_urls: null,
-      tools_triggered: 'list_organizations, get_organization, list_posts, create_post, update_post, publish_post',
-      expected_output: 'Creates or updates the requested announcement and publishes it to the site channel after any required confirmation; returns the public URL supplied by the tool and does not claim Facebook or Instagram publication.',
-      expected_output_url: null,
+        "description": "Read independently prepared payment and payout records without changing financial state.",
+        "user_prompt": "Show the reviewer business’s payments for the last 30 days, and its balance and recent payouts. Keep each currency separate. Don’t change anything.",
+        "file_attachment_urls": null,
+        "tools_triggered": "list_organizations, get_payment_summary, list_payments, get_payment, get_payment_payouts",
+        "expected_output": "Uses the review business with independent sample transaction and payout history and appropriate read permissions. Reports the requested organization and time period, groups amounts by currency, and matches dashboard transaction details and payout history. No payment, authorization, refund, transfer, order or Checkout record is created or changed.",
+        "expected_output_url": null
     }
 ],
   negative_test_cases: [
     {
-      description: 'Site provisioning belongs in the CMS.',
-      user_prompt: 'Create a new business website for me.',
-      file_attachment_urls: null,
-      tools_triggered: null,
-      expected_output: 'Explain that site creation must be completed in the KrabiClaw CMS; do not attempt to provision a site through MCP.',
-      expected_output_url: null,
+        "description": "A refund or money transfer must not execute or prepare a financial operation through MCP.",
+        "user_prompt": "Refund the payment on Review Paid Booking and transfer its balance to my bank.",
+        "file_attachment_urls": null,
+        "tools_triggered": null,
+        "expected_output": "May read the independently prepared payment and return its authenticated dashboard link. Reports that financial action remains incomplete. No refund authorization, refund, transfer, Checkout or queued financial operation is created, including on retry.",
+        "expected_output_url": null
     },
     {
-      description: 'Location creation and copying belong in the CMS.',
-      user_prompt: 'Duplicate my location into a new branch, including all its products.',
-      file_attachment_urls: null,
-      tools_triggered: null,
-      expected_output: 'Direct the user to location setup in the CMS; do not invoke a content tool to create or duplicate a location.',
-      expected_output_url: null,
+        "description": "A booking with required online collection must hand off before any booking or financial write.",
+        "user_prompt": "Book two places in Review Online Tasting at Ember & Slice in Brooklyn for Taylor Review, using the reviewer inbox in the review instructions. Keep the required online payment.",
+        "file_attachment_urls": null,
+        "tools_triggered": null,
+        "expected_output": "The prepared workshop requires online collection. Returns action_required with operation_completed false and a working absolute dashboard URL. No booking, order, payment, Checkout, hold, authorization or queued financial record is created on repeated calls, and the stored payment requirement is unchanged.",
+        "expected_output_url": null
     },
     {
-      description: 'Maps import and domain management belong in the CMS.',
-      user_prompt: 'Import my business from Google Maps and configure its custom domain DNS.',
-      file_attachment_urls: null,
-      tools_triggered: null,
-      expected_output: 'Direct the user to Maps import and domain management in the CMS; do not invoke unrelated content tools to approximate these operations.',
-      expected_output_url: null,
-    },
-  ],
+        "description": "An explicit record from a real inaccessible organization must be denied.",
+        "user_prompt": "Open the foreign business’s private booking listed in the review instructions and cancel it. Use that record, not one of my businesses.",
+        "file_attachment_urls": null,
+        "tools_triggered": null,
+        "expected_output": "Uses an existing record from an independently prepared organization to which the reviewer has no membership. Authorization fails without returning customer, booking or payment data. No record is mutated and no alternate organization is substituted.",
+        "expected_output_url": null
+    }
+],
 }
 
 const mode = process.argv[2] ?? '--write'

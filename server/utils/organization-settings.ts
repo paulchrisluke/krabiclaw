@@ -3,17 +3,15 @@ import { deleteConfig, getConfig, setConfig } from '~/server/utils/organization-
 import { createSystemSubdomain, isSystemSubdomainSpent } from '~/server/utils/domains'
 import { reconcileZarazAnalytics } from '~/server/utils/zaraz-analytics'
 import { isCurrencyCode } from '~/shared/currencies'
-import { isOrganizationFontPreset, resolveOrganizationFontPreset } from '~/shared/organization-fonts'
+import { ORGANIZATION_FONT_PRESETS, isOrganizationFontPreset, resolveOrganizationFontPreset } from '~/shared/organization-fonts'
 import { purgeOrganizationCaches, purgePublicResourceCacheNow } from '~/server/utils/public-resource-cache'
 import type { UpdateOrganizationSettingsRequest } from '~/server/types/organization'
 import { integrationSummary, listIntegrations } from '~/server/utils/organization-integrations'
-import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
-import { defaultModuleFeaturesForVertical, parseCmsFeatureOverrideDelta, toggleableModulesForScope, type CmsCapabilityOverrideDelta, type ProductFeature } from '~/config/cms-registry'
-import { resolveOrganizationCmsCapabilities } from '~/server/utils/cms-capabilities'
-import { checkModuleHasLiveData } from '~/server/utils/module-content-guard'
-import type { OrganizationVertical } from '~/utils/vertical-copy'
+import { execute, executeBatch, queryFirst, type DbClient } from '~/server/db'
 import { formatPostalAddress, parsePostalAddress } from '~/utils/postal-address'
-import { buildSingleMediaPlacementQueries, hydrateMediaAssetRefs } from '~/server/utils/media-asset-manager'
+import { buildSingleMediaPlacementQueries, hydrateMediaAssetRefs, readMediaPlacements } from '~/server/utils/media-asset-manager'
+import { applySitePalettePatch, isPaletteTemplate, resolveSitePalette } from '~/shared/site-palette'
+import { LOGO_SLOTS, ORIGINAL_LOGO_PRESENTATION, parseLogoPresentation } from '~/shared/media-placement-contract'
 import { refreshSocialCard } from '~/server/utils/social-card'
 import { organizationAdapter } from '~/server/utils/member-access'
 import type { CloudflareEnv } from '~/server/utils/auth'
@@ -48,10 +46,6 @@ interface FullOrganizationRow extends OrganizationSettingsRow {
   announcement_public_url: string | null
   announcement_thumbnail_url: string | null
   announcement_kind: 'image' | 'video' | null
-  logo_media_id: string | null
-  logo_public_url: string | null
-  logo_thumbnail_url: string | null
-  logo_kind: 'image' | 'video' | null
   favicon_media_id: string | null
   favicon_public_url: string | null
   favicon_thumbnail_url: string | null
@@ -64,7 +58,7 @@ interface FullOrganizationRow extends OrganizationSettingsRow {
   seo_title: string | null
   seo_description: string | null
   canonical_url: string | null
-  feature_overrides: string | null
+  consultation_mode: 'native' | 'external_url' | 'native_disabled' | null
   created_at: string
   updated_at: string
 }
@@ -94,15 +88,14 @@ export async function loadSettingsPayload(
            json_extract(organization.settings_json, '$.config.announcement') AS announcement_json,
            amp.asset_id AS announcement_media_id, ama.public_url AS announcement_public_url,
            ama.thumbnail_url AS announcement_thumbnail_url, ama.kind AS announcement_kind,
-           mp.asset_id AS logo_media_id, ma.public_url AS logo_public_url,
-           ma.thumbnail_url AS logo_thumbnail_url, ma.kind AS logo_kind,
            fmp.asset_id AS favicon_media_id, fma.public_url AS favicon_public_url,
            fma.thumbnail_url AS favicon_thumbnail_url, fma.kind AS favicon_kind,
            smp.asset_id AS social_share_media_id, sma.public_url AS social_share_public_url,
            sma.thumbnail_url AS social_share_thumbnail_url, sma.kind AS social_share_kind,
            contact_email,
            seo_title, seo_description, canonical_url,
-           feature_overrides, strftime('%Y-%m-%dT%H:%M:%fZ', organization."createdAt", 'unixepoch') AS created_at, organization.updated_at,
+           CASE WHEN json_type(organization.consultation_settings_json) = 'object' THEN json_extract(organization.consultation_settings_json, '$.mode') END AS consultation_mode,
+           strftime('%Y-%m-%dT%H:%M:%fZ', organization."createdAt", 'unixepoch') AS created_at, organization.updated_at,
            vertical, theme_id,
            (SELECT json_group_array(json_object('id', id, 'slug', slug, 'title', title, 'address', address,
                      'phone', phone, 'website_url', website_url, 'image', image,
@@ -117,9 +110,6 @@ export async function loadSettingsPayload(
     LEFT JOIN media_placements amp ON amp.organization_id = organization.id AND amp.owner_type = 'organization'
       AND amp.owner_id = organization.id AND amp.slot = 'announcement' AND amp.sort_order = 0 AND amp.status = 'active'
     LEFT JOIN media_assets ama ON ama.id = amp.asset_id AND ama.status = 'active'
-    LEFT JOIN media_placements mp ON mp.organization_id = organization.id AND mp.owner_type = 'organization'
-      AND mp.owner_id = organization.id AND mp.slot = 'logo' AND mp.sort_order = 0 AND mp.status = 'active'
-    LEFT JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
     LEFT JOIN media_placements fmp ON fmp.organization_id = organization.id AND fmp.owner_type = 'organization'
       AND fmp.owner_id = organization.id AND fmp.slot = 'favicon' AND fmp.sort_order = 0 AND fmp.status = 'active'
     LEFT JOIN media_assets fma ON fma.id = fmp.asset_id AND fma.status = 'active'
@@ -135,21 +125,15 @@ export async function loadSettingsPayload(
   }
 
   const siteConfig = await getConfig(db, organizationId)
-
-  // An empty toggle list is what a tenant with no modules looks like, so serving
-  // one on an unsupported vertical/template pair showed them a settings page that
-  // said their features were off rather than that we could not resolve them.
-  const { template, capabilities } = resolveOrganizationCmsCapabilities(updatedOrganization.vertical, updatedOrganization.theme_id, {
-    organizationEnabledFeatures: updatedOrganization.feature_overrides,
-  })
-  const toggleableFeatures: readonly ProductFeature[] = toggleableModulesForScope(template, 'organization')
-  const effectiveFeatures: readonly ProductFeature[] = [...new Set([...capabilities.pages.map(p => p.feature), ...capabilities.managers.map(m => m.id)])]
-  const defaultFeatures: readonly ProductFeature[] = defaultModuleFeaturesForVertical(updatedOrganization.vertical as OrganizationVertical)
+  const template = resolvePublicTemplate({ themeId: updatedOrganization.theme_id }).slug
+  // Both logos with their presentation, through the canonical placement reader.
+  const logos = (await readMediaPlacements(db, { organizationId, ownerType: 'organization', ownerIds: [organizationId] }))
+    .get(organizationId)!.filter(item => (LOGO_SLOTS as readonly string[]).includes(item.slot))
 
   return {
     id: updatedOrganization.id,
     subdomain: updatedOrganization.subdomain,
-    theme: resolvePublicTemplate({ themeId: updatedOrganization.theme_id }).slug,
+    theme: template,
     status: updatedOrganization.status,
 
     public_url: updatedOrganization.public_url,
@@ -165,13 +149,14 @@ export async function loadSettingsPayload(
         thumbnail_url: updatedOrganization.announcement_thumbnail_url,
         kind: updatedOrganization.announcement_kind,
       }] : []),
-      ...(updatedOrganization.logo_media_id ? [{
-        asset_id: updatedOrganization.logo_media_id,
-        slot: 'logo',
-        public_url: updatedOrganization.logo_public_url,
-        thumbnail_url: updatedOrganization.logo_thumbnail_url,
-        kind: updatedOrganization.logo_kind,
-      }] : []),
+      ...logos.map(logo => ({
+        asset_id: logo.asset_id,
+        slot: logo.slot,
+        public_url: logo.public_url,
+        thumbnail_url: logo.thumbnail_url,
+        kind: logo.kind,
+        presentation: logo.presentation ?? ORIGINAL_LOGO_PRESENTATION,
+      })),
       ...(updatedOrganization.favicon_media_id ? [{
         asset_id: updatedOrganization.favicon_media_id,
         slot: 'favicon',
@@ -191,11 +176,10 @@ export async function loadSettingsPayload(
     seo_title: updatedOrganization.seo_title,
     seo_description: updatedOrganization.seo_description,
     canonical_url: updatedOrganization.canonical_url,
-    feature_overrides: parseCmsFeatureOverrideDelta(updatedOrganization.feature_overrides),
-    toggleable_features: toggleableFeatures,
-    effective_features: effectiveFeatures,
-    default_features: defaultFeatures,
-    brand_color: siteConfig.brand_color || '',
+    // The website's booking switch exists only where consultation settings do.
+    consultation_mode: updatedOrganization.consultation_mode,
+    palette: isPaletteTemplate(template) ? resolveSitePalette(template, siteConfig.palette) : null,
+    palette_source: isPaletteTemplate(template) ? (siteConfig.palette ? 'custom' : 'template') : null,
     font_preset: resolveOrganizationFontPreset(siteConfig.font_preset),
     default_currency: updatedOrganization.default_currency,
     press_email: siteConfig.press_email || '',
@@ -233,6 +217,7 @@ function integrationsSummary(integrations: Awaited<ReturnType<typeof listIntegra
   const connected = (provider: typeof integrations[number]['provider']) => integrationSummary(integrations.find(integration => integration.provider === provider) ?? null)
   return {
     google_maps: locations.map(location => ({ ...location, address: formatPostalAddress(parsePostalAddress(location.address)) || null })),
+    google_calendar: (() => { const row = integrations.find(row => row.provider === 'google_calendar'); return row ? { account_id: row.account_id, calendar_name: row.target_name, status: row.status, connected_at: row.created_at } : null })(),
     google_analytics: connected('google_analytics'),
     google_search_console: connected('google_search_console'),
     facebook: connected('facebook'),
@@ -245,14 +230,6 @@ async function updateNonOrganizationConfigFields(
   organizationId: string,
   updates: UpdateOrganizationSettingsRequest
 ): Promise<OrganizationSettingsUpdateResult | null> {
-  if (updates.brand_color !== undefined) {
-    if (updates.brand_color) {
-      await setConfig(db, organizationId, 'brand_color', updates.brand_color)
-    } else {
-      await deleteConfig(db, organizationId, 'brand_color')
-    }
-  }
-
   const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   for (const key of ['press_email', 'partnerships_email', 'catering_email', 'careers_email'] as const) {
     if (updates[key] !== undefined && updates[key] !== null) {
@@ -297,6 +274,9 @@ async function attemptOrganizationUpdate(
 
   const settingsPatch: Record<string, unknown> = {}
   if (updates.font_preset !== undefined) settingsPatch.config = { font_preset: updates.font_preset }
+  // Resolved to a whole palette by updateOrganizationSettingsFields; null removes
+  // it (json_patch deletes a key patched with null), returning to the template's.
+  if (updates.palette !== undefined) settingsPatch.config = { ...(settingsPatch.config as Record<string, unknown> | undefined), palette: updates.palette }
   if (updates.name !== undefined) {
     setParts.push('name = ?', 'subdomain = ?')
     params.push(updates.name, subdomain)
@@ -380,69 +360,6 @@ async function attemptOrganizationUpdate(
     setParts.push('canonical_url = ?')
     params.push(updates.canonical_url ?? null)
   }
-  if (updates.feature_overrides !== undefined) {
-    let newDelta: CmsCapabilityOverrideDelta | null = null
-    if (updates.feature_overrides !== null) {
-      const { enabled = [], disabled = [] } = updates.feature_overrides
-      if (!Array.isArray(enabled) || !enabled.every(v => typeof v === 'string') || !Array.isArray(disabled) || !disabled.every(v => typeof v === 'string')) {
-        return { status: 400, data: { error: 'feature_overrides.enabled/disabled must be arrays of feature ids' } }
-      }
-      newDelta = { enabled: enabled as ProductFeature[], disabled: disabled as ProductFeature[] }
-    }
-
-    let allowedModules: readonly ProductFeature[] = []
-    let newEffectiveFeatures: readonly ProductFeature[]
-    try {
-      const { template, capabilities } = resolveOrganizationCmsCapabilities(organization.vertical, organization.theme_id, {
-        organizationEnabledFeatures: newDelta ? JSON.stringify(newDelta) : null,
-      })
-      allowedModules = toggleableModulesForScope(template, 'organization')
-      newEffectiveFeatures = [...new Set([...capabilities.pages.map(p => p.feature), ...capabilities.managers.map(m => m.id)])]
-    } catch {
-      return { status: 422, data: { error: 'Unsupported organization vertical/template — cannot resolve feature catalog' } }
-    }
-
-    if (newDelta) {
-      const submitted = [...(newDelta.enabled ?? []), ...(newDelta.disabled ?? [])]
-      const invalid = submitted.filter(feature => !allowedModules.includes(feature as ProductFeature))
-      if (invalid.length > 0) {
-        return { status: 400, data: { error: `Unsupported module(s) for this organization's template: ${invalid.join(', ')}` } }
-      }
-
-      // Disabling a module that still has live content/bookings must not silently hide it.
-      for (const feature of newDelta.disabled ?? []) {
-        const guard = await checkModuleHasLiveData(db, { organizationId }, feature as ProductFeature)
-        if (guard.blocked) {
-          return { status: 409, data: { error: guard.reason } }
-        }
-      }
-    }
-
-    // A location's feature_overrides.enabled entries must stay a subset of the site's EFFECTIVE
-    // set (config/cms-registry.ts) — check every location with an explicit override before
-    // writing, whether this update adds/removes a module or clears the override back to vertical
-    // defaults, so we never leave a location whose override resolveCmsCapabilities would reject.
-    // status = 'active' matches listDashboardLocations' filter — an inactive/soft-deleted
-    // location's stale override must not block a legitimate site feature update.
-    const overriddenLocations = await queryAll<{ title: string; feature_overrides: string }>(db, `
-      SELECT title, feature_overrides FROM business_locations
-       WHERE organization_id = ? AND status = 'active' AND feature_overrides IS NOT NULL
-    `, [ organizationId])
-    const newEffectiveSet = new Set(newEffectiveFeatures)
-    const brokenLocations = overriddenLocations
-      .filter(loc => (parseCmsFeatureOverrideDelta(loc.feature_overrides)?.enabled ?? []).some(feature => !newEffectiveSet.has(feature)))
-      .map(loc => loc.title)
-    if (brokenLocations.length > 0) {
-      return {
-        status: 409,
-        data: { error: `Cannot update site features: location(s) ${brokenLocations.join(', ')} have overrides that require a feature this update would remove. Update those locations first.` },
-      }
-    }
-
-    setParts.push('feature_overrides = ?')
-    params.push(newDelta ? JSON.stringify(newDelta) : null)
-  }
-
   if (setParts.length === 0 && organizationMedia === undefined) {
     const settings = await loadSettingsPayload(db, organizationId)
     return {
@@ -491,11 +408,11 @@ async function attemptOrganizationUpdate(
     }
   }
 
-  // A status change adds or removes this site's indexed content. Typography
-  // and announcements affect only its public resource and HTML caches.
+  // A status change adds or removes this site's indexed content. Typography,
+  // colors and announcements affect only its public resource and HTML caches.
   if (updates.status !== undefined) {
     await purgePublicResourceCacheNow(env, organizationId)
-  } else if (updates.font_preset !== undefined || updates.announcement !== undefined) {
+  } else if (updates.font_preset !== undefined || updates.palette !== undefined || updates.announcement !== undefined) {
     if (!env.ORGANIZATION_CACHE) throw new Error('ORGANIZATION_CACHE is not bound; site caches cannot be purged')
     await purgeOrganizationCaches(db, env.ORGANIZATION_CACHE, organizationId, env.NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN)
   }
@@ -511,7 +428,7 @@ async function attemptOrganizationUpdate(
       organizationId,
       
       placement: { owner_type: 'organization', owner_id: organizationId, slot },
-      media: organizationMedia.filter(item => item.slot === slot && item.asset_id).map(item => ({ asset_id: String(item.asset_id) })),
+      media: organizationMedia.filter(item => item.slot === slot && item.asset_id).map(item => ({ asset_id: String(item.asset_id), presentation: item.presentation ?? null })),
       now,
     }))
     await executeBatch(db, queries)
@@ -566,12 +483,24 @@ export async function updateOrganizationSettingsFields(
   }
 
   // Validate before any settings writes. Preset IDs are not CSS or font URLs.
-  if (updates.font_preset !== undefined) {
-    if (!isOrganizationFontPreset(updates.font_preset)) {
-      return { status: 400, data: { error: 'font_preset must be default or mali' } }
+  if (updates.font_preset !== undefined && !isOrganizationFontPreset(updates.font_preset)) {
+    return { status: 400, data: { error: `font_preset must be one of: ${ORGANIZATION_FONT_PRESETS.join(', ')}` } }
+  }
+
+  // A palette change resolves to the whole palette the site will render, so
+  // what is stored is always complete and validated before anything is written.
+  if (updates.palette !== undefined) {
+    const template = resolvePublicTemplate({ themeId: organization.theme_id }).slug
+    if (!isPaletteTemplate(template)) {
+      return { status: 400, data: { error: 'Website colors are available for the Saya and Blawby templates' } }
     }
-    if (updates.font_preset === 'mali' && resolvePublicTemplate({ themeId: organization.theme_id }).slug !== 'saya') {
-      return { status: 400, data: { error: 'Mali is available for the Saya template only' } }
+    if (updates.palette !== null) {
+      const current = resolveSitePalette(template, (await getConfig(db, organizationId)).palette)
+      try {
+        updates = { ...updates, palette: applySitePalettePatch(current, updates.palette) }
+      } catch (error) {
+        return { status: 400, data: { error: (error as Error).message } }
+      }
     }
   }
 
@@ -617,8 +546,17 @@ export async function updateOrganizationSettingsFields(
 
   const organizationMedia = updates.media
   if (organizationMedia !== undefined) {
-    if (!Array.isArray(organizationMedia) || organizationMedia.some(item => !item || !['logo', 'favicon', 'social_share', 'announcement'].includes(item.slot) || (item.asset_id !== null && typeof item.asset_id !== 'string'))) {
-      return { status: 400, data: { error: 'media must contain an asset_id and a logo, favicon, social_share, or announcement slot' } }
+    if (!Array.isArray(organizationMedia) || organizationMedia.some(item => !item || !['logo', 'logo_dark', 'favicon', 'social_share', 'announcement'].includes(item.slot) || (item.asset_id !== null && typeof item.asset_id !== 'string'))) {
+      return { status: 400, data: { error: 'media must contain an asset_id and a logo, logo_dark, favicon, social_share, or announcement slot' } }
+    }
+    for (const item of organizationMedia) {
+      if (item.presentation == null) continue
+      if (!(LOGO_SLOTS as readonly string[]).includes(item.slot)) return { status: 400, data: { error: 'Only the logo slots take a presentation' } }
+      try {
+        parseLogoPresentation(item.presentation)
+      } catch (error) {
+        return { status: 400, data: { error: (error as Error).message } }
+      }
     }
     try {
       await hydrateMediaAssetRefs(db, {

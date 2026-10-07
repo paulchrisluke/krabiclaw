@@ -1,8 +1,10 @@
+import { refreshProductBusy } from '~/server/domain/member-scheduling'
+import { recordBookingChangeAnswer } from '~/server/domain/booking-analytics'
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { HTTPError } from 'nitro'
 import { z } from 'zod'
 import { executeBatch, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
-import { listSessions, sessionMoveQuery } from '~/server/utils/availability'
+import { listSessions, sessionMoveQuery, sessionAssignmentQuery } from '~/server/utils/availability'
 import { localDateTimeToInstant } from '~/utils/timezone'
 import { RESERVATION_CAPACITY_CONSUMING_SQL } from '~/shared/bookings'
 import { assertResourceAccess, resolveOrganizationMembership, memberAccessPrincipal } from '~/server/utils/member-access'
@@ -17,7 +19,7 @@ import { bookingChangeProposalMessage } from '~/server/notifications/guest-event
 import { organizationLogo } from '~/server/notifications/hero'
 import { getPlatformDomain } from '~/server/utils/dashboard-notification-links'
 import { updateThreadProjection } from './repository'
-import { getGuestRequest, getThreadOperationalRecord, requestSummary } from '~/server/domain/requests'
+import { getGuestRequest, getThreadOperationalRecord, requestSummary, REQUEST_CURRENT_BUYER_SQL } from '~/server/domain/requests'
 import type { GuestThreadRow } from './types'
 
 /**
@@ -56,6 +58,7 @@ const fieldsSchema = z.discriminatedUnion('kind', [bookingFieldsSchema, reservat
 const requestSchema = z.intersection(fieldsSchema, z.object({ expectedUpdatedAt: z.string().min(1) }))
 const sourceSchema = z.object({
   recordKind: z.enum(['booking', 'reservation']),
+  assignedMemberId: z.string().nullable().default(null),
   recordId: z.string(),
   status: z.string(),
   partySize: z.number().int(),
@@ -119,6 +122,7 @@ async function loadSource(db: DbClient, thread: GuestThreadRow): Promise<Source>
   if (!record) throw new HTTPError({ statusCode: 409, message: 'This conversation has no booking or reservation to change' })
   const payload = thread.payload as { party_size_is_minimum: boolean; notes: string | null; guest: { name: string; email: string; phone: string | null } }
   return {
+    assignedMemberId: record.assigned_member_id,
     recordKind: record.kind, recordId: record.id, status: record.status, partySize: record.party_size,
     startsAt: record.starts_at, endsAt: record.ends_at, timezone: record.timezone,
     locationId: record.location_id, productId: record.product_id,
@@ -149,6 +153,10 @@ async function validateDestination(db: DbClient, thread: GuestThreadRow, before:
     const booking = await queryFirst<{ product_variant_id: string; user_id: string | null }>(db,
       'SELECT product_variant_id, user_id FROM bookings WHERE id = ?', [before.recordId])
     if (!booking) throw new HTTPError({ statusCode: 409, message: 'The original booking is missing' })
+    if (after.partySize !== before.partySize || target.location_id !== before.locationId) {
+      const paid = await queryFirst(db, "SELECT id FROM payments WHERE organization_id=? AND subject_type='booking' AND subject_id=? AND captured_amount>refunded_amount LIMIT 1", [thread.organization_id, before.recordId])
+      if (paid) throw new HTTPError({ statusCode: 409, message: 'Refund the paid booking before changing its quantity or location' })
+    }
     const location = target.location_id
       ? await queryFirst<{ title: string }>(db, 'SELECT title FROM business_locations WHERE id = ? AND organization_id = ?', [target.location_id, thread.organization_id])
       : null
@@ -236,7 +244,6 @@ async function deliverEmail(db: DbClient, env: ChangeEnv, thread: GuestThreadRow
     submissionId: thread.id,
   })
   if (sent.status === 'failed') throw new HTTPError({ statusCode: 502, message: sent.error || 'Guest email could not be sent' })
-  if (sent.status === 'unknown') throw new HTTPError({ statusCode: 504, message: sent.error || 'Guest email outcome is unknown' })
   await notifyBookingChangeOwner(env, db, {
     organizationId: thread.organization_id, organizationName: organization.name,
     locationId: (status === 'accepted' && proposal.after.kind === 'reservation' ? proposal.after.locationId : proposal.before.locationId) ?? '',
@@ -312,9 +319,14 @@ export async function requestBookingChange(db: DbClient, env: CloudflareEnv, thr
 }
 
 /** GET only reads the immutable proposal. POST records one idempotent guest decision. */
-export async function respondToBookingChange(db: DbClient, env: ChangeEnv, input: { threadId: string; requestId: string; token: string; decision?: 'accept' | 'decline' }) {
-  const expected = linkToken(env, input.threadId, input.requestId)
-  if (!/^[a-f0-9]{64}$/.test(input.token) || !timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(input.token, 'hex'))) throw new HTTPError({ statusCode: 404, message: 'Change request not found' })
+export async function respondToBookingChange(db: DbClient, env: ChangeEnv, input: { threadId: string; requestId: string; decision?: 'accept' | 'decline' } & ({ token: string } | { buyerUserId: string })) {
+  // The guest answers from the email link, or signed in as the account that owns the booking.
+  if ('token' in input) {
+    const expected = linkToken(env, input.threadId, input.requestId)
+    if (!/^[a-f0-9]{64}$/.test(input.token) || !timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(input.token, 'hex'))) throw new HTTPError({ statusCode: 404, message: 'Change request not found' })
+  } else if (!await queryFirst(db, `SELECT 1 FROM requests r WHERE r.id = ? AND r.user_id = ? AND ${REQUEST_CURRENT_BUYER_SQL}`, [input.threadId, input.buyerUserId])) {
+    throw new HTTPError({ statusCode: 404, message: 'Change request not found' })
+  }
   const entry = await getEntryById(db, input.requestId)
   if (!entry || entry.request_id !== input.threadId || entry.event_name !== 'booking_change.requested') throw new HTTPError({ statusCode: 404, message: 'Change request not found' })
   const thread = await getGuestRequest(db, entry.request_id)
@@ -328,6 +340,7 @@ export async function respondToBookingChange(db: DbClient, env: ChangeEnv, input
 
   if (!result && input.decision) {
     if (!['pending', 'confirmed'].includes(current.status)) throw new HTTPError({ statusCode: 409, message: 'This reservation or booking can no longer be changed' })
+    if(input.decision==='accept' && current.productId)await refreshProductBusy(db,env,thread.organization_id,current.productId)
     const destination = input.decision === 'accept' ? await validateDestination(db, thread as GuestThreadRow, current, proposal.after, resultId) : null
     const id = crypto.randomUUID()
     const now = new Date().toISOString()
@@ -345,7 +358,7 @@ export async function respondToBookingChange(db: DbClient, env: ChangeEnv, input
         ON CONFLICT DO NOTHING`,
       params: [id, thread.id, `booking_change.${input.decision === 'accept' ? 'accepted' : 'declined'}`,
         `Guest ${input.decision === 'accept' ? 'accepted' : 'declined'} the requested changes.`,
-        JSON.stringify({ requestId: entry.id, request_id: thread.id, operational_booking_id: current.recordId, beforeStatus: current.status, before: { starts_at: current.startsAt, ends_at: current.endsAt, party_size: current.partySize }, after: destination ? { starts_at: destination.startsAt, ends_at: destination.endsAt ?? new Date(Date.parse(destination.startsAt) + Date.parse(current.endsAt) - Date.parse(current.startsAt)).toISOString(), party_size: proposal.after.partySize } : null }), resultId, thread.id, now, now,
+        JSON.stringify({ requestId: entry.id, request_id: thread.id, operational_booking_id: current.recordId, beforeStatus: current.status, before: { assigned_member_id:current.assignedMemberId, starts_at: current.startsAt, ends_at: current.endsAt, party_size: current.partySize }, after: destination ? { starts_at: destination.startsAt, ends_at: destination.endsAt ?? new Date(Date.parse(destination.startsAt) + Date.parse(current.endsAt) - Date.parse(current.startsAt)).toISOString(), party_size: proposal.after.partySize } : null }), resultId, thread.id, now, now,
         thread.id, thread.organization_id, current.updatedAt],
     }
 
@@ -359,7 +372,8 @@ export async function respondToBookingChange(db: DbClient, env: ChangeEnv, input
       queries.push(destination.claim(movedBookingId, now))
       queries.push({
         ...entryInsert,
-        query: entryInsert.query.replace('AND source.updated_at = ?', 'AND source.updated_at = ? AND changes() = 1'),
+        query: entryInsert.query.replace('AND source.updated_at = ?', 'AND source.updated_at = ? AND changes() = 1').replace("'guest', ?, ?, ?, ?,", "'guest', ?, ?, json_set(?, '$.after.assigned_member_id', (SELECT assigned_member_id FROM bookings WHERE id=?)), ?,"),
+        params: [...entryInsert.params!.slice(0,5), movedBookingId, ...entryInsert.params!.slice(5)],
       })
     } else {
       queries.push(entryInsert)
@@ -383,6 +397,7 @@ export async function respondToBookingChange(db: DbClient, env: ChangeEnv, input
       })
     }
 
+    if(destination && movedBookingId && destination.sessionId) queries.push(sessionAssignmentQuery(destination.sessionId,thread.organization_id,movedBookingId))
     await executeBatch(db, queries, { operation: 'respond to booking change' })
     result = await findEntryByDedupeKey(db, resultId)
     if (!result) {
@@ -410,6 +425,11 @@ export async function respondToBookingChange(db: DbClient, env: ChangeEnv, input
         : [],
     }, accepted ? 'accepted' : 'declined', proposal, noun)
     await updateThreadProjection(db, thread.id, { conversationState: 'resolved' })
+    if (!result.payload_json) throw new Error('A booking change answer has no recorded payload')
+    const answered = JSON.parse(result.payload_json) as { operational_booking_id?: unknown }
+    if (thread.kind === 'booking' && typeof answered.operational_booking_id === 'string') {
+      await recordBookingChangeAnswer(db, { organizationId: thread.organization_id, bookingId: answered.operational_booking_id, changeRequestId: entry.id, accepted })
+    }
   }
   return {
     type: thread.kind, noun, guestName: summary.guestName,

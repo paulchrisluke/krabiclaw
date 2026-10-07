@@ -2,8 +2,8 @@
   <DashboardIndexPanel id="locations" :title="locationsLabel">
     <template #right>
       <UButton
-        v-if="businessPaths"
-        :to="businessPaths.newLocation"
+        v-if="organizationPaths"
+        :to="organizationPaths.newLocation"
         icon="i-lucide-plus"
         color="neutral"
         variant="soft"
@@ -16,11 +16,11 @@
       <UIcon name="i-lucide-map-pin" class="mx-auto size-6 text-muted" />
       <h2 class="mt-5 text-base font-semibold text-highlighted">No {{ locationsLabel.toLowerCase() }} yet</h2>
       <UButton
-        v-if="businessPaths"
+        v-if="organizationPaths"
         :label="`Add your first ${locationNoun}`"
         icon="i-lucide-plus"
         class="mt-6"
-        :to="businessPaths.newLocation"
+        :to="organizationPaths.newLocation"
       />
     </div>
 
@@ -35,8 +35,6 @@
 
 <script setup lang="ts">
 import DashboardOrganizationLocationSelector, { type OrganizationLocationSelectorItem } from '~/components/dashboard/OrganizationLocationSelector.vue'
-import { dashboardFetch } from '~/composables/dashboardFetch'
-import type { DashboardLocation } from '~/composables/useDashboardOrganization'
 import { getErrorMessage } from '~/utils/errors'
 import { resolveCmsCapabilities } from '~/config/cms-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
@@ -44,20 +42,12 @@ import { normalizeVertical, type OrganizationVertical } from '~/utils/vertical-c
 
 const route = useRoute()
 const dashboard = useDashboardOrganization()
-const { businessPaths } = useDashboardOrganizationLinks()
+const { organizationPaths } = useDashboardOrganizationLinks()
 
 const organization = computed(() => dashboard.organization.value)
 
-// This tab stands outside any site route, so the context carries no
-// locations; they are read for the whole organization.
 const orgSlug = computed(() => String(route.params.orgSlug || ''))
-const { data: locationsData, error: locationsError } = await useAsyncData(`dashboard-org-locations:${orgSlug.value}`, () =>
-  dashboardFetch<{ success: true; locations: DashboardLocation[] }>('/api/dashboard/locations', { orgSlug: orgSlug.value }, {
-    query: { organization: 'true' },
-    validate: (value): value is { success: true; locations: DashboardLocation[] } =>
-      isRecord(value) && value.success === true && Array.isArray(value.locations),
-  }), { watch: [orgSlug] })
-const locations = computed(() => locationsData.value?.locations ?? [])
+const { locations, error: locationsError } = await useOrganizationLocations()
 
 // A professional services site calls these offices. The vocabulary comes from
 // the same capabilities the rest of the dashboard reads; it depends on the
@@ -65,7 +55,7 @@ const locations = computed(() => locationsData.value?.locations ?? [])
 const capabilities = computed(() => {
   const vertical = organization.value?.vertical
   if (!vertical) return null
-  return resolveCmsCapabilities(normalizeVertical(vertical) as OrganizationVertical, resolvePublicTemplate({ vertical }).slug, {})
+  return resolveCmsCapabilities(normalizeVertical(vertical) as OrganizationVertical, resolvePublicTemplate({ vertical }).slug)
 })
 const usesServiceAreaVocabulary = computed(() => capabilities.value?.locationVocabulary === 'office/service area')
 const locationsLabel = computed(() => (usesServiceAreaVocabulary.value ? 'Offices / Service Areas' : 'Locations'))

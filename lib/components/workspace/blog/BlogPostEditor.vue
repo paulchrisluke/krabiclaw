@@ -14,8 +14,7 @@
     <div class="space-y-8" :inert="publishing || saveState === 'saving'">
       <p v-if="actionError" role="alert" class="rounded-lg border border-error/30 bg-error/10 px-4 py-2 text-sm text-error">{{ actionError }}</p>
 
-      <div v-if="loadPending" class="grid min-h-64 place-items-center"><UIcon name="i-lucide-loader-circle" class="size-6 animate-spin" /></div>
-      <UAlert v-else-if="loadError" color="error" variant="soft" :description="loadError" />
+      <UAlert v-if="loadError" color="error" variant="soft" :description="loadError" />
 
       <template v-else>
       <div class="overflow-hidden rounded-lg bg-[var(--editor-canvas,#fff)] text-[var(--editor-ink,#1f2937)]" :style="editorCanvasStyle">
@@ -90,7 +89,6 @@ export const SETTINGS_LABELS: Record<SettingsSection, string> = {
 export interface BlogEditor {
   form: Reactive<{ title: string; collection: ArticleCollection; category_id: string; excerpt: string; slug: string; visibility: 'listed' | 'unlisted'; redirect_old_slug: boolean }>
   post: Ref<BlogPost | null>
-  loadPending: Ref<boolean>
   loadError: Ref<string>
   actionError: Ref<string>
   saving: ComputedRef<boolean>
@@ -124,16 +122,14 @@ import { cloneEditorBlocks, generatedExcerpt, initialBlogEditorBlocks, normalize
 import { getErrorMessage } from '~/utils/errors'
 import { resolveSocialImageUrl } from '~/utils/social-metadata'
 
-const props = withDefaults(defineProps<{ repository: BlogPostRepository; initialPost?: BlogPost | null; deferLoad?: boolean; postId?: string; organizationId?: string; isEdit?: boolean; backUrl?: string; backLabel?: string; panelId?: string; mediaPickerComponent: Component }>(), {
-  initialPost: null, deferLoad: false, postId: undefined, organizationId: '', isEdit: false, backUrl: '/dashboard', backLabel: 'Posts', panelId: 'blog-post-editor',
+const props = withDefaults(defineProps<{ repository: BlogPostRepository; initialPost: BlogPost; postId?: string; organizationId?: string; backUrl?: string; backLabel?: string; panelId?: string; mediaPickerComponent: Component }>(), {
+  postId: undefined, organizationId: '', backUrl: '/dashboard', backLabel: 'Posts', panelId: 'blog-post-editor',
 })
 const route = useRoute()
 const postId = computed(() => props.postId || String(route.params.postId || ''))
 const post = ref<BlogPost | null>(null)
 const persistedPostId = computed(() => post.value?.id || postId.value)
 const blocks = ref<BlogEditorBlock[]>(initialBlogEditorBlocks())
-const interactive = ref(false)
-const loadPending = ref(true)
 const loadError = ref('')
 const saveState = ref<'saved' | 'saving' | 'failed' | 'conflict'>('saved')
 const actionError = ref('')
@@ -156,33 +152,26 @@ const form = reactive({ title: '', collection: 'blog' as ArticleCollection, cate
 const templateName = computed(() => post.value?.editor_template || 'saya')
 const collectionOptions = ARTICLE_COLLECTION_SLUGS.map(slug => ({ label: ARTICLE_COLLECTIONS[slug].label, value: slug }))
 if (!props.organizationId) throw new Error('The blog editor needs the organization it edits')
-const { data: categories, error: categoriesError } = useArticleCategories(props.organizationId, () => form.collection)
-const editorCanvasStyle = computed(() => {
-  const tokens = post.value?.editor_theme_tokens ?? {}
-  if (templateName.value === 'saya') {
-    const primary = String(tokens.primary || post.value?.editor_brand_color || '#8F1D21')
-    const background = String(tokens.bg || '#FFFFFF')
-    const foreground = String(tokens.ink || '#18181B')
-    const muted = String(tokens.muted || '#52525B')
-    return {
-      '--editor-canvas': background, '--editor-ink': foreground, '--brand-color': primary,
-      '--saya-primary': primary, '--saya-bg': background, '--saya-bg-alt': String(tokens.surface || '#FAFAFA'),
-      '--saya-fg': foreground, '--saya-fg-muted': muted, '--saya-border': String(tokens.border || '#E4E4E7'),
-      // Dashboard controls use Nuxt UI tokens, so bridge them to the site's
-      // theme while the editor canvas is active.
-      '--ui-primary': primary, '--ui-bg': background, '--ui-bg-elevated': String(tokens.surface || '#FAFAFA'), '--ui-text': foreground,
-      '--ui-text-highlighted': foreground, '--ui-text-muted': muted, '--ui-text-dimmed': muted,
-    }
+// The page awaits the post before this editor exists; the draft is seeded from it
+// before its collection's categories are read.
+watch(() => props.initialPost, (loaded) => {
+  try {
+    applyLoadedPost(loaded)
+    loadError.value = ''
+  } catch (error) {
+    loadError.value = getErrorMessage(error, 'Failed to load post.')
   }
-  if (templateName.value !== 'blawby') return { '--editor-canvas': 'var(--ui-bg-elevated)', '--editor-ink': 'var(--ui-text)' }
-  const ink = String(tokens.ink || '#162033')
+}, { immediate: true })
+const { data: categories, error: categoriesError } = await useArticleCategories(props.organizationId, () => form.collection)
+// The canvas wears the site's light palette. Dashboard controls read Nuxt UI
+// tokens, so they are bridged to it while the canvas is active.
+const editorCanvasStyle = computed(() => {
+  const colors = post.value?.editor_colors
+  if (!colors) return { '--editor-canvas': 'var(--ui-bg-elevated)', '--editor-ink': 'var(--ui-text)' }
   return {
-    '--editor-canvas': String(tokens.bg || '#fbfaf7'), '--editor-ink': ink,
-    '--blawby-bg': String(tokens.bg || '#fbfaf7'), '--blawby-surface': String(tokens.surface || '#fff'),
-    '--blawby-primary': String(tokens.primary || '#25356c'), '--blawby-primary-dark': String(tokens.primaryDark || '#161f3b'),
-    '--blawby-accent': String(tokens.accent || '#c19855'), '--blawby-border': String(tokens.border || '#e5e7eb'), '--blawby-ink': ink,
-    // See the saya branch above for why these three are needed alongside --editor-ink.
-    '--ui-text-highlighted': ink, '--ui-text-muted': `color-mix(in srgb, ${ink} 70%, transparent)`, '--ui-text-dimmed': `color-mix(in srgb, ${ink} 55%, transparent)`,
+    '--editor-canvas': colors.ground, '--editor-ink': colors.text,
+    '--ui-primary': colors.action, '--ui-bg': colors.ground, '--ui-bg-elevated': colors.surface,
+    '--ui-text': colors.text, '--ui-text-highlighted': colors.text, '--ui-text-muted': colors.muted, '--ui-text-dimmed': colors.muted,
   }
 })
 const statusLabel = computed(() => {
@@ -190,8 +179,6 @@ const statusLabel = computed(() => {
   if (post.value.status === 'draft') return 'Draft'
   return 'Published'
 })
-/** One key for this editor's creation, so a repeated press makes one article. */
-const createKey = crypto.randomUUID()
 const generatedSlug = computed(() => normalizeBlogSlug(form.title))
 const resolvedExcerpt = computed(() => generatedExcerpt(blocks.value))
 const resolvedOrganizationName = computed(() => post.value?.editor_organization_name || '')
@@ -345,26 +332,15 @@ watch([() => form.title, blocks], () => {
   if (applyingServerSnapshot) return
   markContentDirty()
 }, { deep: true, flush: 'sync' })
-onMounted(async () => {
-  interactive.value = true
-  if (!props.initialPost && !props.deferLoad) await load()
-})
 
-async function load() {
-  if (!postId.value || !props.isEdit) { loadPending.value = false; return }
-  try {
-    const loaded = await props.repository.get(postId.value)
-    applyLoadedPost(loaded)
-  } catch (error) { loadError.value = getErrorMessage(error, 'Failed to load post.') } finally { loadPending.value = false }
-}
 function applyLoadedPost(loaded: BlogPost) {
   applyingServerSnapshot = true
   try {
+    if (!loaded.content_document) throw new Error('Blog content document is missing')
     syncServerVersion(loaded)
     post.value = loaded
     Object.assign(form, { title: loaded.title, collection: loaded.collection ?? 'blog', category_id: loaded.category?.id ?? '', excerpt: loaded.excerpt || '', slug: loaded.slug || '', visibility: loaded.visibility || 'listed', redirect_old_slug: true })
     slugResetRequested.value = false
-    if (!loaded.content_document) throw new Error('Blog content document is missing')
     blocks.value = cloneEditorBlocks(loaded.content_document.blocks || [])
     ensureTrailingTextBlock()
     contentDirty.value = false
@@ -372,19 +348,8 @@ function applyLoadedPost(loaded: BlogPost) {
     void nextTick(() => { applyingServerSnapshot = false })
   }
 }
-watch(() => props.initialPost, (loaded) => {
-  if (!loaded) return
-  try {
-    applyLoadedPost(loaded)
-    loadError.value = ''
-  } catch (error) {
-    loadError.value = getErrorMessage(error, 'Failed to load post.')
-  } finally {
-    loadPending.value = false
-  }
-}, { immediate: true })
 function markContentDirty() {
-  if (loadPending.value || saveState.value === 'conflict') return
+  if (saveState.value === 'conflict') return
   contentDirty.value = true
 }
 /** Opens the article with an empty image block; choosing its picture makes it the cover. */
@@ -469,26 +434,6 @@ async function publish() {
   try {
     if (!isArticleValid()) throw new Error('Complete the title and article body before publishing.')
     assertVideosComplete()
-    if (!post.value) {
-      const created = await props.repository.create({
-        title: form.title,
-        slug: form.slug || undefined,
-        content_blocks: savedBlocks(),
-        collection: form.collection,
-        category_id: form.category_id || undefined,
-        excerpt: form.excerpt || null,
-        visibility: form.visibility,
-        idempotency_key: createKey,
-      })
-      applyLoadedPost(created)
-      // Creation is a draft; publishing it is the lifecycle call below.
-      const lifecycle = await props.repository.publish(created.id, lifecycleVersionInput())
-      applyLifecycle(lifecycle)
-      contentDirty.value = false
-      saveState.value = 'saved'
-      await navigateTo(props.repository.editUrl(created.id), { replace: true })
-      return
-    }
     // Publish what is on the canvas: an unsaved article is written first, so
     // the lifecycle token it hands over is the one the save produced.
     await saveArticle()
@@ -601,7 +546,6 @@ function syncServerVersion(value: BlogPost) { serverPostUpdatedAt = value.update
 provide(blogEditorKey, {
   form,
   post,
-  loadPending,
   loadError,
   actionError,
   saving: computed(() => savingExplicitly.value || publishing.value),

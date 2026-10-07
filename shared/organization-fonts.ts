@@ -1,13 +1,27 @@
-export const ORGANIZATION_FONT_PRESETS = ['default', 'mali'] as const
-export type OrganizationFontPreset = typeof ORGANIZATION_FONT_PRESETS[number]
+// The site font presets: a design choice of heading and body families, kept in
+// assets/css/font-presets.css. Thai and Japanese text renders in any preset
+// through the script fallbacks every stack ends with (assets/css/base.css).
+export const ORGANIZATION_FONT_OPTIONS = [
+  { value: 'default', label: 'Default' },
+  { value: 'mali', label: 'Mali' },
+  { value: 'sarabun', label: 'Sarabun' },
+  { value: 'prompt', label: 'Prompt' },
+  { value: 'kanit', label: 'Kanit with Sarabun' },
+  { value: 'ibm-plex-sans-thai', label: 'IBM Plex Sans Thai' },
+  { value: 'noto-serif-thai', label: 'Noto Serif Thai with Noto Sans Thai' },
+  { value: 'inter', label: 'Inter' },
+  { value: 'dm-sans', label: 'DM Sans' },
+  { value: 'montserrat', label: 'Montserrat' },
+  { value: 'lora', label: 'Lora' },
+  { value: 'playfair-display', label: 'Playfair Display with Inter' },
+  { value: 'cormorant-garamond', label: 'Cormorant Garamond with Inter' },
+] as const
 
-export const ORGANIZATION_FONT_OPTIONS: Array<{ label: string; value: OrganizationFontPreset }> = [
-  { label: 'Default', value: 'default' },
-  { label: 'Mali (Thai and English)', value: 'mali' },
-]
+export type OrganizationFontPreset = typeof ORGANIZATION_FONT_OPTIONS[number]['value']
+export const ORGANIZATION_FONT_PRESETS = ORGANIZATION_FONT_OPTIONS.map(option => option.value)
 
 export function isOrganizationFontPreset(value: unknown): value is OrganizationFontPreset {
-  return value === 'default' || value === 'mali'
+  return ORGANIZATION_FONT_PRESETS.includes(value as OrganizationFontPreset)
 }
 
 // An absent optional setting means the template's existing typography. Invalid
@@ -16,54 +30,4 @@ export function resolveOrganizationFontPreset(value: unknown): OrganizationFontP
   if (value === undefined) return 'default'
   if (!isOrganizationFontPreset(value)) throw new Error('Unsupported organization font preset')
   return value
-}
-
-export const MALI_ASSET_BASE = '/assets/fonts/mali-aead5de0'
-// One webfont, then the generic category. Which face backs the generic differs
-// per platform, and so does its metrics, so the stack cannot be tuned to make a
-// swap cheap -- see MALI_FONT_CSS, which removes the swap instead.
-export const MALI_FONT_FAMILY = '"Mali", sans-serif'
-
-// Same manifest drives build-time asset copying and the SSR font declarations.
-// No locale gating: an English page can contain Thai names and vice versa.
-const MALI_SUBSETS = {
-  thai: 'U+02D7,U+0303,U+0331,U+0E01-0E5B,U+200C-200D,U+25CC',
-  latin: 'U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD',
-} as const
-const MALI_FACES = [
-  { weight: 400, style: 'normal' },
-  { weight: 500, style: 'normal' },
-  { weight: 600, style: 'normal' },
-  { weight: 700, style: 'normal' },
-  { weight: 400, style: 'italic' },
-] as const
-
-export const MALI_FONT_FILES = MALI_FACES.flatMap(face => Object.entries(MALI_SUBSETS).map(([subset, unicodeRange]) => ({
-  ...face,
-  unicodeRange,
-  filename: `mali-${subset}-${face.weight}-${face.style}.woff2`,
-})))
-
-// `optional`, not `swap`. Mali's line box is 1.30em (ascent 105%, descent 25%
-// measured from the shipped files); a generic sans-serif's is about 1.15em on
-// macOS and taller again on the Linux fallbacks, so a swap reflows every line of
-// text by a different amount on every platform. Measured on the Thai home page:
-// 0.0616 CLS with `Tahoma` in the stack, 0.1239 without it, 0.0052-0.0349 on
-// macOS -- the number tracks the platform's fallback, not anything we control.
-// `optional` gives the face a block period and then declines to swap, so no
-// platform reflows. Measured with the faces served under the same throttle:
-// Mali still reached `loaded` on every cold sample, with no preload -- the
-// layout's one preload belongs to the hero image (useHeroLcpPreload), which is
-// what decides LCP, and a webfont hint ahead of it is what that budget exists
-// to prevent.
-export const MALI_FONT_CSS = MALI_FONT_FILES.map(face => `@font-face{font-family:"Mali";font-style:${face.style};font-weight:${face.weight};font-display:optional;src:url("${MALI_ASSET_BASE}/${face.filename}") format("woff2");unicode-range:${face.unicodeRange};}`).join('\n')
-
-export function organizationFontStyles(preset: OrganizationFontPreset): Record<string, string> {
-  if (preset === 'default') return {}
-  if (preset !== 'mali') throw new Error('Unsupported organization font preset')
-  return {
-    '--font-saya': MALI_FONT_FAMILY,
-    '--font-sans': MALI_FONT_FAMILY,
-    'font-family': MALI_FONT_FAMILY,
-  }
 }

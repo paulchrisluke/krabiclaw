@@ -1,8 +1,8 @@
 import { expect, test } from '@playwright/test'
-import { dismissPreviewToolbar, waitForNuxtHydration } from './helpers'
+import { blawbyBaseURL, blawbyExtraHeaders, dismissPreviewToolbar, openTenantPage, waitForNuxtHydration } from './helpers'
 import { loginAs } from './helpers/auth'
-import { MCP_GROWTH_ORGANIZATION_ID, mcpRequest, mcpData } from './helpers/mcp'
-import { tenantTestExtraHeaders } from './test-env'
+import { MCP_ORGANIZATION_ID, mcpRequest, mcpData } from './helpers/mcp'
+import { E2E_POTTERY_ORGANIZATION_ID, tenantTestExtraHeaders } from './test-env'
 import { acquireTenantMutationLock } from './helpers/tenant-mutation-lock'
 
 // Split out of mcp.spec.ts (owner tool-coverage tests) — see helpers/mcp.ts
@@ -11,9 +11,52 @@ import { acquireTenantMutationLock } from './helpers/tenant-mutation-lock'
 // lifecycle, and Product/post/media workflows.
 
 test.describe('stateless MCP server', () => {
+  test('saved workspace location survives readback and supplies a location-scoped call while explicit targets win', async ({ request, baseURL }) => {
+    await loginAs(request, baseURL!)
+    const call = async <T>(toolName: string, args: Record<string, unknown>) => {
+      const response = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName, args })
+      expect(response.status()).toBe(200)
+      return mcpData<T>(await response.json())
+    }
+    const locations = await call<{ locations: Array<{ id: string }> }>('list_locations', { organization_id: MCP_ORGANIZATION_ID })
+    expect(locations.locations.length).toBeGreaterThan(0)
+    const locationId = locations.locations[0]!.id
+    await call('set_workspace_context', { organization_id: MCP_ORGANIZATION_ID, location_id: locationId })
+    const workspace = await call<{ context: { organization_id: string; location_id: string } }>('get_workspace_context', {})
+    expect(workspace.context).toMatchObject({ organization_id: MCP_ORGANIZATION_ID, location_id: locationId })
+    const implicit = await call<{ context: { organization_id: string; location_id: string } }>('get_location', {})
+    expect(implicit.context).toMatchObject({ organization_id: MCP_ORGANIZATION_ID, location_id: locationId })
+    const explicit = await call<{ context: { organization_id: string } }>('get_organization', { organization_id: E2E_POTTERY_ORGANIZATION_ID })
+    expect(explicit.context.organization_id).toBe(E2E_POTTERY_ORGANIZATION_ID)
+    const unchanged = await call<{ context: { organization_id: string; location_id: string } }>('get_workspace_context', {})
+    expect(unchanged.context).toMatchObject({ organization_id: MCP_ORGANIZATION_ID, location_id: locationId })
+  })
+
+  test('booking pagination rejects a cursor from a different member filter', async ({ request, baseURL }) => {
+    await loginAs(request, baseURL!)
+    const organizationId = E2E_POTTERY_ORGANIZATION_ID
+    const membersResponse = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'get_member_scheduling', args: { organization_id: organizationId } })
+    expect(membersResponse.status()).toBe(200)
+    const member = mcpData<{ members: Array<{ id: string; self: boolean }> }>(await membersResponse.json()).members.find(member => member.self)
+    expect(member).toBeTruthy()
+    const firstResponse = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'list_product_bookings', args: { organization_id: organizationId, limit: 1 } })
+    expect(firstResponse.status()).toBe(200)
+    const first = mcpData<{ bookings: Array<{ operational_booking_id: string }>; page_info: { next_cursor: string | null } }>(await firstResponse.json())
+    expect(first.bookings).toHaveLength(1)
+    expect(first.page_info.next_cursor).toBeTruthy()
+    const nextResponse = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'list_product_bookings', args: { organization_id: organizationId, limit: 1, cursor: first.page_info.next_cursor } })
+    expect(nextResponse.status()).toBe(200)
+    const next = mcpData<{ bookings: Array<{ operational_booking_id: string }> }>(await nextResponse.json())
+    expect(next.bookings).toHaveLength(1)
+    expect(next.bookings[0]!.operational_booking_id).not.toBe(first.bookings[0]!.operational_booking_id)
+    const filteredResponse = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'list_product_bookings', args: { organization_id: organizationId, assigned_member_id: member!.id, limit: 1, cursor: first.page_info.next_cursor } })
+    expect(filteredResponse.status()).toBe(200)
+    expect((await filteredResponse.json()).result).toMatchObject({ isError: true, content: [{ type: 'text', text: 'Pagination cursor does not belong to this resource.' }] })
+  })
+
   test('owner can use site content and settings tools', async ({ request, baseURL }) => {
     await loginAs(request, baseURL!)
-    const organizationId = MCP_GROWTH_ORGANIZATION_ID
+    const organizationId = MCP_ORGANIZATION_ID
 
     const organizationsList = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
@@ -135,24 +178,29 @@ test.describe('stateless MCP server', () => {
     })
     expect(settingsUpdate.status()).toBe(200)
 
-    const brandColorUpdate = await mcpRequest(request, baseURL!, {
+    const paletteUpdate = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
-      toolName: 'set_brand_color',
-      args: { organization_id: organizationId, color: '#0F4C5C' },
+      toolName: 'update_organization_settings',
+      args: { organization_id: organizationId, palette: { light: { action: '#0F4C5C' } } },
     })
-    expect(brandColorUpdate.status()).toBe(200)
-    const brandColorBody = await brandColorUpdate.json()
-    expect(mcpData<{ brand_color: string; updated: boolean }>(brandColorBody).brand_color).toBe('#0F4C5C')
-    expect(mcpData<{ brand_color: string; updated: boolean }>(brandColorBody).updated).toBe(true)
+    expect(mcpData<{ ok: boolean }>(await paletteUpdate.json()).ok).toBe(true)
+    const paletteRead = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'get_organization_settings',
+      args: { organization_id: organizationId },
+    })
+    const readBack = mcpData<{ settings: { palette: { light: { action: string } }; palette_source: string } }>(await paletteRead.json()).settings
+    expect(readBack.palette.light.action).toBe('#0F4C5C')
+    expect(readBack.palette_source).toBe('custom')
 
   })
 
   test('owner can use submission inquiry tools', async ({ request, baseURL }, testInfo) => {
     // A public reservation here shares the demo location's capacity with the calendar specs.
-    const releaseTenantMutationLock = await acquireTenantMutationLock(testInfo, MCP_GROWTH_ORGANIZATION_ID)
+    const releaseTenantMutationLock = await acquireTenantMutationLock(testInfo, MCP_ORGANIZATION_ID)
     try {
       await loginAs(request, baseURL!)
-      const organizationId = MCP_GROWTH_ORGANIZATION_ID
+      const organizationId = MCP_ORGANIZATION_ID
 
       const locationId = 'loc-demo'
       const locationSetup = await mcpRequest(request, baseURL!, {
@@ -260,7 +308,7 @@ test.describe('stateless MCP server', () => {
   })
 
   test('owner reads the calendar, blocks and opens dates, and sets its policy through MCP, and guests see it', async ({ request, page, baseURL }, testInfo) => {
-    const organizationId = MCP_GROWTH_ORGANIZATION_ID
+    const organizationId = MCP_ORGANIZATION_ID
     const locationId = 'loc-demo'
     // Far enough out that nothing else in the suite books it, and on a
     // Tuesday and Wednesday: a day the hours never open is unavailable for
@@ -396,7 +444,7 @@ test.describe('stateless MCP server', () => {
 
   test('owner can use location, reviews, and QA lifecycle tools', async ({ request, baseURL }) => {
     await loginAs(request, baseURL!)
-    const organizationId = MCP_GROWTH_ORGANIZATION_ID
+    const organizationId = MCP_ORGANIZATION_ID
 
     const locationId = 'loc-demo'
 
@@ -444,9 +492,9 @@ test.describe('stateless MCP server', () => {
     expect(mcpData<{ items: unknown[] }>(await qaList.json()).items).toEqual(expect.any(Array))
   })
 
-  test('authored Q&A has MCP writers while reviews remain read-only', async ({ request, baseURL }) => {
+  test('authored Q&A shares scoped CMS and MCP writers while reviews remain read-only', async ({ page, browser, request, baseURL }, testInfo) => {
     await loginAs(request, baseURL!)
-    const organizationId = MCP_GROWTH_ORGANIZATION_ID
+    const organizationId = MCP_ORGANIZATION_ID
     for (const [toolName, key] of [['list_organization_qa', 'items'], ['list_organization_reviews', 'reviews']]) {
       const response = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName, args: { organization_id: organizationId },
@@ -469,6 +517,94 @@ test.describe('stateless MCP server', () => {
     expect(qaWrite.status(), await qaWrite.text()).toBe(400)
     const reviewWrite = await request.post(`${baseURL}/api/editor/organizations/${organizationId}/reviews`, { data: {} })
     expect([404, 405]).toContain(reviewWrite.status())
+
+    const qaOrganizationId = 'org-ncls-blawby'
+    const qaUrl = `${baseURL}/api/editor/organizations/${qaOrganizationId}/qa`
+    const pagePath = '/pricing'
+    const question = `Page-scoped CMS question ${crypto.randomUUID()}`
+    const answer = 'This published answer belongs only to the pricing page.'
+    const publicPage = await browser.newPage()
+    const release = await acquireTenantMutationLock(testInfo, qaOrganizationId)
+    let createdId: string | undefined
+    try {
+      const before = await openTenantPage(publicPage, `${blawbyBaseURL}${pagePath}`, blawbyExtraHeaders)
+      expect(before?.status()).toBe(200)
+      expect(before?.headers()['cache-control']).toBe('private, no-store, max-age=0')
+      expect(before?.headers()['x-edge-cache']).toBeUndefined()
+      await expect(publicPage.getByRole('heading', { name: question, exact: true })).toHaveCount(0)
+      await loginAs(page.request, baseURL!, 'user-e2e-ncls-owner')
+      const organizationRead = await mcpRequest(page.request, baseURL!, { method: 'tools/call', toolName: 'get_organization', args: { organization_id: qaOrganizationId } })
+      expect(organizationRead.status()).toBe(200)
+      const slug = mcpData<{ context: { organization_slug: string } }>(await organizationRead.json()).context.organization_slug
+      expect(slug).toBeTruthy()
+      await page.setViewportSize({ width: 900, height: 800 })
+      await openTenantPage(page, `${baseURL}/dashboard/${encodeURIComponent(slug)}/website/qa`, {})
+      await page.getByRole('combobox', { name: 'Q&A page scope', exact: true }).click()
+      await page.getByRole('option', { name: 'Pricing', exact: true }).click()
+      await page.getByRole('button', { name: 'Add a question', exact: true }).click()
+      await expect(page).toHaveURL(url => url.pathname.includes('/qa/new') && url.searchParams.get('page_path') === pagePath)
+      await page.getByRole('button', { name: 'Start with Question', exact: true }).click()
+      await expect(page).toHaveURL(url => url.pathname.endsWith('/qa/new/question') && url.searchParams.get('page_path') === pagePath)
+      await page.getByRole('textbox', { name: /^Question/ }).fill(question)
+      await page.getByTestId('dashboard-navbar-close').click()
+      await page.getByRole('link', { name: /^Answer / }).click()
+      await expect(page).toHaveURL(url => url.pathname.endsWith('/qa/new/answer') && url.searchParams.get('page_path') === pagePath)
+      await page.getByRole('textbox', { name: 'Answer', exact: true }).fill(answer)
+      await page.getByTestId('dashboard-navbar-close').click()
+      await page.getByRole('link', { name: 'Visibility Published', exact: true }).click()
+      await expect(page).toHaveURL(url => url.pathname.endsWith('/qa/new/visibility') && url.searchParams.get('page_path') === pagePath)
+      await expect(page.locator('#dashboard-panel-organization-qa-visibility').getByRole('switch')).toBeChecked()
+      const [created] = await Promise.all([
+        page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === new URL(qaUrl).pathname),
+        page.getByRole('button', { name: 'Create question', exact: true }).last().click(),
+      ])
+      expect(created.status(), await created.text()).toBe(201)
+      createdId = (await created.json()).id
+      expect(createdId).toBeTruthy()
+      await expect(page).toHaveURL(url => url.pathname === `/dashboard/${encodeURIComponent(slug)}/website/qa/${createdId}` && url.searchParams.get('page_path') === pagePath)
+      await page.getByTestId('dashboard-navbar-back').filter({ visible: true }).click()
+      await expect(page).toHaveURL(url => url.pathname === `/dashboard/${encodeURIComponent(slug)}/website/qa` && url.searchParams.get('page_path') === pagePath)
+      await expect(page.getByRole('combobox', { name: 'Q&A page scope', exact: true })).toBeVisible()
+      await expect(page.getByRole('combobox', { name: 'Q&A page scope', exact: true })).toHaveText('Pricing')
+      const readback = await page.request.get(qaUrl, { params: { id: createdId! } })
+      expect(readback.status()).toBe(200)
+      expect((await readback.json()).qa).toEqual([expect.objectContaining({ id: createdId, organization_id: qaOrganizationId, location_id: null, page_path: pagePath, question, answer, status: 'published', source: 'manual' })])
+      const scoped = await mcpRequest(page.request, baseURL!, { method: 'tools/call', toolName: 'list_organization_qa', args: { organization_id: qaOrganizationId, page_path: pagePath, limit: 100 } })
+      expect(scoped.status()).toBe(200)
+      expect(mcpData<{ items: Array<{ id: string; page_path: string }> }>(await scoped.json()).items).toContainEqual(expect.objectContaining({ id: createdId, page_path: pagePath, question, answer }))
+      const general = await page.request.get(qaUrl)
+      expect(general.status()).toBe(200)
+      expect((await general.json()).qa.map((row: { id: string }) => row.id)).not.toContain(createdId)
+      await page.setViewportSize({ width: 1000, height: 800 })
+      const freshRecord = await openTenantPage(page, `${baseURL}/dashboard/${encodeURIComponent(slug)}/website/qa/${createdId}?page_path=${encodeURIComponent(pagePath)}`, {})
+      expect(freshRecord?.status()).toBe(200)
+      await expect(page).toHaveURL(url => url.pathname === `/dashboard/${encodeURIComponent(slug)}/website/qa/${createdId}/question` && url.searchParams.get('page_path') === pagePath)
+      await expect(page.getByRole('heading', { name: question, exact: true })).toBeVisible()
+      await expect(page.getByRole('textbox', { name: /^Question/ })).toBeVisible()
+      await expect(page.getByRole('textbox', { name: /^Question/ })).toHaveValue(question)
+      await expect(page.getByTestId('dashboard-navbar-close')).not.toBeVisible()
+      const published = await publicPage.reload()
+      expect(published?.status()).toBe(200)
+      expect(published?.headers()['cache-control']).toBe('private, no-store, max-age=0')
+      expect(published?.headers()['x-edge-cache']).toBeUndefined()
+      await expect(publicPage.locator('[data-parity-section="qa"]').getByRole('heading', { name: question, exact: true })).toBeVisible()
+      await expect(publicPage.locator('[data-parity-section="qa"]').getByText(answer, { exact: true })).toBeVisible()
+    } finally {
+      try {
+        if (createdId) {
+          const readback = await page.request.get(qaUrl, { params: { id: createdId } })
+          expect(readback.status()).toBe(200)
+          const row = (await readback.json()).qa[0] as { page_path: string | null }
+          const deleted = await page.request.delete(`${qaUrl}/${createdId}`, { params: row.page_path === null ? undefined : { page_path: row.page_path } })
+          expect(deleted.status(), await deleted.text()).toBe(200)
+          const after = await page.request.get(qaUrl, { params: { id: createdId } })
+          expect(after.status()).toBe(200)
+          expect((await after.json()).qa).toEqual([])
+        }
+      } finally {
+        await Promise.all([publicPage.close(), release()])
+      }
+    }
   })
 
   test.describe('owner management workflows', () => {
@@ -476,7 +612,7 @@ test.describe('stateless MCP server', () => {
     // lock, so every test that adds a Product to it takes the same lock.
     let releaseTenantMutationLock: (() => Promise<void>) | undefined
     test.beforeEach(async ({ request: _request }, testInfo) => {
-      releaseTenantMutationLock = await acquireTenantMutationLock(testInfo, MCP_GROWTH_ORGANIZATION_ID)
+      releaseTenantMutationLock = await acquireTenantMutationLock(testInfo, MCP_ORGANIZATION_ID)
     })
     test.afterEach(async () => {
       await releaseTenantMutationLock?.()
@@ -484,7 +620,7 @@ test.describe('stateless MCP server', () => {
 
     test('HTTP and MCP share booking defaults, weekly replacement and authored Q&A', async ({ request, baseURL }) => {
       await loginAs(request, baseURL!)
-      const organizationId = MCP_GROWTH_ORGANIZATION_ID
+      const organizationId = MCP_ORGANIZATION_ID
       const locationId = 'loc-demo'
       const call = async (toolName: string, args: Record<string, unknown>) => {
         const response = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName, args: { organization_id: organizationId, ...args } })
@@ -500,14 +636,14 @@ test.describe('stateless MCP server', () => {
         const enabled = await request.put(`${productUrl}/booking`, { data: { duration_minutes: 60, default_capacity: 9 } })
         expect(enabled.status(), await enabled.text()).toBe(200)
         let product = mcpData<{ product: { booking: unknown } }>(await call('get_product', { product_id: productId })).product
-        expect(product.booking).toEqual({ duration_minutes: 60, default_capacity: 9, confirmation_mode: 'instant', online_payment_required: false, online_timezone: null, calendar_group: null })
+        expect(product.booking).toEqual({ duration_minutes: 60, default_capacity: 9, confirmation_mode: 'instant', online_payment_required: false, online_timezone: null, calendar_group: null, scheduling_mode: 'legacy', assigned_member_id: null })
         expect((await call('set_product_booking_config', { product_id: productId, default_capacity: 0 })).result.isError).not.toBe(true)
         const httpProduct = await request.get(`${baseURL}/api/editor/organizations/${organizationId}/products`)
         expect(httpProduct.status(), await httpProduct.text()).toBe(200)
-        expect((await httpProduct.json()).products.find((row: { id: string }) => row.id === productId).booking).toEqual({ duration_minutes: 60, default_capacity: 0, confirmation_mode: 'instant', online_payment_required: false, online_timezone: null, calendar_group: null })
+        expect((await httpProduct.json()).products.find((row: { id: string }) => row.id === productId).booking).toEqual({ duration_minutes: 60, default_capacity: 0, confirmation_mode: 'instant', online_payment_required: false, online_timezone: null, calendar_group: null, scheduling_mode: 'legacy', assigned_member_id: null })
         expect((await call('set_product_booking_config', { product_id: productId, default_capacity: null })).result.isError).not.toBe(true)
         product = mcpData<{ product: { booking: unknown } }>(await call('get_product', { product_id: productId })).product
-        expect(product.booking).toEqual({ duration_minutes: 60, default_capacity: null, confirmation_mode: 'instant', online_payment_required: false, online_timezone: null, calendar_group: null })
+        expect(product.booking).toEqual({ duration_minutes: 60, default_capacity: null, confirmation_mode: 'instant', online_payment_required: false, online_timezone: null, calendar_group: null, scheduling_mode: 'legacy', assigned_member_id: null })
         expect((await request.put(`${productUrl}/booking`, { data: { duration_minutes: 0 } })).status()).toBe(400)
         expect((await call('set_product_booking_config', { product_id: productId, duration_minutes: 0 })).result.isError).toBe(true)
         const schedule = { location_id: locationId, slots: [{ weekday: 2, start_time: '10:00' }] }
@@ -532,11 +668,18 @@ test.describe('stateless MCP server', () => {
         expect(mcpData<{ rules: unknown[] }>(await call('replace_product_weekly_schedule', { product_id: productId, location_id: locationId, slots: [] })).rules).toEqual([])
         expect((await (await request.get(`${productUrl}/availability?location_id=${locationId}`)).json()).rules).toEqual([])
 
-        const policy = { confirmation_mode: 'review', online_payment_required: true, online_timezone: 'America/New_York', calendar_group: `parity-${productId}` }
+        const policy = { confirmation_mode: 'review', online_payment_required: false, online_timezone: 'America/New_York', calendar_group: `parity-${productId}` }
+        // Ember & Slice is on Commerce, so online payment is a setting both writers
+        // accept and both reads report; Growth's refusal is mcp-bookings' to prove.
+        const paymentRequiredPolicy = { ...policy, online_payment_required: true }
+        const httpPaymentPolicy = await request.put(`${productUrl}/booking`, { data: paymentRequiredPolicy })
+        expect(httpPaymentPolicy.status(), await httpPaymentPolicy.text()).toBe(200)
+        expect(mcpData<{ product: { booking: unknown } }>(await call('get_product', { product_id: productId })).product.booking)
+          .toEqual({ duration_minutes: 60, default_capacity: null, ...paymentRequiredPolicy, scheduling_mode: 'legacy', assigned_member_id: null })
         expect((await call('set_product_booking_config', { product_id: productId, ...policy })).result.isError).not.toBe(true)
         const policyRead = await request.get(productUrl)
         expect(policyRead.status()).toBe(200)
-        expect((await policyRead.json()).product.booking).toEqual({ duration_minutes: 60, default_capacity: null, ...policy })
+        expect((await policyRead.json()).product.booking).toEqual({ duration_minutes: 60, default_capacity: null, ...policy, scheduling_mode: 'legacy', assigned_member_id: null })
         const online = { location_id: null, slots: [{ weekday: 3, start_time: '11:30' }] }
         const onlineRules = mcpData<{ rules: Array<{ timezone: string; location_id: null }>; sessions: { created: number } }>(await call('replace_product_weekly_schedule', { product_id: productId, ...online }))
         expect(onlineRules.rules).toHaveLength(1)
@@ -544,7 +687,7 @@ test.describe('stateless MCP server', () => {
         expect((await (await request.get(`${productUrl}/availability?location_id=online`)).json()).rules).toEqual(onlineRules.rules)
         const updatedPolicy = await request.put(`${productUrl}/booking`, { data: { confirmation_mode: 'instant', online_payment_required: false, calendar_group: null } })
         expect(updatedPolicy.status()).toBe(200)
-        expect(mcpData<{ product: { booking: unknown } }>(await call('get_product', { product_id: productId })).product.booking).toEqual({ duration_minutes: 60, default_capacity: null, confirmation_mode: 'instant', online_payment_required: false, online_timezone: policy.online_timezone, calendar_group: null })
+        expect(mcpData<{ product: { booking: unknown } }>(await call('get_product', { product_id: productId })).product.booking).toEqual({ duration_minutes: 60, default_capacity: null, confirmation_mode: 'instant', online_payment_required: false, online_timezone: policy.online_timezone, calendar_group: null, scheduling_mode: 'legacy', assigned_member_id: null })
         expect((await request.put(`${productUrl}/availability`, { data: online })).status()).toBe(200)
         expect(mcpData<{ sessions: { created: number } }>(await call('replace_product_weekly_schedule', { product_id: productId, ...online })).sessions.created).toBe(0)
         expect(mcpData<{ rules: unknown[] }>(await call('replace_product_weekly_schedule', { product_id: productId, location_id: null, slots: [] })).rules).toEqual([])
@@ -590,7 +733,7 @@ test.describe('stateless MCP server', () => {
 
     test('booked session authority survives CMS clear and MCP re-add', async ({ request, page, baseURL }) => {
       await loginAs(request, baseURL!)
-      const organizationId = MCP_GROWTH_ORGANIZATION_ID
+      const organizationId = MCP_ORGANIZATION_ID
       const call = async (toolName: string, args: Record<string, unknown>) => {
         const response = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName, args: { organization_id: organizationId, ...args } })
         expect(response.status()).toBe(200)
@@ -611,15 +754,12 @@ test.describe('stateless MCP server', () => {
         await call('replace_product_weekly_schedule', { product_id: created.id, location_id: 'loc-demo', slots })
         await call('replace_product_weekly_schedule', { product_id: created.id, location_id: null, slots: [{ weekday: 1, start_time: '10:00' }] })
         await loginAs(page.request, baseURL!)
-        const collectionResponse = await page.request.get(`${baseURL}/api/editor/organizations/${organizationId}/collections?location_id=loc-demo`)
-        expect(collectionResponse.status()).toBe(200)
-        const collectionId = (await collectionResponse.json()).collections[0]?.id
-        expect(collectionId).toBeTruthy()
-        await page.goto(`${baseURL}/dashboard/ember-slice-demo/locations/brooklyn/products/experiences/${collectionId}/${created.id}/booking`)
+        // The location's schedule is the one Product editor's Booking, scoped to that location.
+        await page.goto(`${baseURL}/dashboard/ember-slice-demo/products/${created.id}/booking?location_id=loc-demo`)
         await waitForNuxtHydration(page)
         await expect(page.getByRole('link', { name: 'Duration 120 minutes', exact: true })).toBeVisible()
         await expect(page.getByRole('link', { name: 'Guest limit Up to 10 guests per session', exact: true })).toBeVisible()
-        await page.getByRole('link', { name: /^Weekly schedule / }).click()
+        await page.getByRole('link', { name: 'Weekly schedule Sunday', exact: true }).click()
         await page.getByRole('link', { name: 'Sunday 2:00 PM', exact: true }).click()
         await expect(page.getByLabel('Start time 1', { exact: true })).toHaveValue('14:00')
         await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeDisabled()
@@ -670,7 +810,7 @@ test.describe('stateless MCP server', () => {
 
     test('owner can manage media and Product tools including public booking', async ({ request, baseURL }) => {
       await loginAs(request, baseURL!)
-      const organizationId = MCP_GROWTH_ORGANIZATION_ID
+      const organizationId = MCP_ORGANIZATION_ID
       const locationId = 'loc-demo'
 
       const locationSetup = await mcpRequest(request, baseURL!, {

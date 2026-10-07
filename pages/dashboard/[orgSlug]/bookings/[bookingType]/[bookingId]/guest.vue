@@ -1,6 +1,6 @@
 <template>
   <!-- Read-only guest details are a description list, not a form: nothing to save. -->
-  <DashboardLeafPanel id="booking-guest" :title="b.booking.value?.guestName ?? ''" :ready="Boolean(b.booking.value)" :footer="false">
+  <DashboardLeafPanel id="booking-guest" :title="b.booking.value?.guestName ?? ''" :footer="false">
     <div v-if="b.booking.value" class="space-y-6">
       <dl class="space-y-4">
         <div>

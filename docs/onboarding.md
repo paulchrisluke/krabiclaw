@@ -38,7 +38,7 @@ Generated placeholder rows are no longer part of onboarding or site creation. Te
 | 7 | Story — about, founder story, FAQ seeds | Optional | Dashboard CMS |
 | 8 | Channels — Facebook/Instagram, ChatGPT app install, ChowBot intro | Optional | Dashboard (not part of the onboarding flow) |
 | 9 | Team — invite admins/editors | Optional, explicitly skippable | Dashboard settings |
-| 10 | Launch readiness — domain, final review, publish | Required to go live, not required to keep working in draft | `/dashboard/[orgSlug]/settings/website/domains` |
+| 10 | Launch readiness — domain, final review, publish | Required to go live, not required to keep working in draft | `/dashboard/[orgSlug]/website/domains` |
 
 ### Location-level (once per location, including the first)
 
@@ -64,4 +64,6 @@ the domains, locations, content, bookings, reservations, integration
 selections, media and the onboarding draft that created the site with it, so
 signing up again starts a new draft rather than resuming the deleted site. The
 user's linked provider accounts belong to the user, not the organization, and
-remain.
+remain. Deleting an account first deletes its Customers on businesses' connected
+accounts, with the cards saved there; see Saved cards in
+`docs/payments/payments.md`.

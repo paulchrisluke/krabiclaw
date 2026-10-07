@@ -1,4 +1,5 @@
 import { CONTENT_BLOCK_TYPES, describeContentBlockTextFields } from '~/shared/content-registries'
+import { pageEditorPath } from '~/server/utils/dashboard-links'
 import type { McpToolDefinition } from './shared'
 import { contentBlockMediaInputObject, contentBlockUpdatedAtInput, locationReservationConfigObject, locationReservationConfigWriteSchema, pageInfoObject, paginationInputSchema, renderedBookingPolicySummaryObject, organizationTool } from './shared'
 import { HTTPError } from 'nitro';
@@ -40,7 +41,7 @@ import { NOT_HANDLED, omit, mutationContextPayload, optionalString, requiredStri
 // Create and update both write the whole document: an omitted metadata field is
 // written as null, never carried over from the stored row. path and title are
 // required on both for that reason.
-const TENANT_PAGE_METADATA_SCHEMA = {
+export const TENANT_PAGE_METADATA_SCHEMA = {
   path: { type: 'string', description: 'The page path to write. Send the current path unless you are moving the page; a different path moves it and creates the locale-scoped redirect.' },
   title: { type: 'string', description: 'The page title to write. Always sent in full — an omitted title is not kept.' },
   summary: { type: ['string', 'null'] },
@@ -49,7 +50,7 @@ const TENANT_PAGE_METADATA_SCHEMA = {
   sortOrder: { type: 'number', description: "The page's position in the site's page list. Send the sort_order from the last read unless you are reordering." },
 }
 
-const TENANT_PAGE_BLOCKS_SCHEMA = {
+export const TENANT_PAGE_BLOCKS_SCHEMA = {
   type: 'array',
   items: {
     type: 'object',
@@ -114,10 +115,10 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'replace_content_block',
-      description: 'Replace one block\'s data and media in place, keeping its position. Requires the block\'s own updated_at from the last read; a stale token is rejected with a conflict.',
+      description: 'Replace one selected block’s complete data and any supplied media in an article or site page, keeping its ID and position. Omitted data fields are removed; omitted media is preserved. Read the block first and keep fields outside the requested change. Requires its own updated_at; a stale token conflicts. Returns the whole updated document. Published content changes immediately.',
       domain: 'content',
       minimumRole: 'admin',
-      confirmRequired: false,
+      confirmRequired: true,
       inputSchema: {
         block_id: { type: 'string' },
         expected_updated_at: { type: 'string', description: 'The block\'s updated_at from the last read.' },
@@ -129,10 +130,10 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'delete_content_block',
-      description: 'Delete one block, and any blocks nested under it, from a blog article or site page. Requires the block\'s own updated_at from the last read.',
+      description: 'Permanently delete the selected content block and all blocks nested under it from an article or site page. Requires the block’s own updated_at from the latest read; stale tokens conflict. Returns the remaining document and timestamps. Published content changes immediately.',
       domain: 'content',
       minimumRole: 'admin',
-      confirmRequired: false,
+      confirmRequired: true,
       inputSchema: {
         block_id: { type: 'string' },
         expected_updated_at: { type: 'string', description: 'The block\'s updated_at from the last read.' },
@@ -161,7 +162,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'create_site_page',
-      description: "Create an authored site-page language variant. For a secondary language, page_id must name an existing source-language page. Content must be supplied for that language; this tool does not translate it.",
+      description: "Create an authored site page in the named language, returning its document, blocks and editor information. A secondary language must name an existing source page. Supply the actual content for that language; no translation is generated. Pages on a live site can become public immediately; blog articles and short announcements use their own tools.",
       domain: 'content',
       minimumRole: 'admin',
       confirmRequired: true,
@@ -221,7 +222,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'get_reservation_policy',
-      description: 'Get the reservation policy for one location. A null policy means the location does not take reservations; there is no site-level policy underneath it.',
+      description: 'Read one location’s table reservation settings and guest-facing policy summary, including capacity, advance notice and cancellation terms. A null policy means this location does not take reservations. Product session bookings use get_product for their separate configuration.',
       domain: 'content',
       minimumRole: 'admin',
       confirmRequired: false,
@@ -300,9 +301,14 @@ function withoutPosition<T extends { position?: number }>(block: T): Omit<T, 'po
   return rest
 }
 
-function tenantPageLifecycleResponse(action: string, result: unknown) {
+/** The dashboard editor for a page: a page a Product owns opens as that Product's Page content. */
+function pageEditUrl(organizationSlug: string | undefined, page: { id: string; product_id?: string | null }): string | null {
+  return organizationSlug ? pageEditorPath(organizationSlug, { id: page.id }) : null
+}
+
+function tenantPageLifecycleResponse(action: string, result: unknown, organizationSlug?: string) {
   const page = result && typeof result === 'object' && 'page' in result && result.page && typeof result.page === 'object' && Array.isArray((result.page as { blocks?: unknown }).blocks)
-    ? { ...result, page: { ...(result.page as object), blocks: ((result.page as { blocks: Array<{ position?: number }> }).blocks).map(withoutPosition) } }
+    ? { ...result, page: { ...(result.page as object), admin_edit_url: pageEditUrl(organizationSlug, result.page as { id: string; product_id?: string | null }), blocks: ((result.page as { blocks: Array<{ position?: number }> }).blocks).map(withoutPosition) } }
     : result && typeof result === 'object' && Array.isArray((result as { blocks?: unknown }).blocks)
       ? { ...result, blocks: ((result as { blocks: Array<{ position?: number }> }).blocks).map(withoutPosition) }
       : result
@@ -386,7 +392,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
       try {
         const pages = await listTenantPages(organization.db, organization.organizationId, { locale: optionalString(args, "locale") });
         const page = paginateMcpCollection(pages, args, { resource: `tenant-pages:${organization.organizationId}:${optionalString(args, 'locale') ?? ''}` });
-        return { pages: page.items, page_info: page.page_info };
+        return { pages: page.items.map(row => ({ ...row, admin_edit_url: pageEditUrl(organization.organizationSlug, row) })), page_info: page.page_info };
       } catch (error) {
         return rethrowAsInvalidParams(error);
       }
@@ -398,7 +404,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
         return tenantPageLifecycleResponse("Read", {
           page,
           replacement_confirmation: tenantPageReplacementConfirmation(page),
-        });
+        }, organization.organizationSlug);
       } catch (error) {
         return rethrowAsInvalidParams(error);
       }
@@ -424,7 +430,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
           },
           env: organization.env,
         });
-        return tenantPageLifecycleResponse("Created", created);
+        return tenantPageLifecycleResponse("Created", created, organization.organizationSlug);
       } catch (error) {
         return rethrowAsInvalidParams(error);
       }
@@ -451,7 +457,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
           },
           env: organization.env,
         });
-        return tenantPageLifecycleResponse("Updated", updated);
+        return tenantPageLifecycleResponse("Updated", updated, organization.organizationSlug);
       } catch (error) {
         return rethrowAsInvalidParams(error);
       }
@@ -462,7 +468,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
           expectedUpdatedAt: requiredString(args, "expected_updated_at"),
           env: organization.env,
         });
-        return tenantPageLifecycleResponse("Deleted", deleted);
+        return tenantPageLifecycleResponse("Deleted", deleted, organization.organizationSlug);
       } catch (error) {
         return rethrowAsInvalidParams(error);
       }

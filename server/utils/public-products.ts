@@ -17,13 +17,13 @@ import { listPublicLocaleRepresentations } from '~/server/utils/public-locale-re
 import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
 import { parsePostalAddress, type PostalAddress } from '~/utils/postal-address'
 import { publicTenantVisibilitySql } from '~/server/utils/public-base'
+import { refreshProductBusy } from '~/server/domain/member-scheduling'
 
 interface PublicProductOrganizationRow {
   id: string
   name: string
   vertical: string
   theme_id: string
-  feature_overrides: string | null
   default_currency: string
 }
 
@@ -31,7 +31,6 @@ export interface PublicProductLocation {
   id: string
   slug: string
   title: string
-  feature_overrides: string | null
   /** The zone this branch states its times in — what turns a session into a wall clock. */
   timezone: string | null
   /**
@@ -46,14 +45,6 @@ export interface PublicProductLocation {
   latitude: number | null
   longitude: number | null
 }
-
-/** The branch as the product page sends it to the browser. */
-export function publicLocationPayload(location: PublicProductLocation): PublicProductLocationPayload {
-  const { feature_overrides: _featureOverrides, ...payload } = location
-  return payload
-}
-
-export type PublicProductLocationPayload = Omit<PublicProductLocation, 'feature_overrides'>
 
 type PublicProductLocationRow = Omit<PublicProductLocation, 'address'> & { address: string | null }
 
@@ -122,7 +113,7 @@ export interface PublicProductReview {
 // request: a site that has not finished onboarding is readable only with it.
 async function loadProductOrganization(db: DbClient, organizationId: string, routeKind: ProductSurface, previewAuthorized: boolean) {
   const organization = await queryFirst<PublicProductOrganizationRow>(db, `
-    SELECT id, name, vertical, theme_id, feature_overrides, default_currency
+    SELECT id, name, vertical, theme_id, default_currency
       FROM organization
      WHERE id = ? AND ${publicTenantVisibilitySql('organization', previewAuthorized)}
        AND name IS NOT NULL AND trim(name) <> ''
@@ -138,11 +129,8 @@ async function loadProductOrganization(db: DbClient, organizationId: string, rou
   return { organization, presentation, currency: organization.default_currency }
 }
 
-function locationHasProducts(organization: PublicProductOrganizationRow, location: PublicProductLocation): boolean {
-  const { capabilities } = resolveOrganizationCmsCapabilities(organization.vertical, organization.theme_id, {
-    organizationEnabledFeatures: organization.feature_overrides,
-    locationEnabledFeatures: location.feature_overrides,
-  })
+function offersLocationProducts(organization: PublicProductOrganizationRow): boolean {
+  const { capabilities } = resolveOrganizationCmsCapabilities(organization.vertical, organization.theme_id)
   return capabilities.managers.some(manager => manager.key === 'location.products')
 }
 
@@ -156,14 +144,14 @@ export async function loadPublicProductCollection(
   const resolved = await loadProductOrganization(db, organizationId, routeKind, previewAuthorized)
   if (!resolved) return null
   const locationRows = (await queryAll<PublicProductLocationRow>(db, `
-    SELECT id, slug, title, feature_overrides, timezone, address, phone, maps_url, latitude, longitude
+    SELECT id, slug, title, timezone, address, phone, maps_url, latitude, longitude
       FROM business_locations
      WHERE organization_id = ? AND status = 'active'
        ${locationSlug ? 'AND slug = ?' : ''}
      ORDER BY title, id
   `, [organizationId, ...(locationSlug ? [locationSlug] : [])])).map(publicProductLocation)
   if (locationSlug && locationRows.length !== 1) return null
-  const locations = locationRows.filter(location => locationHasProducts(resolved.organization, location))
+  const locations = offersLocationProducts(resolved.organization) ? locationRows : []
   if (locationSlug && locations.length !== 1) return null
   // Location publication is the public gate here: a product carried by the
   // site but withheld at this branch is absent, not shown greyed out.
@@ -229,7 +217,7 @@ export async function loadPublicProductDetail(
   const locationId = resolveLocalizedRouteResourceId(localizations, 'business_location', localizedLocationPath)
   if (!locationId) return null
   const sourceLocation = await queryFirst<PublicProductLocationRow>(db, `
-    SELECT id, slug, title, feature_overrides, timezone, address, phone, maps_url, latitude, longitude FROM business_locations
+    SELECT id, slug, title, timezone, address, phone, maps_url, latitude, longitude FROM business_locations
      WHERE organization_id = ?  AND id = ? AND status = 'active' LIMIT 1
   `, [resolved.organization.id, locationId])
   if (!sourceLocation) return null
@@ -300,12 +288,12 @@ export async function loadPublicExperienceDetail(
   if (!found.publications.some(entry => entry.organization_id === organizationId && entry.published)) return null
   const offeredAt = new Set(found.locations.filter(entry => entry.published).map(entry => entry.location_id))
   const locationRows = (await queryAll<PublicProductLocationRow>(db, `
-    SELECT id, slug, title, feature_overrides, timezone, address, phone, maps_url, latitude, longitude
+    SELECT id, slug, title, timezone, address, phone, maps_url, latitude, longitude
       FROM business_locations
      WHERE organization_id = ?  AND status = 'active'
      ORDER BY title, id
   `, [resolved.organization.id])).map(publicProductLocation)
-  const locations = locationRows.filter(location => offeredAt.has(location.id) && locationHasProducts(resolved.organization, location))
+  const locations = offersLocationProducts(resolved.organization) ? locationRows.filter(location => offeredAt.has(location.id)) : []
   if (locations.length !== 1) return null
   const location = locations[0]!
   if (locale === 'en') {
@@ -367,15 +355,17 @@ export async function loadPublicProductApiDetail(
 export async function loadPublicProductSessions(
   db: DbClient,
   detail: PublicProductDetail,
+  env: CloudflareEnv,
 ): Promise<PublicProductSession[]> {
   if (!detail.booking) return []
   // A branch with no zone cannot state when anything starts, so it offers
   // nothing here rather than a time in a zone nobody chose.
   if (!detail.location) {
     const { listPublicBookingSessions } = await import('~/server/utils/public-session-booking')
-    return (await listPublicBookingSessions(db, detail.organization.id, detail.product.slug, 'online')).sessions.filter(session => !session.is_full)
+    return (await listPublicBookingSessions(db, detail.organization.id, detail.product.slug, env, 'online')).sessions.filter(session => !session.is_full)
   }
   if (!detail.location.timezone) return []
+  await refreshProductBusy(db,env,detail.organization.id,detail.product.id)
   const window = bookingWindow(detail.location.timezone)
   const sessions = await listSessions(db, {
     organizationId: detail.organization.id,

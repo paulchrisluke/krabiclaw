@@ -4,7 +4,10 @@ import { MAX_D1_BATCH_STATEMENTS } from '~/server/db/d1-limits'
 import { resourceLocalizationDeletionQueries } from '~/server/utils/localization'
 import { loadPublicSocialMedia } from '~/server/utils/public-social-image'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
-import { organizationEventQuery } from '~/server/utils/organization-events'
+import { creationDedupeKey, creationRequestHash, isUniqueDedupeConflict, organizationEventQuery, readCreationRecord } from '~/server/utils/organization-events'
+import { assertTenantPagePathAvailable, isProductPageConflict, prepareTenantPageCreate, refreshTenantPageCard, type TenantPageEditorInput } from '~/server/utils/content/pages'
+import { loadOrganizationTemplate } from '~/server/utils/content/publishing'
+import type { CloudflareEnv } from '~/server/utils/auth'
 import { isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
 import {
   assertNoConflictingPrices,
@@ -27,6 +30,8 @@ import type {
   ProductOption,
   ProductSource,
   ProductVariant,
+  ProductVariantInput,
+  ProductVariantPatchInput,
   ReconcileProductInput,
   UpdateCollectionInput,
   UpdateProductInput,
@@ -111,6 +116,7 @@ function mapProductRow(row: Row): Product {
     locations: [],
     collections: [],
     booking: null,
+    page: null,
     image: null,
     gallery: [],
     media: [],
@@ -181,9 +187,11 @@ async function hydrate(db: DbClient, organizationId: string, products: Product[]
       WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?)) ORDER BY location_id`, params: [organizationId, ids] },
     { query: `SELECT product_id, collection_id, sort_order FROM collection_products
       WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?)) ORDER BY collection_id`, params: [organizationId, ids] },
-    { query: `SELECT product_id, duration_minutes, default_capacity, confirmation_mode, online_payment_required, online_timezone, calendar_group FROM product_booking_configs
+    { query: `SELECT product_id, duration_minutes, default_capacity, confirmation_mode, online_payment_required, online_timezone, calendar_group, scheduling_mode, assigned_member_id FROM product_booking_configs
       WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?))`, params: [organizationId, ids] },
-
+    // The page each product owns: the source row that carries its product_id.
+    { query: `SELECT product_id, id, path, title FROM content_documents
+      WHERE organization_id = ? AND row_role = 'root' AND kind = 'page' AND product_id IN (SELECT value FROM json_each(?))`, params: [organizationId, ids] },
   ], { operation: 'Hydrate products' })
   const rowsAt = (index: number): Row[] => (batched[index] as { results?: Row[] })?.results ?? []
   const optionRows = rowsAt(0)
@@ -195,6 +203,11 @@ async function hydrate(db: DbClient, organizationId: string, products: Product[]
   const locationRows = rowsAt(6)
   const collectionRows = rowsAt(7)
   const bookingRows = rowsAt(8)
+  const pageRows = rowsAt(9)
+  for (const row of pageRows) {
+    const product = byId.get(String(row.product_id))
+    if (product) product.page = { id: String(row.id), path: String(row.path), title: String(row.title) }
+  }
 
   // The row's existence is the capability, so a product with no row keeps the
   // null it was mapped with.
@@ -206,6 +219,7 @@ async function hydrate(db: DbClient, organizationId: string, products: Product[]
       default_capacity: row.default_capacity === null ? null : Number(row.default_capacity),
       confirmation_mode: row.confirmation_mode as 'instant' | 'review', online_payment_required: Number(row.online_payment_required) === 1,
       online_timezone: row.online_timezone === null ? null : String(row.online_timezone), calendar_group: row.calendar_group === null ? null : String(row.calendar_group),
+      scheduling_mode: row.scheduling_mode as 'legacy' | 'provider', assigned_member_id: row.assigned_member_id === null ? null : String(row.assigned_member_id),
     }
   }
 
@@ -775,7 +789,7 @@ function productWrites(
   // Prices are rewritten only by a caller that actually supplied variants.
   // Saving a description restates nothing about money, and must not retire and
   // remint every offer a product has.
-  options: { writePrices: boolean } = { writePrices: true },
+  options: { writePrices: boolean; priceIds?: ReadonlySet<string>; writeOptions?: boolean; variantIds?: ReadonlySet<string> } = { writePrices: true },
 ): BatchQuery[] {
   const upsert = mode === 'upsert'
   const writes: BatchQuery[] = [{
@@ -796,7 +810,7 @@ function productWrites(
       JSON.stringify(planned.metadata), planned.tax_code, planned.source, planned.kind, JSON.stringify(planned.details), now, now, actor.actorId, actor.actorId],
   }]
 
-  for (const option of planned.options) {
+  for (const option of options.writeOptions === false ? [] : planned.options) {
     writes.push({
       query: upsert
         ? `INSERT INTO product_options (id, organization_id, product_id, name, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -820,7 +834,7 @@ function productWrites(
   }
 
   for (const variant of planned.variants) {
-    writes.push({
+    if (!options.variantIds || options.variantIds.has(variant.id)) writes.push({
       query: upsert
         ? `INSERT INTO product_variants (id, organization_id, product_id, name, sku, active, sort_order, created_at, updated_at, created_by, updated_by)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -839,8 +853,22 @@ function productWrites(
       })
     }
     for (const price of options.writePrices ? variant.prices : []) {
+      if (options.priceIds && !options.priceIds.has(price.id)) continue
+      // A restated price keeps its row: payments and checkout holds reference
+      // price ids, and a kept row keeps when it was created.
       writes.push({
-        query: `INSERT INTO prices (id, organization_id, product_variant_id, location_id, active, currency, unit_amount, type,
+        query: upsert
+          ? `INSERT INTO prices (id, organization_id, product_variant_id, location_id, active, currency, unit_amount, type,
+                  recurring_interval, recurring_interval_count, tax_behavior, compare_at_unit_amount, valid_from_at, valid_until_at,
+                  source, created_at, updated_at, created_by, updated_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (id) DO UPDATE SET location_id = excluded.location_id, active = excluded.active, currency = excluded.currency,
+                  unit_amount = excluded.unit_amount, type = excluded.type, recurring_interval = excluded.recurring_interval,
+                  recurring_interval_count = excluded.recurring_interval_count, tax_behavior = excluded.tax_behavior,
+                  compare_at_unit_amount = excluded.compare_at_unit_amount, valid_from_at = excluded.valid_from_at,
+                  valid_until_at = excluded.valid_until_at, source = excluded.source, updated_at = excluded.updated_at, updated_by = excluded.updated_by
+                WHERE prices.organization_id = excluded.organization_id AND prices.product_variant_id = excluded.product_variant_id`
+          : `INSERT INTO prices (id, organization_id, product_variant_id, location_id, active, currency, unit_amount, type,
                   recurring_interval, recurring_interval_count, tax_behavior, compare_at_unit_amount, valid_from_at, valid_until_at,
                   source, created_at, updated_at, created_by, updated_by)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -877,17 +905,69 @@ function assertVariantPricesConsistent(planned: PlannedProduct): void {
   }
 }
 
+/**
+ * Create one product, and — when the caller asks — the source page it owns,
+ * in one batch: the product, its default variant, its publication, the page
+ * and the binding commit together or not at all.
+ *
+ * `idempotencyKey` makes a retry of the same request return what it created:
+ * the record is the creation's audit row, written in the same batch under a
+ * unique key, so a lost response or a concurrent duplicate never makes a
+ * second product. The same key with a different request conflicts.
+ */
 export async function createProduct(db: DbClient, input: {
   organizationId: string
   product: CreateProductInput
   actor: Actor
   /** Publish it on `organizationId` in the same batch — see planProductCreateWrites. */
   publication?: { published: boolean }
+  /**
+   * A source page created with the product and bound to it, through the one
+   * page writer. A service's page may omit its path: it is given the first
+   * free `/services/<slug>`, once, and keeps it when the product is renamed.
+   */
+  page?: { data: Omit<TenantPageEditorInput, 'productId' | 'pageId' | 'locale' | 'path'> & { path?: string }; env: CloudflareEnv }
+  idempotencyKey?: string
 }): Promise<Product> {
-  const planned = await planProduct(db, input.organizationId, input.product, { organizationId: input.organizationId })
+  const key = input.idempotencyKey?.trim()
+  if (input.idempotencyKey !== undefined && (!key || key.length > 200)) invalid('idempotency_key must be 1 to 200 characters')
+  // A product made with its page starts sale-inactive unless the caller says
+  // otherwise: the page and the offer are drafted before anything is sold.
+  const product = input.page && input.product.active === undefined ? { ...input.product, active: false } : input.product
+  const dedupeKey = key ? creationDedupeKey('product', input.organizationId, key) : null
+  const requestHash = dedupeKey ? await creationRequestHash({ product, page: input.page?.data ?? null, publication: input.publication ?? null }) : null
+  const replay = async (): Promise<Product | null> => {
+    if (!dedupeKey) return null
+    const record = await readCreationRecord(db, dedupeKey)
+    if (!record) return null
+    if (record.requestHash !== requestHash) conflict('This idempotency_key was already used for a different product')
+    const existing = await queryFirst<{ id: string }>(db, 'SELECT id FROM products WHERE organization_id = ? AND id = ?', [input.organizationId, record.entityId])
+    if (!existing) throw new HTTPError({ statusCode: 410, statusMessage: 'The product this idempotency_key created has been deleted; it is not created again' })
+    return getProduct(db, input.organizationId, record.entityId)
+  }
+  const earlier = await replay()
+  if (earlier) return earlier
+
+  const planned = await planProduct(db, input.organizationId, product, { organizationId: input.organizationId })
   assertVariantPricesConsistent(planned)
   const now = new Date().toISOString()
   const writes = productWrites(input.organizationId, planned, input.actor, now, 'insert')
+  const page = input.page
+    ? await prepareTenantPageCreate(db, {
+        organizationId: input.organizationId,
+        userId: input.actor.actorId,
+        data: {
+          ...input.page.data,
+          path: input.page.data.path ?? (planned.kind === 'service'
+            ? await availableServicePagePath(db, input.organizationId, planned.slug)
+            : invalid('page.path is required for this kind of product')),
+          productId: planned.id,
+        },
+        env: input.page.env,
+        productInSameBatch: true,
+      })
+    : null
+  if (page) writes.push(...page.queries)
   if (input.publication && input.organizationId) {
     writes.push({
       query: `INSERT INTO product_publications (organization_id, product_id, published, created_at, updated_at, created_by, updated_by)
@@ -896,9 +976,42 @@ export async function createProduct(db: DbClient, input: {
     })
     writes.push(publicResourceCacheInvalidationQuery(input.organizationId, 'product_created'))
   }
-  writes.push(organizationEventQuery({ organizationId: input.organizationId, actorId: input.actor.actorId, eventType: 'product.created', entityType: 'product', entityId: planned.id }))
-  await executeBatch(db, writes, { operation: 'Create product' })
+  writes.push(organizationEventQuery({
+    organizationId: input.organizationId, actorId: input.actor.actorId, eventType: 'product.created', entityType: 'product', entityId: planned.id,
+    ...(dedupeKey ? { metadata: { request_hash: requestHash, page_id: page?.variantId ?? null }, dedupeKey } : {}),
+  }))
+  try {
+    await executeBatch(db, writes, { operation: 'Create product' })
+  } catch (error) {
+    if (isUniqueDedupeConflict(error)) {
+      const concurrent = await replay()
+      if (concurrent) return concurrent
+    }
+    if (isProductPageConflict(error)) conflict('Product already has a canonical page')
+    throw error
+  }
+  // The product and its page are committed. The page's social card is drawn
+  // after, and a failure there is reported as itself; a retry under the same
+  // key returns this product rather than making another.
+  if (page && input.page) await refreshTenantPageCard(db, input.page.env, page, input.actor.actorId)
   return getProduct(db, input.organizationId, planned.id)
+}
+
+/**
+ * The first `/services/<slug>` no page or redirect holds, by the same rule the
+ * page writer enforces. A taken candidate is the reason to try the next one;
+ * running out is a conflict the caller sees.
+ */
+async function availableServicePagePath(db: DbClient, organizationId: string, slug: string): Promise<string> {
+  const { template } = await loadOrganizationTemplate(db, organizationId)
+  for (let attempt = 0; attempt < MAX_SLUG_SUFFIX_ATTEMPTS; attempt += 1) {
+    try {
+      return await assertTenantPagePathAvailable(db, { organizationId, locale: 'en', path: `/services/${slugCandidate(slug, attempt)}`, template })
+    } catch (error) {
+      if ((error as { statusCode?: number }).statusCode !== 409) throw error
+    }
+  }
+  conflict('Could not find a free page path for this service')
 }
 
 /**
@@ -981,17 +1094,6 @@ export async function createProductsBatch(db: DbClient, input: {
 }
 
 /**
- * Replace a product's rows with the intended state.
- *
- * Children are deleted and rewritten rather than diffed. Diffing options,
- * values, variants and prices in place is how a half-applied edit leaves a
- * variant selecting a value that no longer exists; the whole replacement
- * commits in one batch or none of it does.
- *
- * A variant that keeps its id keeps its bookings, because bookings reference
- * the variant, not its ordinal position.
- */
-/**
  * The writes one patch makes, given the product it is patching.
  *
  * Planning is separated from loading so a batch can load every product it is
@@ -1015,6 +1117,23 @@ async function planProductUpdate(db: DbClient, input: {
 }): Promise<{ writes: BatchQuery[]; keptVariants: string }> {
   const { current, patch, organizationId } = input
   const productId = current.id
+  const variantsMode = patchListMode(patch.variants_mode, patch.variants, 'variants')
+  const suppliedVariants = patch.variants ?? []
+  const suppliedIds = new Set<string>()
+  for (const [index, variant] of suppliedVariants.entries()) {
+    if (!variant || typeof variant !== 'object' || Array.isArray(variant)) invalid(`variants[${index}] must be an object`)
+    if (variant.id && suppliedIds.has(variant.id)) invalid(`variants[${index}].id is repeated`)
+    if (variant.id) suppliedIds.add(variant.id)
+  }
+  const variants: ProductVariantInput[] = variantsMode === 'replace'
+    ? []
+    : current.variants.map(variant => ({ ...variantInput(variant), prices: variant.prices.map(priceInput) }))
+  for (const [index, supplied] of suppliedVariants.entries()) {
+    const mergedVariant = mergeVariantPatch(supplied, current.variants.find(variant => variant.id === supplied.id), `variants[${index}]`)
+    const at = supplied.id ? variants.findIndex(variant => variant.id === supplied.id) : -1
+    if (at < 0) variants.push(mergedVariant)
+    else variants[at] = mergedVariant
+  }
   const merged: CreateProductInput = {
     kind: patch.kind ?? current.kind,
     name: patch.name ?? current.name,
@@ -1029,17 +1148,7 @@ async function planProductUpdate(db: DbClient, input: {
       id: option.id, name: option.name, sort_order: option.sort_order,
       values: option.values.map(value => ({ id: value.id, value: value.value, sort_order: value.sort_order })),
     })),
-    variants: patch.variants ?? current.variants.map(variant => ({
-      id: variant.id, name: variant.name, sku: variant.sku, active: variant.active, sort_order: variant.sort_order,
-      option_values: variant.option_values,
-      prices: variant.prices.map(price => ({
-        id: price.id,
-        unit_amount: price.unit_amount, currency: price.currency, location_id: price.location_id, active: price.active,
-        type: price.type, recurring_interval: price.recurring_interval, recurring_interval_count: price.recurring_interval_count,
-        tax_behavior: price.tax_behavior, compare_at_unit_amount: price.compare_at_unit_amount,
-        valid_from_at: price.valid_from_at, valid_until_at: price.valid_until_at, source: price.source,
-      })),
-    })),
+    variants,
     details: patch.details ?? current.details,
   }
   const planned = await planProduct(db, organizationId, merged, {
@@ -1060,12 +1169,22 @@ async function planProductUpdate(db: DbClient, input: {
   // prices keep their rows, their identity and their scopes; only a caller
   // that restated the variants is describing the offers.
   const writesPrices = patch.variants !== undefined
+  const keptPrices = d1JsonArray(planned.variants.flatMap(variant => variant.prices.map(price => price.id)))
+  const currentPriceIds = new Set(current.variants.flatMap(variant => variant.prices.map(price => price.id)))
+  const suppliedPriceIds = new Set(suppliedVariants.flatMap(variant => (variant.prices ?? []).map(price => price.id).filter((id): id is string => Boolean(id))))
+  const priceIds = new Set(planned.variants.flatMap(variant => variant.prices)
+    .filter(price => !currentPriceIds.has(price.id) || suppliedPriceIds.has(price.id)).map(price => price.id))
+  const variantIds = new Set(planned.variants.filter(variant => {
+    const before = current.variants.find(candidate => candidate.id === variant.id)
+    return !before || variant.name !== before.name || variant.sku !== before.sku || variant.active !== before.active || variant.sort_order !== before.sort_order
+  }).map(variant => variant.id))
   const writes: BatchQuery[] = [
     // Selections and named details are rebuilt wholesale: nothing
     // references them, so replacing them is simpler and cannot drift.
     { query: 'DELETE FROM product_variant_option_values WHERE organization_id = ? AND product_id = ?', params: [organizationId, productId] },
+    // Only explicit replacement removes prices; merged omissions remain in the plan.
     ...(writesPrices
-      ? [{ query: 'DELETE FROM prices WHERE organization_id = ? AND product_variant_id IN (SELECT id FROM product_variants WHERE organization_id = ? AND product_id = ?)', params: [organizationId, organizationId, productId] }]
+      ? [{ query: 'DELETE FROM prices WHERE organization_id = ? AND product_variant_id IN (SELECT id FROM product_variants WHERE organization_id = ? AND product_id = ?) AND id NOT IN (SELECT value FROM json_each(?))', params: [organizationId, organizationId, productId, keptPrices] }]
       : []),
     // Options, values and variants are UPSERTED, never dropped and recreated:
     // bookings reference variant identity, and recreating a variant under a
@@ -1078,10 +1197,74 @@ async function planProductUpdate(db: DbClient, input: {
     { query: 'DELETE FROM product_variants WHERE organization_id = ? AND product_id = ? AND id NOT IN (SELECT value FROM json_each(?))', params: [organizationId, productId, keptVariants] },
     { query: 'DELETE FROM product_option_values WHERE organization_id = ? AND product_id = ? AND id NOT IN (SELECT value FROM json_each(?))', params: [organizationId, productId, keptValues] },
     { query: 'DELETE FROM product_options WHERE organization_id = ? AND product_id = ? AND id NOT IN (SELECT value FROM json_each(?))', params: [organizationId, productId, keptOptions] },
-    ...productWrites(organizationId, planned, input.actor, input.now, 'upsert', { writePrices: writesPrices }),
+    ...productWrites(organizationId, planned, input.actor, input.now, 'upsert', {
+      writePrices: writesPrices, priceIds, writeOptions: patch.options !== undefined, variantIds,
+    }),
     ...input.cacheInvalidations,
   ]
   return { writes, keptVariants }
+}
+
+const variantInput = (variant: ProductVariant) => ({
+  id: variant.id, name: variant.name, sku: variant.sku, active: variant.active, sort_order: variant.sort_order, option_values: variant.option_values,
+})
+const priceInput = (price: Price): PriceInput => ({
+  id: price.id, unit_amount: price.unit_amount, currency: price.currency, location_id: price.location_id, active: price.active,
+  type: price.type, recurring_interval: price.recurring_interval, recurring_interval_count: price.recurring_interval_count,
+  tax_behavior: price.tax_behavior, compare_at_unit_amount: price.compare_at_unit_amount,
+  valid_from_at: price.valid_from_at, valid_until_at: price.valid_until_at, source: price.source,
+})
+
+/**
+ * An edit names what changes. A variant restated with its id keeps every field
+ * it does not restate; its prices merge by id, so a price restated with its id
+ * keeps its row — payments and checkout holds reference price ids — and its
+ * unstated fields, and a price left out is kept. A variant or price without an
+ * id is new, and must say what it is.
+ */
+function mergeVariantPatch(supplied: ProductVariantPatchInput, current: ProductVariant | undefined, field: string): ProductVariantInput {
+  const pricesMode = patchListMode(supplied.prices_mode, supplied.prices, `${field}.prices`)
+  const suppliedPriceIds = new Set<string>()
+  for (const [index, price] of (supplied.prices ?? []).entries()) {
+    if (!price || typeof price !== 'object' || Array.isArray(price)) invalid(`${field}.prices[${index}] must be an object`)
+    if (price.id && suppliedPriceIds.has(price.id)) invalid(`${field}.prices[${index}].id is repeated`)
+    if (price.id) suppliedPriceIds.add(price.id)
+  }
+  if (!current) {
+    if (supplied.id) invalid(`${field}.id ${supplied.id} does not belong to this product`)
+    if (typeof supplied.name !== 'string') invalid(`${field}.name is required for a new variant`)
+    for (const [index, price] of (supplied.prices ?? []).entries()) {
+      if (price.id) invalid(`${field}.prices[${index}].id names a price this product does not have`)
+      if (typeof price.unit_amount !== 'number') invalid(`${field}.prices[${index}].unit_amount is required for a new price`)
+    }
+    return supplied as ProductVariantInput
+  }
+  const base = variantInput(current)
+  // Prices merge by id: a restated price is updated in place, a new one is
+  // added, and a price left unstated is kept unless replacement was explicit.
+  const prices = pricesMode === 'replace' ? [] : current.prices.map(priceInput)
+  for (const [index, price] of (supplied.prices ?? []).entries()) {
+    const existing = price.id ? current.prices.find(candidate => candidate.id === price.id) : undefined
+    const at = price.id ? prices.findIndex(candidate => candidate.id === price.id) : -1
+    if (price.id && !existing) invalid(`${field}.prices[${index}].id ${price.id} does not belong to variant ${current.id}`)
+    if (!existing && typeof price.unit_amount !== 'number') invalid(`${field}.prices[${index}].unit_amount is required for a new price`)
+    const merged = existing ? { ...priceInput(existing), ...definedFields(price) } : price as PriceInput
+    if (at < 0) prices.push(merged)
+    else prices[at] = merged
+  }
+  return { ...base, ...definedFields(supplied), prices }
+}
+
+function patchListMode(mode: unknown, values: unknown, field: string): 'merge' | 'replace' {
+  if (mode !== undefined && mode !== 'merge' && mode !== 'replace') invalid(`${field}_mode must be merge or replace`)
+  if (mode !== undefined && values === undefined) invalid(`${field} is required when ${field}_mode is supplied`)
+  if (values !== undefined && !Array.isArray(values)) invalid(`${field} must be an array`)
+  return mode === 'replace' ? 'replace' : 'merge'
+}
+
+/** The fields a patch actually states; `undefined` is absence, `null` is a value. */
+function definedFields<T extends object>(value: T): Partial<T> {
+  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined)) as Partial<T>
 }
 
 /**
@@ -1446,7 +1629,13 @@ export async function reconcileProducts(db: DbClient, input: {
     const current = productId ? byId.get(productId) : undefined
     if (current) {
       const planned = await planProductUpdate(db, {
-        organizationId: input.organizationId, current, patch: rest, actor: input.actor, now,
+        organizationId: input.organizationId, current, patch: {
+          ...rest,
+          ...(rest.variants === undefined ? {} : {
+            variants_mode: 'replace',
+            variants: rest.variants.map(variant => ({ ...variant, ...(variant.prices === undefined ? {} : { prices_mode: 'replace' }) })),
+          }),
+        }, actor: input.actor, now,
         defaultCurrency, takenSlugs: taken, idOwners, knownSlugs,
         // One invalidation per site at the end of the batch, not one per product.
         cacheInvalidations: [],

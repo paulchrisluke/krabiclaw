@@ -1,15 +1,15 @@
 // A booking has two ways in — its own screen under Today, and the day it is on
-// in the calendar — and Back and the lit tab are read from the route tree, not
-// from history (useRouteLevel). One page can only sit in one tree, so the
-// booking tree is mounted a second time under the calendar day: the same
-// files, a second set of records, the way the localized public aliases are.
+// in the calendar — and Back is read from the route tree, not from history
+// (useRouteLevel). One page can only sit in one tree, so the booking tree is
+// mounted a second time under the calendar day: the same files, a second set
+// of records, the way the localized public aliases are.
 //
-// Where Back goes from the root mount is decided here with the mounts, not in
-// the page: under Today the booking has no route parent and names Today; under
-// the calendar day its parent is its Back, and a level with a parent may not
-// name one. A `meta.back` in the file would ride into both mounts.
+// The root mount's exit and tab are decided here with the mounts, not in the
+// page: under Today the booking is a root that exits to Today and lights it;
+// under the calendar day its parent is its Back and the calendar root lights
+// Calendar. A `meta` in the file would ride into both mounts.
 
-interface PageNode {
+export interface PageNode {
   name?: string
   path: string
   file?: string
@@ -19,9 +19,15 @@ interface PageNode {
 
 const BOOKING_PATH = '/dashboard/:orgSlug()/bookings/:bookingType()/:bookingId()'
 const DAY_PATH = '/dashboard/:orgSlug()/calendar/:day()'
+// The account's own record lives under Past activity. Today opens it at
+// `/dashboard/account/bookings` with Back to Today, and its calendar day mounts
+// it a third time, as the business's does.
+const ACCOUNT_RECORD_PATH = '/dashboard/account/activity/:kind()/:id()'
+const ACCOUNT_BOOKING_PATH = '/dashboard/account/bookings/:kind()/:id()'
+const ACCOUNT_DAY_PATH = '/dashboard/account/calendar/:day()'
 
 /** The node at a full path in Nuxt's nested page tree, whose children carry paths relative to their parent. */
-function nodeAt(nodes: readonly PageNode[], target: string, parent = ''): PageNode | undefined {
+export function nodeAt(nodes: readonly PageNode[], target: string, parent = ''): PageNode | undefined {
   for (const node of nodes) {
     const path = node.path.startsWith('/') ? node.path : `${parent}/${node.path}`
     if (path === target) return node
@@ -32,7 +38,7 @@ function nodeAt(nodes: readonly PageNode[], target: string, parent = ''): PageNo
 }
 
 /** A record with an `index.vue` child carries no name of its own; the names are on the children. */
-function renamed(node: PageNode, from: string, to: string): PageNode {
+export function renamed(node: PageNode, from: string, to: string): PageNode {
   return {
     ...node,
     name: node.name?.replace(from, to),
@@ -47,5 +53,16 @@ export function mountBookingRoutes(pages: PageNode[]): void {
   const clone = renamed(booking, 'dashboard-orgSlug-bookings', 'dashboard-orgSlug-calendar-day')
   clone.path = ':bookingType()/:bookingId()'
   day.children = [...(day.children ?? []), clone]
-  booking.meta = { ...booking.meta, back: 'dashboard-orgSlug' }
+  booking.meta = { ...booking.meta, tab: 'today', back: 'dashboard-orgSlug' }
+
+  const record = nodeAt(pages, ACCOUNT_RECORD_PATH)
+  const accountDay = nodeAt(pages, ACCOUNT_DAY_PATH)
+  if (!record || !accountDay) throw new Error('The account activity record and calendar day pages were not both found; the account calendar cannot open a booking')
+  const accountClone = renamed(record, 'dashboard-account-activity', 'dashboard-account-calendar-day')
+  accountClone.path = ':kind()/:id()'
+  accountDay.children = [...(accountDay.children ?? []), accountClone]
+  const accountBooking = renamed(record, 'dashboard-account-activity', 'dashboard-account-bookings')
+  accountBooking.path = ACCOUNT_BOOKING_PATH
+  accountBooking.meta = { ...accountBooking.meta, tab: 'today', back: 'dashboard-account' }
+  pages.push(accountBooking)
 }

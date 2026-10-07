@@ -1,3 +1,5 @@
+import { PROVIDERS_TOOLS, handleProvidersTools } from './providers'
+import { PAYMENTS_TOOLS, handlePaymentsTools } from './payments'
 import type { McpToolDefinition } from './shared'
 import { TOOL_ANNOTATIONS_BY_NAME } from './shared'
 import { ANALYTICS_TOOLS, handleAnalyticsTools } from './analytics'
@@ -37,6 +39,8 @@ import {
 import type { McpExecutorContext } from './execution'
 
 export const MCP_PUBLIC_TOOLS: McpToolDefinition[] = [
+  ...PROVIDERS_TOOLS,
+  ...PAYMENTS_TOOLS,
   ...ANALYTICS_TOOLS,
   ...BLOG_TOOLS,
   ...CONTENT_TOOLS,
@@ -86,6 +90,8 @@ export function getMcpTool(name: string) {
 // domain-handler registry instead of hand-copying it — one list of which
 // domain owns which tool, not two.
 export const DOMAIN_HANDLERS: Record<string, (_ctx: McpExecutorContext) => Promise<unknown>> = {
+  providers: handleProvidersTools,
+  payments: handlePaymentsTools,
   analytics: handleAnalyticsTools,
   blog: handleBlogTools,
   content: handleContentTools,
@@ -222,19 +228,25 @@ export async function executeMcpToolCall(
 
   const organizationId = requiredString(normalizedArguments, "organization_id");
   const organization = await requireMcpOrganization(event, organizationId, tool.minimumRole, authenticatedUser);
+  // Attribution records the organization actually authorized for execution,
+  // including a saved workspace resolved from a bearer-authenticated request.
+  const executionContext = { organizationId: organization.organizationId, locationId: null as string | null };
+  event.context.mcpExecutionContext = executionContext;
   const args = omit(normalizedArguments, ["organization_id"]);
   const explicitLocationId = optionalString(rawArguments, "location_id");
   if (explicitLocationId) {
     const location = await queryFirst<{ id: string }>(organization.db, `
       SELECT id
       FROM business_locations
-      WHERE id = ? AND organization_id = ? 
+      WHERE id = ? AND organization_id = ?
       LIMIT 1
     `, [explicitLocationId, organization.organizationId]);
     if (!location) {
       throw mcpProtocolError(MCP_ERROR.invalidParams, "Location not found for this organization.");
     }
   }
+
+  executionContext.locationId = optionalString(normalizedArguments, "location_id");
 
   if (
     tool.requiredEntitlement &&

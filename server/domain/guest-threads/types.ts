@@ -10,7 +10,7 @@ export type GuestThreadSubmissionType = 'contact' | 'reservation' | 'booking'
 export type GuestThreadDeliveryChannel = 'email' | 'whatsapp'
 export type GuestThreadDeliveryProvider = 'resend' | 'meta' | 'log_only'
 export type GuestThreadDeliveryPurpose = 'owner_alert' | 'guest_acknowledgement' | 'member_reply' | 'status_update'
-export type GuestThreadDeliveryStatus = 'pending' | 'accepted' | 'sent' | 'delivered' | 'read' | 'failed' | 'unknown' | 'skipped'
+export type GuestThreadDeliveryStatus = 'pending' | 'accepted' | 'sent' | 'delivered' | 'read' | 'failed' | 'skipped'
 
 export type GuestThreadRow = GuestRequest
 
@@ -92,11 +92,13 @@ export interface ThreadDetailSourceModel {
 export interface GuestThreadListItemViewModel {
   id: string
   organizationId?: string
+  organizationName?: string | null
+  organizationVertical?: string | null
   guestName: string
   submissionType: GuestThreadSubmissionType
   contextLabel: string
   locationLabel: string | null
-  conversationState: ConversationState
+  conversationState: ConversationState | null
   operationalStatus: string | null
   operationalStatusLabel: string | null
   unread: boolean
@@ -157,13 +159,14 @@ export interface GuestThreadDeliveryFailureViewModel {
   channel: GuestThreadDeliveryChannel
   purpose: GuestThreadDeliveryPurpose
   error: string | null
-  status: 'failed' | 'unknown'
-  retryable: boolean
   createdAt: string
 }
 
 export interface GuestThreadDetailViewModel {
   id: string
+  organizationName: string | null
+  organizationVertical: string | null
+  activityPath: string | null
   guestName: string
   guestEmail: string | null
   guestPhone: string | null
@@ -171,7 +174,7 @@ export interface GuestThreadDetailViewModel {
   submissionId: string
   contextLabel: string
   locationLabel: string | null
-  conversationState: ConversationState
+  conversationState: ConversationState | null
   source: ThreadDetailSourceModel
   entries: GuestThreadEntryViewModel[]
   /** What can be done to the booking. Where the conversation lives is below, separately. */
@@ -190,6 +193,7 @@ export interface GuestThreadDetailViewModel {
 }
 
 export interface ListGuestThreadsOptions {
+  buyerAudience?: boolean
   organizationId?: string | null
   locationId?: string | null
   principal?: MemberAccessPrincipal | null

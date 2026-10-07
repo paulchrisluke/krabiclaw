@@ -13,7 +13,7 @@ import {
   type MediaAssetRefInput,
   type StoredMediaPlacementItem,
 } from '~/server/utils/media-asset-manager'
-import { isEditableMediaPlacement, isEditableMediaPlacementOwnerType, type EditableMediaPlacementOwnerType, type MediaPlacementOwnerType } from '~/shared/media-placement-contract'
+import { isEditableMediaPlacement, isEditableMediaPlacementOwnerType, type EditableMediaPlacementOwnerType, type LogoPresentation, type MediaPlacementOwnerType } from '~/shared/media-placement-contract'
 import { refreshSocialCard, socialCardRefreshOwnersForPlacement } from '~/server/utils/social-card'
 import { postMediaMutationQueries } from '~/server/utils/post-management'
 
@@ -158,6 +158,8 @@ export async function setSingleMediaPlacement(db: DbClient, input: {
   principal?: MemberAccessPrincipal
   placement: MediaPlacementKey
   assetId: string | null
+  /** A logo placement's shape and focal point. */
+  presentation?: LogoPresentation | null
 }) {
   await authorizePlacementWrite(db, input)
   const postQueries = await postMediaQueries(db, input)
@@ -168,7 +170,7 @@ export async function setSingleMediaPlacement(db: DbClient, input: {
     allowedKinds: allowedKindsFor(input.placement),
     fieldName: 'asset_id',
   })
-  await executeBatch(db, [...postQueries, ...buildSingleMediaPlacementQueries({ ...input, media })])
+  await executeBatch(db, [...postQueries, ...buildSingleMediaPlacementQueries({ ...input, media: media.map(item => ({ ...item, presentation: input.presentation })) })])
   await refreshSocialCardForPlacement(db, input)
   return canonicalPlacementState(db, input)
 }

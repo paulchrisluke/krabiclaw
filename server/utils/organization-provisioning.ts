@@ -4,7 +4,7 @@
 // picks one from the user's memberships. Handles the same-organization retry,
 // subdomain uniqueness, and seeding.
 import { seedNewOrganization } from '~/server/utils/organization-seed'
-import { createSystemSubdomain, isSystemSubdomainSpent } from '~/server/utils/domains'
+import { createSystemSubdomain, isSystemSubdomainSpent, organizationPublicUrl } from '~/server/utils/domains'
 import { execute, executeBatch, queryFirst } from '~/server/db'
 import { ALL_VERTICALS, type OrganizationVertical } from '~/utils/vertical-copy'
 import type { CurrencyCode } from '~/shared/currencies'
@@ -13,8 +13,13 @@ import { isOrganizationWideRole, organizationAdapter, type OrganizationAdapter }
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
 import { measurementOutcome, originatingOwnerId, recordAndDeliverConversion } from '~/server/utils/organization-conversions'
 import { getPlatformOrganization } from '~/server/utils/platform-organization'
+import { platformOperatorEmails } from '~/server/utils/domain-notifications'
+import { getPlatformDomain } from '~/server/utils/dashboard-notification-links'
+import { hashEmail, sendEmail } from '~/server/utils/email-delivery'
+import { renderNotificationEmail } from '~/server/emails/render'
+import { onboardingCompletedMessage } from '~/server/notifications/events'
 
-type SetupEnv = CloudflareEnv
+type SetupEnv = CloudflareEnv & { PLATFORM_OWNER_EMAILS?: string }
 
 interface ExistingSubdomainRow {
   id: string
@@ -172,8 +177,26 @@ export async function activateOrganization(db: D1Database, organizationId: strin
   await execute(db, `UPDATE organization SET onboarding_status = 'active', updated_at = ? WHERE id = ?`, [new Date().toISOString(), organizationId])
 }
 
+/**
+ * A new business is live: record the onboarding conversion and email the
+ * KrabiClaw operator. Neither waits on or hides the other, and neither fails
+ * the activation that already committed; each outcome is reported.
+ */
+export async function completeOnboarding(env: SetupEnv, db: D1Database, organizationId: string, origin: { headers: Headers } | null) {
+  const [measurement, operatorEmail] = await Promise.allSettled([
+    recordOnboardingComplete(env, db, organizationId, origin),
+    emailOperatorOnboardingComplete(env, db, organizationId),
+  ])
+  return {
+    measurement: measurementOutcome(measurement),
+    operator_email: operatorEmail.status === 'fulfilled'
+      ? { status: 'sent' as const }
+      : { status: 'failed' as const, reason: operatorEmail.reason instanceof Error ? operatorEmail.reason.message : String(operatorEmail.reason) },
+  }
+}
+
 /** Records completion after the caller has committed its setup work. */
-export async function recordOnboardingComplete(env: SetupEnv, db: D1Database, organizationId: string, origin: { headers: Headers } | null): Promise<void> {
+async function recordOnboardingComplete(env: SetupEnv, db: D1Database, organizationId: string, origin: { headers: Headers } | null): Promise<void> {
   // The event is unique per organization, so replaying a completed setup request (or
   // retrying after a failed record) never counts a second onboarding. KrabiClaw
   // activating itself is not an acquisition.
@@ -184,6 +207,46 @@ export async function recordOnboardingComplete(env: SetupEnv, db: D1Database, or
     entityType: 'organization', entityId: organizationId,
     metadata: { originating_user_id: await originatingOwnerId(db, platformOrganizationId, organizationId) },
   })
+}
+
+/**
+ * Emails each operator address once per business. Activation runs once per
+ * draft; the Resend idempotency key makes a repeated request a no-op too.
+ */
+async function emailOperatorOnboardingComplete(env: SetupEnv, db: D1Database, organizationId: string): Promise<void> {
+  const platformOrganizationId = (await getPlatformOrganization(db)).id
+  if (organizationId === platformOrganizationId) return
+  // One mailbox is one recipient, however its address is cased.
+  const recipients = platformOperatorEmails(env).filter((email, index, all) => all.findIndex(other => hashEmail(other) === hashEmail(email)) === index)
+  if (!recipients.length) throw new Error('PLATFORM_OWNER_EMAILS is not configured')
+
+  const ownerId = await originatingOwnerId(db, platformOrganizationId, organizationId)
+  if (!ownerId) throw new Error(`Organization ${organizationId} has no owner`)
+  const [business, owner, platform, siteUrl] = await Promise.all([
+    queryFirst<{ name: string }>(db, 'SELECT name FROM organization WHERE id = ?', [organizationId]),
+    queryFirst<{ name: string; email: string }>(db, 'SELECT name, email FROM user WHERE id = ?', [ownerId]),
+    queryFirst<{ slug: string }>(db, 'SELECT slug FROM organization WHERE id = ?', [platformOrganizationId]),
+    organizationPublicUrl(db, organizationId),
+  ])
+  if (!business || !owner || !platform) throw new Error(`Onboarding email for ${organizationId} is missing its business, owner or platform organization`)
+  if (!siteUrl) throw new Error(`Organization ${organizationId} has no active site address`)
+
+  const platformDomain = getPlatformDomain(env)
+  const query = new URLSearchParams({ user: ownerId, organization: organizationId })
+  const message = onboardingCompletedMessage({
+    organizationName: business.name,
+    ownerName: owner.name,
+    ownerEmail: owner.email,
+    siteUrl,
+    viewCustomerUrl: `https://${platformDomain}/dashboard/${platform.slug}/platform-accounts?${query}`,
+  })
+  const email = await renderNotificationEmail(message, { platformDomain })
+
+  const results = await Promise.all(recipients.map(to => sendEmail(env, {
+    to, subject: message.title, ...email, idempotencyKey: `onboarding-complete:${organizationId}:${hashEmail(to)}`,
+  })))
+  const failures = results.flatMap(result => result.status === 'sent' ? [] : [result.error])
+  if (failures.length) throw new Error(`Operator onboarding email failed: ${failures.join('; ')}`)
 }
 
 // Creates a brand-new organization owned by `userId`. Callers decide when a new
@@ -308,9 +371,7 @@ async function performSeeding(
   await createSystemSubdomain(env, db, organizationId, subdomain)
 
   if (activate) await activateOrganization(db, organizationId)
-  const measurement = activate
-    ? measurementOutcome((await Promise.allSettled([recordOnboardingComplete(env, db, organizationId, origin)]))[0]!)
-    : undefined
+  const completion = activate ? await completeOnboarding(env, db, organizationId, origin) : undefined
 
   return {
     status: 200,
@@ -319,7 +380,7 @@ async function performSeeding(
       subdomain,
       locationId,
       message: 'Organization provisioned successfully',
-      ...(measurement ? { measurement } : {}),
+      ...completion,
     }
   }
 }

@@ -12,9 +12,6 @@
       title="Page could not be loaded"
       :description="loadError"
     />
-    <div v-else-if="pending" class="space-y-3">
-      <USkeleton v-for="index in 4" :key="index" class="h-20 rounded-2xl" />
-    </div>
     <template v-else>
       <div v-if="isNew" class="mb-6 flex justify-end">
         <UButton :label="createActionLabel" :loading="saving" @click="startOrCreate" />
@@ -48,7 +45,7 @@
 </template>
 
 <script lang="ts">
-import type { InjectionKey, Ref } from 'vue'
+import type { ComputedRef, InjectionKey, Ref } from 'vue'
 import {
   isTenantPageListResponse,
   isTenantPageResponse,
@@ -61,7 +58,7 @@ export const SECTION_LABELS = {
   sections: 'Sections',
   title: 'Title',
   summary: 'Summary',
-  booking: 'Appointment booking',
+  url: 'URL',
 } as const
 export type SectionKey = keyof typeof SECTION_LABELS
 
@@ -72,7 +69,8 @@ export type SectionKey = keyof typeof SECTION_LABELS
  */
 export interface TenantPageEditor {
   draft: Ref<TenantPageDraft>
-  ready: Ref<boolean>
+  /** Why the page could not be read. A leaf shows it instead of fields that would edit nothing. */
+  loadError: Ref<string | null>
   saving: Ref<boolean>
   saveDisabled: Ref<boolean>
   saveLabel: Ref<string | undefined>
@@ -82,6 +80,12 @@ export interface TenantPageEditor {
 }
 
 export const tenantPageEditorKey = Symbol('tenant-page-editor') as InjectionKey<TenantPageEditor>
+
+/** Which page document this editor and every level beneath it edit: the one its URL names. */
+export function useTenantPageId(): ComputedRef<string> {
+  const route = useRoute()
+  return computed(() => String(route.params.pageId ?? ''))
+}
 </script>
 
 <script setup lang="ts">
@@ -103,13 +107,17 @@ import {
 // `<RouterView>` above rendered, and an `await` before it would bind nothing.
 const level = useRouteLevel()
 const route = useRoute()
-const pageId = computed(() => String(route.params.pageId ?? ''))
+const router = useRouter()
+const pageId = useTenantPageId()
 const recordPath = level.path
+/** A level below this page, keeping whatever scope the URL carries. */
+const sectionUrl = (section: string) => router.resolve({ path: `${recordPath.value}/${section}`, query: route.query }).fullPath
 
 const organizationId = await useDashboardOrganizationId()
 const dashboardApi = useDashboardApi()
 
-const { data, error, pending, draft, dirty, revert, commit, isNew, previewUrl } = useTenantPageDraft(organizationId, pageId.value)
+const { load, data, error, draft, dirty, revert, commit, isNew, previewUrl } = useTenantPageDraft(organizationId, pageId.value)
+await load
 
 // A page that is not there is not a page. A request that failed is a state this
 // surface shows, because the page may well still exist.
@@ -129,7 +137,7 @@ const saving = ref(false)
 const errorMessage = ref('')
 
 const navigablePreviewUrl = computed(() => previewHrefForTenantPage(dirty.value, previewUrl.value))
-const organizationLocalizationSettingsPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/settings/website/localization`)
+const organizationLocalizationSettingsPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/website/localization`)
 
 function preview(value: string, empty: string) {
   return value.trim() || empty
@@ -151,20 +159,19 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => {
     label: 'Title',
     summary: preview(draft.value.title, 'Not named yet'),
     placeholder: !draft.value.title.trim(),
-    to: `${recordPath.value}/title`,
+    to: sectionUrl('title'),
   }
   if (isNew.value) return [{ id: 'page', items: [title] }]
   return [
     {
       id: 'content',
       items: [
-        ...(draft.value.path.startsWith('/services/') && draft.value.id === draft.value.page_id ? [{ id: 'booking', label: 'Appointment booking', summary: draft.value.product_id ? 'Product linked' : 'No Product linked', to: `${recordPath.value}/booking` }] : []),
         {
           id: 'sections',
           label: 'Sections',
           summary: sectionsSummary.value,
           placeholder: !draft.value.blocks.length,
-          to: `${recordPath.value}/sections`,
+          to: sectionUrl('sections'),
         },
         title,
         {
@@ -172,10 +179,16 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => {
           label: 'Summary',
           summary: preview(draft.value.summary, 'Nothing written yet'),
           placeholder: !draft.value.summary.trim(),
-          to: `${recordPath.value}/summary`,
+          to: sectionUrl('summary'),
         },
+        { id: 'url', label: 'URL', summary: draft.value.path, to: sectionUrl('url') },
       ],
     },
+    // A page a product owns says which, and leads back to it: one page, two ways in.
+    ...(draft.value.product_id ? [{
+      id: 'offering',
+      items: [{ id: 'offering', label: 'Offering', summary: 'The product this page shows', lead: { icon: 'i-lucide-briefcase' }, to: `/dashboard/${String(route.params.orgSlug)}/products/${encodeURIComponent(draft.value.product_id)}` }],
+    }] : []),
   ]
 })
 
@@ -187,7 +200,7 @@ const { createActionLabel, saveLabel, saveDisabled, save: saveOpenSection, start
   order: ['title'],
   missing: () => !draft.value.title.trim(),
   noun: 'page',
-  saving: computed(() => saving.value || pending.value),
+  saving,
   // An existing page saves what is in front of the tenant; there is nothing to
   // save when the draft still matches what was loaded.
   existingBlocked: () => !dirty.value,
@@ -219,7 +232,7 @@ function revertDraft() {
 
 provide(tenantPageEditorKey, {
   draft,
-  ready: computed(() => !pending.value),
+  loadError,
   saving,
   saveDisabled,
   saveLabel,

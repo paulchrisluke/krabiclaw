@@ -6,12 +6,18 @@ import { threadPayloadForGuest, requestInsertQueries, getGuestRequest } from '..
 import { upsertLocationReservationConfig } from '../../server/utils/reservations.ts'
 import test from 'node:test'
 import { Miniflare } from 'miniflare'
-import { claimDelivery, createDeliveryReceipt, getDeliveryById, getDeliveryRetryEligibility, isVisibleDeliveryFailure, listThreadDeliveries, recordDeliveryOutcome } from '../../server/domain/guest-threads/deliveries.ts'
+import { createDeliveryReceipt, getDeliveryById, isVisibleDeliveryFailure, listThreadDeliveries, recordDeliveryOutcome } from '../../server/domain/guest-threads/deliveries.ts'
 import { appendEntry } from '../../server/domain/guest-threads/entries.ts'
 import { executeGuestThreadOperation } from '../../server/domain/guest-threads/operations.ts'
 import { listGuestThreads, updateThreadProjectionIfLatestEntry } from '../../server/domain/guest-threads/repository.ts'
 import { requestBookingChange, respondToBookingChange } from '../../server/domain/guest-threads/booking-changes.ts'
-import { notifyContactSubmitted } from '../../server/utils/notifications.ts'
+import { notifyContactSubmitted, notifyFinancialNotification } from '../../server/utils/notifications.ts'
+import { createCanonicalNotification } from '../../server/utils/notification-center.ts'
+import { buildNotificationVisibilityFilter, type NotificationVisibilityPrincipal } from '../../server/utils/notification-access.ts'
+import { acknowledgeNotification } from '../../server/utils/notification-acknowledgement.ts'
+import { setNotificationPreference } from '../../server/domain/notification-preferences.ts'
+import { guestPaymentMessage, ownerPaymentMessage } from '../../server/notifications/payment-events.ts'
+import { getResendClient, resendData } from '../../server/utils/resend.ts'
 import { getReviewBookingContext } from '../../server/utils/review-requests.ts'
 import { sendReviewRequestForBooking } from '../../server/utils/review-request-delivery.ts'
 import { renderNotificationEmail } from '../../server/emails/render.ts'
@@ -19,9 +25,9 @@ import { reviewRequestMessage } from '../../server/notifications/guest-events.ts
 import { formatTimestamp } from '../../utils/timezone.ts'
 import type { CloudflareEnv } from '../../server/utils/auth.ts'
 
-test('D1 claims fence concurrent sends and bound ambiguous provider retries', async () => {
+test('a guest-thread email is sent once per event: replays send nothing, a failed send goes again, and a late reply never moves the thread', async () => {
   const runtime = new Miniflare({ workers: [{ config: {
-    name: 'guest-delivery-proof', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'guest-delivery-proof', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export class Hub { fetch() { return new Response(null, { status: 204 }) } } export default { fetch() { return new Response("ok") } }' } } },
     exports: { Hub: { type: 'durable-object', storage: 'sqlite' } },
     env: { DB: { type: 'd1' }, GUEST_INBOX_HUBS: { type: 'durable-object', worker: 'guest-delivery-proof', exportName: 'Hub' } },
@@ -92,104 +98,23 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
     await db.prepare("INSERT INTO activity_entries (id,request_id,kind,scope_kind,actor_kind,channel,dedupe_key,sequence,occurred_at) VALUES ('entry-proof','contact-proof','message','request','guest','email','proof',2,'2026-09-05T00:00:00.000Z')").run()
 
 
-    for (const provider of ['meta', 'resend'] as const) {
-      const receipt = await createDeliveryReceipt(db, { entryId: 'entry-proof', channel: provider === 'meta' ? 'whatsapp' : 'email', provider, purpose: 'member_reply', idempotencyKey: `${provider}-proof` })
-      assert.notEqual(getDeliveryRetryEligibility(receipt), 'retryable')
-      const now = Date.now()
-      const claims = await Promise.all([claimDelivery(db, receipt.id, now), claimDelivery(db, receipt.id, now)])
-      assert.equal(claims.filter(result => result.claimed).length, 1)
-      const winner = claims.find(result => result.claimed)!
-      assert(winner.claimed)
-      assert.equal((await claimDelivery(db, receipt.id, now + 1)).claimed, false)
+    const reply = (body: string, idempotencyKey: string) => executeGuestThreadOperation(db, {
+      threadId: 'contact-proof', action: 'reply', actorUserId: 'user-proof', body, idempotencyKey, env })
+    const deliveryRow = (id: string) => db.prepare('SELECT status, provider_message_id FROM guest_thread_deliveries WHERE id = ?').bind(id).first<{ status: string; provider_message_id: string | null }>()
 
-      if (provider === 'meta') {
-        assert.equal((await claimDelivery(db, receipt.id, now + 60_000)).claimed, false)
-        await db.prepare("UPDATE guest_thread_deliveries SET status = 'failed' WHERE id = ?").bind(receipt.id).run()
-        assert.equal((await claimDelivery(db, receipt.id, now + 60_000)).claimed, false)
-        continue
-      }
-
-      const retried = await claimDelivery(db, receipt.id, now + 60_000)
-      assert(retried.claimed)
-      assert.notEqual(retried.claimVersion, winner.claimVersion)
-      await recordDeliveryOutcome(db, { claim: winner, status: 'failed', error: 'late failure' })
-      assert.equal((await getDeliveryById(db, receipt.id))!.status, 'unknown')
-      await db.prepare("UPDATE guest_thread_deliveries SET status = 'delivered' WHERE id = ?").bind(receipt.id).run()
-      await recordDeliveryOutcome(db, { claim: retried, status: 'failed', error: 'late failure after webhook' })
-      assert.equal((await getDeliveryById(db, receipt.id))!.status, 'delivered')
-
-      await db.prepare("UPDATE guest_thread_deliveries SET status = 'unknown', created_at = ?, updated_at = ? WHERE id = ?")
-        .bind(new Date(now - 86_400_000).toISOString(), new Date(now - 60_000).toISOString(), receipt.id).run()
-      assert.equal((await claimDelivery(db, receipt.id, now)).claimed, false)
-      assert.notEqual(getDeliveryRetryEligibility((await getDeliveryById(db, receipt.id))!), 'retryable')
-    }
-    const failedReceipt = await createDeliveryReceipt(db, { entryId: 'entry-proof', channel: 'email', provider: 'resend', purpose: 'member_reply', idempotencyKey: 'failed-email-proof' })
-    const firstAttempt = await claimDelivery(db, failedReceipt.id)
-    assert(firstAttempt.claimed)
-    const failure = await recordDeliveryOutcome(db, { claim: firstAttempt, status: 'failed', error: 'provider rejected request' })
-    const retry = await claimDelivery(db, failedReceipt.id, Date.parse(failure.updated_at))
-    assert(retry.claimed)
-    assert(retry.claimVersion > failure.updated_at)
-    assert.equal(retry.delivery.error, null)
-    await recordDeliveryOutcome(db, { claim: firstAttempt, status: 'sent' })
-    assert.equal((await getDeliveryById(db, failedReceipt.id))!.status, 'unknown')
-    const sent = await recordDeliveryOutcome(db, { claim: retry, status: 'sent' })
-    assert.equal(sent.status, 'sent')
-
-    const operationKey = 'held-reply-proof'
+    // A reply is sent, and its receipt carries the provider's message id.
+    const operationKey = 'reply-proof'
     const operationDedupeKey = `guest-thread-operation:contact-proof:${operationKey}`
     const deliveryId = `guest-thread-email:contact-proof:${operationKey}`
-    await db.prepare(`
-      INSERT INTO activity_entries
-        (id, request_id, kind, scope_kind, actor_kind, actor_user_id, channel, body, event_name, dedupe_key, sequence, occurred_at)
-      VALUES ('entry-held-reply', 'contact-proof', 'message', 'request', 'member', 'user-proof', 'email', 'A held reply', 'thread.member_reply', ?, 3, ?)
-    `).bind(operationDedupeKey, new Date().toISOString()).run()
-    const heldReceipt = await createDeliveryReceipt(db, {
-      entryId: 'entry-held-reply',
-      channel: 'email',
-      provider: 'resend',
-      purpose: 'member_reply',
-      idempotencyKey: deliveryId,
-    })
-    const heldClaim = await claimDelivery(db, heldReceipt.id)
-    assert.equal(heldClaim.claimed, true)
-    const heldDeliveries = await listThreadDeliveries(db, 'contact-proof')
-    assert.equal(heldDeliveries.filter(delivery => isVisibleDeliveryFailure(delivery)).some(delivery => delivery.id === deliveryId), false,
-      'a claim still in flight is not surfaced as a failure')
-    assert.equal(heldDeliveries.some(delivery => delivery.id === heldReceipt.id), true,
-      'but the thread still knows the send exists, and on which channel')
-
-    const accepted = await executeGuestThreadOperation(db, {
-      threadId: 'contact-proof',
-            action: 'reply',
-      actorUserId: 'user-proof',
-      body: 'A held reply',
-      idempotencyKey: operationKey,
-      env: { EMAIL_DELIVERY_MODE: 'provider', NUXT_PUBLIC_PLATFORM_DOMAIN: 'proof.example' },
-    })
-    assert.deepEqual({ ok: accepted.ok, status: accepted.status }, { ok: true, status: 202 })
-
-    const acceptedRetry = await executeGuestThreadOperation(db, {
-      threadId: 'contact-proof',
-            action: 'retry_delivery',
-      actorUserId: 'user-proof',
-      deliveryId,
-      idempotencyKey: 'held-retry-proof',
-      env: { EMAIL_DELIVERY_MODE: 'provider', NUXT_PUBLIC_PLATFORM_DOMAIN: 'proof.example' },
-    })
-    assert.deepEqual({ ok: acceptedRetry.ok, status: acceptedRetry.status }, { ok: true, status: 202 })
-
-    await recordDeliveryOutcome(db, { claim: heldClaim, status: 'sent', providerMessageId: 'provider-proof' })
-    const replay = await executeGuestThreadOperation(db, {
-      threadId: 'contact-proof',
-            action: 'reply',
-      actorUserId: 'user-proof',
-      body: 'A held reply',
-      idempotencyKey: operationKey,
-      env: { EMAIL_DELIVERY_MODE: 'provider', NUXT_PUBLIC_PLATFORM_DOMAIN: 'proof.example' },
-    })
-    assert.deepEqual({ ok: replay.ok, status: replay.status }, { ok: true, status: 200 })
+    assert.deepEqual(await reply('A reply', operationKey).then(outcome => ({ ok: outcome.ok, status: outcome.status })), { ok: true, status: 200 })
+    const sent = await deliveryRow(deliveryId)
+    assert.equal(sent?.status, 'sent')
+    assert.match(sent?.provider_message_id ?? '', /^log-only:email:/)
     assert.equal((await db.prepare('SELECT conversation_state FROM requests WHERE id = ?').bind('contact-proof').first<{ conversation_state: string }>())?.conversation_state, 'waiting_on_guest')
+
+    // Replaying the same reply sends nothing: the receipt keeps its message id.
+    assert.equal((await reply('A reply', operationKey)).ok, true)
+    assert.equal((await deliveryRow(deliveryId))?.provider_message_id, sent?.provider_message_id)
 
     // A thread reaches 'resolved' through its record's own lifecycle, which
     // writes the state alongside the entry that caused it. Both halves matter
@@ -203,21 +128,12 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
       dedupeKey: 'lifecycle-resolve-proof',
     })
     await updateThreadProjectionIfLatestEntry(db, 'contact-proof', resolvingEntry.id, { conversationState: 'resolved' })
-
-    const replayAfterResolve = await executeGuestThreadOperation(db, {
-      threadId: 'contact-proof',
-            action: 'reply',
-      actorUserId: 'user-proof',
-      body: 'A held reply',
-      idempotencyKey: operationKey,
-      env: { EMAIL_DELIVERY_MODE: 'provider', NUXT_PUBLIC_PLATFORM_DOMAIN: 'proof.example' },
-    })
-    assert.deepEqual({ ok: replayAfterResolve.ok, status: replayAfterResolve.status }, { ok: true, status: 200 })
+    assert.equal((await reply('A reply', operationKey)).ok, true)
     assert.equal((await db.prepare('SELECT conversation_state FROM requests WHERE id = ?').bind('contact-proof').first<{ conversation_state: string }>())?.conversation_state, 'resolved')
 
+    // A reply whose send completes after a newer guest message leaves the
+    // thread on that message.
     const delayedOperationKey = 'delayed-reply-proof'
-    const delayedOperationDedupeKey = `guest-thread-operation:contact-proof:${delayedOperationKey}`
-    const delayedDeliveryId = `guest-thread-email:contact-proof:${delayedOperationKey}`
     const delayedReplyEntry = await appendEntry(db, {
       threadId: 'contact-proof',
       kind: 'message',
@@ -226,18 +142,15 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
       channel: 'email',
       body: 'A delayed reply',
       eventName: 'thread.member_reply',
-      dedupeKey: delayedOperationDedupeKey,
+      dedupeKey: `guest-thread-operation:contact-proof:${delayedOperationKey}`,
     })
-    const delayedReceipt = await createDeliveryReceipt(db, {
+    await createDeliveryReceipt(db, {
       entryId: delayedReplyEntry.id,
       channel: 'email',
-      provider: 'resend',
+      provider: 'log_only',
       purpose: 'member_reply',
-      idempotencyKey: delayedDeliveryId,
+      idempotencyKey: `guest-thread-email:contact-proof:${delayedOperationKey}`,
     })
-    const delayedClaim = await claimDelivery(db, delayedReceipt.id)
-    assert.equal(delayedClaim.claimed, true)
-
     const inboundEntry = await appendEntry(db, {
       threadId: 'contact-proof',
       kind: 'message',
@@ -247,21 +160,13 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
       dedupeKey: 'email:newer-guest-reply-proof',
     })
     await updateThreadProjectionIfLatestEntry(db, 'contact-proof', inboundEntry.id, { conversationState: 'needs_attention' })
-    await recordDeliveryOutcome(db, { claim: delayedClaim, status: 'sent', providerMessageId: 'provider-delayed-proof' })
-
-    const delayedCompletion = await executeGuestThreadOperation(db, {
-      threadId: 'contact-proof',
-            action: 'reply',
-      actorUserId: 'user-proof',
-      body: 'A delayed reply',
-      idempotencyKey: delayedOperationKey,
-      env: { EMAIL_DELIVERY_MODE: 'provider', NUXT_PUBLIC_PLATFORM_DOMAIN: 'proof.example' },
-    })
-    assert.deepEqual({ ok: delayedCompletion.ok, status: delayedCompletion.status }, { ok: true, status: 200 })
+    assert.deepEqual(await reply('A delayed reply', delayedOperationKey).then(outcome => ({ ok: outcome.ok, status: outcome.status })), { ok: true, status: 200 })
+    assert.equal((await deliveryRow(`guest-thread-email:contact-proof:${delayedOperationKey}`))?.status, 'sent')
     assert.equal((await db.prepare('SELECT conversation_state FROM requests WHERE id = ?').bind('contact-proof').first<{ conversation_state: string }>())?.conversation_state, 'needs_attention')
 
-    const retryOperationKey = 'failed-reply-proof'
-    const retryEntry = await appendEntry(db, {
+    // A failed send shows on the thread, and replaying the reply sends it again.
+    const failedOperationKey = 'failed-reply-proof'
+    const failedEntry = await appendEntry(db, {
       threadId: 'contact-proof',
       kind: 'message',
       actorKind: 'member',
@@ -269,38 +174,22 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
       channel: 'email',
       body: 'A failed reply',
       eventName: 'thread.member_reply',
-      dedupeKey: `guest-thread-operation:contact-proof:${retryOperationKey}`,
+      dedupeKey: `guest-thread-operation:contact-proof:${failedOperationKey}`,
     })
-    const retryReceipt = await createDeliveryReceipt(db, {
-      entryId: retryEntry.id,
+    const failedReceipt = await createDeliveryReceipt(db, {
+      entryId: failedEntry.id,
       channel: 'email',
-      provider: 'resend',
+      provider: 'log_only',
       purpose: 'member_reply',
-      idempotencyKey: `guest-thread-email:contact-proof:${retryOperationKey}`,
+      idempotencyKey: `guest-thread-email:contact-proof:${failedOperationKey}`,
     })
-    const retryClaim = await claimDelivery(db, retryReceipt.id)
-    assert.equal(retryClaim.claimed, true)
-    await recordDeliveryOutcome(db, { claim: retryClaim, status: 'failed', error: 'provider rejected request' })
+    await recordDeliveryOutcome(db, { deliveryId: failedReceipt.id, status: 'failed', error: 'provider rejected request' })
+    assert.equal((await listThreadDeliveries(db, 'contact-proof')).filter(isVisibleDeliveryFailure).some(delivery => delivery.id === failedReceipt.id), true)
+    assert.equal((await reply('A failed reply', failedOperationKey)).ok, true)
+    const resent = await getDeliveryById(db, failedReceipt.id)
+    assert.deepEqual({ status: resent?.status, error: resent?.error }, { status: 'sent', error: null })
+    assert.equal(isVisibleDeliveryFailure(resent!), false)
 
-    const secondResolvingEntry = await appendEntry(db, {
-      threadId: 'contact-proof',
-      kind: 'operation',
-      actorKind: 'system',
-      eventName: 'thread.completed',
-      dedupeKey: 'lifecycle-resolve-after-failure-proof',
-    })
-    await updateThreadProjectionIfLatestEntry(db, 'contact-proof', secondResolvingEntry.id, { conversationState: 'resolved' })
-
-    const retriedAfterResolve = await executeGuestThreadOperation(db, {
-      threadId: 'contact-proof',
-            action: 'retry_delivery',
-      actorUserId: 'user-proof',
-      deliveryId: retryReceipt.id,
-      idempotencyKey: 'retry-after-resolve-proof',
-      env: { NUXT_PUBLIC_PLATFORM_DOMAIN: 'proof.example' },
-    })
-    assert.deepEqual({ ok: retriedAfterResolve.ok, status: retriedAfterResolve.status }, { ok: true, status: 200 })
-    assert.equal((await db.prepare('SELECT conversation_state FROM requests WHERE id = ?').bind('contact-proof').first<{ conversation_state: string }>())?.conversation_state, 'resolved')
     assert.equal((await db.prepare('SELECT count(*) count FROM activity_entries WHERE dedupe_key = ?').bind(operationDedupeKey).first<{ count: number }>())?.count, 1)
     assert.equal((await db.prepare('SELECT count(*) count FROM guest_thread_deliveries WHERE id = ?').bind(deliveryId).first<{ count: number }>())?.count, 1)
   } finally {
@@ -308,10 +197,10 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
   }
 })
 
-test('D1 status-email retries preserve recorded content and reject superseded bookings', async (t) => {
+test('a replayed status email sends its recorded content and refuses a superseded booking', async (t) => {
   t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-10-01T10:00:00Z') })
   const runtime = new Miniflare({ workers: [{ config: {
-    name: 'status-retry-proof', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'status-retry-proof', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } },
     env: { DB: { type: 'd1' } },
   } }] })
@@ -343,7 +232,8 @@ test('D1 status-email retries preserve recorded content and reject superseded bo
       env: { EMAIL_DELIVERY_MODE: 'provider', RESEND_API_KEY: 'controlled-provider-only', NUXT_PUBLIC_PLATFORM_DOMAIN: 'proof.example' },
     }
     const cancel = { ...input, action: 'cancel', idempotencyKey: 'cancel-status' }
-    assert.equal((await executeGuestThreadOperation(db, cancel)).ok, true)
+    assert.deepEqual(await executeGuestThreadOperation(db, cancel), { ok: false, status: 502, reason: 'delivery_failed', message: '503 application_error: Internal server error. We are unable to process your request right now, please try again later.' })
+    assert.equal(await db.prepare("SELECT status FROM reservations WHERE id='reservation-status'").first('status'), 'cancelled')
     assert.equal(requests.length, 1)
     const deliveryId = 'guest-thread-email:booking-status:cancel-status'
     assert.equal((await getDeliveryById(db, deliveryId))!.status, 'failed')
@@ -352,22 +242,21 @@ test('D1 status-email retries preserve recorded content and reject superseded bo
     // sent copy contains it rather than being it.
     assert.ok(original.text.includes('Your reservation for Oct 1, 2098, 6:00 PM for 2 guests has been cancelled.'))
     assert.ok(original.html.includes('Your reservation for Oct 1, 2098, 6:00 PM for 2 guests has been cancelled.'))
-    assert.equal((await executeGuestThreadOperation(db, { ...input, action: 'retry_delivery', deliveryId, idempotencyKey: 'retry-unchanged' })).status, 502)
+    // Replaying the cancel sends the recorded email again, unchanged.
+    assert.equal((await executeGuestThreadOperation(db, cancel)).status, 502)
     assert.deepEqual(requests[1], original)
 
     // Moving the reservation is what makes the pending send stale — the thread
     // carries no copy of the time to move.
     await db.prepare("UPDATE reservations SET starts_at = '2098-10-02T11:00:00.000Z', ends_at = '2098-10-02T13:00:00.000Z' WHERE request_id = 'booking-status'").run()
     const attemptsBefore = requests.length
-    for (const request of [cancel, { ...input, action: 'retry_delivery', deliveryId, idempotencyKey: 'retry-changed' }]) {
-      assert.equal((await executeGuestThreadOperation(db, request)).status, 409)
-    }
+    assert.equal((await executeGuestThreadOperation(db, cancel)).status, 409)
     assert.equal(requests.length, attemptsBefore)
     // Cancelling is the one transition, so a second one has nothing to move:
     // the record is already cancelled and the stale send stays refused.
     reject = false
     const afterCancellation = requests.length
-    for (const request of [{ ...input, action: 'cancel', idempotencyKey: 'cancel-again' }, { ...input, action: 'retry_delivery', deliveryId, idempotencyKey: 'retry-cancelled' }]) {
+    for (const request of [{ ...input, action: 'cancel', idempotencyKey: 'cancel-again' }, cancel]) {
       assert.equal((await executeGuestThreadOperation(db, request)).status, 409)
     }
     assert.equal(requests.length, afterCancellation)
@@ -383,7 +272,7 @@ test('D1 status-email retries preserve recorded content and reject superseded bo
 
 test('a booking move into a full session leaves the original booking exactly as it was', async () => {
   const runtime = new Miniflare({ workers: [{ config: {
-    name: 'booking-move-proof', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'booking-move-proof', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export class Hub { fetch() { return new Response(null, { status: 204 }) } } export default { fetch() { return new Response("ok") } }' } } },
     exports: { Hub: { type: 'durable-object', storage: 'sqlite' } },
     env: { DB: { type: 'd1' }, GUEST_INBOX_HUBS: { type: 'durable-object', worker: 'booking-move-proof', exportName: 'Hub' } },
@@ -457,7 +346,7 @@ test('a booking move into a full session leaves the original booking exactly as 
 
 test('a review request reads the visit from the record that holds it', async () => {
   const runtime = new Miniflare({ workers: [{ config: {
-    name: 'review-request-proof', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'review-request-proof', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export class Hub { fetch() { return new Response(null, { status: 204 }) } } export default { fetch() { return new Response("ok") } }' } } },
     exports: { Hub: { type: 'durable-object', storage: 'sqlite' } },
     env: { DB: { type: 'd1' }, GUEST_INBOX_HUBS: { type: 'durable-object', worker: 'review-request-proof', exportName: 'Hub' } },
@@ -511,5 +400,176 @@ test('a review request reads the visit from the record that holds it', async () 
     assert.match(html, /Sep 11, 2026, 8:00\s?PM/, 'the visit renders in the reservation timezone')
     assert.match(html, /6 guests/)
     assert.doesNotMatch(html, />\s*your reservation\s*</, 'the headline phrase is never rendered as a detail value')
+  } finally { await runtime.dispose() }
+})
+
+test('financial notification replay preserves per-recipient receipts and isolates personal, merchant and platform audiences', { timeout: 120_000 }, async () => {
+  const runtime = new Miniflare({ workers: [{ config: {
+    name: 'financial-notification-proof', compatibilityDate: '2024-11-01',
+    manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export class Hub { fetch() { return new Response(null, { status: 204 }) } } export default { fetch() { return new Response("ok") } }' } } },
+    exports: { Hub: { type: 'durable-object', storage: 'sqlite' } },
+    env: { DB: { type: 'd1' }, GUEST_INBOX_HUBS: { type: 'durable-object', worker: 'financial-notification-proof', exportName: 'Hub' } },
+  } }] })
+  try {
+    const db = await runtime.getD1Database('DB')
+    const env = { ...await runtime.getBindings<CloudflareEnv>(), BETTER_AUTH_SECRET: 'local-proof-secret-long-enough-for-auth', BETTER_AUTH_URL: 'https://proof.example',
+      STRIPE_SECRET_KEY: 'sk_test_local_d1_no_stripe_requests', NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://proof.example',
+      EMAIL_DELIVERY_MODE: 'log_only', WHATSAPP_DELIVERY_MODE: 'log_only' }
+    await db.batch((await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))).map(statement => db.prepare(statement)))
+    await db.batch([
+      "INSERT INTO organization (id,name,slug) VALUES ('merchant','Merchant','merchant')",
+      "INSERT INTO organization (id,name,slug) VALUES ('other-merchant','Other','other-merchant')",
+      ...['owner-a', 'owner-b', 'owner-off', 'buyer', 'other-user', 'staff'].map(id => `INSERT INTO user (id,name,email,emailVerified) VALUES ('${id}','${id}','${id}@proof.example',1)`),
+      "INSERT INTO member (id,organizationId,userId,role) VALUES ('member-a','merchant','owner-a','owner')",
+      "INSERT INTO member (id,organizationId,userId,role) VALUES ('member-b','merchant','owner-b','admin')",
+      "INSERT INTO member (id,organizationId,userId,role) VALUES ('member-off','merchant','owner-off','owner')",
+      "INSERT INTO member (id,organizationId,userId,role) VALUES ('member-staff','merchant','staff','member')",
+      "INSERT INTO member (id,organizationId,userId,role) VALUES ('member-other','other-merchant','other-user','owner')",
+    ].map(statement => db.prepare(statement)))
+    assert.equal(await db.prepare('SELECT count(*) n FROM user').first('n'), 6)
+    assert.deepEqual((await db.prepare("SELECT userId,role FROM member WHERE organizationId='merchant' ORDER BY userId").all()).results,
+      [{ userId: 'owner-a', role: 'owner' }, { userId: 'owner-b', role: 'admin' }, { userId: 'owner-off', role: 'owner' }, { userId: 'staff', role: 'member' }])
+    await setNotificationPreference(db, env, 'owner-off', 'organization_and_billing', { email: false, whatsapp: false })
+    assert.deepEqual(await db.prepare("SELECT email_enabled,whatsapp_enabled FROM user_notification_preferences WHERE user_id='owner-off' AND category='organization_and_billing'").first(), { email_enabled: 0, whatsapp_enabled: 0 })
+    assert.equal(await db.prepare("SELECT count(*) n FROM activity_entries WHERE kind='notification'").first('n'), 0)
+
+    const eventKey = 'financial-proof:capture'
+    const payment = { kind: 'payment_captured' as const, organizationName: 'Merchant', amount: 10000, currency: 'USD' as const, productTitle: 'Class' }
+    const input = { organizationId: 'merchant', eventKey, ownerMessage: ownerPaymentMessage(payment),
+      guest: { userId: 'buyer', email: 'buyer@proof.example', message: guestPaymentMessage(payment) } }
+    await notifyFinancialNotification(env, db, input)
+    const rows = (await db.prepare('SELECT id,scope_kind,organization_id,target_user_id,parent_id,request_id FROM activity_entries WHERE event_name=? ORDER BY scope_kind').bind(eventKey).all()).results
+    assert.equal(rows.length, 2)
+    const buyer = rows.find(row => row.scope_kind === 'global')!, merchant = rows.find(row => row.scope_kind === 'organization')!
+    assert.deepEqual({ ...buyer, id: undefined }, { id: undefined, scope_kind: 'global', organization_id: null, target_user_id: 'buyer', parent_id: null, request_id: null })
+    assert.deepEqual({ ...merchant, id: undefined }, { id: undefined, scope_kind: 'organization', organization_id: 'merchant', target_user_id: null, parent_id: null, request_id: null })
+    assert.equal(await db.prepare('SELECT count(*) n FROM requests').first('n'), 0, 'a financial notification does not manufacture a guest conversation')
+    const receipts = (await db.prepare('SELECT * FROM guest_thread_deliveries ORDER BY id').all()).results
+    assert.equal(receipts.length, 3)
+    assert.equal(new Set(receipts.map(row => row.id)).size, 3, 'eligible merchant recipients and the buyer have distinct delivery claims')
+    assert.deepEqual(receipts.map(row => ({ entry_id: row.entry_id, purpose: row.purpose, channel: row.channel, provider: row.provider, status: row.status })).sort((a, b) => a.purpose.localeCompare(b.purpose)),
+      [
+        { entry_id: merchant.id, purpose: 'owner_alert', channel: 'email', provider: 'log_only', status: 'sent' },
+        { entry_id: merchant.id, purpose: 'owner_alert', channel: 'email', provider: 'log_only', status: 'sent' },
+        { entry_id: merchant.id, purpose: 'status_update', channel: 'email', provider: 'log_only', status: 'sent' },
+      ])
+    for (const receipt of receipts) {
+      assert.ok(String(receipt.id).length <= 256, 'the durable financial key fits Resend\'s documented idempotency limit')
+      assert.match(String(receipt.provider_message_id), /^log-only:email:/u)
+    }
+    await Promise.all([notifyFinancialNotification(env, db, input), notifyFinancialNotification(env, db, input)])
+    assert.deepEqual((await db.prepare('SELECT * FROM guest_thread_deliveries ORDER BY id').all()).results, receipts, 'replays do not claim or send settled receipts again')
+    assert.deepEqual((await db.prepare('SELECT id,scope_kind,organization_id,target_user_id,parent_id,request_id FROM activity_entries WHERE event_name=? ORDER BY scope_kind').bind(eventKey).all()).results, rows)
+
+    await createCanonicalNotification(db, { scope: 'global', targetUserId: 'other-user', template: 'personal.other', title: 'Other buyer', idempotencyKey: 'personal-other' })
+    await createCanonicalNotification(db, { scope: 'global', targetUserId: 'owner-a', template: 'personal.owner', title: 'Own purchase', idempotencyKey: 'personal-owner' })
+    await createCanonicalNotification(db, { scope: 'global', template: 'platform.alert', title: 'Platform alert', idempotencyKey: 'platform-alert' })
+    await createCanonicalNotification(db, { publishEnv: env, scope: 'organization', organizationId: 'other-merchant', template: 'merchant.other', title: 'Other merchant', idempotencyKey: 'other-merchant-alert' })
+    const cases: Array<{ principal: NotificationVisibilityPrincipal; ids: unknown[] }> = [
+      { principal: { userId: 'buyer', platformAdmin: false, organization: null }, ids: [buyer.id] },
+      { principal: { userId: 'other-user', platformAdmin: false, organization: null }, ids: ['personal-other'] },
+      { principal: { userId: 'owner-a', platformAdmin: false, organization: null }, ids: ['personal-owner'] },
+      { principal: { userId: 'owner-a', platformAdmin: false, organization: { id: 'merchant', role: 'owner' } }, ids: [merchant.id] },
+      { principal: { userId: 'other-user', platformAdmin: false, organization: { id: 'other-merchant', role: 'owner' } }, ids: ['other-merchant-alert'] },
+      { principal: { userId: 'staff', platformAdmin: false, organization: { id: 'merchant', role: 'member' } }, ids: [] },
+      { principal: { userId: 'buyer', platformAdmin: true, organization: null }, ids: [buyer.id, 'platform-alert'] },
+      { principal: { userId: 'owner-a', platformAdmin: true, organization: { id: 'merchant', role: 'owner' } }, ids: [merchant.id] },
+    ]
+    for (const { principal, ids } of cases) {
+      const filter = buildNotificationVisibilityFilter(principal)
+      const actual = (await db.prepare(`SELECT n.id FROM activity_entries n WHERE ${filter.whereSql} ORDER BY n.id`).bind(...filter.whereParams).all()).results
+      assert.deepEqual(actual.map(row => row.id), ids.sort(), JSON.stringify(principal))
+    }
+    const own = { userId: 'buyer', ...buildNotificationVisibilityFilter({ userId: 'buyer', platformAdmin: false, organization: null }) }
+    const other = { userId: 'other-user', ...buildNotificationVisibilityFilter({ userId: 'other-user', platformAdmin: false, organization: null }) }
+    assert.equal(await acknowledgeNotification(db, other, String(buyer.id)), false)
+    assert.equal(await acknowledgeNotification(db, own, String(merchant.id)), false)
+    assert.equal(await db.prepare("SELECT count(*) n FROM activity_entries WHERE kind='acknowledgement'").first('n'), 0)
+    assert.equal(await acknowledgeNotification(db, own, String(buyer.id)), true)
+    assert.deepEqual((await db.prepare("SELECT parent_id,actor_user_id FROM activity_entries WHERE kind='acknowledgement'").all()).results, [{ parent_id: buyer.id, actor_user_id: 'buyer' }])
+    // One key names one alert: a replay with a different audience returns the first write and changes nothing.
+    assert.equal(await createCanonicalNotification(db, { scope: 'organization', organizationId: 'other-merchant', template: eventKey, title: 'Changed audience', idempotencyKey: String(merchant.id) }), String(merchant.id))
+    assert.equal(await db.prepare('SELECT organization_id FROM activity_entries WHERE id=?').bind(merchant.id).first('organization_id'), 'merchant')
+
+    const differentlyCasedEvent = 'financial-proof:Capture'
+    await notifyFinancialNotification(env, db, { ...input, eventKey: differentlyCasedEvent })
+    assert.equal(await db.prepare('SELECT count(*) n FROM activity_entries WHERE event_name=?').bind(differentlyCasedEvent).first('n'), 2)
+    assert.equal(await db.prepare('SELECT count(*) n FROM guest_thread_deliveries d JOIN activity_entries n ON n.id=d.entry_id WHERE n.event_name=?').bind(differentlyCasedEvent).first('n'), 3, 'case-sensitive event identities retain their own recipient receipts')
+    assert.equal(await db.prepare('SELECT count(*) n FROM guest_thread_deliveries').first('n'), 6)
+
+    const contactKey = 'financial-proof:contact'
+    await notifyFinancialNotification(env, db, { ...input, eventKey: contactKey, guest: { ...input.guest, userId: null } })
+    const contactRows = (await db.prepare('SELECT scope_kind,target_user_id FROM activity_entries WHERE event_name=?').bind(contactKey).all()).results
+    assert.deepEqual(contactRows, [{ scope_kind: 'organization', target_user_id: null }], 'an email destination alone is not a personal audience')
+    const contactReceipts = (await db.prepare('SELECT * FROM guest_thread_deliveries ORDER BY id').all()).results
+    assert.equal(contactReceipts.length, 9)
+    await notifyFinancialNotification(env, db, { ...input, eventKey: contactKey })
+    assert.equal(await db.prepare("SELECT count(*) n FROM activity_entries WHERE event_name=? AND scope_kind='global' AND target_user_id='buyer'").bind(contactKey).first('n'), 1)
+    assert.deepEqual((await db.prepare('SELECT * FROM guest_thread_deliveries ORDER BY id').all()).results, contactReceipts, 'an explicit buyer identity does not send the same contact email again')
+    await db.prepare('DELETE FROM activity_entries WHERE id=?').bind(buyer.id).run()
+    assert.equal(await db.prepare('SELECT id FROM activity_entries WHERE id=?').bind(buyer.id).first('id'), null)
+    assert.deepEqual((await db.prepare('SELECT * FROM guest_thread_deliveries ORDER BY id').all()).results, contactReceipts, 'deleting a personal alert retains the merchant financial mail receipts')
+    await notifyFinancialNotification(env, db, { ...input, guest: { ...input.guest, userId: null } })
+    assert.deepEqual((await db.prepare('SELECT * FROM guest_thread_deliveries ORDER BY id').all()).results, contactReceipts, 'contact replay after personal deletion does not resend a settled email')
+  } finally { await runtime.dispose() }
+})
+
+test('native Resend test transport persists one delivered financial email through dispatcher replay', {
+  timeout: 60_000,
+  skip: process.env.PAYMENTS_NATIVE_RESEND_TEST !== '1',
+}, async (t) => {
+  assert.ok(process.env.RESEND_API_KEY?.trim(), 'explicit native qualification requires the configured Resend credential')
+  const runtime = new Miniflare({ workers: [{ config: {
+    name: 'native-financial-email-proof', compatibilityDate: '2024-11-01',
+    manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } },
+    env: { DB: { type: 'd1' } },
+  } }] })
+  try {
+    const db = await runtime.getD1Database('DB')
+    await db.batch((await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))).map(statement => db.prepare(statement)))
+    await db.prepare("INSERT INTO user (id,name,email,emailVerified) VALUES ('native-recipient','Native transport test','delivered@resend.dev',1)").run()
+    assert.equal(await db.prepare('SELECT email FROM user WHERE id=?').bind('native-recipient').first('email'), 'delivered@resend.dev')
+    assert.equal(await db.prepare('SELECT count(*) n FROM guest_thread_deliveries').first('n'), 0)
+    const env = { ...await runtime.getBindings<CloudflareEnv>(), NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://proof.example',
+      EMAIL_DELIVERY_MODE: 'provider', WHATSAPP_DELIVERY_MODE: 'log_only', RESEND_API_KEY: process.env.RESEND_API_KEY,
+      ...(process.env.EMAIL_FROM ? { EMAIL_FROM: process.env.EMAIL_FROM } : {}) }
+    const input = { organizationId: null, eventKey: `native-resend-transport:${crypto.randomUUID()}`,
+      guest: { userId: 'native-recipient', email: 'delivered@resend.dev', message: guestPaymentMessage({ kind: 'payment_captured', organizationName: 'Sandbox transport qualification', amount: 10000, currency: 'USD' }) } }
+    await notifyFinancialNotification(env, db, input)
+    const receipt = await db.prepare('SELECT * FROM guest_thread_deliveries').first()
+    assert(receipt)
+    assert.equal(receipt.channel, 'email')
+    assert.equal(receipt.provider, 'resend')
+    assert.equal(receipt.purpose, 'status_update')
+    assert.equal(receipt.status, 'sent')
+    assert.equal(receipt.error, null)
+    assert.ok(String(receipt.id).length <= 256)
+    assert.match(String(receipt.provider_message_id), /^[0-9a-f]{8}-[0-9a-f-]{27}$/iu)
+    assert.deepEqual(await db.prepare('SELECT kind,scope_kind,target_user_id,organization_id,request_id FROM activity_entries WHERE id=?').bind(receipt.entry_id).first(),
+      { kind: 'notification', scope_kind: 'global', target_user_id: 'native-recipient', organization_id: null, request_id: null })
+    const client = getResendClient(env)
+    let native = await resendData('native financial test email readback', () => client.emails.get(String(receipt.provider_message_id)))
+    const deadline = Date.now() + 20_000
+    while (native.last_event !== 'delivered' && Date.now() < deadline) {
+      assert.ok(['queued', 'sent'].includes(native.last_event), `native test email reached ${native.last_event}`)
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      native = await resendData('native financial test email readback', () => client.emails.get(String(receipt.provider_message_id)))
+    }
+    assert.equal(native.id, receipt.provider_message_id)
+    assert.deepEqual(native.to, ['delivered@resend.dev'])
+    assert.equal(native.subject, input.guest.message.title)
+    assert.equal(native.last_event, 'delivered')
+    assert.match(native.html ?? '', /100\.00 USD/u)
+    await notifyFinancialNotification(env, db, input)
+    assert.deepEqual(await db.prepare('SELECT * FROM guest_thread_deliveries').first(), receipt)
+    assert.equal(await db.prepare('SELECT count(*) n FROM guest_thread_deliveries').first('n'), 1)
+    assert.equal(await db.prepare("SELECT count(*) n FROM activity_entries WHERE kind='notification'").first('n'), 1)
+    const replayReadback = await resendData('native financial test email replay readback', () => client.emails.get(String(receipt.provider_message_id)))
+    assert.equal(replayReadback.id, native.id)
+    assert.equal(replayReadback.last_event, 'delivered')
+    t.diagnostic(JSON.stringify({ evidence: 'native Resend test transport', checked_at: new Date().toISOString(), recipient: 'delivered@resend.dev',
+      email_id: native.id, last_event: native.last_event, receipt_id_length: String(receipt.id).length,
+      persisted_notifications: 1, persisted_deliveries: 1, replay_provider_id_unchanged: true,
+      actual_financial_trigger_qualified: false, actual_owner_inbox_qualified: false }))
   } finally { await runtime.dispose() }
 })

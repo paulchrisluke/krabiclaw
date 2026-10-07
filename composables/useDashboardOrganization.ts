@@ -1,4 +1,3 @@
-import type { ComputedRef, Ref } from 'vue'
 import type { DashboardRequestScope } from '~/composables/dashboardFetch'
 
 /**
@@ -23,7 +22,6 @@ export interface DashboardOrganization {
   onboarding_status: string
   effective_plan: string
   default_currency: string | null
-  feature_overrides: string | null
   media: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string | null }>
 }
 
@@ -37,7 +35,6 @@ export interface DashboardLocation {
   media: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string | null }>
   picture_url: string | null
   social_image: { url: string; width?: number; height?: number; type?: string } | null
-  feature_overrides: string | null
 }
 
 
@@ -114,43 +111,24 @@ export function buildDashboardRequestQuery(scope: DashboardRequestScope): Record
   return { org: scope.orgSlug }
 }
 
-/** The scope key the context is stored under. Empty on an unscoped route. */
-function dashboardContextKey(scope: Ref<DashboardRequestScope | null> | ComputedRef<DashboardRequestScope | null>) {
-  return computed(() => {
-    const current = scope.value
-    return current ? `dashboard:context:${current.orgSlug}` : 'dashboard:context:unscoped'
-  })
+/** The key a scope's context is stored under. Empty on an unscoped route. */
+function dashboardContextKey(scope: DashboardRequestScope | null) {
+  return scope ? `dashboard:context:${scope.orgSlug}` : 'dashboard:context:unscoped'
 }
 
 /**
- * Registers the context request. layouts/dashboard.vue is the only caller.
- * Nothing else starts a context request; every other consumer reads the
- * result through `useDashboardOrganization()`.
- *
- * The scope comes from the router's live route, not `useRoute()`. In a layout,
- * `useRoute()` is Nuxt's lagging copy that only advances once the destination
- * page has rendered -- and the layout does not render that page until this
- * request has answered for the destination, so the two would wait on each
- * other. The result carries the key it answered for: on a scope change Nuxt
- * seeds the new key's `data` with the previous scope's result until the new
- * one lands, so `data` alone cannot say which scope it belongs to.
+ * The context request for one organization, keyed by it. The dashboard-context
+ * route middleware is the only caller: it awaits this before a navigation into
+ * an organization's dashboard completes, so the screen being left stays up
+ * until the new organization's context has answered, and nothing in the new
+ * scope ever renders with the previous organization's context or none.
  */
-export function useDashboardContextOwner() {
-  const scope = useDashboardRouteScope(useRouter().currentRoute)
-  const contextKey = dashboardContextKey(scope)
-
-  const request = useAsyncData<{ key: string; context: DashboardContextResponse | null }>(
-    () => contextKey.value,
+export function useDashboardContext(scope: DashboardRequestScope) {
+  return useAsyncData<DashboardContextResponse>(
+    dashboardContextKey(scope),
     async (_nuxtApp, { signal }) => {
-      const key = contextKey.value
-      const current = scope.value
-
-      // An unscoped route has no context to ask for. Checked on every
-      // execution, so navigation and manual refresh are covered too.
-      if (!current) return { key, context: null }
-
       const response = await $fetch<unknown>('/api/dashboard/context', {
-        query: buildDashboardRequestQuery(current),
+        query: buildDashboardRequestQuery(scope),
         signal,
       })
 
@@ -163,27 +141,26 @@ export function useDashboardContextOwner() {
         )
       }
 
-      return { key, context: response }
+      return response
     },
+    { dedupe: 'defer' },
   )
-
-  return Object.assign(request, { contextKey })
 }
 
 /**
- * Reads the context the owner already fetched. Starts no request, registers no
- * async data and holds no state of its own, so mounting a hundred consumers
- * costs nothing.
+ * Reads the context the middleware already fetched for the route's
+ * organization. Starts no request, registers no async data and holds no state
+ * of its own, so mounting a hundred consumers costs nothing.
  */
 export function useDashboardOrganization() {
   const nuxtApp = useNuxtApp()
   const scope = useDashboardRouteScope()
-  const contextKey = dashboardContextKey(scope)
+  const contextKey = computed(() => dashboardContextKey(scope.value))
 
-  const state = computed<DashboardContextResponse | null>(() => {
-    const entry = nuxtApp.payload.data[contextKey.value] as { key: string; context: DashboardContextResponse | null } | undefined
-    return entry?.context ?? null
-  })
+  const state = computed<DashboardContextResponse | null>(() =>
+    scope.value ? (nuxtApp.payload.data[contextKey.value] as DashboardContextResponse | undefined) ?? null : null)
+  /** Why the route's context could not be loaded, as Nuxt recorded it. */
+  const error = computed(() => scope.value ? nuxtApp.payload._errors[contextKey.value] ?? null : null)
 
   const organization = computed(() => state.value?.organization ?? null)
   const organizationId = computed(() => organization.value?.id ?? null)
@@ -191,12 +168,13 @@ export function useDashboardOrganization() {
 
   return {
     state,
+    error,
     scope,
     contextKey,
     organization,
     organizationId,
     locations,
-    /** Re-runs the owner's request. For an explicit reload after a mutation. */
+    /** Re-runs the context request. For an explicit reload after a mutation. */
     refresh: () => refreshNuxtData(contextKey.value),
   }
 }

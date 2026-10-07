@@ -20,9 +20,6 @@ for (const [sourceName, targetPath] of Object.entries(publicSurfaceCssPaths)) {
     throw new Error(`Missing public surface stylesheet: ${publicAssetPath}`);
   }
 
-  const surfaceCss = fs.readFileSync(publicAssetPath, 'utf8');
-  fs.writeFileSync(publicAssetPath, surfaceCss.replace(/url\((?:\.\.\/)+fonts\//g, 'url(/fonts/'));
-
   const sourcePattern = sourceName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const hashPattern = '[A-Za-z0-9_-]+';
   precomputedManifest = precomputedManifest
@@ -30,14 +27,6 @@ for (const [sourceName, targetPath] of Object.entries(publicSurfaceCssPaths)) {
     .replace(new RegExp(`/_nuxt/${sourcePattern}\\.${hashPattern}\\.css`, 'g'), `/_nuxt/${targetPath}`)
     .replace(new RegExp(`(^|[^A-Za-z0-9_/-])assets/surfaces/${sourcePattern}\\.${hashPattern}\\.css`, 'g'), `$1${targetPath}`)
     .replace(new RegExp(`(^|[^A-Za-z0-9_/-])${sourcePattern}\\.${hashPattern}\\.css`, 'g'), `$1${targetPath}`);
-}
-
-for (const targetPath of Object.values(publicSurfaceCssPaths)) {
-  const publicAssetPath = `.output/public/_nuxt/${targetPath}`;
-  const surfaceCss = fs.readFileSync(publicAssetPath, 'utf8');
-  if (surfaceCss.includes('../fonts/')) {
-    throw new Error(`Unresolved relative public font reference remains in ${publicAssetPath}`);
-  }
 }
 
 const staleSurfaceCss = Object.keys(publicSurfaceCssPaths)

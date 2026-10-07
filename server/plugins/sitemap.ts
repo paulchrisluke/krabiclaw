@@ -1,3 +1,4 @@
+import { publicTenantPageSql } from '~/server/utils/content/pages'
 import { isSubscriptionStateInvalid } from '~/server/utils/billing-access'
 import type { SitemapUrlInput } from '#sitemap/types'
 
@@ -23,6 +24,7 @@ async function listPublishedTenantSitemapPages(db: DbClient, organizationId: str
     SELECT v.path, v.updated_at AS lastmod
       FROM content_documents v
      WHERE v.organization_id = ? AND v.kind = 'page' AND v.row_role = 'root'
+       AND ${publicTenantPageSql('v')}
      ORDER BY lastmod ASC, path ASC
   `, [organizationId])
 }

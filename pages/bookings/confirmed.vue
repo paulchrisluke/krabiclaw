@@ -11,6 +11,7 @@
       :next-steps-notes-html="resolvedPolicySummary?.additional_notes_html ?? ''"
       :cta-label="browseLabel"
       :cta-to="browseHref"
+      :guest-email="confirmation.guestEmail"
     >
       <template #title>
         {{ confirmation.status === 'pending' ? 'Request received' : "You’re booked" }}, {{ confirmation.guestName }}!
@@ -136,5 +137,11 @@ async function share() {
   }
 }
 
-useSeoMeta({ title: 'Booking confirmed', robots: 'noindex' })
+useSocialMetadata({
+  path: '/bookings/confirmed',
+  title: 'Booking confirmed',
+  description: 'Your booking has been confirmed.',
+  socialImage: null,
+  discoverability: 'private',
+})
 </script>

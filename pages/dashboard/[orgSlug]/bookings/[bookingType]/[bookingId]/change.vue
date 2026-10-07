@@ -9,7 +9,7 @@
       <UAlert v-if="b.changeError.value" class="mb-6" color="error" variant="soft" icon="i-lucide-circle-alert" :description="b.changeError.value" />
       <h1 class="text-[32px] font-semibold leading-tight text-highlighted">What do you want to change?</h1>
       <p class="mt-2 text-base text-muted">
-        {{ b.firstName(b.booking.value.guestName) }} confirms the change before anything moves.
+        {{ b.firstName(b.booking.value.guestName ?? '') }} confirms the change before anything moves.
       </p>
 
       <div class="mt-6 flex items-center gap-4 border-t border-default pt-6">

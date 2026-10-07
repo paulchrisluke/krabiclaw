@@ -27,12 +27,10 @@ export function useNotificationPreferences(userId: MaybeRefOrGetter<string | nul
   // and then save — one person's settings under another person's session.
   const key = computed(() => `account-notification-preferences:${toValue(userId) ?? 'anonymous'}`)
   const state = useState<NotificationPreferenceMap | null>(key.value, () => null)
-  const pending = useState(`${key.value}:pending`, () => false)
   const error = useState<string | null>(`${key.value}:error`, () => null)
 
   async function load(force = false) {
     if (state.value && !force) return
-    pending.value = true
     error.value = null
     try {
       const response = await applicationFetch<{ preferences: NotificationPreferenceMap }>(
@@ -42,8 +40,6 @@ export function useNotificationPreferences(userId: MaybeRefOrGetter<string | nul
       state.value = response.preferences
     } catch (cause) {
       error.value = cause instanceof Error ? cause.message : 'Could not load your notification settings.'
-    } finally {
-      pending.value = false
     }
   }
 
@@ -55,5 +51,5 @@ export function useNotificationPreferences(userId: MaybeRefOrGetter<string | nul
     state.value = response.preferences
   }
 
-  return { preferences: state, pending, error, load, save }
+  return { preferences: state, error, load, save }
 }

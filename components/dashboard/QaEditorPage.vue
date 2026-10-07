@@ -13,6 +13,15 @@
     </template>
 
     <UAlert
+      v-if="loadError"
+      class="mb-6"
+      color="error"
+      variant="soft"
+      icon="i-lucide-triangle-alert"
+      title="Question could not be loaded"
+      :description="getErrorMessage(loadError, 'Q&A request failed')"
+    />
+    <UAlert
       v-if="errorMessage"
       class="mb-6"
       color="error"
@@ -53,23 +62,23 @@ import DashboardResourceLocalization from '~/components/dashboard/DashboardResou
 import { getErrorMessage } from '~/utils/errors'
 import { isQaResponse, isQaCreated, isQaUpdated, qaCreateBlockers, type QaRow } from '~/utils/organization-qa'
 
-/** Set when this is a location's question rather than the site's. */
-const props = defineProps<{ locationId?: string }>()
+// The location the URL scopes this to with `?location_id=`, or none for the whole site.
+const locationScope = useLocationScope()
 
 const route = useRoute()
+const router = useRouter()
 const dashboardApi = useDashboardApi()
 
 const qaId = computed(() => String(route.params.qaId ?? ''))
-const qaPath = computed(() => props.locationId
-  ? `/dashboard/${String(route.params.orgSlug)}/locations/${String(route.params.locationSlug)}/qa`
-  : `/dashboard/${String(route.params.orgSlug)}/qa`)
+const qaPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/website/qa`)
 const recordPath = computed(() => `${qaPath.value}/${qaId.value}`)
+const sectionUrl = (section: SectionKey) => router.resolve({ path: `${recordPath.value}/${section}`, query: route.query }).fullPath
 const level = useRouteLevel()
 
 const organizationId = await useDashboardOrganizationId()
 const isNew = computed(() => qaId.value === 'new')
-const qaEndpoint = computed(() => props.locationId
-  ? `/api/editor/organizations/${organizationId}/locations/${props.locationId}/qa`
+const qaEndpoint = computed(() => locationScope.value
+  ? `/api/editor/organizations/${organizationId}/locations/${locationScope.value}/qa`
   : `/api/editor/organizations/${organizationId}/qa`)
 
 const detailKey = computed(() => level.child.value)
@@ -81,7 +90,7 @@ function emptyDraft() {
 }
 
 // Keyed to the record so the draft survives the remount between sections.
-const form = useState(`qa-draft-${organizationId}-${props.locationId ?? 'organization'}-${qaId.value}`, emptyDraft).value
+const form = useState(`qa-draft-${organizationId}-${locationScope.value ?? 'organization'}-${qaId.value}`, emptyDraft).value
 
 const saving = ref(false)
 const errorMessage = ref('')
@@ -91,15 +100,14 @@ const errorMessage = ref('')
  * attribute it reports back, which the scoped PATCH needs. A location's list
  * is not scoped, so its record is found in the list.
  */
-const { data, refresh } = await useAsyncData(
-  () => `dashboard-qa-record-${organizationId}-${props.locationId ?? 'organization'}-${qaId.value}`,
+const { data, error: loadError, refresh } = await useAsyncData(
+  () => `dashboard-qa-record-${organizationId}-${locationScope.value ?? 'organization'}-${qaId.value}`,
   async () => isNew.value
     ? null
     : await dashboardApi<{ qa: QaRow[] }>(qaEndpoint.value, {
-      query: props.locationId ? undefined : { id: qaId.value },
+      query: locationScope.value ? undefined : { id: qaId.value },
       validate: isQaResponse,
     }),
-  { server: false },
 )
 
 const record = computed(() => data.value?.qa.find(row => row.id === qaId.value) ?? null)
@@ -121,15 +129,15 @@ const qaLocalizationFields = computed(() => [
   { key: 'title', label: 'Question', source: record.value?.question },
   { key: 'summary', label: 'Answer', source: record.value?.answer, multiline: true, rows: 4 },
 ])
-const organizationLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/website/localization`)
+const organizationLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/website/localization`)
 
 const navigationGroups = computed<EditorNavigationGroup[]>(() => [
   {
     id: 'question',
     items: [
-      { id: 'question', label: 'Question', summary: form.question.trim() || 'Not written yet', icon: 'i-lucide-circle-help', to: `${recordPath.value}/question` },
-      { id: 'answer', label: 'Answer', summary: form.answer.trim() || 'No answer yet', icon: 'i-lucide-message-square', to: `${recordPath.value}/answer` },
-      { id: 'visibility', label: 'Visibility', summary: form.published ? 'Published' : 'Hidden', icon: 'i-lucide-eye', to: `${recordPath.value}/visibility` },
+      { id: 'question', label: 'Question', summary: form.question.trim() || 'Not written yet', icon: 'i-lucide-circle-help', to: sectionUrl('question') },
+      { id: 'answer', label: 'Answer', summary: form.answer.trim() || 'No answer yet', icon: 'i-lucide-message-square', to: sectionUrl('answer') },
+      { id: 'visibility', label: 'Visibility', summary: form.published ? 'Published' : 'Hidden', icon: 'i-lucide-eye', to: sectionUrl('visibility') },
     ],
   },
 ])
@@ -157,12 +165,16 @@ async function commit() {
   saving.value = true
   errorMessage.value = ''
   try {
+    const pagePath = route.query.page_path
+    if (!locationScope.value && isNew.value && pagePath !== undefined && (typeof pagePath !== 'string' || !pagePath.trim() || !pagePath.startsWith('/') || pagePath.startsWith('//'))) {
+      throw new Error('Choose one page for this question before creating it.')
+    }
     const body = {
       // A site question is filed under the page the list was showing, and an
       // existing one keeps the page it already carries.
-      ...(props.locationId
+      ...(locationScope.value
         ? {}
-        : { page_path: isNew.value ? (typeof route.query.page_path === 'string' ? route.query.page_path : null) : record.value?.page_path ?? null }),
+        : { page_path: isNew.value ? pagePath ?? null : record.value?.page_path ?? null }),
       question: form.question.trim(),
       answer: form.answer.trim() || null,
       status: form.published ? 'published' : 'hidden',
@@ -172,7 +184,7 @@ async function commit() {
       Object.assign(form, emptyDraft())
       // The record it became, not the `new` form it was, so Back from a saved
       // question goes to the list and never to an empty Add screen.
-      await navigateTo(`${qaPath.value}/${created.id}`, { replace: true })
+      await navigateTo({ path: `${qaPath.value}/${created.id}`, query: route.query }, { replace: true })
       return
     }
     await dashboardApi(`${qaEndpoint.value}/${qaId.value}`, { method: 'PATCH', body, validate: isQaUpdated })

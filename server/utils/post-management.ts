@@ -3,7 +3,7 @@ import { HTTPError } from 'nitro'
 import { createContentDocumentWithBlocks, prepareContentDocumentDeletion, updateContentDocument, type ContentDocumentChanges } from '~/server/utils/content/documents'
 import { parsePostInput, PostValidationError, type PostCallToAction, type PostMediaRef, type PostMutation } from '~/shared/posts'
 import { executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
-import { creationDedupeKey, creationRequestHash, organizationEventQuery, readCreationRecord } from '~/server/utils/organization-events'
+import { creationDedupeKey, creationRequestHash, isUniqueDedupeConflict, organizationEventQuery, readCreationRecord } from '~/server/utils/organization-events'
 import { normalizePostSlug, postPublicPath } from '~/utils/post-slugs'
 import { insertInitialMediaPlacements, hydrateMediaAssetRefs, readMediaPlacements, type StoredMediaPlacementItem } from '~/server/utils/media-asset-manager'
 import { refreshSocialCard } from '~/server/utils/social-card'
@@ -310,10 +310,6 @@ export async function postMediaMutationQueries(db: DbClient, input: { organizati
     { query: `UPDATE content_documents SET updated_at = ?, source = 'manual' WHERE id = ? AND organization_id = ? AND kind = 'social_post' AND row_role = 'root'`,
       params: [updatedAt, input.ownerId, input.organizationId] },
   ]
-}
-
-function isUniqueDedupeConflict(error: unknown) {
-  return /UNIQUE constraint failed: activity_entries\.dedupe_key/.test(error instanceof Error ? error.message : String(error))
 }
 
 function isSlugConflict(error: unknown) {

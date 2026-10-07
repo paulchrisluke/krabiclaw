@@ -88,6 +88,96 @@ test('a v7 export transfers into the current baseline, its connections into orga
   }
 })
 
+test('a v11 export transfers into the v12 baseline, which has no capability overrides', async () => {
+  const { transferDatabaseExport } = await import('../../scripts/transfer-database-export.mjs')
+  const directory = mkdtempSync(join(tmpdir(), 'krabiclaw-v11-transfer-'))
+  const v11 = JSON.parse(readFileSync('migrations-history/v11/meta/_journal.json', 'utf8')).entries.map((entry: { tag: string }) => `${entry.tag}.sql`) as string[]
+  const export11 = (name: string, overrides: string | null) => {
+    const path = join(directory, name)
+    const source = new Database(path)
+    for (const file of v11) source.exec(readFileSync(`migrations-history/v11/${file}`, 'utf8'))
+    source.exec(`CREATE TABLE "d1_migrations"(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL);
+      ${v11.map(file => `INSERT INTO d1_migrations (name) VALUES ('${file}');`).join('\n')}`)
+    source.prepare("INSERT INTO organization (id, name, slug, subdomain, feature_overrides) VALUES ('org', 'Org', 'org', 'org', ?)").run(overrides)
+    source.prepare("INSERT INTO organization_locales (id, organization_id, locale, is_source, status) VALUES ('org-en', 'org', 'en', 1, 'published')").run()
+    source.close()
+    return path
+  }
+  try {
+    const targetPath = join(directory, 'v12.sqlite')
+    const manifest = transferDatabaseExport(export11('v11.sqlite', null), targetPath)
+    assert.deepEqual(manifest.source_migrations, v11)
+    const target = new Database(targetPath, { readonly: true })
+    try {
+      assert.deepEqual(target.pragma('foreign_key_check'), [])
+      assert.equal((target.prepare("SELECT slug FROM organization WHERE id = 'org'").get() as { slug: string }).slug, 'org')
+      for (const table of ['organization', 'business_locations']) {
+        assert.equal((target.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).some(column => column.name === 'feature_overrides'), false)
+      }
+    } finally {
+      target.close()
+    }
+    // An override nothing maps stops the transfer rather than disappearing.
+    assert.throws(() => transferDatabaseExport(export11('override.sqlite', '{"reservations":false}'), join(directory, 'target-override.sqlite')), /organization.feature_overrides holds values nothing maps/)
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
+
+test('a v12 export transfers into the v13 baseline with one site palette and logo presentations', async () => {
+  const { transferDatabaseExport } = await import('../../scripts/transfer-database-export.mjs')
+  const { TEMPLATE_PALETTES } = await import('../../shared/site-palette.ts')
+  const directory = mkdtempSync(join(tmpdir(), 'krabiclaw-v12-transfer-'))
+  const v12 = JSON.parse(readFileSync('migrations-history/v12/meta/_journal.json', 'utf8')).entries.map((entry: { tag: string }) => `${entry.tag}.sql`) as string[]
+  const blawbyTokens = { bg: '#fbfaf7', surface: '#ffffff', primary: '#25356c', primaryDark: '#161f3b', primary100: '#f2f5ff', primary200: '#b4c5e5', primary800: '#1d294f', accent: '#c19855', accent100: '#faf5ea', accent200: '#f8f0e1', accentButton: '#b58c4f', accentStrong: '#a37732', border: '#e5e7eb', ink: '#162033' }
+  const export12 = (name: string, tokens: Record<string, string>) => {
+    const path = join(directory, name)
+    const source = new Database(path)
+    for (const file of v12) source.exec(readFileSync(`migrations-history/v12/${file}`, 'utf8'))
+    source.exec(`CREATE TABLE "d1_migrations"(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL);
+      ${v12.map(file => `INSERT INTO d1_migrations (name) VALUES ('${file}');`).join('\n')}`)
+    const organization = source.prepare('INSERT INTO organization (id, name, slug, subdomain, theme_id, settings_json) VALUES (?, ?, ?, ?, ?, ?)')
+    organization.run('saya', 'Saya', 'saya', 'saya', 'saya-theme-v1', JSON.stringify({ config: { default_timezone: 'UTC', brand_color: '#96826a' } }))
+    organization.run('blawby', 'Blawby', 'blawby', 'blawby', 'blawby-theme-v1', JSON.stringify({ config: { default_timezone: 'UTC' }, theme_by_template: { blawby: { tokens, status: 'active', created_at: '2026-07-14 02:32:27', updated_at: '2026-07-14 02:32:27', updated_by: null } } }))
+    for (const id of ['saya', 'blawby']) {
+      source.prepare("INSERT INTO organization_locales (id, organization_id, locale, is_source, status) VALUES (?, ?, 'en', 1, 'published')").run(`${id}-en`, id)
+      source.prepare("INSERT INTO media_assets (id, organization_id, kind, provider, source, public_url, status) VALUES (?, ?, 'image', 'cloudflare_images', 'uploaded', 'https://imagedelivery.net/h/logo/public', 'active')").run(`${id}-logo`, id)
+      source.prepare("INSERT INTO media_placements (id, organization_id, owner_type, owner_id, slot, asset_id) VALUES (?, ?, 'organization', ?, 'logo', ?)").run(`${id}-logo-placement`, id, id, `${id}-logo`)
+    }
+    source.close()
+    return path
+  }
+  try {
+    const targetPath = join(directory, 'v13.sqlite')
+    const manifest = transferDatabaseExport(export12('v12.sqlite', blawbyTokens), targetPath)
+    assert.deepEqual(manifest.source_migrations, v12)
+    const target = new Database(targetPath, { readonly: true })
+    try {
+      assert.deepEqual(target.pragma('foreign_key_check'), [])
+      const settings = (id: string) => JSON.parse((target.prepare('SELECT settings_json FROM organization WHERE id = ?').get(id) as { settings_json: string }).settings_json)
+      // The Saya brand color is its palette's action color; everything else is Saya's own.
+      const saya = settings('saya')
+      assert.equal(saya.config.brand_color, undefined)
+      assert.deepEqual(saya.config.palette.light, { ...TEMPLATE_PALETTES.saya.light, action: '#96826A' })
+      assert.equal(saya.config.palette.dark.ground, TEMPLATE_PALETTES.saya.dark.ground)
+      assert.notEqual(saya.config.palette.dark.action, '#96826A')
+      // Blawby's stored tokens were its defaults: it wears its template's palette.
+      const blawby = settings('blawby')
+      assert.equal(blawby.theme_by_template, undefined)
+      assert.equal(blawby.config.palette, undefined)
+      const presentation = (id: string) => (target.prepare("SELECT presentation_json FROM media_placements WHERE organization_id = ? AND slot = 'logo'").get(id) as { presentation_json: string | null }).presentation_json
+      assert.deepEqual(JSON.parse(presentation('saya')!), { shape: 'circle', focus: { x: 0.5, y: 0.5 } })
+      assert.equal(presentation('blawby'), null)
+    } finally {
+      target.close()
+    }
+    // Tokens that are not Blawby's defaults have no palette to become; the transfer stops.
+    assert.throws(() => transferDatabaseExport(export12('custom-tokens.sqlite', { ...blawbyTokens, primary: '#004400' }), join(directory, 'target-tokens.sqlite')), /theme_by_template.blawby holds tokens other than Blawby's defaults/)
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
+
 test('consultation settings move preserves every value with one canonical source and referenced organization', () => {
   const db = new Database(':memory:')
   db.pragma('foreign_keys = ON')

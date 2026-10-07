@@ -1,4 +1,6 @@
 import { paginationInputSchema, organizationTool, type McpToolDefinition } from './shared'
+import { reassignBookingProvider } from '~/server/domain/provider-reassignment'
+import { refreshProductBusy } from '~/server/domain/member-scheduling'
 import { HTTPError } from 'nitro'
 import { queryAll, queryFirst } from '~/server/db'
 import { listSessions } from '~/server/utils/availability'
@@ -16,16 +18,17 @@ const reservationId = { type: 'string', description: 'Reservation ID from list_r
 const description = 'Call after the user approves the exact change. Records the action in the inbox history and may send email to the guest.'
 
 export const BOOKINGS_TOOLS: McpToolDefinition[] = [
+ organizationTool({name:'reassign_product_booking',domain:'bookings',minimumRole:'admin',confirmRequired:true,description:'Move a provider-led booking to another team member who is free at that time, without changing the service’s provider. The whole Session moves: attendees keep Booking IDs and Session time; active checkout holds refuse the change. Checks the member’s hours, time off, busy calendar and overlapping bookings atomically and audits actor/old/new assignment. The guest is told in their inbox thread; owners and both team members are notified. Retry the same key after a notification failure.',inputSchema:{operational_booking_id:bookingId,member_id:{type:'string'},expected_updated_at:{type:'string'},idempotency_key:key},required:['operational_booking_id','member_id','expected_updated_at','idempotency_key']}),
   organizationTool({ name: 'list_product_booking_sessions', domain: 'bookings', minimumRole: 'admin', confirmRequired: false,
     description: 'List scheduled sessions and remaining places for a product when the user wants to find a time for a booking or consultation. Includes conflicts with other appointments in its shared calendar. Use the returned session IDs to create or change a booking. This tool does not create sessions.',
     inputSchema: { product_id: { type: 'string' }, from: { type: 'string', description: 'Inclusive ISO UTC instant.' }, to: { type: 'string', description: 'Exclusive ISO UTC instant, at most 93 days after from.' }, ...paginationInputSchema }, required: ['product_id', 'from', 'to'],
   }),
   organizationTool({ name: 'list_product_bookings', domain: 'bookings', minimumRole: 'admin', confirmRequired: false,
-    description: 'List product bookings and consultations for the selected site when the user wants to review appointments, guests or booking status. Returns booking IDs and their inbox conversation IDs. Table reservations use list_reservation_inquiries.',
-    inputSchema: { ...paginationInputSchema },
+    description: 'List the selected business’s product bookings and consultations, with guests, session times, assigned members and current status. Results are paginated; use operational_booking_id to read or manage a booking and request_id to identify its inbox thread. Restaurant table reservations use list_reservation_inquiries.',
+    inputSchema: { assigned_member_id: {type: 'string'}, ...paginationInputSchema },
   }),
   organizationTool({ name: 'create_product_booking', domain: 'bookings', minimumRole: 'admin', confirmRequired: true,
-    description: `Create a guest booking or consultation for a published product and an existing session. Requires an available numeric price; specify variant_id when the product has multiple active variants. Staff-review bookings remain pending; instant bookings are confirmed. Paid offerings may allow payment later. For paid sessions requiring online payment, returns payment_required without creating a booking. Free sessions remain bookable. Does not collect payment. Sends owner alerts and sends the guest an acknowledgement only when guest_acknowledgement is true. ${description}`,
+    description: `Create a product booking or consultation for the named guest at a session from list_product_booking_sessions. Review offerings arrive pending; instant offerings arrive confirmed. Positive prices are allowed only when online collection is disabled; an explicit zero price uses the free flow. Required positive online collection returns financial_action_required and a dashboard URL before creating a booking, hold, Checkout or payment record. Owner notifications and an inbox record are created; guest_acknowledgement chooses whether to email the guest. Reuse the same idempotency_key only for an identical retry; completed deliveries are not sent again. ${description}`,
     inputSchema: {
       product_slug: { type: 'string' }, session_id: { type: 'string' }, variant_id: { type: 'string' },
       party_size: { type: 'integer', minimum: 1, maximum: 99 }, guest_name: { type: 'string', minLength: 1 },
@@ -39,12 +42,12 @@ export const BOOKINGS_TOOLS: McpToolDefinition[] = [
     description: 'Read one product booking or consultation when the user wants its guest details, status or current session. Use its updated_at when proposing a change.', inputSchema: { operational_booking_id: bookingId }, required: ['operational_booking_id'],
   }),
   ...([
-    ['confirm', 'Confirm a pending product booking or consultation after staff review. Keeps its existing capacity allocation and emails the guest confirmation.'],
-    ['reject', 'Decline a pending product booking or consultation after staff review. Cancels the booking, releases its places and emails the guest the decision.'],
-    ['cancel', 'Cancel a pending or confirmed product booking or consultation when the user requests cancellation. Releases its places and emails the guest the cancellation.'],
+    ['confirm', 'Confirm a pending product booking or consultation after staff review. Keeps its existing session and capacity allocation, changes its status to confirmed and emails the guest. Does not collect payment.'],
+    ['reject', 'Decline a pending product booking or consultation after staff review. Cancels the booking, releases its places and emails the guest the decision. If a refund is required, returns financial_action_required and a dashboard URL before changing status or preparing a refund; the rejection is incomplete. Use cancel_product_booking for a confirmed booking.'],
+    ['cancel', 'Cancel a pending or confirmed product booking or consultation when the user requests cancellation. Releases its places and emails the guest. If a refund is required, returns financial_action_required and a dashboard URL before changing status or preparing a refund; the cancellation is incomplete.'],
   ] as const).map(([action, purpose]) => organizationTool({
     name: `${action}_product_booking`, domain: 'bookings', minimumRole: 'admin', confirmRequired: true,
-    description: `${purpose} ${description}`,
+    description: `${purpose} Reuse the same idempotency_key only for an identical retry; a completed operation does not repeat its capacity change or delivered guest email. ${description}`,
     inputSchema: { operational_booking_id: bookingId, idempotency_key: key }, required: ['operational_booking_id', 'idempotency_key'],
   })),
   organizationTool({ name: 'request_product_booking_change', domain: 'bookings', minimumRole: 'admin', confirmRequired: true,
@@ -72,21 +75,23 @@ export async function handleBookingsTools(ctx: McpExecutorContext): Promise<unkn
     const productId = requiredString(args, 'product_id')
     const product = await queryFirst(db, 'SELECT id FROM products WHERE id = ? AND organization_id = ?', [productId, organizationId])
     if (!product) throw new HTTPError({ statusCode: 404, message: 'Product not found in this organization' })
+    await refreshProductBusy(db,env,organizationId,productId)
     const sessions = await listSessions(db, { organizationId, productId, fromInstant: new Date(start).toISOString(), toInstant: new Date(end).toISOString() })
     const page = paginateMcpCollection(sessions, args, { resource: `booking-sessions:${organizationId}:${productId}:${from}:${to}` })
     return { sessions: page.items, page_info: page.page_info }
   }
+  if(toolName==='reassign_product_booking')return reassignBookingProvider({env,organizationId,userId:organization.userId},{booking_id:requiredString(args,'operational_booking_id'),member_id:requiredString(args,'member_id'),expected_updated_at:requiredString(args,'expected_updated_at'),idempotency_key:requiredString(args,'idempotency_key')})
   if (toolName === 'list_product_bookings') {
-    const resource = { resource: `product-bookings:${organizationId}` }
+    const resource = { resource: `product-bookings:${JSON.stringify([organizationId, args.assigned_member_id ?? null])}` }
     const window = mcpPageWindow(args, resource)
-    const rows = await queryAll<Record<string, unknown> & { guest_json: string | null; provenance_json: string | null }>(db, `SELECT b.id AS operational_booking_id, b.request_id, b.product_id, b.product_variant_id, b.product_session_id, b.status, b.party_size, b.user_id, b.updated_at, s.starts_at, s.ends_at, s.timezone, json_extract(r.payload_json, '$.guest') AS guest_json, json_extract(r.payload_json, '$.provenance') AS provenance_json FROM bookings b JOIN product_sessions s ON s.id = b.product_session_id LEFT JOIN requests r ON r.id = b.request_id AND r.organization_id = b.organization_id WHERE b.organization_id = ? ORDER BY s.starts_at, b.id LIMIT ? OFFSET ?`, [organizationId, window.limit + 1, window.offset])
+    const rows = await queryAll<Record<string, unknown> & { guest_json: string | null; provenance_json: string | null }>(db, `SELECT b.id AS operational_booking_id, b.request_id, b.product_id, b.product_variant_id, b.product_session_id, b.status, b.party_size, b.user_id, b.updated_at, b.assigned_member_id, s.starts_at, s.ends_at, s.timezone, json_extract(r.payload_json, '$.guest') AS guest_json, json_extract(r.payload_json, '$.provenance') AS provenance_json FROM bookings b JOIN product_sessions s ON s.id = b.product_session_id LEFT JOIN requests r ON r.id = b.request_id AND r.organization_id = b.organization_id WHERE b.organization_id = ? AND (? IS NULL OR b.assigned_member_id=?) ORDER BY s.starts_at, b.id LIMIT ? OFFSET ?`, [organizationId, args.assigned_member_id??null, args.assigned_member_id??null, window.limit + 1, window.offset])
     const bookings = rows.slice(0, window.limit).map(({ guest_json, provenance_json, ...booking }) => ({ ...booking, guest: guest_json === null ? null : JSON.parse(guest_json), provenance: provenance_json === null ? null : JSON.parse(provenance_json) }))
     return { bookings, page_info: mcpPageInfo(window, bookings.length, rows.length > window.limit, resource) }
   }
   if (toolName === 'create_product_booking') {
     if (!event) throw new HTTPError({ statusCode: 500, message: 'Booking creation requires the request context' })
     const result = await createProductBooking(event, {
-      organizationId, slug: requiredString(args, 'product_slug'), body: args,
+      organizationId, slug: requiredString(args, 'product_slug'), body: args, financialWritesAllowed: false,
       operator: { userId: organization.userId, idempotencyKey: requiredString(args, 'idempotency_key'), source: requiredString(args, 'source'), externalReference: optionalString(args, 'external_reference') ?? null, guestAcknowledgement: args.guest_acknowledgement === true },
     })
     return { success: result.status < 400, ...result.body, http_status: result.status }
@@ -106,7 +111,7 @@ export async function handleBookingsTools(ctx: McpExecutorContext): Promise<unkn
     await publishGuestInboxThreadEvent(env, db, { threadId: thread.id, type: 'thread.changed' })
     return { success: true, request_id: thread.id, change_status: 'awaiting_guest_acceptance', record: await getThreadOperationalRecord(db, thread.id) }
   }
-  const outcome = await executeGuestThreadOperation(db, { threadId: thread.id, organizationId, action: toolName.split('_')[0]!, actorUserId: organization.userId, idempotencyKey: key, env })
-  if (outcome.ok || outcome.reason === 'delivery_failed' || outcome.reason === 'delivery_unknown') await publishGuestInboxThreadEvent(env, db, { threadId: thread.id, type: 'thread.changed' })
+  const outcome = await executeGuestThreadOperation(db, { threadId: thread.id, organizationId, action: toolName.split('_')[0]!, actorUserId: organization.userId, idempotencyKey: key, env, financialWritesAllowed: false })
+  if (outcome.ok || outcome.reason === 'delivery_failed') await publishGuestInboxThreadEvent(env, db, { threadId: thread.id, type: 'thread.changed' })
   return { ...outcome, record: await getThreadOperationalRecord(db, thread.id) }
 }

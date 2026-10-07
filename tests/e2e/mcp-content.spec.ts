@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 import Ajv from 'ajv'
 import { loginAs } from './helpers/auth'
 import { tenantBaseURL, tenantExtraHeaders } from './helpers'
-import { MCP_GROWTH_ORGANIZATION_ID, mcpRequest, mcpData } from './helpers/mcp'
+import { MCP_ORGANIZATION_ID, mcpRequest, mcpData } from './helpers/mcp'
 
 // Split out of mcp.spec.ts (content/publishing tool tests) — see
 // helpers/mcp.ts for why. This group covers post publishing, tenant blog
@@ -11,7 +11,7 @@ import { MCP_GROWTH_ORGANIZATION_ID, mcpRequest, mcpData } from './helpers/mcp'
 test.describe('stateless MCP server', () => {
   test('a post rejects fields that are not part of the contract', async ({ request, baseURL }) => {
     await loginAs(request, baseURL!)
-    const organizationId = MCP_GROWTH_ORGANIZATION_ID
+    const organizationId = MCP_ORGANIZATION_ID
 
     // Event and offer types are gone: their dates and terms are written in the body.
     const typed = await mcpRequest(request, baseURL!, {
@@ -35,7 +35,7 @@ test.describe('stateless MCP server', () => {
 
   test('a draft is created once per key, publishes only to its named targets, and matches the public API', async ({ request, baseURL }) => {
     await loginAs(request, baseURL!)
-    const organizationId = MCP_GROWTH_ORGANIZATION_ID
+    const organizationId = MCP_ORGANIZATION_ID
     let createdPostId: string | undefined
 
     try {
@@ -150,7 +150,7 @@ test.describe('stateless MCP server', () => {
 
   test('tenant blog tools preserve the canonical block document', async ({ request, baseURL }) => {
     await loginAs(request, baseURL!)
-    const organizationId = MCP_GROWTH_ORGANIZATION_ID
+    const organizationId = MCP_ORGANIZATION_ID
     const discovery = await mcpRequest(request, baseURL!, { method: 'tools/list' })
     expect(discovery.status()).toBe(200)
     const catalog = await discovery.json() as { result: { tools: Array<{ name: string; outputSchema: object }> } }

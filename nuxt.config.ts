@@ -6,7 +6,6 @@ import { getIcons } from '@iconify/utils'
 import { visualizer } from 'rollup-plugin-visualizer'
 import { ROBOTS_DISABLED_DIRECTIVE, ROBOTS_ENABLED_DIRECTIVE } from './shared/robots-directive'
 import { localizedPublicRouteAliases } from './build/localized-public-routes'
-import { mountOrganizationProductRoutes } from './build/product-routes'
 import { mountBookingRoutes } from './build/booking-routes'
 // One source for the entry -> public path map; patch.cjs rewrites the built
 // manifest from the same file, so a surface cannot be registered in one place
@@ -76,7 +75,6 @@ function publicSurfaceCssAssetFileName(assetInfo: { name?: string; fileName?: st
 }
 
 export default defineNuxtConfig({
-  ignore: ['**/.worktrees/**', '**/.claude/**'],
   modules: [
     '@nuxt/scripts',
     '@nuxtjs/robots',
@@ -87,7 +85,31 @@ export default defineNuxtConfig({
 
   ui: {
     colorMode: false,
-    fonts: false,
+  },
+
+  // @nuxt/fonts (installed by @nuxt/ui) resolves every family a stylesheet names,
+  // downloads the faces at build time and serves them from /_fonts. Each surface
+  // sheet carries only its own @font-face rules; a browser fetches a face only
+  // when rendered text uses it, so the site-font catalog in
+  // assets/css/font-presets.css costs nothing until a site selects one, and the
+  // Thai fallback nothing until a page has Thai text.
+  fonts: {
+    priority: ['google'],
+    throwOnError: true,
+    defaults: {
+      weights: [400, 500, 600, 700],
+      styles: ['normal'],
+      subsets: ['latin', 'thai'],
+    },
+    families: [
+      { name: 'Jost', weights: ['100 900'] },
+      { name: 'Instrument Serif', weights: [400], styles: ['normal', 'italic'] },
+      { name: 'Marcellus', weights: [400] },
+      // Japanese fallbacks: the CJK slices carry no subset name, so naming none
+      // keeps them and drops the Latin ones the site font already covers.
+      { name: 'Noto Sans JP', weights: [400, 700], subsets: ['japanese'] },
+      { name: 'Noto Serif JP', weights: [400, 700], subsets: ['japanese'] },
+    ],
   },
 
   app: {
@@ -182,6 +204,7 @@ export default defineNuxtConfig({
       appName: process.env.NUXT_PUBLIC_APP_NAME || '',
       platformUrl: process.env.NUXT_PUBLIC_SITE_URL || '',
       helpUrl: process.env.NUXT_PUBLIC_HELP_URL || 'https://krabiclaw.com/help',
+      stripePublishableKey: process.env.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '',
 
       whatsappNumber: process.env.NUXT_PUBLIC_WHATSAPP_NUMBER || process.env.WHATSAPP_NUMBER || '16197200000',
       perfPublicTestPage: publicPerfTestPage,
@@ -205,7 +228,7 @@ export default defineNuxtConfig({
     },
     server: {
       watch: {
-        ignored: ['**/.worktrees/**', '**/.claude/**', '**/.wrangler/**', '**/.data/**', '**/node_modules/**', '**/.git/**', '**/.nuxt/**', '**/.output/**', '**/dist/**']
+        ignored: ['**/.wrangler/**', '**/.data/**', '**/node_modules/**', '**/.git/**', '**/.nuxt/**', '**/.output/**', '**/dist/**']
       },
       allowedHosts: ['.krabiclaw.com']
     },
@@ -219,7 +242,6 @@ export default defineNuxtConfig({
     'pages:extend'(pages) {
       pages.push(...localizedPublicRouteAliases(pages))
       mountBookingRoutes(pages)
-      mountOrganizationProductRoutes(pages)
       // Captured here because this is where the resolved route tree exists. The
       // Worker needs it to answer "does anything already claim this path?" — see
       // build/claimed-public-routes.ts.
@@ -395,7 +417,7 @@ export default defineNuxtConfig({
   // Global watcher exclusions
   watchers: {
     chokidar: {
-      ignored: ['**/.worktrees/**', '**/.claude/**', '**/.wrangler/**', '**/.data/**', '**/node_modules/**', '**/.git/**', '**/.nuxt/**', '**/.output/**', '**/dist/**']
+      ignored: ['**/.wrangler/**', '**/.data/**', '**/node_modules/**', '**/.git/**', '**/.nuxt/**', '**/.output/**', '**/dist/**']
     }
   },
 

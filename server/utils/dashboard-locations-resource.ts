@@ -1,6 +1,7 @@
 
 import type { H3Event } from 'nitro'
 import { queryAll } from '~/server/db'
+import { loadOwnerPictures } from '~/server/notifications/hero'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { parsePostalAddress } from '~/utils/postal-address'
 
@@ -27,11 +28,14 @@ export async function listDashboardLocationsResource(
      WHERE organization_id = ?
      ORDER BY title ASC
   `, [organization.id])
+  // The picture leads a row and a Menu card alike, so the resource carries it.
+  const pictures = await loadOwnerPictures(db, organization.id, 'business_location', locations.map(location => location.id))
   return {
     success: true as const,
     locations: locations.map(location => ({
       ...location,
       address: parsePostalAddress(location.address),
+      imageUrl: pictures.get(location.id)?.imageUrl ?? null,
     })),
   }
 }

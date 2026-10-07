@@ -1,6 +1,6 @@
 import { jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { requireOrganizationAccess } from '~/server/utils/location-access'
-import { listOrganizationProducts } from '~/server/utils/product-management'
+import { hydrateProductMedia, listOrganizationProducts } from '~/server/utils/product-management'
 import { defineHandler } from 'nitro'
 import { getRouterParam } from 'nitro/h3'
 
@@ -11,7 +11,8 @@ export default defineHandler(async (event) => {
     const { db, organization } = await requireOrganizationAccess(event, organizationId)
     // Everything this site carries, published or withheld: the editor decides
     // visibility, so it must be able to see what is currently hidden.
-    const products = await listOrganizationProducts(db, { organizationId: organization.id })
+    // The same photographs the location list attaches, so a row looks the same in every scope.
+    const products = await hydrateProductMedia(db, organization.id, await listOrganizationProducts(db, { organizationId: organization.id }))
     return jsonResponse({ success: true, products, organization_id: organizationId })
   } catch (error) {
     rethrowHttpError(error)

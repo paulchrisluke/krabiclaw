@@ -1,6 +1,8 @@
+import { isRecord } from '~/utils/api-clients'
 import { localDateAt } from '~/utils/timezone'
-import { resolveBookingPresentation } from '~/utils/booking-presentation'
-import type { DashboardBookingDetails, DashboardBookingType } from '~/server/utils/dashboard-booking-details'
+import { resolveBookingPresentation, type BookingPresentation } from '~/utils/booking-presentation'
+import { paymentStateLabel } from '~/shared/payment-display'
+import type { DashboardBookingDetails, DashboardRecordType } from '~/server/utils/dashboard-booking-details'
 
 /**
  * One booking record, loaded once per route.
@@ -15,52 +17,56 @@ export function isBookingDetailsResponse(value: unknown): value is { booking: Da
     && isRecord(value.booking)
     && typeof value.booking.id === 'string'
     && typeof value.booking.organizationId === 'string'
-    && typeof value.booking.guestName === 'string'
+    && (value.booking.guestName === null || typeof value.booking.guestName === 'string')
     && Array.isArray(value.booking.notes)
     && (value.booking.policy === null || isRecord(value.booking.policy))
 }
 
-export async function useBookingDetails(bookingType: DashboardBookingType, bookingId: string) {
+// A purchase is not a booking of anything; its one word is the same for every vertical.
+const PURCHASE: BookingPresentation = { noun: 'purchase', nounPlural: 'purchases', label: 'Purchase', labelPlural: 'Purchases' }
+
+export async function useBookingDetails(bookingType: DashboardRecordType, bookingId: string, personalScope = false) {
   const route = useRoute()
-  const dashboardApi = useDashboardApi()
-  const orgSlug = computed(() => String(route.params.orgSlug || ''))
+  // The account reads its own booking from the account API; the business reads the organization's.
+  const dashboardApi = personalScope ? applicationFetch : useDashboardApi()
+  const endpoint = `/api/${personalScope ? 'account' : 'dashboard'}/bookings/${bookingType}/${encodeURIComponent(bookingId)}`
+  const orgSlug = computed(() => personalScope ? 'account' : String(route.params.orgSlug || ''))
 
   const key = computed(() => `dashboard-booking:${orgSlug.value}:${bookingType}:${bookingId}`)
-  const { data: resource, pending, error } = await useAsyncData<{ booking: DashboardBookingDetails }>(
+  const { data: resource, error, refresh: reread } = await useAsyncData<{ booking: DashboardBookingDetails }>(
     key,
-    () => dashboardApi(`/api/dashboard/bookings/${bookingType}/${encodeURIComponent(bookingId)}`, {
+    () => dashboardApi(endpoint, {
       validate: isBookingDetailsResponse,
     }),
-    // Awaiting this blocks the navigation into the booking, and every surface
-    // that reads it already renders `pending`.
-    { lazy: true },
   )
 
   const booking = computed(() => resource.value?.booking ?? null)
 
   // The one vocabulary. `resolveBookingPresentation` refuses a missing vertical
   // rather than guessing, so it is only asked once the booking has loaded.
+  const purchase = bookingType === 'order' || bookingType === 'payment'
   const presentation = computed(() => booking.value
-    ? resolveBookingPresentation(booking.value.type, booking.value.vertical)
+    ? purchase ? PURCHASE : resolveBookingPresentation(booking.value.type as 'reservation' | 'booking', booking.value.vertical)
     : null)
   const noun = computed(() => presentation.value?.noun ?? '')
 
   const referenceDay = computed(() => booking.value ? localDateAt(new Date(), booking.value.timeZone) : '')
   const pageTitle = computed(() => {
-    if (!booking.value) return 'Booking details'
+    if (!booking.value) return purchase ? 'Purchase' : 'Booking details'
+    // A purchase's state is the money's: Paid, Refunded, Pending — as the visit's is Coming up or Cancelled.
+    if (purchase) return booking.value.payments?.[0] ? paymentStateLabel(booking.value.payments[0].payment) : 'Purchase'
     if (booking.value.status === 'pending') return 'Awaiting review'
     if (booking.value.status === 'cancelled') return 'Cancelled'
-    if (booking.value.bookingDate === referenceDay.value) return 'Currently hosting'
+    if (booking.value.bookingDate === referenceDay.value) return personalScope ? 'Today' : 'Currently hosting'
     if (booking.value.bookingDate > referenceDay.value) return 'Coming up'
     return `Past ${noun.value}`
   })
 
+  /** A writer's re-read; a failed one fails the write that asked for it. */
   async function refresh() {
-    resource.value = await dashboardApi<{ booking: DashboardBookingDetails }>(
-      `/api/dashboard/bookings/${bookingType}/${encodeURIComponent(bookingId)}`,
-      { validate: isBookingDetailsResponse },
-    )
+    await reread()
+    if (error.value) throw error.value
   }
 
-  return { resource, booking, pending, error, presentation, noun, pageTitle, orgSlug, refresh }
+  return { resource, booking, error, presentation, noun, pageTitle, orgSlug, purchase, refresh }
 }

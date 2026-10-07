@@ -98,7 +98,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
       description: "Edit the selected blog or documentation article. Only supplied metadata changes; content_blocks replaces the entire body and requires expected_updated_at from the latest read. Stale tokens conflict. Changes to a published article are public immediately.",
       domain: 'blog',
       minimumRole: 'admin',
-      confirmRequired: false,
+      confirmRequired: true,
       inputSchema: {
         post_id: { type: 'string', description: 'Post id or slug.' },
         title: { type: 'string' },
@@ -118,7 +118,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'publish_blog_post',
-      description: "Publish the selected draft blog or documentation article when publication is requested. Requires expected_updated_at from the latest read. An already published article is unchanged, including its date and announcement.",
+      description: "Publish the selected draft blog or documentation article when publication is requested. Requires expected_updated_at from the latest read. An already published article is unchanged, including its date and announcement. Returns the article and website URL; this does not publish to Facebook or Instagram.",
       domain: 'blog', minimumRole: 'admin', confirmRequired: true,
       inputSchema: {
         post_id: { type: 'string', description: 'Post id or slug.' },
@@ -169,7 +169,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'create_article_category',
-      description: 'Create a category in the blog or the documentation, at the top level or under another category (parent_id). It goes last among its siblings; place it with reorder_article_categories. Its slug comes from the name and does not change later.',
+      description: 'Create a category in the blog or the documentation, at the top level or under another category (parent_id). It goes last among its siblings; place it with reorder_article_categories. Its slug comes from the name and does not change later. Returns the category and ID; articles are assigned separately.',
       domain: 'blog', minimumRole: 'admin', confirmRequired: false,
       inputSchema: {
         collection: { type: 'string', enum: ['blog', 'docs'] },
@@ -182,7 +182,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'update_article_category',
-      description: "Rename a category, change its description, or move it under another category (parent_id; null moves it to the top level, where it goes last). Its page's address (slug) stays the same.",
+      description: "Rename a category, change its description, or move it under another category (parent_id; null moves it to the top level, where it goes last). Its page's address (slug) stays the same. Omitted fields stay unchanged; returns the updated category without moving its articles.",
       domain: 'blog', minimumRole: 'admin', confirmRequired: false,
       inputSchema: {
         category_id: { type: 'string' },

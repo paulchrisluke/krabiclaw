@@ -1,5 +1,5 @@
 import type { Product, ProductSurface } from '~/server/types/products'
-import type { PublicProductBooking, PublicProductLocationPayload, PublicProductReview, PublicProductSession } from '~/server/utils/public-products'
+import type { PublicProductBooking, PublicProductLocation, PublicProductReview, PublicProductSession } from '~/server/utils/public-products'
 import { isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
 import { isRecord, publicApiRequest } from '~/utils/api-clients'
 import type { ProductCollectionSibling } from '~/utils/product-seo'
@@ -7,7 +7,7 @@ import { isPublicProduct, type PublicLocaleRepresentation } from '~/utils/public
 
 export interface PublicProductDetailPayload {
   product: Product
-  location: PublicProductLocationPayload | null
+  location: PublicProductLocation | null
   currency: CurrencyCode
   vertical: string
   brandName: string
@@ -102,7 +102,7 @@ export async function usePublicProductDetail(routeKind: ProductSurface) {
     async (_nuxtApp, { signal }) => {
       if (import.meta.server) {
         if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
-        const [{ cloudflareEnv }, { loadPublicExperienceDetail, loadPublicProductDetail, loadPublicProductReviews, loadPublicProductSessions, publicLocationPayload }, { selectProductCollectionSiblings }] = await Promise.all([
+        const [{ cloudflareEnv }, { loadPublicExperienceDetail, loadPublicProductDetail, loadPublicProductReviews, loadPublicProductSessions }, { selectProductCollectionSiblings }] = await Promise.all([
           import('~/server/utils/api-response'),
           import('~/server/utils/public-products'),
           import('~/utils/product-seo'),
@@ -122,7 +122,7 @@ export async function usePublicProductDetail(routeKind: ProductSurface) {
         const siblingCollection = detail.collections.find(collection => membership.has(collection.id)) ?? null
         return {
           product: detail.product,
-          location: detail.location ? publicLocationPayload(detail.location) : null,
+          location: detail.location,
           currency: detail.currency,
           vertical: detail.organization.vertical,
           brandName: detail.organization.name,
@@ -130,7 +130,7 @@ export async function usePublicProductDetail(routeKind: ProductSurface) {
           booking: detail.booking,
           // The calendar travels with the page, so the dates are in the bytes
           // a crawler reads rather than appearing only after hydration.
-          sessions: await loadPublicProductSessions(db, detail),
+          sessions: await loadPublicProductSessions(db, detail, env),
           // Siblings come from the collection this product actually belongs
           // to on this site. With none, there are no siblings to show — the
           // page does not fall back to "everything at this location".

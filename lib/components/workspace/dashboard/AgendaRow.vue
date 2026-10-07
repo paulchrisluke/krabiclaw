@@ -1,14 +1,28 @@
 <template>
-  <NuxtLink :to="to ?? item.to" class="group grid min-h-[var(--ws-row-min-height,66px)] grid-cols-[5.5rem_1fr_auto] items-center gap-3 py-3" :class="cancelled ? 'text-muted line-through' : 'text-highlighted'">
-    <div class="text-sm font-medium tabular-nums">
+  <!-- One row of a day: the Today card's shape, smaller — who, with the place as a badge, what, and when. -->
+  <NuxtLink :to="to ?? item.to" class="group flex min-h-[var(--ws-row-min-height,66px)] items-center gap-4 py-3" :class="cancelled ? 'text-muted' : 'text-highlighted'">
+    <div class="relative size-12 shrink-0" aria-hidden="true">
+      <UAvatar
+        :src="item.guestImageUrl || undefined"
+        alt=""
+        icon="i-lucide-user"
+        class="size-12"
+        :ui="{ icon: 'size-6' }"
+      />
+      <div class="absolute -bottom-1 -right-1 flex size-6 items-center justify-center overflow-hidden rounded-lg border-2 border-default bg-default">
+        <img v-if="item.resourceImageUrl" :src="item.resourceImageUrl" alt="" class="size-full object-cover">
+        <UIcon v-else :name="item.kind === 'booking' ? 'i-lucide-ticket' : item.kind === 'post' ? 'i-lucide-newspaper' : 'i-lucide-map-pin'" class="size-3 text-muted" />
+      </div>
+    </div>
+    <div class="min-w-0 flex-1">
+      <p class="truncate text-sm font-medium" :class="cancelled ? 'line-through' : ''">{{ item.title }}</p>
+      <p class="mt-0.5 truncate text-xs text-muted">{{ details }}</p>
+    </div>
+    <div class="shrink-0 text-right text-sm tabular-nums" :class="cancelled ? 'line-through' : ''">
       {{ formattedTime }}
       <span v-if="item.showTimeZone" class="block text-[11px] font-normal text-muted">{{ item.timeZone }}</span>
     </div>
-    <div class="min-w-0">
-      <p class="truncate text-sm font-medium">{{ item.title }}</p>
-      <p class="mt-0.5 truncate text-xs text-muted">{{ details }}</p>
-    </div>
-    <UIcon name="i-lucide-chevron-right" class="size-4 text-dimmed group-hover:text-highlighted" />
+    <UIcon name="i-lucide-chevron-right" class="size-4 shrink-0 text-dimmed group-hover:text-highlighted" />
   </NuxtLink>
 </template>
 
@@ -21,10 +35,5 @@ import type { AgendaItem } from '~/server/utils/dashboard-agenda'
 const props = defineProps<{ item: AgendaItem; to?: string }>()
 const cancelled = computed(() => props.item.status === 'cancelled')
 const formattedTime = computed(() => formatTimestamp(props.item.startsAt, 'en', props.item.timeZone, { hour: 'numeric', minute: '2-digit' }))
-const details = computed(() => [cancelled.value ? 'Cancelled' : props.item.subtitle, props.item.locationTitle, agendaKindLabel(props.item.kind)].filter(Boolean).join(' · '))
-
-function agendaKindLabel(kind: AgendaItem['kind']) {
-  if (kind === 'booking') return 'Booking'
-  return kind.charAt(0).toUpperCase() + kind.slice(1)
-}
+const details = computed(() => [cancelled.value ? 'Cancelled' : props.item.subtitle, props.item.locationTitle].filter(Boolean).join(' · '))
 </script>

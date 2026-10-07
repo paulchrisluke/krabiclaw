@@ -831,9 +831,13 @@ export function globalTool(definition: RawMcpToolDefinition | McpToolDefinition)
 
 export type RawMcpToolDefinition = Omit<McpToolDefinition, 'annotations' | 'securitySchemes'>
 
-// The explicit catalog table below is authoritative. Website/CMS operations
-// stay within the selected workspace even when its content is publicly visible.
-// Publishing to a social audience and downloading host files cross that boundary.
+// Classify the complete supported contract, including optional branches.
+// Deletion/replacement of owned records and messages sent to recipients are
+// destructive effects even if a later edit or cancellation is possible.
+// Ordinary property edits that retain the underlying record are W.
+// A provider's hosting alone is not open-world: the selected workspace's own
+// Stripe account, stored media, and linked accounts remain bounded targets.
+// Guest email, public social audiences and host file downloads cross that scope.
 const R: McpToolAnnotations = Object.freeze({
   readOnlyHint: true,
   idempotentHint: true,
@@ -846,22 +850,32 @@ const D: McpToolAnnotations = Object.freeze({ readOnlyHint: false, openWorldHint
 /** Submission-review contract. Every real public tool is listed explicitly. */
 export const EXPECTED_TOOL_ANNOTATIONS = {
   create_qa: W,
-  update_qa: D,
+  update_qa: W,
   delete_qa: D,
-  reorder_qa: D,
-  set_product_booking_config: D,
+  reorder_qa: W,
+  get_member_scheduling: R,
+  set_member_scheduling: W,
+  set_member_busy_calendars: W,
+  reassign_product_booking: { ...D, openWorldHint: true, idempotentHint: true },
+  get_payment_summary: R,
+  list_payments: R,
+  get_payment: R,
+  get_payment_payouts: R,
+  get_payments_usage: R,
+  get_payments_dashboard_link: R,
+  set_product_booking_config: W,
   delete_product_booking_config: D,
   replace_product_weekly_schedule: D,
-  create_product_booking: { ...W, openWorldHint: true, idempotentHint: true },
+  create_product_booking: { ...D, openWorldHint: true, idempotentHint: true },
   get_product_booking: R,
   list_product_bookings: R,
   list_product_booking_sessions: R,
-  confirm_product_booking: { ...W, openWorldHint: true, idempotentHint: true },
+  confirm_product_booking: { ...D, openWorldHint: true, idempotentHint: true },
   reject_product_booking: { ...D, openWorldHint: true, idempotentHint: true },
   cancel_product_booking: { ...D, openWorldHint: true, idempotentHint: true },
-  request_product_booking_change: { ...W, openWorldHint: true, idempotentHint: true },
+  request_product_booking_change: { ...D, openWorldHint: true, idempotentHint: true },
   cancel_table_reservation: { ...D, openWorldHint: true, idempotentHint: true },
-  request_table_reservation_change: { ...W, openWorldHint: true, idempotentHint: true },
+  request_table_reservation_change: { ...D, openWorldHint: true, idempotentHint: true },
   append_content_block: W,
   attach_media: W,
   batch_create_products: W,
@@ -871,8 +885,7 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   create_site_page: W,
   delete_blog_post: D,
   delete_content_block: D,
-  // Deletes the stored file from the Cloudflare media account.
-  delete_media_asset: { ...D, openWorldHint: true },
+  delete_media_asset: D,
   delete_post: D,
   delete_product: D,
   delete_resource_localization: D,
@@ -897,11 +910,11 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   list_locations: R,
   list_posts: R,
   // Asks Meta whether each saved connection's access still works.
-  get_social_connections: { ...R, openWorldHint: true },
+  get_social_connections: R,
   // Reads Meta, and records what the read proves about one publication.
-  reconcile_post_publication: { ...D, openWorldHint: true },
-  list_channel_posts: { ...R, openWorldHint: true },
-  get_channel_post: { ...R, openWorldHint: true },
+  reconcile_post_publication: W,
+  list_channel_posts: R,
+  get_channel_post: R,
   delete_channel_post: { ...D, openWorldHint: true },
   list_organization_locales: R,
   list_organization_qa: R,
@@ -911,48 +924,47 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   publish_blog_post: D,
   publish_post: { ...D, openWorldHint: true },
   put_resource_localization: D,
-  remove_media: D,
-  reorder_media: D,
+  remove_media: W,
+  reorder_media: W,
   replace_content_block: D,
-  set_brand_color: D,
-  set_consultation_mode: D,
-  set_media: D,
-  set_workspace_context: D,
+  set_consultation_mode: W,
+  set_media: W,
+  set_workspace_context: W,
   reconcile_products: D,
   update_blog_post: D,
-  update_location: D,
+  update_location: W,
   get_calendar: R,
-  block_dates: D,
-  open_dates: D,
-  update_media_asset: D,
-  update_post: D,
+  block_dates: W,
+  open_dates: W,
+  update_media_asset: W,
+  update_post: W,
   update_product: D,
   update_organization_settings: D,
   update_site_page: D,
   delete_site_page: D,
   save_media_attachment: { ...W, openWorldHint: true },
   list_products: R,
-  set_product_publication: D,
-  set_product_location: D,
+  set_product_publication: W,
+  set_product_location: W,
   remove_product_location: D,
   list_collections: R,
   create_collection: W,
-  update_collection: D,
+  update_collection: W,
   delete_collection: D,
   // Replaces the whole membership list: products left out lose their place in
   // the collection, which is a removal the caller must mean.
   set_collection_products: D,
-  reorder_collections: D,
-  reorder_blog_posts: D,
+  reorder_collections: W,
+  reorder_blog_posts: W,
   list_article_categories: R,
   create_article_category: W,
-  update_article_category: D,
+  update_article_category: W,
   delete_article_category: D,
-  reorder_article_categories: D,
+  reorder_article_categories: W,
   get_product_catalog_localization: R,
   replace_resource_localizations: D,
   get_reservation_policy: R,
-  update_reservation_policy: D,
+  update_reservation_policy: W,
 } as const satisfies Record<string, McpToolAnnotations>
 
 export function buildToolAnnotationsByName() {
@@ -965,8 +977,8 @@ export function validateToolAnnotations(name: string, annotations: McpToolAnnota
   // ChatGPT Apps submission review requires every tool to declare all three
   // hints explicitly. A future classification that forgets openWorldHint or
   // destructiveHint must fail at module load.
-  if (typeof annotations.openWorldHint !== 'boolean' || typeof annotations.destructiveHint !== 'boolean') {
-    throw new Error(`Tool "${name}" must declare openWorldHint and destructiveHint explicitly.`)
+  if (typeof annotations.readOnlyHint !== 'boolean' || typeof annotations.openWorldHint !== 'boolean' || typeof annotations.destructiveHint !== 'boolean') {
+    throw new Error(`Tool "${name}" must declare readOnlyHint, openWorldHint and destructiveHint explicitly.`)
   }
 
   if (annotations.readOnlyHint === true) {
@@ -980,6 +992,9 @@ export function validateToolAnnotations(name: string, annotations: McpToolAnnota
     if (confirmRequired) {
       throw new Error(`Read-only MCP tool "${name}" cannot require confirmation.`)
     }
+  } else if (annotations.destructiveHint && !confirmRequired) {
+    // Destructive means irreversible, and an irreversible act is confirmed.
+    throw new Error(`Destructive tool "${name}" must require confirmation.`)
   }
 }
 

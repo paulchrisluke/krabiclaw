@@ -50,19 +50,14 @@ export function getContrastRatio(color1: string, color2: string): number {
 }
 
 /**
- * Determine appropriate foreground color (white or black) based on contrast
- * Returns the color that provides WCAG AA compliant contrast (≥4.5:1)
+ * The label for a filled control: white on any saturated or dark fill, black
+ * only on a light one. A brand red or gold takes white even where black
+ * scores a higher WCAG ratio; paletteContrast reports the ratio either way.
  */
 export function getOptimalForeground(backgroundColor: string): '#ffffff' | '#000000' {
-  const whiteContrast = getContrastRatio(backgroundColor, '#ffffff')
-  const blackContrast = getContrastRatio(backgroundColor, '#000000')
-  
-  // Prefer white if both meet AA, otherwise use whichever meets AA
-  if (whiteContrast >= 4.5) return '#ffffff'
-  if (blackContrast >= 4.5) return '#000000'
-  
-  // If neither meets AA, use the one with higher contrast
-  return whiteContrast >= blackContrast ? '#ffffff' : '#000000'
+  const rgb = hexToRgb(backgroundColor)
+  if (!rgb) throw new Error(`Not a hex color: ${backgroundColor}`)
+  return getLuminance(rgb.r, rgb.g, rgb.b) > 0.4 ? '#000000' : '#ffffff'
 }
 
 /**
@@ -81,65 +76,11 @@ export function lightenColor(hex: string, percent: number): string {
 }
 
 /**
- * Darken a hex color by a percentage
- */
-export function darkenColor(hex: string, percent: number): string {
-  const rgb = hexToRgb(hex)
-  if (!rgb) return hex
-
-  const factor = 1 - percent / 100
-  const r = Math.round(rgb.r * factor)
-  const g = Math.round(rgb.g * factor)
-  const b = Math.round(rgb.b * factor)
-
-  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`
-}
-
-/**
  * Calculate dark mode variant of a color
  * Lightens the color for dark mode to maintain visual hierarchy
  */
 export function getDarkModeVariant(hex: string): string {
   return lightenColor(hex, 30)
-}
-
-/**
- * Validate hex color format
- */
-export function isValidHex(hex: string): boolean {
-  return /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/.test(hex)
-}
-
-/**
- * Normalize hex color to 6-digit format
- */
-export function normalizeHex(hex: string): string {
-  if (!isValidHex(hex)) return '#8F1D21' // default fallback
-  
-  // Convert 3-digit to 6-digit
-  if (hex.length === 4) {
-    return `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`
-  }
-  
-  return hex
-}
-
-/**
- * Calculate theme colors from brand color
- * Returns CSS variable values for light and dark modes
- */
-export function calculateThemeColors(brandColor: string) {
-  const normalizedColor = normalizeHex(brandColor)
-  const darkModeColor = getDarkModeVariant(normalizedColor)
-  const foregroundLight = getOptimalForeground(normalizedColor)
-  const foregroundDark = getOptimalForeground(darkModeColor)
-
-  return {
-    brandColor: normalizedColor,
-    brandColorDark: darkModeColor,
-    brandColorForeground: foregroundLight,
-    brandColorForegroundDark: foregroundDark
-  }
 }
 
 /**
@@ -257,11 +198,10 @@ export function interpretColorDescription(description: string): string | null {
  * Smart color resolver - accepts hex codes or natural language
  */
 export function resolveColor(input: string): string | null {
-  // If it's already a valid hex code, return it
-  if (isValidHex(input)) {
-    return normalizeHex(input)
-  }
-  
+  // A #RRGGBB or #RGB hex code is returned as #RRGGBB.
+  const rgb = /^#([a-f\d]{3}|[a-f\d]{6})$/i.test(input.trim()) ? hexToRgb(input.trim()) : null
+  if (rgb) return `#${[rgb.r, rgb.g, rgb.b].map(c => c.toString(16).padStart(2, '0')).join('').toUpperCase()}`
+
   // Otherwise, try to interpret as natural language
   return interpretColorDescription(input)
 }

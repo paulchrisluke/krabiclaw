@@ -1,6 +1,6 @@
 <template>
   <DashboardIndexPanel
-    id="org-today"
+    :id="personalScope ? 'account-today' : 'org-today'"
     title="Today"
     :navbar-ui="{ title: 'sr-only', root: 'h-(--ui-header-height) shrink-0 flex items-center justify-between px-4 sm:px-6 gap-1.5', center: 'flex flex-1 items-center justify-center' }"
   >
@@ -19,31 +19,8 @@
             aria-label="Booking range"
           />
   
-          <UPopover v-model:open="filtersOpen" :content="{ align: 'end', side: 'bottom', sideOffset: 10 }">
-            <UButton
-              icon="i-lucide-sliders-horizontal"
-              :color="hasActiveFilters ? 'primary' : 'neutral'"
-              :variant="hasActiveFilters ? 'solid' : 'soft'"
-              square
-              class="rounded-full"
-              aria-label="Filter bookings"
-            />
-  
-            <template #content>
-              <div class="w-72 space-y-4 p-4">
-                <div class="flex items-center justify-between gap-3">
-                  <p class="font-semibold text-highlighted">Filters</p>
-                  <UButton v-if="hasActiveFilters" label="Clear" color="neutral" variant="ghost" size="xs" @click="clearFilters" />
-                </div>
-                <UFormField label="Location">
-                  <USelect v-model="filters.locationId" :items="locationOptions" class="w-full" />
-                </UFormField>
-                <UFormField label="Booking type">
-                  <USelect v-model="filters.kind" :items="kindOptions" class="w-full" />
-                </UFormField>
-              </div>
-            </template>
-          </UPopover>
+          <!-- An account has one agenda and nothing to narrow it by. -->
+          <AgendaFilters v-if="!personalScope" :locations="todayData?.locations ?? []" :kinds="todayData?.availableKinds ?? []" :organization-id="organizationId" />
         </div>
     </template>
 
@@ -74,44 +51,39 @@
         {{ heading }}
       </h1>
 
-      <div v-if="pending && !todayData" class="mt-6 space-y-4" aria-label="Loading today">
-        <USkeleton v-for="index in 4" :key="index" class="h-36 w-full rounded-2xl sm:h-40" />
+      <div v-if="visibleItems.length" class="mt-6 space-y-4">
+        <TodayAgendaCard
+          v-for="item in visibleItems"
+          :key="item.id"
+          :item="item"
+          :reference-day="referenceDay(item)"
+          :personal="personalScope"
+        />
       </div>
 
-      <template v-else>
-        <div v-if="visibleItems.length" class="mt-6 space-y-4">
-          <TodayAgendaCard
-            v-for="item in visibleItems"
-            :key="item.id"
-            :item="item"
-            :reference-day="referenceDay(item)"
-          />
-        </div>
-
-        <div v-else-if="!activeLoading && !activeError" class="py-24 text-center">
-          <img
-            src="https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/0b7e08d0-6b7d-471b-2957-9845392cc200/w=224"
-            alt=""
-            aria-hidden="true"
-            width="112"
-            height="112"
-            class="mx-auto size-28 object-contain"
-          >
-          <p class="mt-6 text-base font-semibold text-highlighted">{{ emptyTitle }}</p>
-          <p class="mt-1 text-sm text-muted">{{ emptyDescription }}</p>
-        </div>
-
-        <div
-          v-if="hasMore"
-          :key="`${activeRange}-${filterSignature}`"
-          ref="loadMoreSentinel"
-          class="flex min-h-24 items-center justify-center"
-          aria-live="polite"
+      <div v-else-if="!activeLoading && !activeError" class="py-24 text-center">
+        <img
+          src="https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/0b7e08d0-6b7d-471b-2957-9845392cc200/w=224"
+          alt=""
+          aria-hidden="true"
+          width="112"
+          height="112"
+          class="mx-auto size-28 object-contain"
         >
-          <UIcon v-if="activeLoading" name="i-lucide-loader-circle" class="size-6 animate-spin text-muted" />
-          <span v-else class="sr-only">Scroll to load more</span>
-        </div>
-      </template>
+        <p class="mt-6 text-base font-semibold text-highlighted">{{ emptyTitle }}</p>
+        <p class="mt-1 text-sm text-muted">{{ emptyDescription }}</p>
+      </div>
+
+      <div
+        v-if="hasMore"
+        :key="`${activeRange}-${filterSignature}`"
+        ref="loadMoreSentinel"
+        class="flex min-h-24 items-center justify-center"
+        aria-live="polite"
+      >
+        <UIcon v-if="activeLoading" name="i-lucide-loader-circle" class="size-6 animate-spin text-muted" />
+        <span v-else class="sr-only">Scroll to load more</span>
+      </div>
 
       <!--
         Triage is a band, not a badge on every row. Marking each card with its
@@ -125,6 +97,7 @@
 
 <script setup lang="ts">
 import { localDateAt } from '~/utils/timezone'
+import AgendaFilters from './AgendaFilters.vue'
 import TodayAgendaCard from './TodayAgendaCard.vue'
 import { bookingCountLabel, resolveAggregateBookingPresentation, type BookingKind } from '~/utils/booking-presentation'
 import { getErrorMessage } from '~/utils/errors'
@@ -132,9 +105,13 @@ import type { AgendaItem, AgendaKind, AgendaLocation, AgendaPayload, TodayAgenda
 
 useSeoMeta({ title: 'Today | Krabiclaw', robots: 'noindex, nofollow' })
 
+// One screen for both readers: the business sees who is arriving, the account
+// sees where it is going. Personal scope reads the account agenda and nothing
+// else changes.
+const props = defineProps<{ personalScope?: boolean }>()
+
 type TodayRange = 'today' | 'upcoming'
 
-const FILTER_ALL = '__all__'
 const PAGE_SIZE = 12
 const UPCOMING_WINDOW_DAYS = 30
 const UPCOMING_HORIZON_DAYS = 365
@@ -146,13 +123,14 @@ const ranges: Array<{ label: string; value: TodayRange }> = [
 ]
 
 const route = useRoute()
-const dashboardApi = useDashboardApi()
+const dashboardApi = props.personalScope ? applicationFetch : useDashboardApi()
+const apiBase = props.personalScope ? '/api/account' : '/api/dashboard'
 const dashboardOrganization = useDashboardOrganization()
 const realtime = useDashboardInvalidations()
-const orgSlug = computed(() => String(route.params.orgSlug ?? ''))
+const orgSlug = computed(() => props.personalScope ? 'account' : String(route.params.orgSlug ?? ''))
 const todayKey = computed(() => `dashboard-today-${orgSlug.value}`)
-const filters = reactive({ locationId: FILTER_ALL, kind: FILTER_ALL })
-const filtersOpen = ref(false)
+const { filters, signature: filterSignature, active: hasActiveFilters } = useAgendaFilters()
+const organizationId = props.personalScope ? null : await useDashboardOrganizationId()
 
 const isNullableString = (value: unknown): value is string | null => value === null || typeof value === 'string'
 const isAgendaItem = (value: unknown): value is AgendaItem =>
@@ -194,8 +172,7 @@ const isAgendaPayload = (value: unknown): value is AgendaPayload =>
 
 const { data: todayData, pending, error: todayError, refresh: refreshToday } = await useAsyncData<TodayAgendaPayload>(
   todayKey,
-  () => dashboardApi<TodayAgendaPayload>('/api/dashboard/today', { validate: isTodayResponse }),
-  { lazy: true },
+  () => dashboardApi<TodayAgendaPayload>(`${apiBase}/today`, { validate: isTodayResponse }),
 )
 
 const activeRange = ref<TodayRange>('today')
@@ -215,11 +192,11 @@ const resolvedUtcDay = computed(() => resolvedAt.value.slice(0, 10))
 // UTC range, then classify each item against its own location's local day.
 const upcomingCursor = ref(addDays(resolvedUtcDay.value, -1))
 const upcomingHorizon = computed(() => addDays(resolvedUtcDay.value, UPCOMING_HORIZON_DAYS + 1))
-const filterSignature = computed(() => `${filters.locationId}:${filters.kind}`)
 
 const filteredTodayItems = computed(() => (todayData.value?.items ?? []).filter(item =>
-  (filters.locationId === FILTER_ALL || item.locationId === filters.locationId)
-  && (filters.kind === FILTER_ALL || item.kind === filters.kind)))
+  (filters.locationId === AGENDA_FILTER_ALL || item.locationId === filters.locationId)
+  && (filters.kind === AGENDA_FILTER_ALL || item.kind === filters.kind)
+  && (filters.assignedMemberId === AGENDA_FILTER_ALL || item.assignedMemberId === filters.assignedMemberId)))
 const allRangeItems = computed(() => activeRange.value === 'today' ? filteredTodayItems.value : upcomingItems.value)
 const rangeItems = computed(() => activeRange.value === 'today'
   ? filteredTodayItems.value.slice(0, todayVisibleCount.value)
@@ -231,19 +208,19 @@ const hasMore = computed(() => activeRange.value === 'today'
 const activeLoading = computed(() => activeRange.value === 'today' ? pending.value : upcomingLoading.value)
 const activeError = computed(() => activeRange.value === 'today' ? todayError.value : upcomingError.value)
 const activeLabel = computed(() => activeRange.value === 'today' ? 'Today' : 'Upcoming')
-const hasActiveFilters = computed(() => filters.locationId !== FILTER_ALL || filters.kind !== FILTER_ALL)
 // Derived from the organization and kinds in scope rather than from the loaded items,
 // so the heading reads the same before anything has arrived and does not change
 // noun as a page of Upcoming loads. The vertical is the organization's own,
 // which the layout has loaded before this page renders.
+// An account's visits span sites, so their one shared word is "booking".
 const presentation = computed(() => {
   const vertical = dashboardOrganization.organization.value?.vertical
-  const scoped: AgendaKind[] = filters.kind === FILTER_ALL
+  const scoped: AgendaKind[] = filters.kind === AGENDA_FILTER_ALL
     ? todayData.value?.availableKinds ?? BOOKING_KINDS
     : [filters.kind as AgendaKind]
   const kinds = scoped.filter(isBookingKind)
   return resolveAggregateBookingPresentation(
-    kinds.map(kind => ({ kind, vertical })),
+    props.personalScope ? [] : kinds.map(kind => ({ kind, vertical })),
   )
 })
 const heading = computed(() => {
@@ -259,25 +236,12 @@ const emptyDescription = computed(() => hasActiveFilters.value
     ? 'There are no arrivals scheduled for today.'
     : 'New arrivals will appear here as they are booked.')
 
-const locationOptions = computed(() => [
-  { label: 'All locations', value: FILTER_ALL },
-  ...(todayData.value?.locations ?? []).map(location => ({ label: location.title, value: location.id })),
-])
-const kindOptions = computed(() => [
-  { label: 'All booking types', value: FILTER_ALL },
-  ...(todayData.value?.availableKinds ?? []).map(kind => ({ label: kind === 'reservation' ? 'Reservations' : 'Bookings', value: kind })),
-])
 
 async function selectRange(range: TodayRange) {
   activeRange.value = range
   if (range === 'upcoming' && upcomingItems.value.length === 0 && !upcomingLoading.value) {
     await loadUpcoming()
   }
-}
-
-function clearFilters() {
-  filters.locationId = FILTER_ALL
-  filters.kind = FILTER_ALL
 }
 
 async function loadMore() {
@@ -298,12 +262,13 @@ async function loadUpcoming() {
     while (upcomingCursor.value <= upcomingHorizon.value && requestSignature === filterSignature.value) {
       const from = upcomingCursor.value
       const to = minDate(addDays(from, UPCOMING_WINDOW_DAYS - 1), upcomingHorizon.value)
-      const payload = await dashboardApi<AgendaPayload>('/api/dashboard/agenda', {
+      const payload = await dashboardApi<AgendaPayload>(`${apiBase}/agenda`, {
         query: {
           from,
           to,
-          locationId: filters.locationId !== FILTER_ALL ? filters.locationId : undefined,
-          kinds: filters.kind !== FILTER_ALL ? filters.kind : 'reservation, booking',
+          locationId: filters.locationId !== AGENDA_FILTER_ALL ? filters.locationId : undefined,
+          assigned_member_id: filters.assignedMemberId !== AGENDA_FILTER_ALL ? filters.assignedMemberId : undefined,
+          kinds: filters.kind !== AGENDA_FILTER_ALL ? filters.kind : 'reservation, booking',
         },
         validate: isAgendaPayload,
       })

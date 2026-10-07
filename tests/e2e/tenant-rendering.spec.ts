@@ -31,7 +31,7 @@ const tenants: Tenant[] = [
     name: 'Pottery House', baseURL: potteryHouseBaseURL, headers: potteryHouseExtraHeaders,
     shell: '.tenant-layout', identity: /Pottery House/i, definingContent: /pottery|wheel|clay/i,
     primaryLabel: /product|class|book/i, detailPath: '/locations/krabi/products/pottery-wheel-class',
-    detailContent: /Pottery Wheel Class/i, themeVar: '--saya-bg',
+    detailContent: /Pottery Wheel Class/i, themeVar: '--ui-bg',
     forbidden: [/Come dine with us/i, /Reserve a table/i, /From the kitchen/i, /Also part of Saya/i],
   },
   {
@@ -85,7 +85,7 @@ test('Krabiclaw pricing retains its billing plans after hydration', async ({ pag
   const paid = plans.find(plan => plan.id === 'growth')
   expect(paid).toBeDefined()
   await expect(page.getByRole('heading', { name: paid!.name, exact: true })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Get Grow', exact: true })).toHaveAttribute('href', '/signup?plan=growth&redirect=%2Fapi%2Fpost-login%3Fplan%3Dgrowth')
+  await expect(page.getByRole('link', { name: 'Get Growth', exact: true })).toHaveAttribute('href', '/signup?plan=growth&redirect=%2Fapi%2Fpost-login%3Fplan%3Dgrowth')
 })
 
 for (const width of [390, 1440]) {
@@ -108,31 +108,37 @@ for (const width of [390, 1440]) {
   })
 }
 
-test('Krabiclaw social viewer keyboard navigation changes the visible picture', async ({ page }) => {
+test('Krabiclaw social viewer keyboard navigation changes the visible media', async ({ page }) => {
   const response = await openTenantPage(page, `${testBaseUrl()}/`, {})
   expect(response?.status()).toBe(200)
   await waitForNuxtHydration(page)
-  const firstCard = page.locator('[data-social-posts=block] [data-social-post]').first()
-  // The newest post's channel decides whose account name shows; assert the
-  // unlinked mark carries one rather than naming the channel that posted last.
-  const channelMark = firstCard.getByLabel(/^Posted on (Facebook|Instagram)$/)
+  const cards = page.locator('[data-social-posts=block] [data-social-post]')
+  const mark = /^Posted on (Facebook|Instagram)$/
+  // A website-only post carries no channel mark; the newest post may be one
+  // (production, 2026-10-06). The first card published to a channel carries
+  // its account name in an unlinked mark, not the channel's own name.
+  const firstCard = cards.first()
+  const socialCard = cards.filter({ has: page.getByLabel(mark) }).first()
+  const channelMark = socialCard.getByLabel(mark)
   await expect(channelMark).toBeVisible()
   await expect(channelMark).toHaveText(/\S/)
+  await expect(socialCard.locator('time, a')).toHaveCount(0)
   await expect(firstCard.locator('time, a')).toHaveCount(0)
+  // The viewer opens on the card that was clicked; the first card puts the first picture at the top.
   await firstCard.click()
   const viewer = page.getByRole('dialog', { name: 'Media Lightbox' })
   await expect(viewer).toBeVisible()
   const pictures = viewer.locator('section')
-  const imageBounds = await pictures.first().locator('img:not([aria-hidden])').boundingBox()
+  const mediaBounds = await pictures.first().locator('img:not([aria-hidden]), video').boundingBox()
   const captionBounds = await pictures.first().locator('p').boundingBox()
-  expect(imageBounds).not.toBeNull()
+  expect(mediaBounds).not.toBeNull()
   expect(captionBounds).not.toBeNull()
-  expect(captionBounds!.x >= imageBounds!.x + imageBounds!.width || captionBounds!.y >= imageBounds!.y + imageBounds!.height).toBe(true)
+  expect(captionBounds!.x >= mediaBounds!.x + mediaBounds!.width || captionBounds!.y >= mediaBounds!.y + mediaBounds!.height).toBe(true)
   expect(await pictures.count()).toBeGreaterThan(1)
   const close = viewer.getByRole('button', { name: 'Close', exact: true })
   await close.press('ArrowDown')
   await expect.poll(() => pictures.nth(1).evaluate(element => Math.round(element.getBoundingClientRect().top))).toBe(0)
-  await expect.poll(() => pictures.nth(1).locator('img:not([aria-hidden])').evaluate(element => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
+  await expect.poll(() => pictures.nth(1).locator('img:not([aria-hidden]), video').evaluate(element => element instanceof HTMLVideoElement ? element.videoWidth : (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
   await close.press('ArrowUp')
   await expect.poll(() => pictures.nth(0).evaluate(element => Math.round(element.getBoundingClientRect().top))).toBe(0)
   await close.click()
@@ -231,7 +237,7 @@ test.describe('NCLS representative journeys', () => {
   // One reader walking the site. Each route is a different page recipe, so the
   // traversal is the coverage; six separate fixtures were not.
   test('renders every route reachable from the header', async ({ page }) => {
-    for (const journey of [
+    const journeys = [
       { path: '/pricing', text: /pricing|income|calculator/i },
       { path: '/article/writing-your-own-will-how-it-works', text: /will|North Carolina/i },
       { path: '/contact', text: /contact|message/i },
@@ -244,7 +250,10 @@ test.describe('NCLS representative journeys', () => {
       { path: '/policies/privacy', text: /personal information/i },
       { path: '/policies/terms', text: /terms of service/i },
       { path: '/third-party-notices', text: /legal aid|inner banks/i },
-    ]) {
+    ]
+    // Nine uncached server renders at 3–4 s each do not fit one page's 30 s budget; each route gets that budget.
+    test.setTimeout(journeys.length * 30_000)
+    for (const journey of journeys) {
       const response = await openTenantPage(page, `${blawbyBaseURL}${journey.path}`, blawbyExtraHeaders)
       expect(response?.status(), journey.path).toBe(200)
       await expect(page.locator('main'), journey.path).toContainText(journey.text)

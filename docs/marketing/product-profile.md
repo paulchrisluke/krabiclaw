@@ -126,6 +126,52 @@ KrabiClaw lets local business owners launch websites in the dashboard and manage
 KrabiClaw exists so restaurants and local businesses can keep a polished, multilingual website current without wrestling with a traditional CMS. Owners manage real website content, bookings, inquiries, products, experiences, media, translations, and analytics through Claude or ChatGPT, while the dashboard and assistant use the same permissioned business data.
 ```
 
+## Calendar release content
+
+Prepared on 2026-10-04 for PR #1240. Calendar and member availability are qualified
+locally; this is not a production release announcement. Google Cloud Console's
+branding and data access are verified. Calendar's three scopes are non-sensitive;
+the unused sensitive `calendar.events` scope was removed on 2026-10-04. Analytics
+remains approved. A new Calendar scope-verification video is not required for
+this scope set.
+
+Public content remains in the platform organization's CMS (`organization_id:
+platform`), edited through the ordinary MCP tools. The **Calendar and bookings**
+docs category is `9ec9c29e-696e-41c3-b821-d41ce1232278`. The following articles were
+created as private drafts and read back through MCP; their bodies are not copied
+into repository documentation.
+
+| Draft | CMS article ID |
+| --- | --- |
+| Connect Google Calendar | `241019f4-2176-4858-bfcd-92a11b0c461c` |
+| Set your working hours | `3283d505-4d01-4beb-b665-dd317d159b17` |
+| Add time off | `81fddbb6-4ecf-4361-833f-12fc6214c112` |
+| Avoid double bookings with your personal calendar | `60033f23-c250-4a52-97b1-a7a1b2a9897e` |
+| Choose who guests meet | `4dacfe5e-b8f4-41de-932b-a0d79b925b35` |
+| Update your public profile | `3bbee519-d084-43f4-b159-689be788b055` |
+| Manage your bookings | `1e9ee926-4794-4f93-aef2-f96edfb34f8f` |
+| Make room for your next booking (blog) | `043d5238-1e65-42bd-baba-afbef1985843` |
+
+Use short task titles, one clear outcome and numbered steps matching the actual
+CMS labels. [Airbnb's Calendar and bookings topic](https://www.airbnb.com/help/topic/1330)
+is the editorial reference. Explain our Google connection rather than copying
+Airbnb's ICS import/export instructions or its two-way booking claims.
+
+After deployment and release qualification, publish the guides and launch article
+through MCP. Update the existing **Invite your team**, **Connect your accounts to
+KrabiClaw**, and **What AI assistants can and cannot do** guides to include Member
+self-service, Calendar connection and scheduling tools. Preserve their existing
+content and media when editing.
+
+Update the existing `/products` booking section to include services, working hours
+and time off, with a link to the new category. The `/legal` capability sections
+should offer native consultations alongside external intake. Keep the NCLS
+showcase's Clio Grow description until that tenant's actual setup changes.
+The shared pricing comparison adds **Team availability** for both plans; it
+does not alter Stripe's paid marketing bullets. Review the existing privacy
+disclosure against the final Calendar scopes and data handling before publishing
+the release content.
+
 ## Classification
 
 - Primary categories: Website Builder, Content Management System, AI, SaaS.

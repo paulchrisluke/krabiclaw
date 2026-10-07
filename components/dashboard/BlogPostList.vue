@@ -5,7 +5,6 @@
       title="Blog"
       description="Long-form articles published on this site."
       :items="listItems"
-      :pending="pending"
       :error="loadError"
       empty-title="No posts yet"
       empty-icon="i-lucide-newspaper"
@@ -148,32 +147,28 @@ async function fetchFirst(): Promise<BlogPage> {
   }
   return { posts, page_info: info }
 }
-const { data, pending, error, refresh } = await useAsyncData(
+const { data, error, refresh } = await useAsyncData(
   () => `dashboard-blog-posts:${organizationId}:${orderedCollection.value ?? statusFilter.value ?? 'all'}`,
   fetchFirst,
-  { lazy: true, watch: [statusFilter, orderedCollection] },
 )
 
 const loadError = computed(() => (error.value ? getErrorMessage(error.value, 'Failed to load posts') : null))
-const more = ref<BlogPost[]>([])
-const nextCursor = ref<string | null>(null)
-watch(data, value => { more.value = []; nextCursor.value = value?.page_info.has_more ? value.page_info.next_cursor : null }, { immediate: true })
+const nextCursor = computed(() => (data.value?.page_info.has_more ? data.value.page_info.next_cursor : null))
 const loadingMore = ref(false)
 async function loadMore() {
-  if (!nextCursor.value) return
-  // A page fetched for the list that was showing is dropped if the tab changed meanwhile.
   const base = data.value
+  if (!base || !nextCursor.value) return
   loadingMore.value = true
   try {
     const page = await fetchPage(nextCursor.value)
+    // A page fetched for the list that was showing is dropped if the tab changed meanwhile.
     if (data.value !== base) return
-    more.value = [...more.value, ...page.posts]
-    nextCursor.value = page.page_info.has_more ? page.page_info.next_cursor : null
+    data.value = { posts: [...base.posts, ...page.posts], page_info: page.page_info }
   } finally {
     loadingMore.value = false
   }
 }
-const loadedPosts = computed(() => [...(data.value?.posts ?? []), ...more.value])
+const loadedPosts = computed(() => data.value?.posts ?? [])
 const collectionOrder = computed(() => localOrder.value?.collection === orderedCollection.value ? localOrder.value.posts : loadedPosts.value)
 const visiblePosts = computed(() => (orderedCollection.value ? collectionOrder.value : loadedPosts.value))
 

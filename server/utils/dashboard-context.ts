@@ -31,7 +31,6 @@ export interface DashboardOrganizationConfig {
   status: string
   onboarding_status: string
   default_currency: string | null
-  feature_overrides: string | null
 }
 
 export type DashboardOrganizationRow = ResolvedMembership & {
@@ -44,7 +43,7 @@ const ORGANIZATION_CONFIG_SQL = `
   SELECT theme_id, vertical, subdomain,
          (SELECT domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active' AND type = 'custom') AS custom_domain,
          (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active') AS public_url,
-         status, onboarding_status, default_currency, feature_overrides
+         status, onboarding_status, default_currency
   FROM organization WHERE id = ? LIMIT 1
 `
 
@@ -81,9 +80,6 @@ export interface DashboardLocationRow {
   address: string | null
   media: PublicSocialMedia['media']
   social_image: PublicSocialMedia['social_image']
-  // The delta is applied on top of the organization's effective feature set
-  // (never the vertical defaults directly).
-  feature_overrides: string | null
 }
 
 export interface DashboardLocationContextRow {
@@ -107,7 +103,6 @@ export interface DashboardLocationContextRow {
   google_place_id: string | null
   google_review_url: string | null
   timezone: string | null
-  feature_overrides: string | null
 }
 
 export interface DashboardContextOptions {
@@ -281,7 +276,11 @@ export async function getDashboardLocationContext(event: H3Event, locationId: st
   }
 
   const row = await queryFirst<DashboardLocationContextRow>(db, `
-    SELECT bl.*
+    SELECT bl.id, bl.organization_id, bl.slug, bl.title, bl.address, bl.phone, bl.website_url, bl.maps_url,
+           bl.latitude, bl.longitude, bl.opening_hours, bl.categories, bl.rating, bl.review_count, bl.status,
+           bl.last_synced_at, bl.description, bl.short_description, bl.special_hours, bl.price_level, bl.email,
+           bl.google_place_id, bl.google_review_url, bl.created_at, bl.updated_at, bl.timezone, bl.max_capacity,
+           bl.seo_title, bl.seo_description, bl.canonical_url
     FROM business_locations bl
     WHERE bl.id = ?
     LIMIT 1
@@ -316,7 +315,7 @@ export async function listDashboardLocations(
 ) {
 
   const locations = await queryAll<Omit<DashboardLocationRow, 'media' | 'social_image' | 'address'> & { address: string | null }>(db, `
-    SELECT id, slug, title, status, address, feature_overrides
+    SELECT id, slug, title, status, address
     FROM business_locations
     WHERE organization_id = ? AND status = 'active'
     ORDER BY title ASC

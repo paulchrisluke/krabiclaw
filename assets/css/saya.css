@@ -1,10 +1,8 @@
 /* Saya theme tokens — Krabiclaw Design System */
 
 :root {
-  --font-saya: "Instrument Serif", serif;
-
   /* Fixed dark surface pair — deliberately NOT re-scoped inside .dark
-     .saya-theme below, unlike --saya-bg-inverted/--saya-fg-inverted (which
+     .saya-theme below, unlike --ui-bg-inverted/--ui-text-inverted (which
      invert with light/dark mode by design, e.g. for SayaFooter.vue). Used
      for chrome that must always render dark regardless of the visitor's
      device theme (e.g. SayaPostDetail's caption bar, matching how
@@ -14,103 +12,12 @@
 }
 
 .saya-theme {
-  color-scheme: light;
-  background-color: var(--saya-bg);
-
-  /* The heading face shared components set their headings in. */
-  --font-heading:        var(--font-saya);
-  --font-heading-weight: 400;
-
-  --saya-primary:       var(--brand-color, #8F1D21);
-
-  /* Mirror saya-primary into Tailwind's --color-primary so that
-     bg-primary / text-primary / ring-primary utilities and all Nuxt UI
-     components using color="primary" resolve to the tenant brand color. */
-  --color-primary:      var(--saya-primary);
-
-  /* WCAG foreground: calculated dynamically based on brand color contrast */
-  --primary-foreground: var(--brand-color-foreground, #fff);
-  --saya-bg:            #FFFFFF;
-  --saya-bg-alt:        #FAFAFA;
-  --saya-bg-inverted:   #09090B;
-  --saya-fg:            #18181B;
-  --saya-fg-muted:      #52525B;
-  --saya-fg-dimmed:     #A1A1AA;
-  --saya-fg-inverted:   #FAFAFA;
-  --saya-border:        #E4E4E7;
-  --saya-border-muted:  #F4F4F5;
-
-  --ui-primary:         var(--saya-primary);
-  --ui-secondary:       #6366F1;
-  --ui-success:         #10B981;
-  --ui-info:            #3B82F6;
-  --ui-warning:         #F59E0B;
-  --ui-error:           #EF4444;
-  --ui-bg:              var(--saya-bg);
-  --ui-bg-elevated:     var(--saya-bg-alt);
-  --ui-bg-muted:        var(--saya-bg-alt);
-  --ui-bg-accented:     #F4F4F5;
-  --ui-bg-inverted:     var(--saya-bg-inverted);
-  --ui-text:            var(--saya-fg);
-  --ui-text-muted:      var(--saya-fg-muted);
-  --ui-text-dimmed:     var(--saya-fg-dimmed);
-  --ui-text-toned:      #71717A;
-  --ui-text-highlighted:var(--saya-fg);
-  --ui-text-inverted:   var(--saya-fg-inverted);
-  --ui-border:          var(--saya-border);
-  --ui-border-muted:    var(--saya-border-muted);
-  --ui-border-accented: #D4D4D8;
-  --ui-border-inverted: #27272A;
   --ui-radius:          0.25rem; /* Platform-specific radius override */
-}
-
-/* Saya dark tokens are scoped to the tenant shell. The Saya theme plugin and
-   footer control own the html.dark class; this surface does not need a UI
-   color-mode component or package. */
-.dark .saya-theme {
-  color-scheme: dark;
-
-  --saya-primary:       var(--brand-color-dark, var(--brand-color, #D16063));
-  --color-primary:      var(--saya-primary);
-
-  /* WCAG foreground: calculated dynamically based on brand color contrast */
-  --primary-foreground: var(--brand-color-foreground-dark, var(--brand-color-foreground, #18060a));
-  --saya-bg:            #09090B;
-  --saya-bg-alt:        #121216;
-  --saya-bg-inverted:   #FAFAFA;
-  --saya-fg:            #F4F4F5;
-  --saya-fg-muted:      #D4D4D8;
-  --saya-fg-dimmed:     #A1A1AA;
-  --saya-fg-inverted:   #18181B;
-  --saya-border:        #27272A;
-  --saya-border-muted:  #1E1E22;
-
-  --ui-primary:         var(--saya-primary);
-  --ui-secondary:       #818CF8;
-  --ui-success:         #34D399;
-  --ui-info:            #60A5FA;
-  --ui-warning:         #FBBF24;
-  --ui-error:           #F87171;
-  --ui-bg:              var(--saya-bg);
-  --ui-bg-elevated:     var(--saya-bg-alt);
-  --ui-bg-muted:        var(--saya-bg-alt);
-  --ui-bg-accented:     #18181B;
-  --ui-bg-inverted:     var(--saya-bg-inverted);
-  --ui-text:            var(--saya-fg);
-  --ui-text-muted:      var(--saya-fg-muted);
-  --ui-text-dimmed:     var(--saya-fg-dimmed);
-  --ui-text-toned:      #A1A1AA;
-  --ui-text-highlighted:var(--saya-fg);
-  --ui-text-inverted:   var(--saya-fg-inverted);
-  --ui-border:          var(--saya-border);
-  --ui-border-muted:    var(--saya-border-muted);
-  --ui-border-accented: #3F3F46;
-  --ui-border-inverted: #E4E4E7;
 }
 
 /* Saya display type — Instrument Serif, sentence case, never bold */
 .saya-display-lg {
-  font-family: var(--font-saya);
+  font-family: var(--font-heading);
   font-size: clamp(56px, 7.5vw, 104px);
   font-weight: 400;
   letter-spacing: -0.02em;
@@ -118,7 +25,7 @@
   text-wrap: balance;
 }
 .saya-display-md {
-  font-family: var(--font-saya);
+  font-family: var(--font-heading);
   font-size: clamp(40px, 5vw, 64px);
   font-weight: 400;
   letter-spacing: -0.015em;
@@ -126,7 +33,7 @@
   text-wrap: balance;
 }
 .saya-display-sm {
-  font-family: var(--font-saya);
+  font-family: var(--font-heading);
   font-size: clamp(28px, 3.5vw, 40px);
   font-weight: 400;
   letter-spacing: -0.01em;
@@ -134,7 +41,7 @@
   text-wrap: balance;
 }
 .saya-display {
-  font-family: var(--font-saya);
+  font-family: var(--font-heading);
   font-weight: 400;
   font-style: normal;
   letter-spacing: -0.01em;
@@ -158,10 +65,9 @@
 .saya-body-lg { font-size: 18px; line-height: 1.6; }
 
 /* WCAG accessibility: any element that uses bg-primary as a background must
-   read --primary-foreground for its text colour so contrast is always ≥4.5:1.
-   Nuxt UI solid primary buttons are configured in layouts/saya.vue:6 via
-   UTheme :ui to use text-[var(--brand-color-foreground)] instead of the
-   default text-inverted. */
+   read --primary-foreground (text-on-primary) for its text colour, which the
+   palette computes for contrast. Nuxt UI solid primary buttons get it from
+   app.config.ts rather than the default text-inverted. */
 
 /* Menu dotted leader line */
 .saya-dotted-leader {

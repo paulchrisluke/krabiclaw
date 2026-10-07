@@ -1,4 +1,5 @@
 import { createAccessControl } from 'better-auth/plugins/access'
+import { isPlatformTemplate } from '~/utils/template-registry'
 
 const setCredentialAction = ['set', ['pass', 'word'].join('')].join('-')
 
@@ -84,4 +85,13 @@ export function hasPlatformAdminPermission(
     .map(value => value.trim())
     .filter(Boolean)
   return roles.some(roleName => platformAdminRoles[roleName as keyof typeof platformAdminRoles]?.authorize(permissions).success === true)
+}
+
+/**
+ * Platform accounts — every account there is, and impersonation — open only
+ * inside Krabiclaw's own organization, and only to a Better Auth admin who may
+ * list and impersonate users, which Better Auth enforces again on every call.
+ */
+export function canOpenPlatformAccounts(organization: { theme_id: string }, role: string | null | undefined): boolean {
+  return isPlatformTemplate({ themeId: organization.theme_id }) && hasPlatformAdminPermission(role, { user: ['list', 'impersonate'] })
 }

@@ -4,7 +4,10 @@ import test, { type TestContext } from 'node:test'
 import { Miniflare } from 'miniflare'
 
 import { drainPublicResourceCacheInvalidations, purgePublicResourceCacheNow, type OrganizationChangeDrainEnv } from '../../server/utils/public-resource-cache.ts'
-import { buildOrganizationDocuments, expandDocumentsForSurfaces, indexItemPayload, syncOrganizationSearchIndex } from '../../server/utils/public-search.ts'
+import { buildOrganizationDocuments, expandDocumentsForSurfaces, indexItemPayload, organizationKeySegment, syncOrganizationSearchIndex } from '../../server/utils/public-search.ts'
+import { createContentDocumentWithBlocks } from '../../server/utils/content/documents.ts'
+import { articleCategoryMembershipQuery, createArticleCategory } from '../../server/utils/content/article-categories.ts'
+import { updateBlogLifecycle } from '../../server/utils/content/publishing.ts'
 import type { CloudflareEnv } from '../../server/utils/auth.ts'
 
 const searchEnv: OrganizationChangeDrainEnv = {
@@ -27,7 +30,6 @@ async function migratedCacheD1(context: TestContext) {
     workers: [{
       config: {
         name: 'public-resource-cache-test',
-        type: 'worker',
         compatibilityDate: '2024-11-01',
         manifest: {
           mainModule: 'index.mjs',
@@ -77,7 +79,7 @@ async function insertInvalidation(
   `).bind(input.id, input.status, input.attemptCount, input.claimedAt ?? null, input.processedAt ?? null, input.createdAt).run()
 }
 
-test('a scoped sync returns current pending work after its queued item finishes indexing', async (t) => {
+test('a sync reports an accepted, unindexed item as pending instead of waiting on it', async (t) => {
   const { db } = await migratedCacheD1(t)
   await db.prepare("INSERT INTO business_locations (id, organization_id, slug, title) VALUES ('location', 'org', 'location', 'Location')").run()
   const records = expandDocumentsForSurfaces(await buildOrganizationDocuments(db, 'org'))
@@ -105,10 +107,56 @@ test('a scoped sync returns current pending work after its queued item finishes 
   } as unknown as CloudflareEnv
 
   assert.deepEqual(await syncOrganizationSearchIndex(env, db, 'org'), {
-    indexed: 0, unchanged: 1, pending: 0, deleted: 0, indexingUnconfirmedReason: null,
+    indexed: 0, unchanged: 0, pending: 1, deleted: 0,
   })
-  assert.equal(lists, 3)
+  assert.equal(lists, 1)
   assert.equal(uploads, 0)
+})
+
+test('publishing a platform guide indexes its public pages and preserves another business’s items', async (t) => {
+  const { db, kv } = await migratedCacheD1(t)
+  await db.prepare("INSERT INTO user (id, name, email) VALUES ('author', 'Author', 'author@example.test')").run()
+  await db.prepare("INSERT INTO organization_locales (id, organization_id, locale, is_source, status) VALUES ('platform-en', 'platform', 'en', 1, 'published')").run()
+  const category = await createArticleCategory(db, { organizationId: 'platform', collection: 'docs', name: 'Calendar and bookings', actorId: 'author' })
+  const { document } = await createContentDocumentWithBlocks(db, {
+    id: 'calendar-guide', organizationId: 'platform', kind: 'article', rowRole: 'root', locale: 'en',
+    title: 'Connect Google Calendar', slug: 'connect-google-calendar', status: 'draft', visibility: 'listed', metadata: { collection: 'docs' },
+  }, [{ id: 'calendar-body', type: 'markdown', data: { markdown: 'See your bookings in Google Calendar.', editor_mode: 'rich' } }], {
+    additionalQueriesAfter: [await articleCategoryMembershipQuery(db, { organizationId: 'platform', collection: 'docs', articleId: 'calendar-guide', categoryId: category.id })],
+  })
+  await updateBlogLifecycle(db, document.id, { expected_updated_at: document.updated_at }, 'platform')
+  const otherKey = `dashboard/${organizationKeySegment('org')}/route/other.md`
+  const items = new Map<string, { id: string; key: string; status: string; metadata: Record<string, string>; content?: string }>([
+    [otherKey, { id: 'other', key: otherKey, status: 'completed', metadata: {} }],
+  ])
+  const env: OrganizationChangeDrainEnv = {
+    ...searchEnv,
+    AI_SEARCH: { get: () => ({
+      update: async () => ({}),
+      stats: async () => ({ queued: 0, running: 0, outdated: 0 }),
+      items: {
+        list: async ({ page, per_page, search }: { page: number; per_page: number; search?: string }) => {
+          const selected = [...items.values()].filter(item => !search || item.key.includes(search))
+          return { result: selected.slice((page - 1) * per_page, page * per_page), result_info: { per_page, total_count: selected.length } }
+        },
+        upload: async (key: string, content: string, options: { metadata: Record<string, string> }) => {
+          items.set(key, { id: key, key, status: 'completed', metadata: options.metadata, content })
+        },
+        delete: async (id: string) => {
+          const item = [...items.values()].find(item => item.id === id)
+          if (item) items.delete(item.key)
+        },
+      },
+    }) } as unknown as NonNullable<OrganizationChangeDrainEnv['AI_SEARCH']>,
+  }
+  await drainPublicResourceCacheInvalidations(db, kv, env, {})
+  const guide = [...items.values()].filter(item => item.metadata.record_id === 'doc:calendar-guide')
+  assert.deepEqual(guide.map(item => item.metadata.surface).sort(), ['blog', 'chowbot', 'dashboard', 'docs', 'help', 'public'])
+  for (const item of guide) {
+    assert.equal(JSON.parse(item.metadata.display!).path, '/docs/connect-google-calendar')
+    assert.match(item.content!, /See your bookings in Google Calendar/)
+  }
+  assert.equal(items.get(otherKey)?.id, 'other')
 })
 
 test('cache invalidation drain enforces the durable work lifecycle', async (t) => {
@@ -209,7 +257,7 @@ test('nonproduction drains cache invalidations without AI Search', async (t) => 
     NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN: 'https://krabiclaw.com',
     NUXT_PUBLIC_PLATFORM_DOMAIN: 'http://localhost:3107',
   }
-  assert.equal(await drainPublicResourceCacheInvalidations(db, kv, env, { organizationId: 'org' }), 1)
+  assert.equal(await drainPublicResourceCacheInvalidations(db, kv, env, {}), 1)
   assert.equal(await kv.get('public~org~v4~page'), null)
   assert.equal(await kv.get('html:org.krabiclaw.com:/'), null)
   assert.deepEqual(await db.prepare("SELECT status, attempt_count FROM public_resource_cache_invalidations WHERE id = 'local-write'").first(),
@@ -241,13 +289,7 @@ test('an organization write purges that organization despite an older invalidati
     { organization_id: 'changed', status: 'pending', attempt_count: 0 },
     { organization_id: 'org', status: 'pending', attempt_count: 0 },
   ])
-  await assert.rejects(
-    drainPublicResourceCacheInvalidations(db, kv, searchEnv, { organizationId: 'changed', limit: 0 }),
-    /pending cache or search index work remains/,
-  )
-  assert.equal(await drainPublicResourceCacheInvalidations(db, kv, searchEnv, { organizationId: 'changed' }), 1)
-  assert.equal(await kv.get('public~org~v4~page'), 'cached public resource')
-  assert.equal(await drainPublicResourceCacheInvalidations(db, kv, searchEnv, {}), 1)
+  assert.equal(await drainPublicResourceCacheInvalidations(db, kv, searchEnv, {}), 2)
   assert.equal(await kv.get('public~org~v4~page'), null)
   assert.equal(await kv.get('html:org.krabiclaw.com:/'), null)
 })
@@ -259,14 +301,12 @@ test('a complete fresh reconciliation clears older terminal work, but no work ca
     id: 'old-failed', status: 'failed', attemptCount: 5,
     processedAt: '2026-09-28T04:30:00.000Z', createdAt: '2026-09-28T04:00:00.000Z',
   })
-  await assert.rejects(
-    drainPublicResourceCacheInvalidations(db, kv, searchEnv, { organizationId: 'org', now }),
-    /failed cache or search index work remains/,
-  )
+  assert.equal(await drainPublicResourceCacheInvalidations(db, kv, searchEnv, { now }), 0)
+  assert.equal((await db.prepare("SELECT status FROM public_resource_cache_invalidations WHERE id = 'old-failed'").first<{ status: string }>())!.status, 'failed')
   await insertInvalidation(db, {
     id: 'fresh', status: 'pending', attemptCount: 0, createdAt: '2026-09-29T04:00:00.000Z',
   })
-  assert.equal(await drainPublicResourceCacheInvalidations(db, kv, searchEnv, { organizationId: 'org', now }), 1)
+  assert.equal(await drainPublicResourceCacheInvalidations(db, kv, searchEnv, { now }), 1)
   const rows = await db.prepare("SELECT id, status, last_error FROM public_resource_cache_invalidations ORDER BY id")
     .all<{ id: string; status: string; last_error: string | null }>()
   assert.deepEqual(rows.results, [
@@ -336,32 +376,30 @@ test('simultaneous drains cannot sync one organization out of order', async (t) 
     } as unknown as NonNullable<OrganizationChangeDrainEnv['AI_SEARCH']>,
   }
   const now = new Date('2026-09-29T04:30:00.000Z')
-  const first = drainPublicResourceCacheInvalidations(db, kv, env, { organizationId: 'org', now })
-  let second: Promise<number>
+  const first = drainPublicResourceCacheInvalidations(db, kv, env, { now })
   try {
     await firstEntered
     await insertInvalidation(db, {
       id: 'second', status: 'pending', attemptCount: 0, createdAt: '2026-09-29T04:01:00.000Z',
     })
-    // The second write's drain waits while the first holds the site.
-    second = drainPublicResourceCacheInvalidations(db, kv, env, { organizationId: 'org', now })
-    await new Promise(resolve => setTimeout(resolve, 300))
+    // An overlapping run leaves the site to the run holding it.
+    assert.equal(await drainPublicResourceCacheInvalidations(db, kv, env, { now }), 0)
     assert.equal(providerReads, 1)
     assert.deepEqual(await db.prepare("SELECT status, attempt_count FROM public_resource_cache_invalidations WHERE id = 'second'").first(),
       { status: 'pending', attempt_count: 0 })
   } finally {
     releaseFirst()
   }
-  // Both writes become visible, one sync after the other.
-  const [firstProcessed, secondProcessed] = await Promise.all([first, second!])
-  assert.equal(firstProcessed + secondProcessed, 2)
+  assert.equal(await first, 1)
+  // The next run syncs the later write, after the first.
+  assert.equal(await drainPublicResourceCacheInvalidations(db, kv, env, { now }), 1)
   assert.equal(providerReads, 2)
   assert.deepEqual(await db.prepare('SELECT id, status FROM public_resource_cache_invalidations ORDER BY id').all().then(result => result.results),
     [{ id: 'first', status: 'processed' }, { id: 'second', status: 'processed' }])
 })
 
 
-test('a write syncs search once and leaves its continuation to the scheduled drain', async (t) => {
+test('a drain syncs search once and leaves its continuation to the next run', async (t) => {
   for (const outcome of ['completed', 'skipped'] as const) {
     await t.test(outcome, async (t) => {
       const { db, kv } = await migratedCacheD1(t)
@@ -395,14 +433,14 @@ test('a write syncs search once and leaves its continuation to the scheduled dra
         status: string; attempt_count: number; last_error: string | null
       }>())!
 
-      // The write: one bounded sync, its own row processed, the rest queued.
-      assert.equal(await drainPublicResourceCacheInvalidations(db, kv, env, { organizationId: 'org' }), 1)
+      // One drain run: one bounded sync, the write's row processed, the rest queued.
+      assert.equal(await drainPublicResourceCacheInvalidations(db, kv, env, {}), 1)
       assert.equal(lists, 1)
       assert.deepEqual(uploads, [missing!.key])
       assert.equal((await db.prepare("SELECT status FROM public_resource_cache_invalidations WHERE id = 'write'").first<{ status: string }>())!.status, 'processed')
       assert.deepEqual(await continuation(), { status: 'pending', attempt_count: 0, last_error: null })
 
-      // The scheduled drain finishes it, or reports what the provider refused.
+      // The next run finishes it, or reports what the provider refused.
       if (outcome === 'completed') {
         assert.equal(await drainPublicResourceCacheInvalidations(db, kv, env, {}), 1)
         assert.deepEqual(await continuation(), { status: 'processed', attempt_count: 1, last_error: null })

@@ -4,6 +4,7 @@ import type { Product } from '../../server/types/products.ts'
 import {
   COLLECTION_SIBLING_LIMIT,
   composeProductSeoDescription,
+  extractDietarySchemaUrls,
   isOfferedProduct,
   selectProductCollectionSiblings,
 } from '../../utils/product-seo.ts'
@@ -129,3 +130,38 @@ test('the sibling window rotates and stays bounded so a large collection is full
     ['Dish 0', 'Dish 1', 'Dish 2', 'Dish 3', 'Dish 4', 'Dish 5', 'Dish 6', 'Dish 7'],
   )
 })
+
+test('extractDietarySchemaUrls maps product dietary notes to standard Schema.org diet enumeration URLs', () => {
+  const baseProduct = {
+    id: 'prod-1',
+    name: 'Pad Thai',
+    slug: 'pad-thai',
+    description: 'Delicious noodles',
+    kind: 'item' as const,
+    variants: [],
+    collections: [],
+    details: {},
+  }
+
+  assert.deepEqual(
+    extractDietarySchemaUrls({ ...baseProduct, details: { dietary_notes: ['V'] } }),
+    ['https://schema.org/VegetarianDiet'],
+  )
+  assert.deepEqual(
+    extractDietarySchemaUrls({ ...baseProduct, details: { dietary_notes: ['VG'] } }),
+    ['https://schema.org/VeganDiet'],
+  )
+  assert.deepEqual(
+    extractDietarySchemaUrls({ ...baseProduct, details: { dietary_notes: ['GF'] } }),
+    ['https://schema.org/GlutenFreeDiet'],
+  )
+  assert.deepEqual(
+    extractDietarySchemaUrls({ ...baseProduct, details: { dietary_notes: ['V', 'GF', 'UNKNOWN'] } }),
+    ['https://schema.org/VegetarianDiet', 'https://schema.org/GlutenFreeDiet'],
+  )
+  assert.deepEqual(
+    extractDietarySchemaUrls({ ...baseProduct, details: {} }),
+    [],
+  )
+})
+

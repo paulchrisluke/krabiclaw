@@ -8,7 +8,7 @@ import { aggregateOrganizationAnalyticsDate, getAnalyticsReport } from '../../se
 
 test('analytics preserves duplicate, attribution, summary semantics on D1', { timeout: 60_000 }, async () => {
   const runtime = new Miniflare({ workers: [{ config: {
-    name: 'analytics-proof', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'analytics-proof', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } },
     env: { DB: { type: 'd1' } },
   } }] })

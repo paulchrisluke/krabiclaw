@@ -13,12 +13,13 @@ interface SubscriptionCheckoutInput {
   onAction?: (_action: StripeGa4IntentAction) => void
 }
 
-function checkoutReturnUrls(): { successUrl: string; cancelUrl: string; returnUrl: string } {
+function checkoutReturnUrls(plan: string): { successUrl: string; cancelUrl: string; returnUrl: string } {
   const current = new URL(window.location.href)
   for (const key of ['success', 'canceled', 'plan']) current.searchParams.delete(key)
 
   const success = new URL(current)
   success.searchParams.set('success', 'true')
+  success.searchParams.set('plan', plan)
   const cancel = new URL(current)
   cancel.searchParams.set('canceled', 'true')
   return { successUrl: success.toString(), cancelUrl: cancel.toString(), returnUrl: current.toString() }
@@ -39,7 +40,7 @@ export function useSubscriptionCheckout() {
     const plan = normalizedPlan === STARTER_PLAN_ID
       ? STARTER_PLAN_ID
       : assertNewSalePlan(normalizedPlan)
-    const { successUrl, cancelUrl, returnUrl } = checkoutReturnUrls()
+    const { successUrl, cancelUrl, returnUrl } = checkoutReturnUrls(plan)
     const action = classifyStripePlanChange(input.currentPlan, plan, Boolean(input.subscriptionId))
     if (!action) throw new Error('The selected plan is already active')
     input.onAction?.(action)

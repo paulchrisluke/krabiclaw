@@ -1,57 +1,36 @@
 /* Blawby theme tokens — Krabiclaw Design System */
 
 .blawby-theme {
-  color-scheme: light;
-  background-color: var(--blawby-bg);
-  color: var(--blawby-ink);
-  font-family: Poppins, sans-serif;
+  font-family: var(--font-sans);
 
-  /* The heading face shared components set their headings in, and how far the
-     fixed header reaches past its spacer (it carries the banner too). */
-  --font-heading:        Marcellus, serif;
-  --font-heading-weight: 400;
+  /* How far the fixed header reaches past its spacer (it carries the banner too). */
   --header-overlap:      3rem;
 
-  --blawby-bg:            var(--blawby-token-bg, #fbfaf7);
-  --blawby-surface:       var(--blawby-token-surface, #ffffff);
-  --blawby-primary:       var(--blawby-token-primary, #25356c);
-  --blawby-primary-dark:  var(--blawby-token-primary-dark, #161f3b);
-  --blawby-primary-100:   var(--blawby-token-primary-100, #f2f5ff);
-  --blawby-primary-200:   var(--blawby-token-primary-200, #b4c5e5);
-  --blawby-primary-800:   var(--blawby-token-primary-800, #1d294f);
-  --blawby-accent:        var(--blawby-token-accent, #c19855);
-  --blawby-accent-100:    var(--blawby-token-accent-100, #faf5ea);
-  --blawby-accent-200:    var(--blawby-token-accent-200, #f8f0e1);
-  --blawby-accent-button: var(--blawby-token-accent-button, #b58c4f);
-  --blawby-accent-strong: var(--blawby-token-accent-strong, #a37732);
-  --blawby-border:        var(--blawby-token-border, #e5e7eb);
-  --blawby-ink:           var(--blawby-token-ink, #162033);
+  /* Blawby's tonal scale, derived from the site palette (base.css maps the
+     palette itself): deep bands, pale tints and stronger accents. */
+  --blawby-bg:            var(--site-ground);
+  --blawby-surface:       var(--site-surface);
+  --blawby-ink:           var(--site-text);
+  --blawby-primary:       var(--site-action);
+  --blawby-primary-dark:  color-mix(in oklab, var(--site-action) 60%, black);
+  --blawby-primary-100:   color-mix(in oklab, var(--site-action) 6%, var(--site-ground));
+  --blawby-primary-200:   color-mix(in oklab, var(--site-action) 30%, var(--site-ground));
+  --blawby-primary-800:   color-mix(in oklab, var(--site-action) 85%, black);
+  --blawby-accent:        var(--site-accent);
+  --blawby-accent-100:    color-mix(in oklab, var(--site-accent) 10%, var(--site-ground));
+  --blawby-accent-200:    color-mix(in oklab, var(--site-accent) 18%, var(--site-ground));
+  --blawby-accent-strong: color-mix(in oklab, var(--site-accent) 80%, black);
+  --blawby-border:        var(--ui-border);
 
-  --brand-color:          var(--blawby-primary);
-  --brand-color-foreground: var(--blawby-surface);
-  --color-primary:        var(--blawby-primary);
-  --primary-foreground:   var(--blawby-surface);
-  --ui-primary:           var(--blawby-primary);
-  --ui-secondary:         var(--blawby-accent);
-  --ui-success:           #10B981;
-  --ui-info:              #3B82F6;
-  --ui-warning:           #F59E0B;
-  --ui-error:             #EF4444;
-  --ui-bg:                var(--blawby-bg);
-  --ui-bg-elevated:       var(--blawby-surface);
+  /* Blawby headings take the action color, and its tints come from it. */
+  --ui-text-highlighted:  var(--site-action);
   --ui-bg-muted:          var(--blawby-primary-100);
   --ui-bg-accented:       var(--blawby-accent-100);
   --ui-bg-inverted:       var(--blawby-primary-dark);
-  --ui-text:              var(--blawby-ink);
-  --ui-text-muted:        color-mix(in srgb, var(--blawby-ink) 72%, transparent);
-  --ui-text-dimmed:       color-mix(in srgb, var(--blawby-ink) 48%, transparent);
-  --ui-text-toned:        color-mix(in srgb, var(--blawby-ink) 60%, transparent);
-  --ui-text-highlighted:  var(--blawby-primary);
-  --ui-text-inverted:     var(--blawby-surface);
-  --ui-border:            var(--blawby-border);
   --ui-border-muted:      var(--blawby-primary-100);
   --ui-border-accented:   var(--blawby-primary-200);
   --ui-border-inverted:   var(--blawby-primary-dark);
+  --ui-text-inverted:     var(--site-surface);
   --ui-radius:            0.5rem;
 
   --text-xs: 0.75rem;
@@ -83,11 +62,27 @@
   --container-2xl: 40rem;
 }
 
-/* Blawby intentionally has no dark-mode variant — a professional-service tenant
- * site (law firms, clinics) should look the same regardless of the visitor's
- * system color-scheme preference, not flip to a different palette underneath
- * them. .blawby-theme above sets color-scheme: light unconditionally so the
- * browser's own chrome (scrollbars, form controls) also stays light. */
+/* In dark mode the deep bands sit just off the dark ground, and the strong
+   accents lighten instead of darken, so the same components read on either. */
+.dark .blawby-theme {
+  /* Text is white and grey in dark mode, never the action color: headings,
+     nav and labels that take the brand navy in light mode take the text. */
+  --blawby-primary:       var(--site-text);
+  --ui-text-highlighted:  var(--site-text);
+  /* Brand bands keep the light mode's deep action color: dark mode turns the
+     page near-black and grey, not the bands. */
+  --blawby-primary-dark:  color-mix(in oklab, var(--site-action-light) 60%, black);
+  --blawby-primary-800:   color-mix(in oklab, var(--site-action-light) 85%, black);
+  --blawby-accent-strong: color-mix(in oklab, var(--site-accent) 80%, white);
+  /* Pale tints become a lift of the ground toward the surface, not a wash of
+     the accent over a dark ground, which reads as grey-brown. The band tint
+     sits just above the surface so a band, and the shield pointing out of it,
+     stands apart from the ground and from the cards it holds. */
+  --blawby-primary-100:   color-mix(in oklab, var(--site-surface) 60%, var(--site-ground));
+  --blawby-accent-100:    color-mix(in oklab, var(--site-surface) 45%, var(--site-ground));
+  --blawby-accent-200:    color-mix(in oklab, var(--site-text) 7%, var(--site-surface));
+  --ui-text-inverted:     var(--site-text);
+}
 
 html.blawby-document {
   font-size: 100%;
@@ -127,15 +122,15 @@ html.blawby-document {
 }
 
 .blawby-display {
-  font-family: Marcellus, serif;
+  font-family: var(--font-heading);
 }
 
 .blawby-shell .prose :where(h1, h2, h3, h4) {
-  font-family: Marcellus, serif;
+  font-family: var(--font-heading);
 }
 
 .blawby-shell .prose.blawby-policy-prose :where(h1, h2, h3, h4) {
-  font-family: Poppins, sans-serif;
+  font-family: var(--font-sans);
 }
 
 .blawby-faq-answer p,
@@ -163,10 +158,6 @@ html.blawby-document {
 .blawby-footer-copy a {
   text-decoration: underline;
   text-underline-offset: 3px;
-}
-
-.blawby-footer-logo {
-  filter: grayscale(1) brightness(1.2);
 }
 
 /* Shared Product and booking components inherit this theme's heading family. */

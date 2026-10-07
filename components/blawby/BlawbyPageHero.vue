@@ -60,7 +60,7 @@
   -->
   <section
     v-else-if="gallery.length"
-    class="mx-auto mb-8 max-w-7xl border-b border-slate-200 pt-8 sm:px-6 md:flex lg:px-8"
+    class="mx-auto mb-8 max-w-7xl border-b border-default pt-8 sm:px-6 md:flex lg:px-8"
     data-parity-section="service-overview"
   >
     <BlawbyMediaGallery v-model="activeMedia" :media="gallery" :fallback-alt="page.title" />
@@ -102,7 +102,7 @@
           </p>
           <h1 v-if="titleWords.length" :aria-label="title" class="blawby-display text-3xl font-bold sm:text-4xl">
             <template v-for="(word, index) in titleWords" :key="`${word}-${index}`">
-              <span :class="index === 1 || index === 2 ? 'text-[var(--blawby-accent)]' : 'text-[var(--blawby-primary)]'">{{ word + (index < titleWords.length - 1 ? ' ' : '') }}</span>
+              <span :class="index === 1 || index === 2 ? 'text-[var(--blawby-accent-strong)]' : 'text-[var(--blawby-primary)]'">{{ word + (index < titleWords.length - 1 ? ' ' : '') }}</span>
             </template>
           </h1>
           <div v-if="descriptionParts.length" class="mt-6 text-left text-lg leading-8 text-[var(--blawby-primary)]">
@@ -201,7 +201,7 @@ const descriptionParts = computed(() => (description.value ?? '')
 
 <style>
 .blawby-page-hero-copy p {
-  color: rgb(82 82 91) !important;
+  color: var(--ui-text-muted) !important;
   font-size: 1.125rem !important;
   line-height: 2rem !important;
   margin: 0 0 1rem !important;
@@ -213,6 +213,6 @@ const descriptionParts = computed(() => (description.value ?? '')
 }
 
 .blawby-page-hero-copy a {
-  color: var(--blawby-accent);
+  color: var(--blawby-accent-strong);
 }
 </style>

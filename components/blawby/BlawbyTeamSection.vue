@@ -1,12 +1,12 @@
 <template>
   <section v-if="people.length" class="bg-[var(--blawby-accent-200)] pb-16" data-parity-section="team">
     <div class="mx-auto max-w-7xl px-6 lg:px-8">
-      <ul class="-mt-12 space-y-12 divide-y divide-gray-200" role="list">
+      <ul class="-mt-12 space-y-12 divide-y divide-default" role="list">
         <li v-for="person in people" :key="`${person.first_name}-${person.last_name}`" class="flex flex-col gap-10 pt-12 sm:flex-row">
           <img v-if="person.media[0]?.public_url" :src="person.media[0].public_url" :alt="`${person.first_name} ${person.last_name}`" width="640" height="480" loading="lazy" class="w-2/5 flex-none rounded-2xl object-cover">
           <div class="max-w-xl flex-auto">
             <h3 class="blawby-display text-3xl font-bold text-[var(--blawby-primary)] sm:text-4xl">{{ person.first_name }} {{ person.last_name }}</h3>
-            <p v-if="person.title" class="text-base leading-7 text-gray-600">{{ person.title }}</p>
+            <p v-if="person.title" class="text-base leading-7 text-muted">{{ person.title }}</p>
             <div v-if="person.bio" class="mt-6 text-base leading-7 text-[var(--blawby-primary)]">
               <div class="flex items-start gap-3">{{ person.bio }}</div>
             </div>

@@ -14,6 +14,7 @@ import {
   type PlatformKnowledgeSurface,
 } from '~/config/platform-knowledge'
 import { resolveProductPresentation } from '~/utils/product-presentation'
+import { blogEditorPath, brandEditorPath, collectionEditorPath, locationEditorPath, pageEditorPath, postEditorPath, productEditorPath, qaEditorPath } from '~/server/utils/dashboard-links'
 import type { PublicSearchTypeFilter } from '~/server/utils/platform-search-types'
 import { renderContentBlocksForLlm } from '~/server/utils/platform-llm'
 import { articleCategoryNameSql } from '~/server/utils/content/article-categories'
@@ -400,45 +401,6 @@ async function uploadIndexItem(env: CloudflareEnv, key: string, content: string,
   await withRetries(() => searchNamespace(env).get(platformKnowledgeInstanceId(env)).items.upload(key, content, { metadata }))
 }
 
-async function waitForIndexing(env: CloudflareEnv, timeoutMs = 10 * 60 * 1000, organizationId?: string) {
-  const instance = searchNamespace(env).get(platformKnowledgeInstanceId(env))
-  const startedAt = Date.now()
-
-  // One failed stats read does not end the wait — the documents are already
-  // uploaded and this loop only confirms completion. But the last failure is kept
-  // rather than logged, so that when the budget does run out the error says what
-  // actually went wrong instead of "timed out". A whole window of identical
-  // errors is our instance being unhealthy, and that is the thing worth naming.
-  let lastStatusError: unknown = null
-  while (Date.now() - startedAt < timeoutMs) {
-    try {
-      if (organizationId) {
-        const items = await listOrganizationItems(env, organizationId)
-        if (items.every(item => !['queued', 'running', 'outdated'].includes(item.status))) return
-      } else {
-        const stats = await instance.stats()
-        const { queued, running, outdated } = stats
-        if (![queued, running, outdated].every(value => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0)) {
-          throw new Error('AI Search stats omitted or returned invalid queued, running, or outdated counts')
-        }
-        if (queued === 0 && running === 0 && outdated === 0) return
-      }
-      lastStatusError = null
-    } catch (error) {
-      lastStatusError = error
-    }
-    await new Promise(resolve => setTimeout(resolve, 1000))
-  }
-
-  if (lastStatusError) {
-    throw new Error(
-      `Timed out waiting for AI Search indexing; the last status read failed with: ${lastStatusError instanceof Error ? lastStatusError.message : String(lastStatusError)}`,
-      { cause: lastStatusError },
-    )
-  }
-  throw new Error('Timed out waiting for AI Search indexing to complete')
-}
-
 export async function buildTenantBlogDocuments(db: DbClient, platformOrganizationId?: string, organizationId?: string | null): Promise<PlatformKnowledgeDocument[]> {
   const platformId = platformOrganizationId ?? (await getPlatformOrganization(db)).id
   const [posts, contentBodies] = await Promise.all([queryAll<TenantBlogDocRow>(db, `
@@ -491,7 +453,6 @@ interface WorkspaceOrganizationRow {
   slug: string
   subdomain: string
   vertical: string | null
-  first_location_slug: string | null
 }
 
 const WORKSPACE_ORGANIZATION_SQL = `JOIN organization s ON s.status = 'active' AND s.subdomain IS NOT NULL`
@@ -512,18 +473,13 @@ export async function buildWorkspaceDocuments(db: DbClient, organizationId?: str
   const organizationWhere = organizationId ? ' AND s.id = ?' : ''
   const organizationParams = organizationId ? [organizationId] : []
   const organizations = await queryAll<WorkspaceOrganizationRow>(db, `
-    SELECT s.id, s.slug, s.subdomain, s.vertical,
-      (SELECT bl.slug FROM business_locations bl WHERE bl.organization_id = s.id ORDER BY bl.title LIMIT 1) AS first_location_slug
+    SELECT s.id, s.slug, s.subdomain, s.vertical
     FROM organization s
     WHERE s.status = 'active' AND s.subdomain IS NOT NULL${organizationWhere}
   `, organizationParams)
   if (!organizations?.length) return []
   const byOrganization = new Map(organizations.map(organization => [organization.id, organization]))
   const base = (organization: WorkspaceOrganizationRow) => `/dashboard/${organization.slug}`
-  const locationPath = (organization: WorkspaceOrganizationRow, slug: string | null) => {
-    const location = slug ?? organization.first_location_slug
-    return location ? `${base(organization)}/locations/${location}` : null
-  }
   const segment = (organization: WorkspaceOrganizationRow) => resolveProductPresentation(organization.vertical)?.locationCollectionSegment ?? 'products'
   const doc = (organization: WorkspaceOrganizationRow, type: PlatformKnowledgeResultType, id: string, fields: { title: string; path: string; snippet: string; section: string; icon: string; body: string }): PlatformKnowledgeDocument => ({
     id: `dashboard:${type}:${organization.id}:${id}`,
@@ -545,31 +501,25 @@ export async function buildWorkspaceDocuments(db: DbClient, organizationId?: str
       FROM business_locations bl ${WORKSPACE_ORGANIZATION_SQL} AND s.id = bl.organization_id
       WHERE 1 = 1${organizationWhere}
     `, organizationParams),
-    queryAll<{ id: string; organization_id: string; name: string; description: string | null; location_slug: string | null; bookable: number; collection_id: string | null }>(db, `
+    queryAll<{ id: string; organization_id: string; name: string; description: string | null; bookable: number }>(db, `
       SELECT p.id, pub.organization_id, p.name, p.description,
-        (SELECT bl.slug FROM product_locations pl JOIN business_locations bl ON bl.id = pl.location_id
-          WHERE pl.product_id = p.id AND pl.organization_id = p.organization_id AND bl.organization_id = pub.organization_id ORDER BY bl.title LIMIT 1) AS location_slug,
-        EXISTS (SELECT 1 FROM product_booking_configs b WHERE b.product_id = p.id AND b.organization_id = p.organization_id) AS bookable,
-        (SELECT cp.collection_id FROM collection_products cp JOIN collections c ON c.id = cp.collection_id
-          WHERE cp.product_id = p.id AND cp.organization_id = p.organization_id AND c.organization_id = pub.organization_id ORDER BY c.sort_order, c.name LIMIT 1) AS collection_id
+        EXISTS (SELECT 1 FROM product_booking_configs b WHERE b.product_id = p.id AND b.organization_id = p.organization_id) AS bookable
       FROM products p
       JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
       ${WORKSPACE_ORGANIZATION_SQL} AND s.id = pub.organization_id
       WHERE 1 = 1${organizationWhere}
     `, organizationParams),
-    queryAll<{ id: string; organization_id: string; name: string; description: string | null; location_slug: string | null; member_count: number; bookable_count: number }>(db, `
-      SELECT c.id, c.organization_id, c.name, c.description, bl.slug AS location_slug,
+    queryAll<{ id: string; organization_id: string; name: string; description: string | null; location_id: string | null; member_count: number; bookable_count: number }>(db, `
+      SELECT c.id, c.organization_id, c.name, c.description, c.location_id,
         (SELECT COUNT(*) FROM collection_products cp WHERE cp.collection_id = c.id) AS member_count,
         (SELECT COUNT(*) FROM collection_products cp JOIN product_booking_configs b ON b.product_id = cp.product_id AND b.organization_id = cp.organization_id
           WHERE cp.collection_id = c.id) AS bookable_count
       FROM collections c ${WORKSPACE_ORGANIZATION_SQL} AND s.id = c.organization_id
-      LEFT JOIN business_locations bl ON bl.id = c.location_id
       WHERE 1 = 1${organizationWhere}
     `, organizationParams),
-    queryAll<{ id: string; organization_id: string; kind: string; title: string | null; summary: string | null; status: string | null; category: string | null; location_slug: string | null }>(db, `
-      SELECT d.id, d.organization_id, d.kind, d.title, d.summary, d.status, ${articleCategoryNameSql('d.id')} AS category, bl.slug AS location_slug
+    queryAll<{ id: string; organization_id: string; kind: string; title: string | null; summary: string | null; status: string | null; category: string | null; location_id: string | null; product_id: string | null }>(db, `
+      SELECT d.id, d.organization_id, d.kind, d.title, d.summary, d.status, ${articleCategoryNameSql('d.id')} AS category, d.location_id, d.product_id
       FROM content_documents d ${WORKSPACE_ORGANIZATION_SQL} AND s.id = d.organization_id
-      LEFT JOIN business_locations bl ON bl.id = d.location_id
       WHERE d.row_role = 'root' AND d.kind IN ('qa', 'social_post', 'page', 'article')${organizationWhere}
     `, organizationParams),
     queryAll<ContentBlockBodyRow>(db, `
@@ -606,22 +556,20 @@ export async function buildWorkspaceDocuments(db: DbClient, organizationId?: str
     const organization = byOrganization.get(row.organization_id)
     if (!organization) continue
     records.push(doc(organization, 'location', row.id, {
-      title: row.title, path: `${base(organization)}/locations/${row.slug}`, snippet: row.short_description || row.address || row.description || '',
+      title: row.title, path: locationEditorPath(organization.slug, row.slug), snippet: row.short_description || row.address || row.description || '',
       section: 'Locations', icon: 'map-pin', body: joinWords(row.title, row.short_description, row.description, row.address),
     }))
   }
 
+  // Every product, collection, post and Q&A has one editor, shared by the
+  // organization and scoped to a location by its id, so search opens it there.
   for (const row of products ?? []) {
     const organization = byOrganization.get(row.organization_id)
     if (!organization) continue
     const surface = row.bookable ? 'experiences' : segment(organization)
     const presentation = surface === 'experiences' ? null : resolveProductPresentation(organization.vertical)
-    const catalog = locationPath(organization, row.location_slug)
-    const path = catalog
-      ? `${catalog}/products/${surface}${row.collection_id ? `/${row.collection_id}/${row.id}` : ''}`
-      : base(organization)
     records.push(doc(organization, 'product', row.id, {
-      title: row.name, path, snippet: row.description || '',
+      title: row.name, path: productEditorPath(organization.slug, row.id), snippet: row.description || '',
       section: surface === 'experiences' ? 'Experiences' : presentation?.collectionLabel ?? 'Products', icon: 'utensils',
       body: joinWords(row.name, row.description),
     }))
@@ -631,9 +579,8 @@ export async function buildWorkspaceDocuments(db: DbClient, organizationId?: str
     const organization = byOrganization.get(row.organization_id)
     if (!organization) continue
     const surface = row.member_count > 0 && row.bookable_count === row.member_count ? 'experiences' : segment(organization)
-    const catalog = locationPath(organization, row.location_slug)
     records.push(doc(organization, 'collection', row.id, {
-      title: row.name, path: catalog ? `${catalog}/products/${surface}/${row.id}` : base(organization), snippet: row.description || '',
+      title: row.name, path: collectionEditorPath(organization.slug, row.id, row.location_id), snippet: row.description || '',
       section: surface === 'experiences' ? 'Experiences' : resolveProductPresentation(organization.vertical)?.collectionLabel ?? 'Products', icon: 'layout-list',
       body: joinWords(row.name, row.description),
     }))
@@ -645,15 +592,13 @@ export async function buildWorkspaceDocuments(db: DbClient, organizationId?: str
     const title = row.title?.trim() || row.summary?.trim() || 'Untitled'
     const body = joinWords(row.title, row.summary, row.category, bodies.get(row.id))
     if (row.kind === 'qa') {
-      const scope = row.location_slug ? `${base(organization)}/locations/${row.location_slug}` : base(organization)
-      records.push(doc(organization, 'qa', row.id, { title, path: `${scope}/qa/${row.id}`, snippet: row.summary || '', section: 'Q&A', icon: 'circle-help', body }))
+      records.push(doc(organization, 'qa', row.id, { title, path: qaEditorPath(organization.slug, row.id, row.location_id), snippet: row.summary || '', section: 'Q&A', icon: 'circle-help', body }))
     } else if (row.kind === 'social_post') {
-      const scope = locationPath(organization, row.location_slug)
-      records.push(doc(organization, 'post', row.id, { title, path: scope ? `${scope}/posts/${row.id}` : base(organization), snippet: row.summary || '', section: 'Posts', icon: 'megaphone', body }))
+      records.push(doc(organization, 'post', row.id, { title, path: postEditorPath(organization.slug, row.id, row.location_id), snippet: row.summary || '', section: 'Posts', icon: 'megaphone', body }))
     } else if (row.kind === 'page') {
-      records.push(doc(organization, 'page', row.id, { title, path: `${base(organization)}/pages/${row.id}`, snippet: row.summary || '', section: 'Pages', icon: 'file-text', body }))
+      records.push(doc(organization, 'page', row.id, { title, path: pageEditorPath(organization.slug, row), snippet: row.summary || '', section: 'Pages', icon: 'file-text', body }))
     } else {
-      records.push(doc(organization, 'blog', row.id, { title, path: `${base(organization)}/blog/${row.id}`, snippet: row.summary || '', section: row.category || 'Blog', icon: 'newspaper', body }))
+      records.push(doc(organization, 'blog', row.id, { title, path: blogEditorPath(organization.slug, row.id), snippet: row.summary || '', section: row.category || 'Blog', icon: 'newspaper', body }))
     }
   }
 
@@ -675,7 +620,7 @@ export async function buildWorkspaceDocuments(db: DbClient, organizationId?: str
     for (const organization of organizations) {
       if (organization.id !== row.organization_id) continue
       records.push(doc(organization, 'member', row.id, {
-        title: row.name?.trim() || row.email, path: `${base(organization)}/settings/members`, snippet: `${row.email} · ${row.role}`,
+        title: row.name?.trim() || row.email, path: `${base(organization)}/team`, snippet: `${row.email} · ${row.role}`,
         section: 'Team', icon: 'users', body: joinWords(row.name, row.email, row.role),
       }))
     }
@@ -684,9 +629,11 @@ export async function buildWorkspaceDocuments(db: DbClient, organizationId?: str
   for (const row of media ?? []) {
     const organization = byOrganization.get(row.organization_id)
     if (!organization) continue
-    const scope = locationPath(organization, row.location_slug)
+    // A location's photo opens that location's Photos; anything else is the
+    // organization's, never a location guessed for it.
     records.push(doc(organization, 'media', row.id, {
-      title: row.file_name?.trim() || `${row.kind} ${row.id.slice(0, 8)}`, path: scope ? `${scope}/photos` : `${base(organization)}/brand`, snippet: row.category || row.kind,
+      title: row.file_name?.trim() || `${row.kind} ${row.id.slice(0, 8)}`,
+      path: row.location_slug ? `${locationEditorPath(organization.slug, row.location_slug)}/photos` : brandEditorPath(organization.slug), snippet: row.category || row.kind,
       section: 'Photos', icon: 'image', body: joinWords(row.file_name, row.category, row.kind),
     }))
   }
@@ -983,24 +930,20 @@ export async function listOrganizationItems(env: CloudflareEnv, organizationId: 
  */
 export async function syncOrganizationSearchIndex(env: CloudflareEnv, db: DbClient, organizationId: string) {
   const startedAt = Date.now()
+  // Platform guides live in the shared public corpus, alongside the site's
+  // organization-scoped dashboard records. A platform write updates both.
+  const platformId = (await getPlatformOrganization(db)).id
+  const publicCorpus = organizationId === platformId ? await rebuildPlatformKnowledgeIndex(env, db) : null
   const [existingItems, baseRecords] = await Promise.all([listOrganizationItems(env, organizationId), buildOrganizationDocuments(db, organizationId)])
   const records = expandDocumentsForSurfaces(baseRecords)
-  let result = await reconcileIndexItems(env, existingItems, records, { maxUploads: SYNC_UPLOADS_PER_RUN })
-  let indexingUnconfirmedReason: string | null = null
-  if (result.indexed === 0 && result.pending > 0) {
-    // A pass waiting only on accepted, metadata-less items must let AI Search
-    // progress instead of immediately polling and resetting the same queue.
-    try {
-      await waitForIndexing(env, 45_000, organizationId)
-    } catch (error) {
-      indexingUnconfirmedReason = error instanceof Error ? error.message : String(error)
-    }
-    if (!indexingUnconfirmedReason) {
-      result = await reconcileIndexItems(env, await listOrganizationItems(env, organizationId), records, { maxUploads: SYNC_UPLOADS_PER_RUN })
-    }
-  }
+  const result = await reconcileIndexItems(env, existingItems, records, { maxUploads: SYNC_UPLOADS_PER_RUN })
   console.warn(`[ai-search] organization ${organizationId}: uploaded ${result.indexed}, unchanged ${result.unchanged}, pending ${result.pending}, deleted ${result.deleted} in ${((Date.now() - startedAt) / 1000).toFixed(1)}s`)
-  return { ...result, indexingUnconfirmedReason }
+  return {
+    indexed: result.indexed + (publicCorpus?.indexed ?? 0),
+    unchanged: result.unchanged + (publicCorpus?.unchanged ?? 0),
+    pending: result.pending + (publicCorpus?.pending ?? 0),
+    deleted: result.deleted + (publicCorpus?.deleted ?? 0),
+  }
 }
 
 /**
@@ -1012,7 +955,6 @@ export async function syncOrganizationSearchIndex(env: CloudflareEnv, db: DbClie
 export async function rebuildPlatformKnowledgeIndex(
   env: CloudflareEnv,
   db: DbClient,
-  options: { confirmIndexing?: boolean } = {},
 ) {
   const rebuildStartedAt = Date.now()
   const elapsed = () => `${((Date.now() - rebuildStartedAt) / 1000).toFixed(1)}s`
@@ -1034,31 +976,10 @@ export async function rebuildPlatformKnowledgeIndex(
   const result = await reconcileIndexItems(env, platformItems, platformRecords, { maxUploads: SYNC_UPLOADS_PER_RUN })
   console.warn(`[ai-search] rebuild uploaded ${result.indexed}/${platformRecords.length} records, pending ${result.pending}, deleted ${result.deleted} stale items in ${elapsed()}`)
 
-  // Cloudflare processes indexing asynchronously after accepting uploads.
-  // Waiting for every item would delay this response and keep its client request
-  // open. Observe indexing for a short window and report whether it completed;
-  // the caller can see an unconfirmed result separately from an upload failure.
-  let indexingConfirmed = false
-  let indexingUnconfirmedReason: string | null = null
-  if (options.confirmIndexing !== false) {
-    try {
-      await waitForIndexing(env, 45 * 1000)
-      indexingConfirmed = true
-    } catch (error) {
-      // Returned rather than logged. The rebuild really can outlive this request,
-      // so not-yet-confirmed is not a failed rebuild — but the caller is the one
-      // entitled to decide that, and it cannot if the reason only ever reached a
-      // console. This is what the deploy step prints.
-      indexingUnconfirmedReason = error instanceof Error ? error.message : String(error)
-    }
-  }
-
   return {
     instanceId: platformKnowledgeInstanceId(env),
     ...result,
     organizations: [...liveOrganizations],
-    indexingConfirmed,
-    indexingUnconfirmedReason,
   }
 }
 

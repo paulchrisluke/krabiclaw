@@ -3,6 +3,7 @@ import { adminAc, defaultStatements, ownerAc } from 'better-auth/plugins/organiz
 
 const statements = {
   ...defaultStatements,
+  scheduling: ['own'],
   organization: ['read', 'update', 'delete'],
   members: ['read', 'invite', 'update', 'remove'],
   invitations: ['read', 'create', 'cancel'],
@@ -21,6 +22,7 @@ const statements = {
   notifications: ['read', 'update', 'send'],
   analytics: ['read'],
   domains: ['read', 'create', 'update', 'delete'],
+  payments: ['read', 'refund', 'disputes', 'payouts', 'integration'],
   billing: ['read', 'update'],
   settings: ['read', 'update'],
   integrations: ['read', 'create', 'update', 'delete'],
@@ -39,8 +41,10 @@ export type OrganizationPermissions = {
   [Resource in keyof typeof statements]?: Array<(typeof statements)[Resource][number]>
 }
 export const organizationRoles = {
+  member: organizationAccessControl.newRole({ scheduling: ['own'] }),
   owner: organizationAccessControl.newRole({
     ...ownerAc.statements,
+    scheduling: ['own'],
     organization: ['read', 'update', 'delete'],
     members: ['read', 'invite', 'update', 'remove'],
     invitations: ['read', 'create', 'cancel'],
@@ -59,6 +63,7 @@ export const organizationRoles = {
     notifications: ['read', 'update', 'send'],
     analytics: ['read'],
     domains: ['read', 'create', 'update', 'delete'],
+    payments: ['read', 'refund', 'disputes', 'payouts', 'integration'],
     billing: ['read', 'update'],
     settings: ['read', 'update'],
     integrations: ['read', 'create', 'update', 'delete'],
@@ -66,6 +71,7 @@ export const organizationRoles = {
   }),
   admin: organizationAccessControl.newRole({
     ...adminAc.statements,
+    scheduling: ['own'],
     organization: ['read', 'update'],
     members: ['read', 'invite', 'update', 'remove'],
     invitations: ['read', 'create', 'cancel'],
@@ -84,6 +90,7 @@ export const organizationRoles = {
     notifications: ['read', 'update', 'send'],
     analytics: ['read'],
     domains: ['read', 'create', 'update', 'delete'],
+    payments: ['read', 'refund', 'disputes', 'payouts', 'integration'],
     billing: ['read'],
     settings: ['read', 'update'],
     integrations: ['read', 'create', 'update', 'delete'],

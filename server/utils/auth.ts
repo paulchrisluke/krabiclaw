@@ -11,7 +11,7 @@ import { cimd } from '@better-auth/cimd'
 import { fetchCimdMetadataResource } from '~/server/utils/cimd-metadata-fetch'
 import type { GenericEndpointContext } from '@better-auth/core'
 import { HTTPError, type H3Event } from 'nitro';
-import { createDb, execute, executeBatch, queryAll, schema, type BatchQuery } from '~/server/db'
+import { createDb, execute, executeBatch, queryAll, queryFirst, schema, type BatchQuery } from '~/server/db'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 import { sendWhatsAppOtp } from '~/server/utils/whatsapp'
 import { parsePhoneOrThrow } from '~/utils/phone'
@@ -26,7 +26,11 @@ import { organizationAccessControl, organizationRoles } from '~/utils/organizati
 import { platformAdminAccessControl, platformAdminRoles } from '~/utils/platform-admin-access'
 import { createStripePlanLoader } from '~/server/utils/better-auth-stripe'
 import { handleStripeGa4Event } from '~/server/utils/stripe-ga4'
+import { notifyPaymentsInvoiceEvent } from '~/server/domain/payments/billing-notifications'
+import { setUpPaymentsBillingForSubscriptionEvent } from '~/server/domain/payments/usage'
 import { createStripeClient } from '~/server/utils/stripe-client'
+import { deleteBuyerCustomers } from '~/server/utils/billing-customer'
+import { anonymousLinkQueries, linkGuestIdentitiesByVerifiedEmail } from '~/server/utils/guest-accounts'
 import { unwrapInstrumentedD1 } from '~/server/utils/request-metrics'
 import { timingSafeEqualText } from '~/server/utils/dev-route-auth'
 import { notifyOrganizationInvited } from '~/server/utils/notifications'
@@ -303,7 +307,8 @@ export function createAuth(env: CloudflareEnv) {
         const callback = new URL(state.callbackURL, authBaseUrl)
         // Only a successful integration link continues to resource selection.
         if (new URL(location, authBaseUrl).href !== callback.href) return
-        const integration = callback.pathname.match(/^\/dashboard\/[^/]+\/settings\/integrations\/(facebook|instagram|google-analytics|google-search-console)$/)?.[1]
+        const integration = callback.pathname.match(/^\/dashboard\/[^/]+\/settings\/integrations\/(facebook|instagram|google-analytics|google-search-console|google-calendar)$/)?.[1]
+          ?? (/^\/dashboard\/[^/]+\/calendar\/settings\/availability\/google-calendar$/.test(callback.pathname) || /^\/dashboard\/account\/profile\/calendar\/[^/]+\/google-calendar$/.test(callback.pathname) ? 'google-calendar' : undefined)
         if (!integration) return
         const provider = integration.startsWith('google-') ? 'google' : integration
         if (ctx.params?.id !== provider) return
@@ -347,11 +352,27 @@ export function createAuth(env: CloudflareEnv) {
       schema,
     }),
     databaseHooks: {
+      session: {
+        create: {
+          after: async (session) => {
+            const user = await queryFirst<{ id: string; email: string; emailVerified: number; isAnonymous: number | null }>(db, 'SELECT id, email, "emailVerified", "isAnonymous" FROM user WHERE id = ?', [session.userId])
+            if (!user) throw new Error('A session was created for a user that does not exist')
+            await linkGuestIdentitiesByVerifiedEmail(db, { ...user, emailVerified: Boolean(user.emailVerified), isAnonymous: Boolean(user.isAnonymous) })
+          },
+        },
+      },
       account: {
         create: { after: integrationAccountLinked },
         update: { after: integrationAccountLinked },
       },
       user: {
+        delete: {
+          before: async (user) => {
+            // A deleted account's Customer at every business it paid goes with it, and the cards saved there.
+            await deleteBuyerCustomers(db, stripeClient, user.id)
+            await execute(db, "DELETE FROM activity_entries WHERE kind='notification' AND scope_kind='global' AND target_user_id=?", [user.id])
+          },
+        },
         update: {
           after: async (user) => {
             // A renamed member reads under the new name wherever they are a member.
@@ -531,27 +552,7 @@ export function createAuth(env: CloudflareEnv) {
           const from = anonymousUser.user.id
           const to = newUser.user.id
           if (from === to) return
-          const now = new Date().toISOString()
-          await executeBatch(db, [
-            // An opt-out on either identity survives the merge.
-            {
-              query: `INSERT INTO user_notification_preferences (user_id, category, email_enabled, whatsapp_enabled, updated_at)
-                SELECT ?, category, email_enabled, whatsapp_enabled, ? FROM user_notification_preferences WHERE user_id = ?
-                ON CONFLICT (user_id, category) DO UPDATE SET
-                  email_enabled = user_notification_preferences.email_enabled AND excluded.email_enabled,
-                  whatsapp_enabled = user_notification_preferences.whatsapp_enabled AND excluded.whatsapp_enabled,
-                  updated_at = excluded.updated_at`,
-              params: [to, now, from],
-            },
-            { query: 'DELETE FROM user_notification_preferences WHERE user_id = ?', params: [from] },
-            // Re-pointing who a record belongs to is not activity on it, so
-            // updated_at — the version booking changes compare against — stays.
-            ...['requests', 'reservations', 'bookings', 'review_requests', 'reviews'].map(table => ({
-              query: `UPDATE ${table} SET user_id = ? WHERE user_id = ?`,
-              params: [to, from],
-            })),
-            { query: 'UPDATE media_assets SET created_by_user_id = ? WHERE created_by_user_id = ?', params: [to, from] },
-          ], { operation: 'anonymous-account-link' })
+          await executeBatch(db, anonymousLinkQueries(from, to, new Date().toISOString()), { operation: 'anonymous-account-link' })
         },
       }),
       oauthProvider({
@@ -612,10 +613,12 @@ export function createAuth(env: CloudflareEnv) {
         },
         // The plugin's own /api/auth/stripe/webhook handlers own the
         // `subscription` table, and Stripe's delivery retries are the retry
-        // mechanism. This hook adds analytics only; a throw here returns a
+        // mechanism. This hook adds analytics, Payments status alerts and Payments fees billing set-up; a throw here returns a
         // non-2xx so Stripe redelivers the event.
         onEvent: async (event) => {
           await handleStripeGa4Event(env, db, stripeClient, event)
+          await notifyPaymentsInvoiceEvent(db, stripeClient, env, event)
+          await setUpPaymentsBillingForSubscriptionEvent(db, stripeClient, env, event)
         },
       }),
       organizationDeletionCleanupPlugin(env),

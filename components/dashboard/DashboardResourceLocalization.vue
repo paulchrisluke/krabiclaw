@@ -5,9 +5,9 @@
     variant="outline"
     icon="i-lucide-languages"
     label="Localize"
+    :to="modePath"
     :disabled="disabled || !resourceId"
     data-testid="localize-resource"
-    @click="open = true"
   />
 
   <UModal
@@ -139,7 +139,7 @@ const props = defineProps<{
   routePath?: (locale: string) => string
   languageSettingsPath?: string
   disabled?: boolean
-  /** Opened by a row in a settings list through `v-model:open`; draws no button of its own. */
+  /** Opened by a row in a settings list that links to this mode; draws no button of its own. */
   rowTrigger?: boolean
   loadValues?: (locale: string) => Promise<Record<string, unknown>>
   saveValues?: (locale: string, values: Record<string, unknown>) => Promise<void>
@@ -148,8 +148,21 @@ const props = defineProps<{
 const emit = defineEmits<{ saved: [locale: string] }>()
 const dashboardApi = useDashboardApi()
 const route = useRoute()
-const open = defineModel<boolean>('open', { default: false })
-const locale = ref('')
+const router = useRouter()
+const level = useRouteLevel()
+
+/*
+  Translating is a mode of the record, held in its URL: the record's own path
+  with `editMode=translations`, and `locale` once a language is chosen. A reload,
+  a shared link or a Languages opportunity reopens the same record in the same
+  language. Without `locale` the mode is on the source language and nothing is
+  picked for the tenant. The record whose level the URL ends at owns the mode;
+  a record with a child open beside it does not, so a product and its page
+  never both open.
+*/
+const modePath = computed(() => router.resolve({ path: level.path.value, query: { ...route.query, locale: undefined, editMode: 'translations' } }).fullPath)
+const open = computed(() => route.query.editMode === 'translations' && level.mode.value === 'index')
+const locale = computed(() => open.value && typeof route.query.locale === 'string' ? route.query.locale : '')
 const sourceLocale = ref('')
 const localeOptions = ref<Array<{ label: string, value: string }>>([])
 const draft = reactive<Record<string, string>>({})
@@ -163,14 +176,15 @@ let requestGeneration = 0
 let documentRevision: { locale: string; updatedAt: string } | null = null
 
 
+/** Leaving the mode is a navigation like entering it, so Back and reload agree with the screen. */
+function close() {
+  return navigateTo({ path: route.path, query: { ...route.query, editMode: undefined, locale: undefined }, hash: route.hash })
+}
+
 const modalOpen = computed({
   get: () => open.value,
   set: (value: boolean) => {
-    if (value) {
-      open.value = true
-      return
-    }
-    if (!saving.value) open.value = false
+    if (!value && !saving.value) void close()
   },
 })
 
@@ -178,7 +192,7 @@ const selectedLocale = computed({
   get: () => locale.value,
   set: (value: string) => {
     if (value === locale.value || saving.value) return
-    locale.value = value
+    void navigateTo({ path: route.path, query: { ...route.query, locale: value }, hash: route.hash }, { replace: true })
   },
 })
 
@@ -248,7 +262,6 @@ function serializedValues(): Record<string, unknown> {
 async function loadLanguages(): Promise<void> {
   loadingLanguages.value = true
   languageError.value = null
-  locale.value = ''
   localeOptions.value = []
   sourceLocale.value = ''
   clearDraft()
@@ -264,13 +277,6 @@ async function loadLanguages(): Promise<void> {
     const secondaryLanguages = response.languages.filter(item => !item.is_source && item.status === 'published')
     if (secondaryLanguages.some(item => !item.label)) throw new Error('An enabled language is missing its display name.')
     localeOptions.value = secondaryLanguages.map(item => ({ label: `${item.label} (${item.locale})`, value: item.locale }))
-    const requestedLocale = typeof route.query.locale === 'string' ? route.query.locale : ''
-    if (route.query.localize === `${props.resourceType}:${props.resourceId}` && requestedLocale) {
-      if (!localeOptions.value.some(option => option.value === requestedLocale)) {
-        throw new Error(`The requested ${requestedLocale} language is not enabled for this organization.`)
-      }
-      locale.value = requestedLocale
-    }
   } catch (cause) {
     languageError.value = getErrorMessage(cause, 'Failed to load organization languages')
   } finally {
@@ -285,7 +291,12 @@ async function load(): Promise<void> {
   clearDraft()
   markDraftClean()
   editorError.value = null
-  if (!requestedLocale) return
+  loading.value = false
+  if (!requestedLocale || loadingLanguages.value || languageError.value) return
+  if (!localeOptions.value.some(option => option.value === requestedLocale)) {
+    editorError.value = `The requested ${requestedLocale} language is not enabled for this organization.`
+    return
+  }
   loading.value = true
   try {
     const response = props.loadValues ? null : await dashboardApi<LocalizationResponse>(
@@ -334,7 +345,7 @@ async function save(): Promise<void> {
     }
     emit('saved', requestedLocale)
     markDraftClean()
-    open.value = false
+    await close()
   } catch (cause) {
     editorError.value = getErrorMessage(cause, 'Failed to save translation')
   } finally {
@@ -346,28 +357,13 @@ function requestClose(): void {
   modalOpen.value = false
 }
 
-
-
-watch(open, (value) => {
+// A mode reached by a link opens on arrival.
+watch([open, () => props.resourceId], ([value]) => {
   requestGeneration += 1
-  if (value) void loadLanguages()
-  else {
-    locale.value = ''
-    clearDraft()
-    markDraftClean()
-    editorError.value = null
-  }
-})
+  clearDraft()
+  markDraftClean()
+  editorError.value = null
+  if (value) void loadLanguages().then(load)
+}, { immediate: true })
 watch(locale, () => { void load() })
-watch(() => props.resourceId, () => {
-  requestGeneration += 1
-  if (open.value) {
-    locale.value = ''
-    clearDraft()
-    markDraftClean()
-  }
-})
-watchEffect(() => {
-  if (route.query.localize === `${props.resourceType}:${props.resourceId}` && props.resourceId) open.value = true
-})
 </script>

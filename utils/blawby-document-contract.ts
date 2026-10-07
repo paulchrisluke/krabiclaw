@@ -13,7 +13,6 @@ export interface BlawbyDocumentPayload {
 }
 
 const RECIPES = new Set<string>(BLAWBY_ROUTE_RECIPES)
-const THEME_COLOR = /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i
 
 const isNullableString = (value: unknown) => value === null || typeof value === 'string'
 
@@ -41,11 +40,6 @@ function hasValidConsultation(value: unknown) {
     && isRecord(value.metadata)
 }
 
-function hasValidThemeTokens(value: unknown) {
-  return isRecord(value)
-    && Object.values(value).every(token => typeof token === 'string' && THEME_COLOR.test(token))
-}
-
 function hasRequiredRouteContent(route: Record<string, unknown>) {
   if (route.recipe === 'confirmation' || isBlawbyShellOnlyRouteRecipe(route.recipe as PublicBlawbyRouteData['recipe'])) return true
   return isRecord(route.page)
@@ -61,7 +55,6 @@ export const isBlawbyDocumentPayload = (
   && isRecord(value.route)
   && hasValidIdentity(value.shell.identity)
   && hasValidConsultation(value.shell.consultation)
-  && hasValidThemeTokens(value.shell.themeTokens)
   && Array.isArray(value.shell.pageLinks)
   && (value.shell.searchConsoleVerification === null || typeof value.shell.searchConsoleVerification === 'string')
   && typeof value.route.recipe === 'string'

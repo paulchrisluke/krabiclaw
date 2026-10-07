@@ -31,12 +31,11 @@
           class="absolute inset-0 bg-cover bg-center opacity-50"
           :style="heroBackgroundStyle"
         />
-        <!-- No real photo yet: same brand-color + icon treatment as the homepage
+        <!-- No real photo yet: same action-color + icon treatment as the homepage
              hero (SayaHomeHero.vue) — not a stock photo that isn't actually theirs. -->
         <div
           v-else
-          class="absolute inset-0 flex items-center justify-center"
-          :style="{ background: `linear-gradient(135deg, ${locationHeroBrandColor} 0%, color-mix(in srgb, ${locationHeroBrandColor} 60%, black) 100%)` }"
+          class="absolute inset-0 flex items-center justify-center bg-[linear-gradient(135deg,var(--ui-primary)_0%,color-mix(in_srgb,var(--ui-primary)_60%,black)_100%)]"
           aria-hidden="true"
         >
           <SayaIcon :name="locationHeroIcon" class="size-24 text-white/25" />
@@ -276,7 +275,7 @@
 <script setup lang="ts">
 import SocialPosts from '~/components/social/SocialPosts.vue'
 import { formatOpeningHours, getIsOpenNow, getActiveSpecialClosure, formatClosureMessage } from '~/utils/formatters'
-import { getTodayHoursLabel } from '~/shared/reservation-hours'
+import { getTodayHoursLabel, schemaOpeningHours } from '~/shared/reservation-hours'
 import { formatProductMoney } from '~/utils/product-money'
 import { productLocationCollectionPath, resolveProductPresentation } from '~/utils/product-presentation'
 import { selectPrice, type Price } from '~/shared/prices'
@@ -354,7 +353,6 @@ const reviewsPreview = computed(() => locationReviews.value.slice(0, 3))
 
 
 // Neutral default until the owner picks a brand color in onboarding.
-const locationHeroBrandColor = computed(() => pageConfig.value?.brand_color || '#3F3F46')
 const locationHeroIcon = computed(() => (organization as ApiValue)?.vertical === 'experience' ? 'sparkles' : 'map-pin')
 
 // Sanitize hero background URL to prevent CSS injection
@@ -495,6 +493,10 @@ useSocialMetadata(() => ({
   brand: {
     organizationName: organizationName.value,
   },
+  breadcrumbs: [
+    { name: t('saya.header.locations'), url: '/locations' },
+    { name: location.value?.title ?? slug.value, url: `/locations/${slug.value}` },
+  ],
 }))
 
 useSchemaOrg([
@@ -504,6 +506,7 @@ useSchemaOrg([
     // nodes before building the graph, so undefined is the correct, filtered "no schema" value
     // here — the vendored UseSchemaOrgInput type just doesn't include it in its union.
     if (!loc) return undefined as unknown as Record<string, unknown>
+    const isRestaurant = (organization as ApiValue)?.vertical === 'restaurant'
     return {
       '@type': getBusinessSchemaTypes((organization as ApiValue)?.vertical),
       name: `${organizationName.value} — ${loc.title}`,
@@ -511,17 +514,21 @@ useSchemaOrg([
       address: schemaPostalAddress((location.value?.address ?? null) as PostalAddress | null),
       telephone: loc.phone,
       url: `${tenantOrigin}${localePath(`/locations/${loc.slug}`)}`,
+      ...(loc.maps_url ? { hasMap: loc.maps_url } : {}),
+      openingHoursSpecification: schemaOpeningHours(loc.opening_hours ?? null),
+      ...(isRestaurant ? {
+        hasMenu: `${tenantOrigin}${localePath(`/locations/${loc.slug}/menu`)}`,
+        acceptsReservations: true,
+        reservationUrl: `${tenantOrigin}${localePath('/reservations')}`,
+        potentialAction: {
+          '@type': 'ReserveAction',
+          target: { '@type': 'EntryPoint', urlTemplate: `${tenantOrigin}${localePath('/reservations')}` },
+          result: { '@type': 'Reservation' },
+        },
+      } : {}),
       ...(loc.latitude && loc.longitude ? { geo: { '@type': 'GeoCoordinates', latitude: loc.latitude, longitude: loc.longitude } } : {}),
       ...(loc.rating ? { aggregateRating: { '@type': 'AggregateRating', ratingValue: loc.rating, reviewCount: loc.review_count ?? 0 } } : {})
     }
   }),
-  computed(() => ({
-    '@type': 'BreadcrumbList',
-    itemListElement: [
-      { '@type': 'ListItem', position: 1, name: organizationName.value, item: `${tenantOrigin}${localePath('/')}` },
-      { '@type': 'ListItem', position: 2, name: t('saya.header.locations'), item: `${tenantOrigin}${localePath('/locations')}` },
-      { '@type': 'ListItem', position: 3, name: location.value?.title ?? slug.value, item: `${tenantOrigin}${localePath(`/locations/${slug.value}`)}` }
-    ]
-  }))
 ])
 </script>

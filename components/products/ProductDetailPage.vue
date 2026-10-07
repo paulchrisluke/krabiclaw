@@ -310,11 +310,13 @@
         </div>
       </section>
     </article>
+    <div v-if="booking" class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8"><WhoYouMeet :organization-id="organizationId" :organization-name="organizationName || location?.title || ''" :product-id="product.id" :slug="product.slug" :session-id="bookingController.selectedSession.value?.id" /></div>
     <slot name="content" :can-book="canBook" />
   </div>
 </template>
 
 <script setup lang="ts">
+import WhoYouMeet from '~/components/booking/WhoYouMeet.vue'
 import type { Product, ProductPresentation } from '~/server/types/products'
 import { useSchemaOrg } from '~/composables/useSchemaOrg'
 import type { CurrencyCode } from '~/shared/currencies'
@@ -322,10 +324,10 @@ import { minorAmountToMajor, selectPrice, type Price } from '~/shared/prices'
 import { formatProductMoney } from '~/utils/product-money'
 import { ga4Major } from '~/utils/ga4-projection'
 import { productLocationCollectionPath } from '~/utils/product-presentation'
-import type { ProductCollectionSibling } from '~/utils/product-seo'
+import { extractDietarySchemaUrls, type ProductCollectionSibling } from '~/utils/product-seo'
 import type { ProductDetailValue } from '~/shared/product-details'
 import { EXPERIENCE_ATTRIBUTE_HANDLES, productDetailFields, productDetailKey, PRICING_NOTE_HANDLE } from '~/shared/product-details'
-import type { PublicProductBooking, PublicProductLocationPayload, PublicProductReview, PublicProductSession } from '~/server/utils/public-products'
+import type { PublicProductBooking, PublicProductLocation, PublicProductReview, PublicProductSession } from '~/server/utils/public-products'
 import { formatPostalAddress, schemaPostalAddress } from '~/utils/postal-address'
 import SayaReviewCard from '~/components/saya/SayaReviewCard.vue'
 import BookingModal from '~/components/booking/BookingModal.vue'
@@ -340,7 +342,7 @@ const props = defineProps<{
   organizationId: string
   vertical: string
   product: Product
-  location: PublicProductLocationPayload | null
+  location: PublicProductLocation | null
   organizationName?: string
   reviews: PublicProductReview[]
   /** Non-null exactly when this Product takes bookings. */
@@ -520,7 +522,7 @@ const { data: initialSessions, error: initialSessionsError } = await useAsyncDat
     const event = useRequestEvent()!
     const { cloudflareEnv } = await import('~/server/utils/api-response')
     const { listPublicBookingSessions } = await import('~/server/utils/public-session-booking')
-    return (await listPublicBookingSessions(cloudflareEnv(event).DB, props.organizationId, props.product.slug, props.location?.id ?? 'online')).sessions.filter(session => !session.is_full)
+    return (await listPublicBookingSessions(cloudflareEnv(event).DB, props.organizationId, props.product.slug, cloudflareEnv(event), props.location?.id ?? 'online')).sessions.filter(session => !session.is_full)
   }
   return (await publicApiRequest<{ success: true; sessions: PublicProductSession[] }>(`/api/public/products/${encodeURIComponent(props.product.slug)}/sessions?location_id=${encodeURIComponent(props.location?.id ?? 'online')}`, {
     validate: (value): value is { success: true; sessions: PublicProductSession[] } => isRecord(value) && value.success === true && Array.isArray(value.sessions),
@@ -677,6 +679,7 @@ useSchemaOrg(computed(() => {
   const list = schemaSessions.value
   const first = list[0]
   const last = list[list.length - 1]
+  const dietUrls = extractDietarySchemaUrls(props.product)
   return {
     // Without a context this node names no vocabulary and no parser reads it.
     '@context': 'https://schema.org',
@@ -684,6 +687,7 @@ useSchemaOrg(computed(() => {
     name: props.product.name,
     description: props.product.description,
     image: props.product.image?.public_url,
+    ...(dietUrls.length ? { suitableForDiet: dietUrls } : {}),
     ...(first && last
       ? {
           url: canonicalProductUrl.value,

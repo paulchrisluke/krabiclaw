@@ -59,7 +59,7 @@ export interface Collection {
 }
 
 /** What generating this product's occurrences starts from. Sessions keep their own. */
-export type ProductBookingConfig = Pick<import('~/server/utils/availability').ProductBookingConfig, 'duration_minutes' | 'default_capacity' | 'confirmation_mode' | 'online_payment_required' | 'online_timezone' | 'calendar_group'>
+export type ProductBookingConfig = Pick<import('~/server/utils/availability').ProductBookingConfig, 'duration_minutes' | 'default_capacity' | 'confirmation_mode' | 'online_payment_required' | 'online_timezone' | 'calendar_group' | 'scheduling_mode' | 'assigned_member_id'>
 
 /** Membership of one product in one collection, carrying its position there. */
 export interface CollectionMembership {
@@ -104,6 +104,12 @@ export interface Product {
    * bookable or about the defaults its sessions are generated from.
    */
   booking: ProductBookingConfig | null
+  /**
+   * The source page this product owns, or null when it has none. The binding
+   * is the page's root `product_id`; translations inherit it. A product's
+   * Page content is this document, edited through the shared page editor.
+   */
+  page: ProductPage | null
   image: ResolvedMediaAsset | null
   gallery: ResolvedMediaAsset[]
   media: ResolvedMediaAsset[]
@@ -113,6 +119,13 @@ export interface Product {
   updated_at: string
   created_by: string
   updated_by: string
+}
+
+/** The page a product owns: its source document's id, public path and title. */
+export interface ProductPage {
+  id: string
+  path: string
+  title: string
 }
 
 export interface ProductVariantInput {
@@ -150,7 +163,18 @@ export interface CreateProductInput {
   source?: ProductSource
 }
 
-export type UpdateProductInput = Partial<Omit<CreateProductInput, 'source'>>
+/** Existing identities accept partial fields; a new entry must supply its required fields. */
+export type ProductVariantPatchInput = Omit<Partial<ProductVariantInput>, 'prices'> & {
+  prices?: Partial<PriceInput>[]
+  /** Merge preserves unmentioned prices. Replace removes prices omitted from the supplied list. */
+  prices_mode?: 'merge' | 'replace'
+}
+
+export type UpdateProductInput = Partial<Omit<CreateProductInput, 'source' | 'variants'>> & {
+  variants?: ProductVariantPatchInput[]
+  /** Merge preserves unmentioned variants. Replace removes variants omitted from the supplied list. */
+  variants_mode?: 'merge' | 'replace'
+}
 
 export interface SetProductPublicationInput {
   organization_id: string

@@ -7,17 +7,17 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { basename, dirname } from 'node:path'
+import { NEW_SALE_PAID_PLAN_IDS, PAID_PLAN_PRICES } from '../../shared/billing-model.ts'
 
 export const CATALOG_PLAN_SCHEMA_VERSION = 10
 export const CATALOG_APPLY_JOURNAL_SCHEMA_VERSION = 1
 export const CATALOG_APPLY_JOURNAL_KIND = 'stripe-catalog-apply-journal'
 export const CATALOG_PLAN_KIND = 'stripe-catalog-plan'
-export const OFFERED_PLAN_IDS = Object.freeze(['growth', 'site_language'])
+export const OFFERED_PLAN_IDS = Object.freeze([...NEW_SALE_PAID_PLAN_IDS, 'site_language'])
 export const RETIRED_PLAN_IDS = Object.freeze(['managed', 'seo_accelerator'])
 export const RETIRED_ADDON_TYPES = Object.freeze(['translation', 'seasonal', 'gbp_setup'])
 export const CATALOG_PLAN_SCOPES = Object.freeze(['full', 'retirement-only'])
 export const STRIPE_CATALOG_REQUEST_TIMEOUT_MS = 10_000
-export const GROWTH_ANNUAL_AMOUNT_CENTS = 58800
 const SUPPORTED_OPERATION_TYPES = new Set([
   'archive_product',
   'clear_product_default_price',
@@ -43,20 +43,34 @@ const CANONICAL_PRODUCT_METADATA_KEYS = Object.freeze([
 export const PLAN_DEFINITIONS = Object.freeze([
   {
     name: 'Growth',
-    description: 'Your site, your domain — go live in minutes and edit everything through ChatGPT.',
+    description: 'Your website, your domain — manage supported content through your dashboard and ChatGPT.',
     planId: 'growth',
-    amountCents: 4900,
+    amountCents: PAID_PLAN_PRICES.growth.monthly,
     highlighted: true,
     badge: 'Most Popular',
     imagePath: 'scripts/assets/stripe/growth.jpg',
     features: [
-      'Restaurant, experience, or legal / professional site live in minutes',
+      'Business websites for restaurants, experiences and professional services',
       'Your own domain (yourbusiness.com)',
-      'Edit menus, practice areas, content & photos through ChatGPT',
-      'Bookings, ticketed experiences & consultation requests',
-      'Messaging booking & reservation notifications',
-      'Facebook & Instagram publishing',
-      'Google Places imports',
+      'Update supported content, menus and photos through ChatGPT',
+      'Bookings, consultation requests and ticketed experiences',
+      'WhatsApp booking and reservation notifications — setup required',
+      'Publish to connected Facebook and Instagram channels',
+      'Google Places re-imports and weekly Google review refresh',
+    ],
+  },
+  {
+    name: 'Commerce',
+    description: 'Everything in Growth, plus online payments for bookings and one-time orders.',
+    planId: 'commerce',
+    amountCents: PAID_PLAN_PRICES.commerce.monthly,
+    highlighted: false,
+    features: [
+      'Everything in Growth',
+      'Stripe Checkout for paid bookings and one-time orders',
+      'Buyer receipts and purchase history',
+      'Refund, dispute and payout management',
+      '1.4% of payment volume, plus Stripe fees.',
     ],
   },
   {
@@ -99,9 +113,10 @@ export function keyMode(key) {
   return 'unknown'
 }
 
-export function assertTestModeKey(key) {
-  if (keyMode(key) !== 'test') {
-    throw new Error('Stripe catalog operations require a test-mode key (sk_test_ or rk_test_).')
+export function assertCatalogModeKey(key, requiredMode = 'test') {
+  if (!['test', 'live'].includes(requiredMode)) throw new Error('Stripe catalog mode must be test or live.')
+  if (keyMode(key) !== requiredMode) {
+    throw new Error(`Stripe catalog operations require a ${requiredMode}-mode key (sk_${requiredMode}_ or rk_${requiredMode}_).`)
   }
 }
 
@@ -352,9 +367,10 @@ function assertAnnualCurrency(product, monthly, annual) {
   }
 }
 
-function assertFixedGrowthAnnualAmount(annual) {
-  if (annual && (annual.currency?.toLowerCase() !== 'usd' || annual.unit_amount !== GROWTH_ANNUAL_AMOUNT_CENTS)) {
-    throw new Error(`Growth annual price must be exactly USD ${GROWTH_ANNUAL_AMOUNT_CENTS} cents`)
+function assertFixedAnnualAmount(planId, annual) {
+  const amount = PAID_PLAN_PRICES[planId]?.annual
+  if (annual && (amount === undefined || annual.currency?.toLowerCase() !== 'usd' || annual.unit_amount !== amount)) {
+    throw new Error(amount === undefined ? `${planId} has no authorized annual price` : `${planId} annual price must be exactly USD ${amount} cents`)
   }
 }
 
@@ -473,10 +489,10 @@ function assertRetirementOnlyGrowthSafety(snapshot, productsByPlan) {
   if (!monthly) {
     throw new Error(`Retirement-only catalog planning requires one active canonical Growth monthly price on ${growth.id}.`)
   }
-  assertFixedMonthlyAmount(growth, monthly, PLAN_DEFINITIONS.find(definition => definition.planId === 'growth')?.amountCents ?? 4900)
+  assertFixedMonthlyAmount(growth, monthly, PAID_PLAN_PRICES.growth.monthly)
   const annual = resolveCanonicalPrice(growth, prices, 'year', seatPriceId)
   assertAnnualCurrency(growth, monthly, annual)
-  assertFixedGrowthAnnualAmount(annual)
+  assertFixedAnnualAmount('growth', annual)
   return growth
 }
 
@@ -532,7 +548,7 @@ export function buildCatalogPlan({ snapshot, imageFiles = {}, canonicalProductId
     const canonical = resolvedMonthly
     const annual = existing ? resolveCanonicalPrice(existing, prices, 'year', seatPriceId) : null
     assertAnnualCurrency(existing ?? { id: definition.planId }, canonical, annual)
-    if (definition.planId === 'growth') assertFixedGrowthAnnualAmount(annual)
+    if (NEW_SALE_PAID_PLAN_IDS.includes(definition.planId)) assertFixedAnnualAmount(definition.planId, annual)
     if (definition.annualAmountCents && annual && (annual.currency?.toLowerCase() !== 'usd' || annual.unit_amount !== definition.annualAmountCents)) {
       throw new Error(`Stripe product ${existing?.id ?? definition.planId} canonical annual price ${annual.id} must be usd ${definition.annualAmountCents} cents`)
     }
@@ -1179,14 +1195,15 @@ export async function applyCatalogPlan({
   mutationAdapter,
   filesAdapter,
   journalPath,
+  requiredMode = 'test',
 }) {
   if (typeof journalPath !== 'string' || journalPath.trim().length === 0) {
     throw new Error('Stripe catalog apply requires an explicit journal path.')
   }
   assertCatalogPlanSchema(plan)
-  assertTestModeKey(key)
+  assertCatalogModeKey(key, requiredMode)
   const hash = assertPlanIntegrity(plan, confirmedSha256)
-  if (plan.accountMode !== 'test') throw new Error('Stripe catalog apply only accepts a test-mode plan.')
+  if (plan.accountMode !== requiredMode) throw new Error(`Stripe catalog apply requires a ${requiredMode}-mode plan.`)
   if (!Array.isArray(plan.operations)) throw new Error('Stripe catalog plan operations must be an array.')
   for (const operation of plan.operations) {
     if (!SUPPORTED_OPERATION_TYPES.has(operation?.type)) {

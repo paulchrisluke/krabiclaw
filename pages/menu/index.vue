@@ -25,5 +25,14 @@ if (typeof brandName !== 'string' || brandName.trim().length === 0) throw create
 const productLocations = computed(() => locations.value.map(location => ({ id: location.id, slug: location.slug, title: location.title })))
 // A page about the business: its image is the organization's.
 const organizationSocialImage = useTenantOrganization().organization?.social_image ?? null
-useSocialMetadata(() => ({ socialImage: organizationSocialImage, path: presentation.collectionPath, title: `${brandName} Menu`, description: `Full menu at ${brandName}.`, brand: { organizationName: brandName } }))
+useSocialMetadata(() => ({
+  socialImage: organizationSocialImage,
+  path: presentation.collectionPath,
+  title: `${brandName} Menu`,
+  description: `Full menu at ${brandName}.`,
+  brand: { organizationName: brandName },
+  breadcrumbs: [
+    { name: 'Menu', url: presentation.collectionPath },
+  ],
+}))
 </script>

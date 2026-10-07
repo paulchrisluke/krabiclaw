@@ -1,8 +1,8 @@
 <template>
   <UDashboardPanel
-    v-if="level.mode.value !== 'yield'"
     :id="id"
-    :class="pair ? 'hidden lg:flex' : undefined"
+    :class="level.mode.value === 'yield' ? 'hidden' : pair ? 'hidden lg:flex' : undefined"
+    :data-yield="level.mode.value === 'yield' ? '' : undefined"
     :default-size="pair ? 50 : undefined"
     :ui="ui"
   >
@@ -15,8 +15,10 @@
         <template v-if="$slots.center" #default>
           <slot name="center" />
         </template>
-        <template v-if="$slots.right" #right>
+        <!-- The list's controls land here (dashboardPanelActionsKey), after whatever the page itself puts on the right. -->
+        <template #right>
           <slot name="right" />
+          <span :id="actionsId" class="flex items-center gap-1.5 empty:hidden" />
         </template>
       </UDashboardNavbar>
     </template>
@@ -50,9 +52,12 @@
   arrival: an index of deterministic settings or fields names its first one, the
   way a listing editor lands on its first section; a list of records names none.
   Below the pane width the index is the screen and nothing is chosen for the
-  tenant. `replace`, so Back still leaves the index.
+  tenant. `replace`, so Back still leaves the index. A level in a mode named by
+  its URL's `editMode`, such as its translations, is that mode's screen, and
+  choosing a child would leave the mode; it opens one when the mode closes.
 */
 import type { RouteLocationRaw } from 'vue-router'
+import { dashboardPanelActionsKey } from './dashboardPanelContext'
 
 const props = defineProps<{
   id: string
@@ -67,16 +72,34 @@ const props = defineProps<{
 
 const level = useRouteLevel()
 const pair = computed(() => level.mode.value === 'pair')
+// Read through the instance: vue-tsc cannot type `props.id` here (TS2590), and the id is a plain string.
+const instance = getCurrentInstance()
+// Not prefixed `dashboard-panel-`: that prefix names panes, and this is a slot inside one.
+const actionsId = computed(() => `${String(instance?.props.id ?? '')}-list-actions`)
+provide(dashboardPanelActionsKey, actionsId)
 
 const pane = useDashboardPane()
+const route = useRoute()
 const router = useRouter()
+const scope = getCurrentScope()
+if (!scope) throw createError({ statusCode: 500, statusMessage: 'Dashboard pane scope is unavailable.', fatal: true })
 // Every arrival at the bare index opens the child again — Back from deeper
 // included. Opening it makes this level a pair, which is what stops the watch.
-watch((): [RouteLocationRaw | null | undefined, boolean, RouteLevelMode] => [props.autoOpen, pane.value, level.mode.value], ([target, wide, mode]) => {
-  // An index on its way out after a navigation elsewhere yields, so it opens nothing.
-  if (!target || !wide || mode !== 'index') return
-  // An index whose rows are still loading offers itself as the first row; its own URL opens nothing.
-  if (router.resolve(target).path === level.path.value) return
-  void navigateTo(target, { replace: true })
-}, { immediate: true })
+// Initial auto-navigation waits for Nuxt to finish hydrating the route's panes.
+onNuxtReady(() => {
+  if (!scope.active) return
+  scope.run(() => {
+    watch((): [RouteLocationRaw | null | undefined, boolean, RouteLevelMode, unknown] => [props.autoOpen, pane.value, level.mode.value, route.query.editMode], ([target, wide, mode, editMode]) => {
+      if (!target || !wide || mode !== 'index' || editMode) return
+      // Only an arrival opens a child: the router is at this index's own URL.
+      // An index on its way out still reads the route it rendered for, which
+      // may be its bare URL; opening from there pulled the tenant back into the
+      // screen they had just left.
+      if (router.currentRoute.value.path !== level.path.value) return
+      // An index whose rows are still loading offers itself as the first row; its own URL opens nothing.
+      if (router.resolve(target).path === level.path.value) return
+      void navigateTo(target, { replace: true })
+    }, { immediate: true })
+  })
+})
 </script>

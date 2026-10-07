@@ -65,10 +65,10 @@ const sizeClasses = {
 // meaningful "destructive" variant of its own.
 const variantClasses = {
   primary: {
-    solid: 'bg-(--brand-color) text-(--brand-color-foreground) hover:opacity-90',
-    soft: 'bg-(--brand-color)/10 text-(--brand-color) hover:bg-(--brand-color)/15',
-    outline: 'border border-(--brand-color) bg-transparent text-(--brand-color) hover:bg-(--brand-color)/10',
-    ghost: 'bg-transparent text-(--brand-color) hover:bg-(--brand-color)/10',
+    solid: 'bg-primary text-on-primary hover:opacity-90',
+    soft: 'bg-primary/10 text-primary hover:bg-primary/15',
+    outline: 'border border-primary bg-transparent text-primary hover:bg-primary/10',
+    ghost: 'bg-transparent text-primary hover:bg-primary/10',
   },
   error: {
     solid: 'bg-red-600 text-white hover:opacity-90',

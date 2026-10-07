@@ -1,6 +1,6 @@
 export interface PublicResourceProviderOptions {
   organizationId: string | null
-  resourceKind: 'shell' | 'page'
+  resourceKind: 'shell' | 'page' | 'config'
   url: string
   query: Record<string, string | undefined>
   signal?: AbortSignal

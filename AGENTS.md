@@ -252,6 +252,27 @@ changes it.
 After a tenant write, verify the affected persisted state and customer-facing
 behavior.
 
+## Pricing copy
+
+Use Stripe and Metronome's exact pricing terms, phrasing and breakdown wherever
+they apply. This governs public pages, SEO metadata, LLM-readable content,
+customer-facing billing and documentation. Do not replace their wording with
+technical jargon or invent a different pricing tone. Add plain wording only for
+KrabiClaw's own subscription and fee.
+
+Read the current primary [Stripe pricing](https://stripe.com/pricing) and
+[Metronome pricing](https://metronome.com/pricing) before changing pricing copy.
+Preserve the actual amounts, charge basis, currency, billing interval and
+conditions. Public pages and their Markdown, SEO and LLM projections use the
+same canonical published pricing content.
+
+## Dashboard CMS
+
+CMS work starts from `DESIGN.md`: its workspace map, its ownership table and
+its rule for admitting a new concern. Read the generated route tree and the
+existing editor and domain operation before adding a file, and remove what the
+change replaces in the same change.
+
 ## Local development
 
 Follow `docs/local-development.md`.

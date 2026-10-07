@@ -132,7 +132,7 @@ function fakeResend(t: TestContext) {
 
 async function runtimeWithSchema() {
   const runtime = new Miniflare({ workers: [{ config: {
-    name: 'resend-native-proof', type: 'worker', compatibilityDate: '2024-11-01',
+    name: 'resend-native-proof', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: `
       export class Hub {
         constructor(ctx) { this.ctx = ctx }
@@ -183,13 +183,15 @@ test('transactional email goes through resend.emails.send with the existing resu
   assert.equal((await sendEmail({ ...PROVIDER_ENV }, { ...input, to: 'fixture@example.test' })).status, 'sent')
   assert.equal(resend.calls.length, 1)
 
-  // A rejection Resend answered is failed; no answer at all is unknown.
+  // A rejection Resend answered and a request it never answered both fail, with the reason.
   resend.failNext('POST /emails')
   const rejected = await sendEmail({ ...PROVIDER_ENV }, input)
   assert.equal(rejected.status, 'failed')
   assert.match((rejected as { error: string }).error, /^500 internal_server_error: injected failure/)
   t.mock.method(globalThis, 'fetch', async () => { throw new TypeError('network down') })
-  assert.equal((await sendEmail({ ...PROVIDER_ENV }, input)).status, 'unknown')
+  const unanswered = await sendEmail({ ...PROVIDER_ENV }, input)
+  assert.equal(unanswered.status, 'failed')
+  assert.match((unanswered as { error: string }).error, /^no response /)
 })
 
 test('Resend delivery events move a guest-thread delivery forward only and publish when it moves', async (t) => {

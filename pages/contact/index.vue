@@ -370,8 +370,12 @@ useSocialMetadata(() => ({
   socialImage: organizationSocialImage,
   title: tenantPage.value?.title || businessName.value,
   description: tenantPage.value?.summary || '',
+  schemaPageType: 'ContactPage',
   brand: {
     organizationName: businessName.value,
   },
+  breadcrumbs: [
+    { name: tenantPage.value?.title || 'Contact', url: '/contact' },
+  ],
 }))
 </script>

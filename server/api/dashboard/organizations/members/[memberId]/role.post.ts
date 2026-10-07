@@ -14,7 +14,7 @@ import { createAuth } from '~/server/utils/auth'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { findOrganizationMemberById, isOrganizationWideRole } from '~/server/utils/member-access'
 
-const ALLOWED_ROLES = new Set(['admin', 'owner'])
+const ALLOWED_ROLES = new Set(['admin', 'owner', 'member'])
 
 interface UpdateMemberRoleApi {
   updateMemberRole(_input: {
@@ -37,7 +37,7 @@ export default defineHandler(async (event) => {
   const role = typeof body?.role === 'string' ? body.role.trim() : ''
 
   if (!ALLOWED_ROLES.has(role)) {
-    return jsonResponse({ error: 'Role must be admin or owner' }, { status: 400 })
+    return jsonResponse({ error: 'Role must be member, admin or owner' }, { status: 400 })
   }
   if (role === 'owner' && organization.role !== 'owner') {
     return jsonResponse({ error: 'Only an owner can grant the owner role' }, { status: 403 })

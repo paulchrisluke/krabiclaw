@@ -72,8 +72,6 @@ function isDeliveryFailure(value: unknown): value is GuestThreadDeliveryFailureV
       || value.purpose === 'status_update'
     )
     && (value.error === null || typeof value.error === 'string')
-    && (value.status === 'failed' || value.status === 'unknown')
-    && typeof value.retryable === 'boolean'
     && typeof value.createdAt === 'string'
 }
 
@@ -82,6 +80,8 @@ export function isThreadDetailResponse(value: unknown): value is { thread: Threa
     && isRecord(value.thread)
     && typeof value.thread.id === 'string'
     && typeof value.thread.guestName === 'string'
+    && (value.thread.organizationName === null || typeof value.thread.organizationName === 'string')
+    && (value.thread.organizationVertical === null || typeof value.thread.organizationVertical === 'string')
     && Array.isArray(value.thread.entries)
     && Array.isArray(value.thread.availableActions)
     && (value.thread.mailbox === 'current' || value.thread.mailbox === 'past')

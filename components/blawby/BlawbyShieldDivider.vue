@@ -1,7 +1,12 @@
 <template>
-  <div class="relative h-[110px] p-0" aria-hidden="true" data-parity-section="shield-divider">
+  <!--
+    The shield is the section above it reaching down to a point. Its box is only
+    as tall as the shape's straight sides; the point overlays the next section,
+    so nothing behind the shield takes a colour of its own.
+  -->
+  <div class="pointer-events-none relative z-10 aspect-[1920/56] p-0" aria-hidden="true" data-parity-section="shield-divider">
     <svg
-      class="w-full"
+      class="absolute inset-x-0 top-0 w-full"
       viewBox="0 0 1920 160"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"

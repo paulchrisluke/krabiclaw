@@ -1,0 +1,22 @@
+diff --git a/dist/presets/cloudflare/runtime/_module-handler.mjs b/dist/presets/cloudflare/runtime/_module-handler.mjs
+index c9357d6760354d28e47382d73b4fc15240111809..0bffdf4386facdc712e41461c31ba10ead400e8e 100644
+--- a/dist/presets/cloudflare/runtime/_module-handler.mjs
++++ b/dist/presets/cloudflare/runtime/_module-handler.mjs
+@@ -41,12 +41,15 @@ export function createHandler(hooks) {
+ 		},
+ 		email(message, env, context) {
+ 			globalThis.__env__ = env;
+-			context.waitUntil(nitroHooks.callHook("cloudflare:email", {
++			// Returned, not handed to waitUntil, so Email Routing sees the hook's
++			// outcome: a thrown error fails the delivery, and message.setReject()
++			// is read only when it is called before the handler settles.
++			return nitroHooks.callHook("cloudflare:email", {
+ 				message,
+ 				event: message,
+ 				env,
+ 				context
+-			}) || Promise.resolve());
++			}) || Promise.resolve();
+ 		},
+ 		queue(batch, env, context) {
+ 			globalThis.__env__ = env;

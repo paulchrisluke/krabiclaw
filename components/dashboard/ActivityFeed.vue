@@ -7,11 +7,7 @@
       title="Activity could not be loaded"
       :description="getErrorMessage(eventsError, 'Activity request failed')"
     />
-    <div v-if="pending && groups.length === 0" class="space-y-3">
-      <USkeleton v-for="i in 5" :key="i" class="h-12 w-full" />
-    </div>
-
-    <div v-else-if="!eventsError && groups.length === 0" class="py-16 text-center">
+    <div v-if="!eventsError && groups.length === 0" class="py-16 text-center">
       <UIcon name="i-lucide-activity" class="size-8 text-muted mx-auto mb-3" />
       <p class="text-sm font-medium text-highlighted">No activity yet</p>
       <p class="mt-1 text-xs text-muted">New activity will appear here.</p>
@@ -68,23 +64,11 @@ const isEventsResponse = (value: unknown): value is { events: OrganizationEvent[
   )
   && (value.nextCursor === null || typeof value.nextCursor === 'string')
 
-const { data: eventsData, pending, error: eventsError } = await useAsyncData(
+const { data: eventsData, error: eventsError } = await useAsyncData(
   eventsKey,
-  () => dashboardApi<{ events: OrganizationEvent[]; nextCursor: string | null }>(
-    '/api/dashboard/events',
-    { query: { limit: 20 }, validate: isEventsResponse },
-  ),
-  // Nuxt blocks navigation on useAsyncData by default; the client does not
-  // need to wait for this to paint the route, and `pending` already drives a
-  // loading state here.
-  { lazy: true },
+  () => fetchEvents(),
 )
-const events = ref<OrganizationEvent[]>([])
-const nextCursor = ref<string | null>(null)
-watch(eventsData, (value) => {
-  events.value = value?.events ?? []
-  nextCursor.value = value?.nextCursor ?? null
-}, { immediate: true })
+const nextCursor = computed(() => eventsData.value?.nextCursor ?? null)
 const loadingMore = ref(false)
 
 async function fetchEvents(before?: string) {
@@ -96,17 +80,16 @@ async function fetchEvents(before?: string) {
 
 async function loadMore() {
   if (loadingMore.value) return
-  if (!nextCursor.value) return
+  const current = eventsData.value
+  if (!current?.nextCursor) return
   // A page from a previous tenant must not append to the current tenant's feed.
   const requestedKey = eventsKey.value
-  const cursor = nextCursor.value
   loadingMore.value = true
   loadMoreError.value = null
   try {
-    const res = await fetchEvents(cursor)
+    const res = await fetchEvents(current.nextCursor)
     if (requestedKey !== eventsKey.value) return
-    events.value = [...events.value, ...res.events]
-    nextCursor.value = res.nextCursor
+    eventsData.value = { events: [...current.events, ...res.events], nextCursor: res.nextCursor }
   } catch (err) {
     if (requestedKey === eventsKey.value) loadMoreError.value = err instanceof Error ? err.message : 'Failed to load more activity'
   } finally {
@@ -126,7 +109,7 @@ function groupLabel(dateStr: string) {
 
 const groups = computed(() => {
   const map = new Map<string, OrganizationEvent[]>()
-  for (const ev of events.value) {
+  for (const ev of eventsData.value?.events ?? []) {
     const label = groupLabel(ev.created_at)
     if (!map.has(label)) map.set(label, [])
     map.get(label)!.push(ev)

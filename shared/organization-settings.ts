@@ -12,6 +12,7 @@
  * scopes are fixed by its provider configuration in server/utils/auth.ts.
  */
 export const INTEGRATION_SCOPES = {
+  'google-calendar': ['https://www.googleapis.com/auth/calendar.calendarlist.readonly', 'https://www.googleapis.com/auth/calendar.app.created'],
   'google-analytics': ['https://www.googleapis.com/auth/analytics.readonly'],
   'google-search-console': [
     'https://www.googleapis.com/auth/webmasters',
@@ -24,7 +25,7 @@ export const INTEGRATION_SCOPES = {
 } as const satisfies Record<string, readonly string[]>
 
 /** The providers an organization connects, one of each. */
-export const INTEGRATION_PROVIDERS = ['facebook', 'instagram', 'google_analytics', 'google_search_console'] as const
+export const INTEGRATION_PROVIDERS = ['facebook', 'instagram', 'google_analytics', 'google_search_console', 'google_calendar'] as const
 export type IntegrationProvider = typeof INTEGRATION_PROVIDERS[number]
 
 /** One row of `organization_integrations`. */
@@ -43,14 +44,27 @@ export interface OrganizationIntegration {
   verified: boolean | null
   /** Search Console only, while Google still requires the meta tag to be served. */
   verification_token: string | null
+  status: 'active' | 'disabled' | 'error' | null
+  last_error: string | null
   revision: string
+  created_at: string
+  updated_at: string
+}
+
+export interface GoogleCalendarIntegration {
+  revision: string
+  account_id: string
+  calendar_id: string
+  calendar_name: string
+  status: 'active' | 'disabled' | 'error'
+  last_error: string | null
   created_at: string
   updated_at: string
 }
 
 export interface OrganizationSettings {
   config?: {
-    brand_color?: string
+    palette?: import('./site-palette').SitePalette
     font_preset?: import('./organization-fonts').OrganizationFontPreset
     press_email?: string
     partnerships_email?: string
@@ -59,13 +73,6 @@ export interface OrganizationSettings {
     default_timezone?: string
     whatsapp_phone?: string
   }
-  theme_by_template?: Partial<Record<import('../utils/template-registry').PublicTemplateSlug, {
-    tokens: Record<string, string>
-    status: 'active' | 'disabled'
-    created_at: string
-    updated_at: string
-    updated_by: string | null
-  }>>
   consultation?: Omit<import('../types/blawby').PublicConsultationSettings, 'contact_form_enabled' | 'metadata'> & {
     metadata_json: Record<string, unknown> | null
     created_at: string

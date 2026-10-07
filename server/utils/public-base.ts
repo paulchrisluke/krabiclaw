@@ -18,7 +18,6 @@ export interface PublicBase {
     brand_description: string | null
     vertical: string | null
     theme_id: string
-    feature_overrides: string | null
     seo_title: string | null
     seo_description: string | null
     canonical_url: string | null
@@ -57,7 +56,7 @@ export function loadPublicBase(
       const organization = await queryFirst<PublicBase['organization']>(
         db,
         `SELECT s.id, s.default_currency, s.contact_email, s.contact_phone, s.name, s.vertical,
-                s.theme_id, s.feature_overrides,
+                s.theme_id,
                 s.brand_description,
                 s.seo_title, s.seo_description, s.canonical_url,
                 (SELECT i.verification_token FROM organization_integrations i WHERE i.organization_id = s.id AND i.provider = 'google_search_console') AS search_console_verification,

@@ -1,9 +1,10 @@
-import { d1JsonStringSet, queryAll, type DbClient } from '~/server/db'
+import { buyerRequestActivityPath } from '~/server/domain/payments/buyer'
+import { d1JsonStringSet, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { getGuestRequest, getThreadOperationalRecord, requestSummary, requestActions } from '~/server/domain/requests'
 import { formatOperationalStatusLabel } from './status-labels'
 import { resolveGuestThreadMailbox } from './mailbox'
-import { listThreadEntries, parseEntryPayload } from './entries'
-import { getDeliveryRetryEligibility, isVisibleDeliveryFailure, listThreadDeliveries } from './deliveries'
+import { listThreadEntries, parseEntryPayload, isBuyerVisibleThreadEntry } from './entries'
+import { isVisibleDeliveryFailure, listThreadDeliveries } from './deliveries'
 import { listMessagePhotos } from './attachments'
 import type { GuestThreadDetailViewModel, GuestThreadEntryDeliveryViewModel, GuestThreadEntryViewModel } from './types'
 
@@ -12,9 +13,14 @@ export async function getGuestThreadDetail(
   db: DbClient,
   threadId: string,
   organizationId: string,
+  audience?: { buyerUserId: string },
 ): Promise<GuestThreadDetailViewModel | null> {
-  const thread = await getGuestRequest(db, threadId, organizationId)
-  if (!thread) return null
+  const thread = await getGuestRequest(db, threadId, organizationId, undefined, audience?.buyerUserId)
+  if (!thread || (audience && thread.user_id !== audience.buyerUserId)) return null
+  const record = await getThreadOperationalRecord(db, thread.id)
+  if (audience && record && (record.user_id !== audience.buyerUserId || record.organization_id !== organizationId || record.kind !== thread.kind)) return null
+  const organization = await queryFirst<{name:string;vertical:string}>(db,'SELECT name,vertical FROM organization WHERE id=?',[organizationId])
+  if (!organization) throw new Error('Conversation has no organization')
 
 
   const [entryRows, deliveryRows] = await Promise.all([
@@ -23,15 +29,14 @@ export async function getGuestThreadDetail(
   ])
 
   // One read of the deliveries answers both questions the thread asks of them:
-  // where each entry went, and which sends still need a human.
-  const nowMs = Date.now()
+  // where each entry went, and which sends failed.
   const deliveriesByEntry = new Map<string, GuestThreadEntryDeliveryViewModel[]>()
   for (const delivery of deliveryRows) {
     const forEntry = deliveriesByEntry.get(delivery.entry_id) ?? []
     forEntry.push({ id: delivery.id, channel: delivery.channel, purpose: delivery.purpose, status: delivery.status })
     deliveriesByEntry.set(delivery.entry_id, forEntry)
   }
-  const deliveryFailureRows = deliveryRows.filter(delivery => isVisibleDeliveryFailure(delivery, nowMs))
+  const deliveryFailureRows = deliveryRows.filter(isVisibleDeliveryFailure)
 
   const photos = await listMessagePhotos(db, entryRows.filter(entry => entry.kind === 'message').map(entry => entry.id))
 
@@ -42,29 +47,37 @@ export async function getGuestThreadDetail(
         .map(row => [row.id, row.name])
     : [])
 
-  const entries: GuestThreadEntryViewModel[] = entryRows.map(entry => ({
+  const visibleEntries = audience ? entryRows.filter(isBuyerVisibleThreadEntry) : entryRows
+  const entries: GuestThreadEntryViewModel[] = visibleEntries.map(entry => ({
     id: entry.id,
     kind: entry.kind,
     actorKind: entry.actor_kind,
-    actorUserId: entry.actor_user_id,
+    actorUserId: audience
+      ? entry.actor_kind === 'guest' && entry.channel === 'web' && entry.actor_user_id === audience.buyerUserId ? entry.actor_user_id : null
+      : entry.actor_user_id,
     actorLabel: entry.actor_user_id ? actorNames.get(entry.actor_user_id) ?? null : null,
     channel: entry.channel,
     body: entry.body,
     eventName: entry.event_name,
-    payload: parseEntryPayload(entry),
+    payload: audience
+      ? entry.kind === 'message' ? { unshownFiles: parseEntryPayload(entry)?.unshownFiles ?? [] }
+        : entry.kind === 'operation' ? { action: parseEntryPayload(entry)?.action ?? null } : null
+      : parseEntryPayload(entry),
     sequence: entry.sequence,
     occurredAt: entry.occurred_at,
-    deliveries: deliveriesByEntry.get(entry.id) ?? [],
+    deliveries: audience ? [] : deliveriesByEntry.get(entry.id) ?? [],
     attachments: photos.get(entry.id) ?? [],
   }))
 
   const summary = await requestSummary(db, thread)
-  const record = await getThreadOperationalRecord(db, thread.id)
   const now = new Date().toISOString()
-  const mailbox = resolveGuestThreadMailbox(thread, record, now)
+  const mailbox = resolveGuestThreadMailbox(thread, record, now, audience?'buyer':'member')
 
   return {
     id: thread.id,
+    organizationName: organization.name,
+    organizationVertical: organization.vertical,
+    activityPath: audience && thread.kind!=='contact' ? await buyerRequestActivityPath(db,audience.buyerUserId,thread.id) : null,
     guestName: summary.guestName,
     guestEmail: summary.guestEmail,
     guestPhone: summary.guestPhone,
@@ -72,7 +85,7 @@ export async function getGuestThreadDetail(
     submissionId: thread.id,
     contextLabel: summary.contextLabel,
     locationLabel: summary.locationTitle,
-    conversationState: thread.conversation_state,
+    conversationState: audience ? null : thread.conversation_state,
     // The occurrence comes from the booking or reservation, rendered in that
     // record's own timezone. A thread with no record reports no occurrence
     // rather than a fabricated one.
@@ -96,24 +109,22 @@ export async function getGuestThreadDetail(
           },
     },
     entries,
-    availableActions: requestActions(record, now),
+    availableActions: audience ? [] : requestActions(record, now),
     mailbox: mailbox.mailbox,
     manuallyArchived: mailbox.manuallyArchived,
-    archivedAt: thread.archived_at,
-    archivedByUserId: thread.archived_by_user_id,
-    canArchive: mailbox.canArchive,
-    canUnarchive: mailbox.canUnarchive,
-    deliveryFailures: deliveryFailureRows.map(d => ({
+    archivedAt: audience ? null : thread.archived_at,
+    archivedByUserId: audience ? null : thread.archived_by_user_id,
+    canArchive: audience ? false : mailbox.canArchive,
+    canUnarchive: audience ? false : mailbox.canUnarchive,
+    deliveryFailures: audience ? [] : deliveryFailureRows.map(d => ({
       id: d.id,
       channel: d.channel,
       purpose: d.purpose,
       error: d.error,
-      status: d.status as 'failed' | 'unknown',
-      retryable: getDeliveryRetryEligibility(d) === 'retryable',
       createdAt: d.created_at,
     })),
     createdAt: thread.created_at,
     updatedAt: thread.updated_at,
-    resolvedAt: thread.resolved_at,
+    resolvedAt: audience ? null : thread.resolved_at,
   }
 }

@@ -3,7 +3,6 @@
   <DashboardLeafPanel
     :id="`hours-${concern}`"
     :title="day ? day.label : 'Timezone'"
-    :ready="!editor.loading.value"
     :saving="editor.saving.value"
     :disabled="editor.saveDisabled.value"
     :error="editor.editorError.value ?? editor.validationMessage.value ?? ''"

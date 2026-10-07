@@ -1,12 +1,12 @@
 import { expect, test } from '@playwright/test'
 import { loginAs } from './helpers/auth'
 import { acquireTenantMutationLock } from './helpers/tenant-mutation-lock'
-import { MCP_GROWTH_ORGANIZATION_ID, mcpData, mcpRequest } from './helpers/mcp'
+import { MCP_ORGANIZATION_ID, mcpData, mcpRequest } from './helpers/mcp'
 
 interface CreatedProduct { id: string; name: string; description: string; active: boolean }
 
 test('Product batches validate and commit atomically at the supported limit', async ({ request, baseURL }, testInfo) => {
-  const organizationId = MCP_GROWTH_ORGANIZATION_ID
+  const organizationId = MCP_ORGANIZATION_ID
   // deactivate_missing acts on the whole tenant, and the assertions below name
   // its whole catalog, so nothing else may write the demo's products meanwhile.
   const releaseTenantMutationLock = await acquireTenantMutationLock(testInfo, organizationId)
