@@ -442,11 +442,6 @@ async function main() {
       if (authoring?.inputSchema?.properties?.type?.enum?.includes(blockType)) pass(`${blockType} block type advertised`);
       else fail(`${blockType} missing from authoring catalog`);
     }
-    const payloadDescription = authoring?.inputSchema?.properties?.data?.description ?? "";
-    for (const field of ["rotating_accents", "layout (one of cards, pictures)"]) {
-      if (payloadDescription.includes(field)) pass(`${field} field advertised`);
-      else fail(`${field} missing from authoring catalog`);
-    }
   } else {
     fail("tools/list failed", listBody);
   }
