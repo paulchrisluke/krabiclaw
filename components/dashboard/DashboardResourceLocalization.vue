@@ -291,6 +291,7 @@ async function load(): Promise<void> {
   clearDraft()
   markDraftClean()
   editorError.value = null
+  loading.value = false
   if (!requestedLocale || loadingLanguages.value || languageError.value) return
   if (!localeOptions.value.some(option => option.value === requestedLocale)) {
     editorError.value = `The requested ${requestedLocale} language is not enabled for this organization.`

@@ -12,7 +12,7 @@ export function useDashboardOrganizationLinks() {
   const organizationPaths = computed(() => {
     const organizationSlug = dashboard.scope.value?.orgSlug
     if (!organizationSlug) return null
-    const organization = `/dashboard/${organizationSlug}`
+    const organization = `/dashboard/${encodeURIComponent(organizationSlug)}`
     return {
       catalog: `${organization}/products`,
       newLocation: `${organization}/locations/new`,

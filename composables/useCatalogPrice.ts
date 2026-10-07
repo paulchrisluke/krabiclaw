@@ -19,7 +19,7 @@ export function useCatalogPrice(locationId: Ref<string | null>, locations: Ref<R
   function priceLabel(product: Product) {
     const at = new Date().toISOString()
     const scopes = locationId.value ? [locationId.value] : [null, ...locations.value.map(location => location.id)]
-    const offers = scopes.flatMap(location_id => product.variants.flatMap(variant => selectPrice(variant.prices, { currency, location_id, at }) ?? []))
+    const offers = scopes.flatMap(location_id => product.variants.filter(variant => variant.active).flatMap(variant => selectPrice(variant.prices, { currency, location_id, at }) ?? []))
     const lowest = offers.reduce<typeof offers[number] | null>((best, offer) => (!best || offer.unit_amount < best.unit_amount ? offer : best), null)
     return formatProductMoney(lowest) ?? ''
   }

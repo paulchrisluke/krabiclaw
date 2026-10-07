@@ -42,7 +42,7 @@
       <div v-if="items.length" class="divide-y divide-default border-y border-default">
         <AgendaRow v-for="item in items" :key="item.id" :item="item" :to="openHere(item)" />
       </div>
-      <div v-else-if="!errorMessage" class="py-6 text-center">
+      <div v-else-if="!errorMessage && status === 'success'" class="py-6 text-center">
         <img
           src="https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/e10ff26b-ab52-4f93-8f48-36e23828aa00/w=224"
           alt=""
@@ -90,7 +90,7 @@ const calendarLocation = inject(calendarLocationKey)!
 const location = computed(() => calendarLocation.location.value ?? null)
 const refreshLocation = calendarLocation.refresh
 
-const { data, error } = await useAsyncData(
+const { data, error, status } = await useAsyncData(
   () => `calendar-day:${organizationId}:${day.value}:${locationId.value ?? ''}:${String(route.query.kinds ?? '')}`,
   async () => {
     const agenda = await dashboardApi<AgendaPayload>(`${apiBase}/agenda`, {

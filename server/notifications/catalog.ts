@@ -1,4 +1,5 @@
 import type { WhatsAppTemplate } from '~/server/utils/whatsapp'
+import { reviewEditorPath } from '~/server/utils/dashboard-links'
 import type { NotificationMessage } from './messages'
 import { guestPaymentMessage, ownerPaymentMessage } from './payment-events'
 import type { GuestPaymentNotificationEvent, PaymentNotificationEvent } from './payment-events'
@@ -192,7 +193,7 @@ export const NOTIFICATION_CATALOG: CatalogEntry[] = [
     message: ownerAlert(reviewReceivedMessage({
       authorName: 'Alex Carter', rating: 5,
       content: 'The wood-fired pizza was outstanding and the team could not have been kinder.',
-      organizationName: restaurant, reviewsUrl: 'https://demo.krabiclaw.com/dashboard/ember-slice/qa/reviews/review-ember-alex',
+      organizationName: restaurant, reviewsUrl: `https://demo.krabiclaw.com${reviewEditorPath('ember-slice', 'review-ember-alex')}`,
     })),
   },
   {

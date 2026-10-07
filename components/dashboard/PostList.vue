@@ -94,18 +94,25 @@ const { data, error, refresh } = await useAsyncData(postsKey, () => fetchPage())
 /** A path in this list's scope: the explicit location rides along. */
 const scoped = (path: string) => router.resolve({ path, query: { location_id: route.query.location_id } }).fullPath
 
-const loadError = computed(() => (error.value ? getErrorMessage(error.value, 'Failed to load posts') : null))
+const moreError = ref<unknown>(null)
+const loadError = computed(() => {
+  const cause = error.value ?? moreError.value
+  return cause ? getErrorMessage(cause, 'Failed to load posts') : null
+})
 const nextCursor = computed(() => (data.value?.page_info.has_more ? data.value.page_info.next_cursor : null))
 const loadingMore = ref(false)
 async function loadMore() {
   const base = data.value
   if (!base || !nextCursor.value) return
   loadingMore.value = true
+  moreError.value = null
   try {
     const page = await fetchPage(nextCursor.value)
     // A page fetched for the list that was showing is dropped if the filter changed meanwhile.
     if (data.value !== base) return
     data.value = { posts: [...base.posts, ...page.posts], page_info: page.page_info }
+  } catch (cause) {
+    if (data.value === base) moreError.value = cause
   } finally {
     loadingMore.value = false
   }

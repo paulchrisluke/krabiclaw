@@ -19,7 +19,7 @@
     <!-- A request that failed, or a conversation that is gone, is a state this
          surface shows rather than a blank column. -->
     <UAlert
-      v-if="!thread"
+      v-if="!thread && !pending"
       class="m-3"
       color="error"
       variant="soft"
@@ -27,7 +27,7 @@
       :description="isNotFoundError(error) ? 'It may have been deleted, or the link is from another business.' : getErrorMessage(error, 'Guest thread request failed')"
     />
 
-    <template v-else>
+    <template v-else-if="thread">
       <!-- Positioned so UChatMessages' jump-to-latest button sits over the
            stream rather than scrolling away with it. -->
       <div class="relative flex min-h-0 flex-1 flex-col">

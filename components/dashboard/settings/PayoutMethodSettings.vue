@@ -14,7 +14,7 @@
       <h2 class="text-2xl font-semibold text-highlighted">How you get paid</h2>
       <p class="mt-2 text-base text-muted">Your money goes to the bank account on file with Stripe. To change it, use Edit next to the account.</p>
 
-      <UButton v-if="!account && !failure" class="mt-6" size="xl" :loading="starting" label="Add payout method" @click="startOnboarding" />
+      <UButton v-if="!account && !connectError" class="mt-6" size="xl" :loading="starting" label="Add payout method" @click="startOnboarding" />
 
       <template v-else-if="account">
         <div v-if="payout" class="mt-6 flex items-center gap-4 py-4">

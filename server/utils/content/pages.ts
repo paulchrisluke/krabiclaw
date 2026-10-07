@@ -529,6 +529,7 @@ export async function resolvePublishedTenantPageIdentity(
       FROM content_documents v
       JOIN content_documents p ON p.id = COALESCE(v.root_id, v.id) AND p.row_role = 'root' AND p.kind = 'page'
      WHERE v.row_role IN ('root','representation') AND v.kind = 'page' AND v.organization_id = ? AND v.locale = ? AND v.path = ?
+       AND ${publicTenantPageSql('p')}
       LIMIT 1
   `, [organizationId, candidateLocale, normalizedPath])
   const page = await selectPublished(resolvedLocale)

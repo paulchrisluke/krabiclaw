@@ -60,7 +60,8 @@ export async function useSocialPostFeed(scope: () => { locationId?: string | nul
       if (first.value !== base) return
       first.value = { posts: [...base.posts, ...page.posts], page_info: page.page_info }
     } catch (cause) {
-      failed.value = cause instanceof Error ? cause.message : String(cause)
+      // A failure for a feed that is no longer showing is not this feed's.
+      if (first.value === base) failed.value = cause instanceof Error ? cause.message : String(cause)
     } finally {
       loading.value = false
     }
