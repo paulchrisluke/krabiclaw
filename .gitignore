@@ -36,6 +36,9 @@ pr_body.txt
 
 # AI tool local state (like .claude/ — never commit)
 /.agents/skills/*
+!/.agents/skills/krabiclaw-marketing/
+/.agents/skills/krabiclaw-marketing/*
+!/.agents/skills/krabiclaw-marketing/SKILL.md
 !/.agents/skills/write-help-docs/
 /.claude/worktrees/
 .codex/*
@@ -73,3 +76,13 @@ tsconfig.spot.json
 
 # Generated at build from the resolved route table (see nuxt.config.ts).
 .nuxt-generated/
+
+# Official HyperFrames skills used by the marketing workflow (pinned provenance).
+!/.agents/skills/hyperframes/
+!/.agents/skills/hyperframes-core/
+!/.agents/skills/hyperframes-animation/
+!/.agents/skills/hyperframes-audio/
+!/.agents/skills/hyperframes-creative/
+!/.agents/skills/hyperframes-cli/
+!/.agents/skills/product-launch-video/
+!/.agents/skills/media-use/
