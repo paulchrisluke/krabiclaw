@@ -2,7 +2,6 @@
   <DashboardLeafPanel
     id="location-status"
     title="Status"
-    :ready="!editor.loading.value"
     :saving="editor.saving.value"
     :disabled="editor.saveDisabled.value"
     :error="editor.editorError.value ?? ''"

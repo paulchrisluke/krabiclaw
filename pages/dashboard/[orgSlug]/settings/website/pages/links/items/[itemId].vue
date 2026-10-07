@@ -6,11 +6,10 @@
   <DashboardLeafPanel
     id="organization-links-item"
     :title="isNew ? 'New link' : record?.label || 'Link'"
-    :ready="editor.editorReady.value && (isNew || Boolean(record))"
     :saving="editor.saving.value"
     :disabled="!form.label.trim() || !form.destination.trim()"
     :save-label="isNew ? 'Create link' : undefined"
-    :error="editor.errorMessage.value"
+    :error="editor.loadError.value ?? editor.errorMessage.value"
     @cancel="loadDraft"
     @save="commit"
   >
@@ -26,7 +25,7 @@
         :language-settings-path="editor.organizationLocalizationSettingsPath.value"
       />
     </template>
-    <div class="space-y-6">
+    <div v-if="isNew ? !editor.loadError.value : record" class="space-y-6">
       <UFormField label="Label" required>
         <UInput v-model="form.label" maxlength="120" autofocus class="w-full" />
       </UFormField>
@@ -56,7 +55,7 @@ const isNew = computed(() => itemId.value === 'new')
 const record = computed(() => editor.items.value.find(item => item.id === itemId.value) ?? null)
 // A link that is not in the page is not a page of its own (DESIGN.md).
 watchEffect(() => {
-  if (!isNew.value && editor.editorReady.value && !record.value) showError(createError({ statusCode: 404, statusMessage: 'Link not found' }))
+  if (!isNew.value && !editor.loadError.value && !record.value) showError(createError({ statusCode: 404, statusMessage: 'Link not found' }))
 })
 
 const form = reactive<{ label: string; destination: string; status: LinkItemStatus }>({ label: '', destination: '', status: 'active' })

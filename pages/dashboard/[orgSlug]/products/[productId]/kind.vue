@@ -1,6 +1,6 @@
 <template>
-  <DashboardLeafPanel id="product-kind" :ready="p.ready.value" title="Type" lead="Choose what customers are buying. Each type has its own useful details." :saving="p.saving.value" :disabled="p.saveDisabled.value" :save-label="p.saveLabel.value" :error="p.saveError.value || ''" @cancel="p.revert" @save="p.save">
-    <URadioGroup v-model="p.form.kind" :items="items" variant="card" />
+  <DashboardLeafPanel id="product-kind" title="Type" lead="Choose what customers are buying. Each type has its own useful details." :saving="p.saving.value" :disabled="p.saveDisabled.value" :save-label="p.saveLabel.value" :error="p.loadError.value || p.saveError.value || ''" @cancel="p.revert" @save="p.save">
+    <URadioGroup v-if="p.isNew.value || p.product.value" v-model="p.form.kind" :items="items" variant="card" />
   </DashboardLeafPanel>
 </template>
 

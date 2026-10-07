@@ -50,7 +50,7 @@ const { filters, active, clear, failure } = useAgendaFilters()
 const open = ref(false)
 
 const members = props.organizationId
-  ? (await useFetch<{ members: { id: string; name: string; image: string | null }[] }>(`/api/organizations/${props.organizationId}/members/scheduling`, { server: false })).data
+  ? (await useFetch<{ members: { id: string; name: string; image: string | null }[] }>(`/api/organizations/${props.organizationId}/members/scheduling`)).data
   : ref(null)
 
 // A person is their face and a branch its picture, as the rows that list them draw it.

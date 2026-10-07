@@ -15,8 +15,8 @@
 import QaList from '~/components/dashboard/QaList.vue'
 import TestimonialList from '~/components/dashboard/TestimonialList.vue'
 
-// A row on Website, nested under it so Website is both its pane and its Back; the URL stays `/qa`.
-definePageMeta({ layout: 'dashboard', path: '/dashboard/:orgSlug/qa' })
+// A row on Website: Website is both its pane and its Back.
+definePageMeta({ layout: 'dashboard' })
 
 const route = useRoute()
 

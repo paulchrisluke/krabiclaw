@@ -2,7 +2,6 @@
   <DashboardLeafPanel
     id="organization-announcement-image"
     title="Image (optional)"
-    :ready="!editor.loading.value"
     :saving="editor.saving.value"
     :disabled="editor.saveDisabled.value"
     :error="editor.editorError.value ?? editor.validationMessage.value ?? ''"

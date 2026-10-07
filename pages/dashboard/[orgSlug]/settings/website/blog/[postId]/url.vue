@@ -2,13 +2,12 @@
   <DashboardLeafPanel
     id="organization-blog-post-url"
     title="URL"
-    :ready="!editor.loadPending.value && !editor.loadError.value"
     :saving="editor.saving.value"
     :error="editor.actionError.value || editor.loadError.value"
     @cancel="editor.revert"
     @save="editor.save"
   >
-    <div class="space-y-5">
+    <div v-if="editor.post.value" class="space-y-5">
       <UFormField label="URL slug">
         <UInput v-model="editor.form.slug" :disabled="editor.slugResetRequested.value" autofocus class="w-full" />
         <div class="mt-1 flex items-center justify-between gap-3">

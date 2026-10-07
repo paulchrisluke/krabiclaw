@@ -6,13 +6,11 @@
     its proration before anything is charged.
   -->
   <div class="space-y-6">
+    <UAlert v-if="billingError" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="getErrorMessage(billingError, 'Failed to load billing')" />
+    <UAlert v-if="usageError" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="getErrorMessage(usageError, 'Payments fees could not be loaded')" />
     <UAlert v-if="errorMessage" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="errorMessage" />
     <UAlert v-if="successMessage" color="success" variant="soft" icon="i-lucide-circle-check" :description="successMessage" />
-    <div v-if="loading" class="space-y-3">
-      <USkeleton class="h-20 w-full rounded-2xl" />
-      <USkeleton class="h-20 w-full rounded-2xl" />
-    </div>
-    <EditorNavigationList v-else :groups="groups" @act="onRowAction" />
+    <EditorNavigationList :groups="groups" @act="onRowAction" />
 
     <!-- ChatGPT's picker in our cards: every plan for sale, the current one marked, each with what it includes. -->
     <DashboardListItemDialog v-model:open="choosing" title="Change plan" :show-actions="false" :error="sheetError">
@@ -59,12 +57,11 @@ interface BillingStatus { organizationId: string; plan: string; stripeCustomerId
 const isBillingResponse = (value: unknown): value is { success: true; billing: BillingStatus } =>
   isRecord(value) && value.success === true && isRecord(value.billing) && typeof value.billing.organizationId === 'string' && isKnownBillingPlan(value.billing.plan)
   && (value.billing.scheduledPlan === undefined || value.billing.scheduledPlan === null || (isRecord(value.billing.scheduledPlan) && isKnownBillingPlan(value.billing.scheduledPlan.plan) && typeof value.billing.scheduledPlan.at === 'string'))
-const { data: billingResponse, error: billingError, pending: loading, refresh: refreshBilling } = await useAsyncData(
+const { data: billingResponse, error: billingError, refresh: refreshBilling } = await useAsyncData(
   computed(() => `dashboard-billing:${String(route.params.orgSlug || '')}`),
   () => dashboardApi('/api/billing/status', { validate: isBillingResponse }),
 )
 const billing = computed(() => billingResponse.value?.billing ?? null)
-watch(billingError, (error) => { if (error) errorMessage.value = error.message || 'Failed to load billing' }, { immediate: true })
 
 // What Payments costs, and the usage billing behind it, read from the same place the Earnings fees come from.
 type Pricing = { captured_volume_rate_percent: string; livemode: boolean }
@@ -74,7 +71,9 @@ const isUsageBilling = (value: unknown): value is UsageBilling => isRecord(value
   && (value.pricing === null || (isRecord(value.pricing) && typeof value.pricing.captured_volume_rate_percent === 'string' && typeof value.pricing.livemode === 'boolean'))
   && (!value.configured || (isRecord(value.account) && typeof value.account.status === 'string'))
   && Array.isArray(value.credits) && value.credits.every(row => isRecord(row) && typeof row.id === 'string' && typeof row.source_id === 'string' && isCurrencyCode(row.currency) && Number.isSafeInteger(row.amount))
-const { data: usage, refresh: refreshUsage } = await useAsyncData(() => `payments-billing:${route.params.orgSlug}`, () => dashboardApi<UsageBilling>('/api/dashboard/payments/billing', { validate: isUsageBilling }), { lazy: true })
+// Lazy on purpose: this reads Metronome's invoices and each one's Stripe collection
+// invoice, and the plan rows above it do not wait on that provider round trip.
+const { data: usage, error: usageError, refresh: refreshUsage } = await useAsyncData(() => `payments-billing:${route.params.orgSlug}`, () => dashboardApi<UsageBilling>('/api/dashboard/payments/billing', { validate: isUsageBilling }), { lazy: true })
 
 const currentPlan = computed(() => plans.value.find(plan => plan.id === billing.value?.plan) ?? null)
 const onStarter = computed(() => billing.value?.plan === STARTER_PLAN_ID)

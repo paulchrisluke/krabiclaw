@@ -1,8 +1,7 @@
 <template>
   <UDashboardPanel
-    v-if="level.mode.value !== 'yield'"
     :id="id"
-    :class="pair ? 'hidden lg:flex' : undefined"
+    :class="level.mode.value === 'yield' ? 'hidden' : pair ? 'hidden lg:flex' : undefined"
     :default-size="pair ? 50 : undefined"
     :ui="ui"
   >
@@ -82,8 +81,12 @@ onNuxtReady(() => {
   if (!scope.active) return
   scope.run(() => {
     watch((): [RouteLocationRaw | null | undefined, boolean, RouteLevelMode, unknown] => [props.autoOpen, pane.value, level.mode.value, route.query.editMode], ([target, wide, mode, editMode]) => {
-      // An index on its way out after a navigation elsewhere yields, so it opens nothing.
       if (!target || !wide || mode !== 'index' || editMode) return
+      // Only an arrival opens a child: the router is at this index's own URL.
+      // An index on its way out still reads the route it rendered for, which
+      // may be its bare URL; opening from there pulled the tenant back into the
+      // screen they had just left.
+      if (router.currentRoute.value.path !== level.path.value) return
       // An index whose rows are still loading offers itself as the first row; its own URL opens nothing.
       if (router.resolve(target).path === level.path.value) return
       void navigateTo(target, { replace: true })

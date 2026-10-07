@@ -3,7 +3,6 @@
     id="integration-google-analytics"
     icon="i-logos-google-analytics"
     title="Google Analytics"
-    :ready="integrations.summary.value !== undefined"
     :saving="saving"
     :disabled="!accountId || !selected"
     :error="error || data?.error || integrations.failure.value || loadFailure"
@@ -16,15 +15,12 @@
       :disconnecting="disconnecting"
       @disconnect="disconnect"
     >
-      <template v-if="!pending">
-        <UButton v-if="!accountId || loadFailure || data?.error || !options.length" icon="i-simple-icons-google" size="xl" block :loading="linking" @click="connect({ access_type: 'offline', prompt: 'consent select_account' })">Connect Google Analytics</UButton>
+      <UButton v-if="!accountId || loadFailure || data?.error || !options.length" icon="i-simple-icons-google" size="xl" block :loading="linking" @click="connect({ access_type: 'offline', prompt: 'consent select_account' })">Connect Google Analytics</UButton>
 
-        <UFormField v-if="data?.account_id" label="Analytics property" :error="data.error ?? undefined">
-          <USelectMenu v-model="selected" :items="options" value-key="value" placeholder="Choose a GA4 property" class="w-full" />
-          <p v-if="!data.error && !options.length" class="mt-2 text-sm text-muted">This Google account has no GA4 properties.</p>
-        </UFormField>
-      </template>
-      <USkeleton v-else-if="pending" class="h-14 rounded-xl" />
+      <UFormField v-if="data?.account_id" label="Analytics property" :error="data.error ?? undefined">
+        <USelectMenu v-model="selected" :items="options" value-key="value" placeholder="Choose a GA4 property" class="w-full" />
+        <p v-if="!data.error && !options.length" class="mt-2 text-sm text-muted">This Google account has no GA4 properties.</p>
+      </UFormField>
     </IntegrationConnection>
   </DashboardLeafPanel>
 </template>
@@ -54,10 +50,10 @@ const isLeaf = (value: unknown): value is AnalyticsLeaf =>
   && (value.analytics === null || isRecord(value.analytics))
 const isSuccess = (value: unknown): value is { success: true } => isRecord(value) && value.success === true
 
-const { data, pending, refresh, error: loadError } = await useAsyncData(
+const { data, refresh, error: loadError } = await useAsyncData(
   () => `integration-google-analytics:${integrations.organizationId}:${accountId.value ?? ''}`,
   () => dashboardApi(`${api}/properties`, { query: !analytics.value && accountId.value ? { account_id: accountId.value } : {}, validate: isLeaf }),
-  { lazy: true, watch: [accountId] },
+  { watch: [accountId] },
 )
 const selected = ref<string | undefined>()
 

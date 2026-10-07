@@ -3,7 +3,6 @@
     id="integration-instagram"
     icon="i-skill-icons-instagram"
     title="Instagram"
-    :ready="integrations.summary.value !== undefined"
     :saving="saving"
     :disabled="!accountId || !account"
     :error="error || integrations.failure.value || loadFailure || connectionProblem"
@@ -18,7 +17,6 @@
       @disconnect="disconnect"
     >
       <p v-if="account" class="font-semibold">@{{ account.name }}</p>
-      <USkeleton v-else-if="pending" class="h-14 rounded-xl" />
       <UButton v-else icon="i-lucide-instagram" size="xl" block :loading="linking" @click="connect()">Connect Instagram</UButton>
     </IntegrationConnection>
   </DashboardLeafPanel>
@@ -38,7 +36,7 @@ const instagram = computed(() => integrations.summary.value?.instagram ?? null)
 const { accountId, error, linking, connect, clear } = useIntegrationConnection('instagram')
 
 // Read only the account this OAuth callback linked, never every historical credential.
-const { data: account, pending, error: accountError } = await useAsyncData(
+const { data: account, error: accountError } = await useAsyncData(
   () => `integration-instagram-account:${integrations.organizationId}:${accountId.value ?? ''}`,
   async () => {
     if (!accountId.value || instagram.value) return null
@@ -47,7 +45,7 @@ const { data: account, pending, error: accountError } = await useAsyncData(
     if (!data?.user.name) throw new Error('Instagram did not return the account name.')
     return data.user
   },
-  { server: false, watch: [accountId] },
+  { watch: [accountId] },
 )
 
 interface ConnectionHealth { channels: Array<{ channel: string; problems: Array<{ code: string; message: string }> }> }
@@ -57,7 +55,7 @@ const { data: health, error: healthError, refresh: refreshHealth } = await useAs
   () => instagram.value
     ? dashboardApi('/api/integrations/social-connections', { query: { organizationId: integrations.organizationId }, validate: isHealth })
     : Promise.resolve(null),
-  { lazy: true, watch: [instagram] },
+  { watch: [instagram] },
 )
 const connectionProblem = computed(() => health.value?.channels.find(channel => channel.channel === 'instagram')?.problems
   .map(problem => `${problem.code}: ${problem.message}`).join(' ') ?? '')

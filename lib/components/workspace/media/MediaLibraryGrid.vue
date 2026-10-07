@@ -28,7 +28,7 @@
 
     <!-- Error -->
     <UAlert v-if="uploadError" color="error" variant="soft" :description="uploadError" icon="i-lucide-triangle-alert" />
-    <UAlert v-if="loadError" color="error" variant="soft" :description="loadError" icon="i-lucide-triangle-alert" />
+    <UAlert v-if="mediaError" color="error" variant="soft" :description="getErrorMessage(mediaError, 'Failed to load media')" icon="i-lucide-triangle-alert" />
 
     <!-- Filters -->
     <div class="flex items-center gap-2">
@@ -44,18 +44,14 @@
     </div>
 
     <!-- Grid -->
-    <div v-if="loading" class="grid grid-cols-4 gap-2 sm:grid-cols-5 lg:grid-cols-6">
-      <div v-for="i in 12" :key="i" class="aspect-square rounded-lg bg-elevated animate-pulse" />
-    </div>
-
-    <div v-else-if="!loadError && assets.length === 0" class="py-10 text-center">
+    <div v-if="media?.media.length === 0" class="py-10 text-center">
       <UIcon name="i-lucide-image" class="mx-auto size-8 text-muted" />
       <p class="mt-3 text-sm text-muted">No media yet. Upload your first file.</p>
     </div>
 
     <div v-else class="grid grid-cols-4 gap-2 sm:grid-cols-5 lg:grid-cols-6 overflow-y-auto max-h-80">
       <button
-        v-for="asset in assets"
+        v-for="asset in media?.media ?? []"
         :key="asset.id"
         type="button"
         class="group relative aspect-square overflow-hidden rounded-lg border-2 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
@@ -155,15 +151,10 @@ const emit = defineEmits<{
 const ALL_MEDIA_KIND = 'all'
 const { uploading, error: mediaUploadError, upload: uploadMedia } = useMediaUpload(`/api/editor/organizations/${props.organizationId}`)
 
-const assets = ref<MediaAsset[]>([])
-const loading = ref(false)
-const loadError = ref<string | null>(null)
 const uploadError = ref<string | null>(null)
 const isDragging = ref(false)
 const fileInput = ref<{ inputRef?: HTMLInputElement | null } | null>(null)
 const kindFilter = ref(props.accept === 'video' ? 'video' : 'image')
-const loadAbortController = ref<AbortController | null>(null)
-const loadRequestId = ref(0)
 
 const computedAccept = computed(() => {
   if (props.accept === 'video') return 'video/mp4,video/webm'
@@ -176,46 +167,6 @@ const kindOptions = [
   { label: 'Videos', value: 'video' },
   { label: 'All', value: ALL_MEDIA_KIND },
 ]
-
-function isAbortError(error: unknown): boolean {
-  return error instanceof Error && error.name === 'AbortError'
-}
-
-async function loadAssets() {
-  const requestId = ++loadRequestId.value
-  loadAbortController.value?.abort()
-  const controller = new AbortController()
-  loadAbortController.value = controller
-  loading.value = true
-  loadError.value = null
-
-  try {
-    const params = new URLSearchParams()
-    if (kindFilter.value && kindFilter.value !== ALL_MEDIA_KIND) params.set('kind', kindFilter.value)
-    if (props.locationId) {
-      params.set('ownerType', 'business_location')
-      params.set('ownerId', props.locationId)
-      params.set('slot', 'gallery')
-    }
-    const res = await dashboardApi<{ media: MediaAsset[] }>(`/api/editor/organizations/${props.organizationId}/media?${params}`, {
-      signal: controller.signal,
-      validate: isMediaResponse,
-    })
-
-    if (controller.signal.aborted || requestId !== loadRequestId.value) return
-
-    assets.value = res.media
-  } catch (err) {
-    if (controller.signal.aborted || isAbortError(err instanceof Error ? err : new Error(String(err)))) return
-    if (requestId === loadRequestId.value) {
-      loadError.value = getErrorMessage(err, 'Failed to load media')
-    }
-  } finally {
-    if (requestId === loadRequestId.value) {
-      loading.value = false
-    }
-  }
-}
 
 function onDrop(e: DragEvent) {
   isDragging.value = false
@@ -259,8 +210,8 @@ async function upload(file: File) {
       return
     }
 
-    await loadAssets()
-    emit('uploaded', assets.value.find(asset => asset.id === result.asset_id) ?? {
+    await refresh()
+    emit('uploaded', media.value?.media.find(asset => asset.id === result.asset_id) ?? {
       id: result.asset_id,
       kind: result.kind,
       file_name: file.name,
@@ -272,43 +223,21 @@ async function upload(file: File) {
   }
 }
 
-const initialMediaKey = computed(() =>
-  `dashboard-media-library:${props.organizationId}:${props.locationId ?? 'organization'}:${kindFilter.value}`,
+// One request answers the grid for the selected kind; an upload refreshes it.
+const { data: media, error: mediaError, refresh } = await useAsyncData(
+  () => `dashboard-media-library:${props.organizationId}:${props.locationId ?? 'organization'}:${kindFilter.value}`,
+  async () => {
+    const params = new URLSearchParams({ limit: '100' })
+    if (kindFilter.value !== ALL_MEDIA_KIND) params.set('kind', kindFilter.value)
+    if (props.locationId) {
+      params.set('ownerType', 'business_location')
+      params.set('ownerId', props.locationId)
+      params.set('slot', 'gallery')
+    }
+    return await dashboardApi<{ media: MediaAsset[] }>(
+      `/api/editor/organizations/${props.organizationId}/media?${params}`,
+      { validate: isMediaResponse },
+    )
+  },
 )
-const {
-  data: initialMedia,
-  pending: initialMediaPending,
-  error: initialMediaError,
-} = await useAsyncData(initialMediaKey, async () => {
-  const kind = kindFilter.value && kindFilter.value !== ALL_MEDIA_KIND
-    ? kindFilter.value
-    : undefined
-  const params = new URLSearchParams({ limit: '100' })
-  if (kind) params.set('kind', kind)
-  if (props.locationId) {
-    params.set('ownerType', 'business_location')
-    params.set('ownerId', props.locationId)
-    params.set('slot', 'gallery')
-  }
-  return await dashboardApi<{ media: MediaAsset[] }>(
-    `/api/editor/organizations/${props.organizationId}/media?${params}`,
-    { validate: isMediaResponse },
-  )
-}, { lazy: true })
-
-watch([initialMedia, initialMediaPending, initialMediaError], ([data, pending, error]) => {
-  loading.value = pending
-  if (error) {
-    loadError.value = getErrorMessage(error, 'Failed to load media')
-    return
-  }
-  if (data) {
-    assets.value = data.media as MediaAsset[]
-    loadError.value = null
-  }
-}, { immediate: true })
-
-onUnmounted(() => {
-  loadAbortController.value?.abort()
-})
 </script>

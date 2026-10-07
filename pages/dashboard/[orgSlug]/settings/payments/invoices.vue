@@ -2,7 +2,6 @@
   <!-- Airbnb's "Your payments" for the business: what it paid the platform — plan and Payments fees — newest first, each opening its Stripe invoice. -->
   <DashboardLeafPanel id="organization-payments-invoices" title="Your payments" :footer="false">
     <UAlert v-if="error" color="error" title="Payments could not be loaded" :description="getErrorMessage(error, 'Payments request failed.')" />
-    <div v-else-if="pending" class="space-y-4"><USkeleton v-for="index in 4" :key="index" class="h-20 rounded-2xl" /></div>
     <template v-else-if="years.length">
       <section v-for="year in years" :key="year.label" class="mb-8">
         <h2 class="text-xl font-semibold text-highlighted">{{ year.label }}</h2>
@@ -41,7 +40,7 @@ const isHistory = (value: unknown): value is History => isRecord(value) && typeo
   && Array.isArray(value.invoices) && value.invoices.every(row => isRecord(row) && typeof row.id === 'string' && (row.number === null || typeof row.number === 'string') && typeof row.created_at === 'string' && typeof row.status === 'string' && Number.isSafeInteger(row.total) && isCurrencyCode(row.currency) && typeof row.description === 'string' && (row.url === null || typeof row.url === 'string'))
 const route = useRoute()
 const api = useDashboardApi()
-const { data, pending, error } = await useAsyncData(() => `billing-history:${route.params.orgSlug}`, () => api<History>('/api/billing/history', { validate: isHistory }), { lazy: true })
+const { data, error } = await useAsyncData(() => `billing-history:${route.params.orgSlug}`, () => api<History>('/api/billing/history', { validate: isHistory }))
 const statusLabel = (status: string) => status === 'paid' ? 'Paid' : status === 'open' ? 'Due' : status === 'uncollectible' ? 'Unpaid' : status
 // Airbnb heads the current year "Completed" and each past year by its number.
 const years = computed(() => {

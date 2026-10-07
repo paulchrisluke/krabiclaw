@@ -28,11 +28,10 @@
     v-else
     id="organization-page-block-section"
     :title="section?.label ?? 'Section'"
-    :ready="editor.ready.value"
     :saving="editor.saving.value"
     :disabled="editor.saveDisabled.value"
     :save-label="editor.saveLabel.value"
-    :error="editor.errorMessage.value"
+    :error="editor.loadError.value ?? editor.errorMessage.value"
     @cancel="editor.revert"
     @save="editor.save"
   >

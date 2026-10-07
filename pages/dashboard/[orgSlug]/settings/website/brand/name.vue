@@ -2,7 +2,6 @@
   <DashboardLeafPanel
     id="organization-name"
     title="Brand name"
-    :ready="!editor.loading.value"
     :saving="editor.saving.value"
     :disabled="editor.saveDisabled.value"
     :error="editor.editorError.value ?? ''"

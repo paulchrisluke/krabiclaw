@@ -25,7 +25,8 @@ export interface StripeConnectedAccount {
   id: string
   organizationId: string
   stripeAccountId: string | null
-  country: string
+  /** The account's country as Stripe reports it; null until the owner chooses it in Stripe's onboarding. */
+  country: string | null
   livemode: boolean
   status: StripeConnectStatus
   cardPaymentsStatus: StripeCapabilityStatus | null
@@ -40,7 +41,7 @@ interface StripeConnectedAccountRow {
   id: string
   organization_id: string
   stripe_account_id: string | null
-  country: string
+  country: string | null
   livemode: number
   status: StripeConnectStatus
   card_payments_status: StripeCapabilityStatus | null
@@ -55,7 +56,7 @@ export interface StripeConnectProjection {
   reservationId: string
   organizationId: string
   stripeAccountId: string
-  country: string
+  country: string | null
   livemode: boolean
   cardPaymentsStatus: StripeCapabilityStatus | null
   requirements: StripeConnectRequirement[]
@@ -95,15 +96,6 @@ function mapConnectedAccount(row: StripeConnectedAccountRow): StripeConnectedAcc
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
-}
-
-export function normalizeStripeConnectCountry(value: unknown): string {
-  if (typeof value !== 'string') throw new HTTPError({ statusCode: 400, statusMessage: 'Country is required' })
-  const country = value.trim().toUpperCase()
-  if (!/^[A-Z]{2}$/u.test(country)) {
-    throw new HTTPError({ statusCode: 400, statusMessage: 'Country must be an ISO 3166-1 alpha-2 code' })
-  }
-  return country
 }
 
 export function stripeLivemodeFromKey(secretKey: string): boolean {
@@ -182,20 +174,16 @@ export async function getStripeConnectedAccountByStripeId(
 
 export async function reserveStripeConnectedAccount(
   db: DbClient,
-  input: { organizationId: string; country: string; livemode: boolean },
+  input: { organizationId: string; livemode: boolean },
 ): Promise<StripeConnectedAccount> {
-  const country = normalizeStripeConnectCountry(input.country)
   const now = new Date().toISOString()
   await execute(db, `
     INSERT OR IGNORE INTO stripe_connected_accounts
-      (id, organization_id, country, livemode, status, requirements_json, created_at, updated_at)
-    VALUES (?, ?, ?, ?, 'creating', '[]', ?, ?)
-  `, [crypto.randomUUID(), input.organizationId, country, input.livemode ? 1 : 0, now, now])
+      (id, organization_id, livemode, status, requirements_json, created_at, updated_at)
+    VALUES (?, ?, ?, 'creating', '[]', ?, ?)
+  `, [crypto.randomUUID(), input.organizationId, input.livemode ? 1 : 0, now, now])
   const row = await getStripeConnectedAccount(db, input.organizationId)
   if (!row) throw new Error('Stripe Connect account reservation was not persisted')
-  if (row.country !== country) {
-    throw new HTTPError({ statusCode: 409, statusMessage: 'Stripe Connect country cannot be changed after onboarding starts' })
-  }
   if (row.livemode !== input.livemode) {
     throw new HTTPError({ statusCode: 409, statusMessage: 'Stripe Connect account belongs to a different Stripe mode' })
   }
@@ -238,16 +226,16 @@ export async function projectStripeConnectedAccount(
   input: StripeConnectProjection,
 ): Promise<StripeConnectedAccount> {
   const status = input.financialContractSupported === false ? 'restricted' : deriveStripeConnectStatus(input)
-  const country = normalizeStripeConnectCountry(input.country)
   const updated = await execute(db, `
     UPDATE stripe_connected_accounts
-    SET stripe_account_id = ?, status = ?, card_payments_status = ?,
+    SET stripe_account_id = ?, country = ?, status = ?, card_payments_status = ?,
         requirements_json = ?, stripe_refreshed_at = ?, last_error = NULL,
         updated_at = ?
-    WHERE id = ? AND organization_id = ? AND country = ? AND livemode = ?
+    WHERE id = ? AND organization_id = ? AND livemode = ?
       AND (stripe_account_id IS NULL OR stripe_account_id = ?)
   `, [
     input.stripeAccountId,
+    input.country,
     status,
     input.cardPaymentsStatus,
     JSON.stringify(input.requirements),
@@ -255,7 +243,6 @@ export async function projectStripeConnectedAccount(
     new Date().toISOString(),
     input.reservationId,
     input.organizationId,
-    country,
     input.livemode ? 1 : 0,
     input.stripeAccountId,
   ])
@@ -282,13 +269,13 @@ function accountProjection(
   refreshedAt = new Date().toISOString(),
 ): StripeConnectProjection {
   const country = account.identity?.country
-  if (!country) throw new Error(`Stripe account ${account.id} did not include its country`)
   const cardPaymentsStatus = account.configuration?.merchant?.capabilities?.card_payments?.status
   return {
     reservationId: reservation.id,
     organizationId: reservation.organizationId,
     stripeAccountId: account.id,
-    country: normalizeStripeConnectCountry(country),
+    // Stripe's hosted onboarding sets the country; before the owner chooses it there is none.
+    country: country ? country.toUpperCase() : null,
     livemode: account.livemode,
     cardPaymentsStatus: cardPaymentsStatus === undefined ? null : cardPaymentsStatus,
     financialContractSupported: account.dashboard==='express' && account.defaults?.responsibilities?.fees_collector==='application' && account.defaults.responsibilities.losses_collector==='stripe',
@@ -350,11 +337,9 @@ export async function ensureStripeConnectedAccount(
     organizationId: string
     organizationName: string
     contactEmail: string
-    country: string
     livemode: boolean
   },
 ): Promise<StripeConnectedAccount> {
-  if (normalizeStripeConnectCountry(input.country) !== 'US') throw new HTTPError({ statusCode: 400, statusMessage: 'Payments onboarding currently supports US businesses' })
   const reservation = await reserveStripeConnectedAccount(db, input)
   if (reservation.stripeAccountId) return await refreshStripeConnectedAccount(db, stripe, reservation)
 
@@ -364,10 +349,12 @@ export async function ensureStripeConnectedAccount(
       contact_email: input.contactEmail,
       display_name: input.organizationName,
       dashboard: 'express',
-      identity: { country: reservation.country.toLowerCase() },
-      configuration: {
-        merchant: { capabilities: { card_payments: { requested: true } } },
-      },
+      // No country and no capability request: Stripe's hosted onboarding lets the
+      // owner choose from the countries the platform's Connect onboarding options
+      // allow, and requests that country's default capabilities. Naming either
+      // here would fix the country before the owner chose it.
+      // https://docs.stripe.com/connect/hosted-onboarding#create-account
+      configuration: { merchant: {} },
       defaults: {
         responsibilities: { fees_collector: 'application', losses_collector: 'stripe' },
       },
@@ -405,12 +392,4 @@ export async function createStripeConnectOnboardingLink(
     throw new Error('Stripe returned an untrusted onboarding URL')
   }
   return parsed.toString()
-}
-
-export async function listStripeConnectCountries(stripe: Stripe): Promise<string[]> {
-  // Fetch only the country the current Accounts v2 managed-risk boundary accepts.
-  // Enumerating every Stripe country adds unrelated pagination to CMS onboarding.
-  const country = await stripe.countrySpecs.retrieve('US')
-  if (country.id.toUpperCase() !== 'US') throw new Error('Stripe returned an unexpected country specification')
-  return ['US']
 }

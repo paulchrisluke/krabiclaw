@@ -11,6 +11,14 @@
     </div>
 
     <UAlert
+      v-if="listError"
+      color="error"
+      variant="soft"
+      icon="i-lucide-circle-alert"
+      :description="getErrorMessage(listError, 'Your organizations could not be loaded.')"
+    />
+
+    <UAlert
       v-if="failure"
       color="error"
       variant="soft"
@@ -18,12 +26,8 @@
       :description="failure"
     />
 
-    <div v-if="pending" class="space-y-3">
-      <USkeleton v-for="index in 3" :key="index" class="h-16 rounded-lg" />
-    </div>
-
     <!-- Rows on the page itself, a hairline between them, as every list in the dashboard is. -->
-    <div v-else-if="organizations.length">
+    <div v-if="organizations.length">
       <button
         v-for="organization in organizations"
         :key="organization.id"
@@ -42,7 +46,7 @@
       </button>
     </div>
 
-    <p v-else class="text-sm text-muted">This account belongs to no organization yet.</p>
+    <p v-else-if="!listError" class="text-sm text-muted">This account belongs to no organization yet.</p>
   </div>
 </template>
 
@@ -60,10 +64,12 @@ if (route.query.plan !== undefined && !isNewSalePlan(route.query.plan)) {
   throw createError({ statusCode: 400, statusMessage: 'Unknown checkout plan', fatal: true })
 }
 const session = authClient.useSession()
-const organizationsState = authClient.useListOrganizations()
-
-const organizations = computed(() => unref(organizationsState)?.data ?? [])
-const pending = computed(() => Boolean(unref(organizationsState)?.isPending))
+const { data: organizationList, error: listError } = await useAsyncData('select-organization', async () => {
+  const { data, error } = await authClient.organization.list()
+  if (error) throw new Error(error.message || 'Your organizations could not be loaded.')
+  return data
+})
+const organizations = computed(() => organizationList.value ?? [])
 const failure = ref<string | null>(null)
 const entering = ref<string | null>(null)
 
@@ -73,8 +79,8 @@ const plan = computed(() => isNewSalePlan(route.query.plan) ? route.query.plan :
 
 async function enter(organization: { id: string }) {
   if (entering.value) return
-  // Only an organization Better Auth still lists may be chosen: the membership can
-  // change while this page is open.
+  // Only an organization Better Auth listed may be chosen; a membership that ended
+  // since is refused by setActive below.
   if (!organizations.value.some(candidate => candidate.id === organization.id)) {
     failure.value = 'That organization is no longer available to this account.'
     return

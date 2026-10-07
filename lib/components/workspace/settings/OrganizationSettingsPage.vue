@@ -5,10 +5,7 @@
     one level below it. Each setting is a leaf below its list.
   -->
   <DashboardIndexPanel :id="surface === 'brand' ? 'organization-brand' : 'organization-website'" :title="navbarTitle" :auto-open="navigationGroups[0]?.items.find(item => item.to)?.to ?? null">
-    <div v-if="loading" class="space-y-4">
-      <USkeleton v-for="i in 4" :key="i" class="h-32 rounded-xl" />
-    </div>
-    <UAlert v-else-if="loadError" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="loadError" />
+    <UAlert v-if="loadError" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="loadError" />
     <EditorNavigationList v-else :groups="navigationGroups" :active-item="detailKey" />
   </DashboardIndexPanel>
 
@@ -82,14 +79,6 @@ export interface OrganizationSettingsResponse {
   consultation_mode: 'native' | 'external_url' | 'native_disabled' | null
 }
 
-export interface LocalizationLanguageRow { locale: string; label: string | null; is_source: number | boolean; status: string }
-
-export interface LocalizationCatalogRow { locale: string; label: string; direction: string }
-
-export interface LocalizationSettings { effective_plan: string; languages: LocalizationLanguageRow[]; available_catalogs: LocalizationCatalogRow[] }
-
-export interface LocalizationProgress { locale: string; completed: number; total: number; opportunities: Array<{ id: string; label: string; completed: number; total: number; path: string }> }
-
 /**
  * The site's settings draft and everything a leaf shows or does beside its
  * one field. Brand and Website mount the same provider; a leaf reads what it
@@ -98,7 +87,6 @@ export interface LocalizationProgress { locale: string; completed: number; total
 export interface OrganizationSettingsEditor {
   form: Reactive<OrganizationSettingsForm>
   organizationId: string
-  loading: Ref<boolean>
   saving: Ref<boolean>
   saveDisabled: ComputedRef<boolean>
   editorError: Ref<string | null>
@@ -114,17 +102,6 @@ export interface OrganizationSettingsEditor {
   consultationMode: ComputedRef<OrganizationSettingsResponse['consultation_mode']>
   /** The saved logo assets' URLs, for previews before a new pick is saved. */
   logoUrl: (assetId: string | null) => string | null
-  localizationSettings: Ref<LocalizationSettings | null>
-  localizationLoading: Ref<boolean>
-  localizationBusy: Ref<boolean>
-  localizationError: Ref<string | null>
-  localizationProgress: Ref<LocalizationProgress[]>
-  localizationProgressError: Ref<string | null>
-  enableableCatalogOptions: ComputedRef<Array<{ label: string; value: string }>>
-  newLocale: Ref<string>
-  publishLanguage: (locale: string) => Promise<void>
-  disableLanguage: (locale: string) => Promise<void>
-  deleteLanguage: (locale: string) => Promise<void>
   revert: () => void
   save: () => Promise<void>
 }
@@ -147,7 +124,7 @@ const route = useRoute()
 const editorError = ref<string | null>(null)
 const dashboard = useDashboardOrganization()
 const organizationDashboardPath = computed(() => `/dashboard/${String(route.params.orgSlug)}`)
-const brandPath = computed(() => `${organizationDashboardPath.value}/brand`)
+const brandPath = computed(() => `${organizationDashboardPath.value}/settings/website/brand`)
 const settingsPath = computed(() => `${organizationDashboardPath.value}/settings/website`)
 // The level runs while setup is still synchronous: it injects the record the
 // `<RouterView>` above rendered, and an `await` before it would bind nothing.
@@ -176,17 +153,7 @@ function isOrganizationStatus(value: unknown): value is OrganizationStatus {
 
 /** Which leaf is open, named by the route below this rail rather than counted here. */
 const detailKey = computed(() => level.child.value)
-const loading = ref(true)
-const loadError = ref<string | null>(null)
 const saving = ref(false)
-const localizationSettings = ref<LocalizationSettings | null>(null)
-const localizationLoading = ref(false)
-const localizationBusy = ref(false)
-const localizationError = ref<string | null>(null)
-const localizationProgress = ref<LocalizationProgress[]>([])
-const localizationProgressError = ref<string | null>(null)
-const newLocale = ref('')
-const loadedSettings = ref<OrganizationSettingsResponse | null>(null)
 const theme = computed(() => loadedSettings.value?.theme)
 const paletteSource = computed(() => loadedSettings.value?.palette_source ?? null)
 const originalSignature = ref('')
@@ -202,9 +169,6 @@ const brandLocalizationFields = computed(() => [
   { key: 'name', label: 'Brand name', source: loadedSettings.value?.name },
   { key: 'brand_description', label: 'Description', source: loadedSettings.value?.brand_description, multiline: true, rows: 6 },
 ])
-const enableableCatalogOptions = computed(() => (localizationSettings.value?.available_catalogs ?? [])
-  .filter(catalog => !localizationSettings.value?.languages.some(language => language.locale === catalog.locale && language.status !== 'disabled'))
-  .map(catalog => ({ label: `${catalog.label} (${catalog.locale})`, value: catalog.locale })))
 const nameCharactersRemaining = computed(() => 50 - form.name.length)
 const descriptionCharactersRemaining = computed(() => 500 - form.brand_description.length)
 
@@ -274,7 +238,6 @@ function editorSignature(key: string | null) {
     case 'status': return JSON.stringify(form.status)
     case 'search': return JSON.stringify([form.seo_title, form.seo_description, form.canonical_url])
     case 'booking': return JSON.stringify(form.native_consultations)
-    case 'localization': return JSON.stringify(newLocale.value)
     default: return ''
   }
 }
@@ -307,7 +270,6 @@ const validationMessage = computed(() => {
     case 'contact': return !form.contact_email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.contact_email) ? null : 'Enter a valid email address.'
     case 'status': return form.status === 'suspended' ? 'This website is suspended. Contact support to restore it.' : null
     case 'search': return isValidUrl(form.canonical_url) ? null : 'Enter a complete http or https URL.'
-    case 'localization': return localizationSettings.value?.effective_plan !== 'growth' ? 'A Growth subscription is required.' : null
     default: return null
   }
 })
@@ -316,7 +278,6 @@ const saveDisabled = computed(() => {
 })
 
 function fillForm(settings: OrganizationSettingsResponse) {
-  loadedSettings.value = settings
   form.name = settings.name ?? ''
   form.brand_description = settings.brand_description ?? ''
   form.announcementEnabled = settings.announcement?.enabled ?? false
@@ -349,7 +310,6 @@ function fillForm(settings: OrganizationSettingsResponse) {
 function resetDraft() {
   editorError.value = null
   if (loadedSettings.value) fillForm(loadedSettings.value)
-  newLocale.value = ''
   originalSignature.value = editorSignature(detailKey.value)
 }
 function errorMessage(error: unknown, fallback: string) {
@@ -358,19 +318,19 @@ function errorMessage(error: unknown, fallback: string) {
 }
 
 const settingsResourceKey = computed(() => `dashboard-organization-settings:${String(route.params.orgSlug)}`)
-const { data: settingsResource, pending: settingsPending, error: settingsResourceError } = await useAsyncData<SettingsPageResource>(settingsResourceKey, async () => {
+const { data: settingsResource, error: settingsResourceError, refresh: refreshSettingsResource } = await useAsyncData<SettingsPageResource>(settingsResourceKey, async () => {
   const [settings] = await Promise.all([
     dashboardApi<{ success: boolean; settings: OrganizationSettingsResponse }>('/api/dashboard/settings', { validate: isSettingsResponse }),
   ])
   return { settings }
-}, { lazy: true })
-watch([settingsResource, settingsPending, settingsResourceError], ([resource, pending, error]) => {
-  loading.value = pending
-  if (error) { loadError.value = errorMessage(error, 'Failed to load organization settings'); return }
+})
+// The saved settings are what the request answered; the form is the draft seeded from each answer.
+const loadedSettings = computed(() => settingsResource.value?.settings.settings ?? null)
+const loadError = computed(() => settingsResourceError.value ? errorMessage(settingsResourceError.value, 'Failed to load organization settings') : null)
+watch(settingsResource, (resource) => {
   if (!resource) return
   fillForm(resource.settings.settings)
   originalSignature.value = editorSignature(detailKey.value)
-  loadError.value = null
 }, { immediate: true })
 watch(detailKey, () => resetDraft())
 
@@ -382,7 +342,8 @@ async function patchSettings(body: Record<string, unknown>) {
   await dashboard.refresh()
 }
 async function refreshSettings() {
-  settingsResource.value = { settings: await dashboardApi<{ success: boolean; settings: OrganizationSettingsResponse }>('/api/dashboard/settings', { validate: isSettingsResponse }) }
+  await refreshSettingsResource()
+  if (settingsResourceError.value) throw settingsResourceError.value
 }
 async function resetPalette() {
   saving.value = true
@@ -440,76 +401,12 @@ async function saveCurrentEditor() {
         await refreshSettings()
         break
       }
-      case 'localization': {
-        const success = await enableLanguage()
-        if (success) originalSignature.value = editorSignature(detailKey.value)
-        break
-      }
     }
   } catch (error) { editorError.value = errorMessage(error, 'Failed to save this setting') } finally { saving.value = false }
 }
-const isLocalizationSettings = (value: unknown): value is LocalizationSettings =>
-  isRecord(value) && Array.isArray(value.languages) && Array.isArray(value.available_catalogs)
-const isLocalizationProgress = (value: unknown): value is LocalizationProgress =>
-  isRecord(value) && typeof value.locale === 'string' && typeof value.completed === 'number' && typeof value.total === 'number'
-  && Array.isArray(value.opportunities) && value.opportunities.every(item => isRecord(item)
-    && typeof item.id === 'string' && typeof item.label === 'string' && typeof item.path === 'string'
-    && typeof item.completed === 'number' && typeof item.total === 'number')
-async function loadLocalizationProgress() {
-  // Every added language, not only the published ones: a language still being
-  // translated is the one whose progress the owner most wants to see.
-  const locales = localizationSettings.value?.languages
-    .filter(language => !language.is_source)
-    .map(language => language.locale) ?? []
-  try {
-    localizationProgress.value = await Promise.all(locales.map(locale =>
-      dashboardApi<LocalizationProgress>(`/api/editor/organizations/${organizationId}/locales/${encodeURIComponent(locale)}/opportunities`, { validate: isLocalizationProgress })))
-    localizationProgressError.value = null
-  } catch (error) {
-    localizationProgress.value = []
-    localizationProgressError.value = errorMessage(error, 'Translation progress could not be loaded')
-  }
-}
-async function loadLocalizationSettings() {
-  localizationLoading.value = true
-  try {
-    localizationSettings.value = await dashboardApi<LocalizationSettings>(`/api/editor/organizations/${organizationId}/locales`, { validate: isLocalizationSettings })
-    await loadLocalizationProgress()
-    localizationError.value = null
-  } catch (error) { localizationError.value = errorMessage(error, 'Failed to load localization settings') }
-  finally { localizationLoading.value = false }
-}
-async function mutateLocalization(path: string, method: 'POST' | 'DELETE', body?: Record<string, unknown>) {
-  localizationBusy.value = true
-  try {
-    await dashboardApi(path, { method, body, validate: (value): value is Record<string, unknown> => isRecord(value) })
-    await loadLocalizationSettings()
-    return true
-  } catch (error) {
-    localizationError.value = errorMessage(error, 'Localization request failed')
-    return false
-  } finally {
-    localizationBusy.value = false
-  }
-}
-async function enableLanguage(): Promise<boolean> {
-  if (newLocale.value) {
-    const selectedCatalog = localizationSettings.value?.available_catalogs.find(catalog => catalog.locale === newLocale.value)
-    if (!selectedCatalog) return false
-    const success = await mutateLocalization(`/api/editor/organizations/${organizationId}/locales/${encodeURIComponent(newLocale.value)}/add`, 'POST', { label: selectedCatalog.label })
-    if (success) newLocale.value = ''
-    return success
-  }
-  return false
-}
-async function publishLanguage(locale: string) { await mutateLocalization(`/api/editor/organizations/${organizationId}/locales/${encodeURIComponent(locale)}/publish`, 'POST') }
-async function disableLanguage(locale: string) { await mutateLocalization(`/api/editor/organizations/${organizationId}/locales/${encodeURIComponent(locale)}/disable`, 'POST') }
-async function deleteLanguage(locale: string) { if (window.confirm(`Permanently delete all ${locale} content for this organization?`)) await mutateLocalization(`/api/editor/organizations/${organizationId}/locales/${encodeURIComponent(locale)}`, 'DELETE') }
-watch(detailKey, key => { if (key === 'localization' && !localizationSettings.value) loadLocalizationSettings() }, { immediate: true })
 provide(organizationSettingsEditorKey, {
   form,
   organizationId,
-  loading,
   saving,
   saveDisabled,
   editorError,
@@ -521,17 +418,6 @@ provide(organizationSettingsEditorKey, {
   resetPalette,
   consultationMode: computed(() => loadedSettings.value?.consultation_mode ?? null),
   logoUrl,
-  localizationSettings,
-  localizationLoading,
-  localizationBusy,
-  localizationError,
-  localizationProgress,
-  localizationProgressError,
-  enableableCatalogOptions,
-  newLocale,
-  publishLanguage,
-  disableLanguage,
-  deleteLanguage,
   // A cancelled leaf puts the loaded settings back before it closes.
   revert: resetDraft,
   save: saveCurrentEditor,

@@ -7,7 +7,6 @@
   -->
   <DashboardIndexPanel id="account-activity" title="Past activity">
     <UAlert v-if="error" color="error" title="Past activity could not be loaded" :description="getErrorMessage(error, 'Activity request failed.')" />
-    <div v-else-if="pending" class="space-y-4"><USkeleton v-for="index in 3" :key="index" class="h-32 rounded-2xl" /></div>
     <div v-else-if="data" class="mx-auto max-w-3xl space-y-10 pb-6">
       <section v-for="section in sections" :key="section.label">
         <h2 class="mb-4 flex items-center gap-4 text-sm text-muted after:h-px after:flex-1 after:bg-border">{{ section.label }}</h2>
@@ -34,7 +33,7 @@ import type { AccountActivityItem } from '~/shared/account-activity'
 definePageMeta({ layout: 'dashboard', path: '/dashboard/account/activity' })
 useSeoMeta({ title: 'Past activity | Krabiclaw', robots: 'noindex, nofollow' })
 const level = useRouteLevel()
-const { data, pending, error } = await useAccountActivity()
+const { data, error } = await useAccountActivity()
 const now = Date.now()
 const isVisit = (item: AccountActivityItem) => item.kind === 'booking' || item.kind === 'reservation'
 const cancelled = computed(() => (data.value?.activities ?? []).filter(item => isVisit(item) && item.status === 'cancelled'))

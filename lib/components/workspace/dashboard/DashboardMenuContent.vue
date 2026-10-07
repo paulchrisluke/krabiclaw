@@ -1,11 +1,14 @@
 <template>
-  <div class="space-y-6">
+  <!-- A menu is a column, not the page: alone on a wide screen it keeps a phone's measure. -->
+  <div class="mx-auto w-full max-w-xl space-y-6">
 
     <!--
       Airbnb's hosting Menu leads with two square cards — Earnings and Insights,
       each a title, a subline and one figure. The account's Menu carries Past
       activity the same way, as its profile carries Past trips.
     -->
+    <UAlert v-if="cardsError" color="error" variant="soft" :title="cardsError" data-testid="dashboard-menu-error" />
+
     <div v-if="cards.length" class="grid grid-cols-2 gap-4">
       <NuxtLink
         v-for="card in cards"
@@ -32,43 +35,52 @@
 
 <script setup lang="ts">
 import EditorNavigationList from '~/components/dashboard/EditorNavigationList.vue'
+import { authClient } from '~/lib/auth-client'
 import { earningsFigure, isEarningsSummary, type EarningsSummary } from '~/shared/earnings-display'
 import { formatCalendarDate } from '~/utils/timezone'
 import { isAccountActivityResponse, type AccountActivityResponse } from '~/shared/account-activity'
 
 // Rendered by both the desktop slideover and the mobile menu page, off one
 // model, so the two surfaces cannot show different menus.
-const { groups, activeItem, scopeModel, logOut, personal } = useDashboardMenu()
-const { orgPaths } = useDashboardOrganizationLinks()
-const dashboardApi = useDashboardApi()
-
-const inOrganization = computed(() => orgPaths.value.org !== '/dashboard' && !personal.value)
+const { groups, activeItem, scopeModel, logOut, personal, organization } = useDashboardMenu()
+// The shell's organization, whichever route it is drawn on — Account settings included.
+const dashboardApi = useDashboardApi(computed(() => organization.value ? { orgSlug: organization.value.slug } : null))
+const orgBase = computed(() => organization.value ? `/dashboard/${encodeURIComponent(organization.value.slug)}` : null)
+const inOrganization = computed(() => Boolean(orgBase.value))
 const monthLabel = formatCalendarDate(new Date().toISOString().slice(0, 10), 'en', { month: 'long', year: 'numeric' })
-// The Earnings figure is this month's money, read the way the Earnings level reads it.
-const { data: earnings } = await useAsyncData(
-  () => `menu-earnings:${orgPaths.value.org}`,
+// The Earnings figure is this month's money from the payments ledger. The
+// Menu awaits it, its photos and the account's activity like any level. A
+// member Better Auth does not let read payments has no Earnings card: the
+// check is the one the payments API enforces, asked before the figure is.
+const { data: earnings, error: earningsError } = await useAsyncData(
+  () => `menu-earnings:${orgBase.value}`,
   async () => {
-    if (!inOrganization.value) return null
+    if (!organization.value) return null
+    const permission = await authClient.organization.hasPermission({ organizationId: organization.value.id, permissions: { payments: ['read'] } })
+    if (permission.error) throw new Error(permission.error.message || 'Your permissions could not be checked.')
+    if (permission.data.success !== true) return null
     const now = new Date()
     const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString()
     const to = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toISOString()
-    return await dashboardApi<EarningsSummary>('/api/dashboard/payments', { query: { view: 'overview', from, to }, validate: isEarningsSummary })
+    return await dashboardApi<EarningsSummary>('/api/dashboard/payments', { query: { from, to }, validate: isEarningsSummary })
   },
-  { lazy: true, server: false, watch: [inOrganization] },
 )
 // The pictures in the cards' corners: the organization's places, or the visits the account has made.
 type LocationPhotos = { success: true; locations: Array<{ id: string; imageUrl: string | null }> }
 const isLocationPhotos = (value: unknown): value is LocationPhotos => isRecord(value) && value.success === true && Array.isArray(value.locations) && value.locations.every(row => isRecord(row) && typeof row.id === 'string' && (row.imageUrl === null || typeof row.imageUrl === 'string'))
-const { data: places } = await useAsyncData(
-  () => `menu-places:${orgPaths.value.org}`,
+const { data: places, error: placesError } = await useAsyncData(
+  () => `menu-places:${orgBase.value}`,
   async () => inOrganization.value ? await dashboardApi<LocationPhotos>('/api/dashboard/locations', { validate: isLocationPhotos }) : null,
-  { lazy: true, server: false, watch: [inOrganization] },
 )
-const { data: activity } = await useAsyncData(
+const { data: activity, error: activityError } = await useAsyncData(
   () => `menu-activity:${personal.value}`,
   async () => personal.value ? await applicationFetch<AccountActivityResponse>('/api/account', { validate: isAccountActivityResponse }) : null,
-  { lazy: true, server: false, watch: [personal] },
 )
+// A card whose figure or photos could not be read says so, never an empty card standing in for one.
+const cardsError = computed(() => {
+  const error = earningsError.value ?? placesError.value ?? activityError.value
+  return error ? getErrorMessage(error, 'The Menu could not be loaded.') : null
+})
 const placePhotos = computed(() => (places.value?.locations ?? []).map(row => row.imageUrl).filter((url): url is string => !!url))
 const visitPhotos = computed(() => (activity.value?.activities ?? []).filter(item => item.imageUrl && (item.status === 'cancelled' || (item.endsAt && Date.parse(item.endsAt) < Date.now()) || item.kind === 'order' || item.kind === 'payment')).map(item => item.imageUrl as string))
 const cards = computed(() => personal.value
@@ -78,16 +90,17 @@ const cards = computed(() => personal.value
     ]
   : inOrganization.value
     ? [
-        { to: `${orgPaths.value.org}/earnings`, label: 'Earnings', subline: monthLabel, icon: 'i-lucide-banknote', figure: earningsFigure(earnings.value), photos: [] as string[], testId: 'dashboard-menu-earnings' },
-        { to: `${orgPaths.value.settings}/insights`, label: 'Insights', subline: 'Views and reviews', icon: 'i-lucide-chart-no-axes-column', figure: '', photos: placePhotos.value, testId: 'dashboard-menu-insights' },
+        ...(earnings.value ? [{ to: `${orgBase.value}/earnings`, label: 'Earnings', subline: monthLabel, icon: 'i-lucide-banknote', figure: earningsFigure(earnings.value), photos: [] as string[], testId: 'dashboard-menu-earnings' }] : []),
+        { to: `${orgBase.value}/settings/insights`, label: 'Insights', subline: 'Views and reviews', icon: 'i-lucide-chart-no-axes-column', figure: '', photos: placePhotos.value, testId: 'dashboard-menu-insights' },
       ]
     : [])
 
 // Airbnb's "Switch to hosting" / "Switch to travelling" is a row above Log out, not a picker.
 function onAct(id: string) {
   if (id === 'log-out') void logOut()
-  if (id === 'switch-personal') scopeModel.value?.peers.find(peer => peer.label === 'Personal')?.onSelect?.()
-  if (id === 'switch-organization') scopeModel.value?.peers.find(peer => peer.label !== 'Personal')?.onSelect?.()
+  // Personal is the one peer without an organization id.
+  if (id === 'switch-personal') scopeModel.value?.peers.find(peer => !peer.id)?.onSelect?.()
+  if (id === 'switch-organization') scopeModel.value?.peers.find(peer => peer.id)?.onSelect?.()
 }
 
 

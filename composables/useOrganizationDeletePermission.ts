@@ -1,23 +1,24 @@
 import { authClient } from '~/lib/auth-client'
 
 /**
- * Whether the signed-in user may delete this organization, answered by Better
- * Auth's own permission check for that organization — the same decision it
- * enforces on the delete itself. A failed check is an error, not a "no".
+ * Which of these organizations the signed-in user may delete, answered by
+ * Better Auth's own permission check for each — the same decision it enforces
+ * on the delete itself. A failed check is an error, not a "no".
  */
-export function useOrganizationDeletePermission(organizationId: Ref<string>) {
-  const { data, pending, error } = useAsyncData(
-    () => `organization-delete-permission:${organizationId.value}`,
+export async function useOrganizationDeletePermission(organizationIds: Ref<string[]>) {
+  const { data, error } = await useAsyncData(
+    () => `organization-delete-permission:${organizationIds.value.join(',')}`,
     async () => {
-      const result = await authClient.organization.hasPermission({ organizationId: organizationId.value, permissions: { organization: ['delete'] } })
-      if (result.error) throw new Error(result.error.message || 'Your permissions could not be checked.')
-      return result.data.success === true
+      const results = await Promise.all(organizationIds.value.map(async (organizationId) => {
+        const result = await authClient.organization.hasPermission({ organizationId, permissions: { organization: ['delete'] } })
+        if (result.error) throw new Error(result.error.message || 'Your permissions could not be checked.')
+        return result.data.success === true ? organizationId : null
+      }))
+      return results.filter((organizationId): organizationId is string => organizationId !== null)
     },
-    { server: false, watch: [organizationId] },
   )
   return {
-    canDelete: computed(() => data.value === true),
-    permissionPending: computed(() => pending.value || (data.value === undefined && !error.value)),
+    deletable: computed(() => new Set(data.value ?? [])),
     permissionError: computed(() => error.value ? getErrorMessage(error.value, 'Your permissions could not be checked.') : null),
   }
 }

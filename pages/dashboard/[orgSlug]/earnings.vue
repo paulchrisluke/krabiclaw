@@ -3,7 +3,7 @@
     Airbnb's Earnings page: a Performance card with this month's total, the
     year's bars, Paid and Upcoming and a way into the details; then Upcoming
     and Paid payouts as cards, and monthly Reports. The cog opens Payments
-    (payouts, plan, fees) and the payment link. A card on Menu, so Back returns there.
+    (payouts, plan, fees). A card on Menu, so Back returns there.
   -->
   <DashboardIndexPanel id="earnings" title="Earnings">
     <template #right>
@@ -16,15 +16,12 @@
       <UAlert v-if="error" color="error" variant="soft" title="Earnings could not be loaded" :description="getErrorMessage(error, 'Earnings request failed')" />
       <section v-else class="rounded-3xl bg-elevated/50 px-6 py-8 shadow-sm ring ring-default">
         <p class="text-center text-sm font-medium text-highlighted">Performance</p>
-        <USkeleton v-if="pending && !performance" class="mx-auto mt-3 h-12 w-40" />
-        <template v-else>
-          <p class="mt-2 text-center text-5xl font-semibold tracking-tight text-highlighted">{{ total }}</p>
-          <p class="mt-2 text-center text-sm text-muted">Total for {{ monthName }}{{ performance?.currency ? ` (${performance.currency})` : '' }}</p>
-          <div v-if="performance" class="mx-auto mt-8 flex h-48 w-40 items-end justify-center gap-3" role="img" :aria-label="`${monthName}: paid ${total}, upcoming ${upcoming}`">
-            <span class="w-16 rounded-xl bg-primary transition-[height]" :style="{ height: `${barHeight(paidAmount)}%` }" />
-            <span class="w-16 rounded-xl ring-2 ring-inset ring-primary transition-[height]" :style="{ height: `${barHeight(upcomingAmount)}%` }" />
-          </div>
-        </template>
+        <p class="mt-2 text-center text-5xl font-semibold tracking-tight text-highlighted">{{ total }}</p>
+        <p class="mt-2 text-center text-sm text-muted">Total for {{ monthName }}{{ performance?.currency ? ` (${performance.currency})` : '' }}</p>
+        <div v-if="performance" class="mx-auto mt-8 flex h-48 w-40 items-end justify-center gap-3" role="img" :aria-label="`${monthName}: paid ${total}, upcoming ${upcoming}`">
+          <span class="w-16 rounded-xl bg-primary transition-[height]" :style="{ height: `${barHeight(paidAmount)}%` }" />
+          <span class="w-16 rounded-xl ring-2 ring-inset ring-primary transition-[height]" :style="{ height: `${barHeight(upcomingAmount)}%` }" />
+        </div>
         <dl class="mt-8 space-y-3">
           <div class="flex items-center justify-between gap-4"><dt class="flex items-center gap-2 text-sm text-muted"><span class="size-2 rounded-full bg-primary" aria-hidden="true" />Paid</dt><dd class="text-sm font-medium text-highlighted">{{ total }}</dd></div>
           <div class="flex items-center justify-between gap-4"><dt class="flex items-center gap-2 text-sm text-muted"><span class="size-2 rounded-full ring-2 ring-inset ring-primary" aria-hidden="true" />Upcoming</dt><dd class="text-sm font-medium text-highlighted">{{ upcoming }}</dd></div>
@@ -98,18 +95,20 @@ const thisMonthKey = `${thisMonth.year}-${String(thisMonth.month).padStart(2, '0
 const monthName = formatCalendarDate(thisMonth.toString(), 'en', { month: 'long' })
 
 // The year by month, in UTC as the money is recorded; this month is the card's total.
-const { data: performance, pending, error } = await useAsyncData(
-  () => `earnings-performance:${route.params.orgSlug}:${thisMonthKey}`,
-  () => api<EarningsPerformance>('/api/dashboard/payments', { query: { view: 'performance', year: thisMonth.year, month: thisMonthKey }, validate: isEarningsPerformance }),
-  { lazy: true },
-)
+// Upcoming is what Stripe still holds or has on its way; Paid is what it has sent, with what each payout carried.
+// Both load together before the page shows.
+const [{ data: performance, error }, { data: payouts, error: payoutsError }] = await Promise.all([
+  useAsyncData(
+    () => `earnings-performance:${route.params.orgSlug}:${thisMonthKey}`,
+    () => api<EarningsPerformance>('/api/dashboard/payments', { query: { view: 'performance', year: thisMonth.year, month: thisMonthKey }, validate: isEarningsPerformance }),
+  ),
+  useAsyncData(() => `earnings-payouts:${route.params.orgSlug}`, () => api<PayoutsView>('/api/dashboard/payments', { query: { view: 'payouts', with_items: '1' }, validate: isPayoutsView })),
+])
 const money = (amount: number) => paymentMoney(amount, performance.value?.currency ?? 'USD')
 const monthRow = (month: string) => performance.value?.months.find(row => row.month === month)
 const paidAmount = computed(() => { const row = monthRow(thisMonthKey); return row ? row.paid - row.refunded : 0 })
 const total = computed(() => money(paidAmount.value))
 
-// Upcoming is what Stripe still holds or has on its way; Paid is what it has sent, with what each payout carried.
-const { data: payouts, error: payoutsError } = await useAsyncData(() => `earnings-payouts:${route.params.orgSlug}`, () => api<PayoutsView>('/api/dashboard/payments', { query: { view: 'payouts', with_items: '1' }, validate: isPayoutsView }), { lazy: true })
 const upcomingPayouts = computed(() => (payouts.value?.payouts ?? []).filter(row => row.status === 'pending' || row.status === 'in_transit'))
 const clearing = computed(() => [
   ...(payouts.value?.balance?.available ?? []).map(row => ({ amount: row.amount, currency: row.currency.toUpperCase(), label: 'Ready to send' })),
@@ -128,15 +127,13 @@ const reports = computed(() => [1, 2, 3].map((offset) => {
   const first = thisMonth.subtract({ months: offset })
   const month = `${first.year}-${String(first.month).padStart(2, '0')}`
   const row = monthRow(month)
-  return { month, name: formatCalendarDate(first.toString(), 'en', { month: 'long' }), year: String(first.year), figure: performance.value ? money(row ? row.paid - row.refunded : 0) : '…' }
+  return { month, name: formatCalendarDate(first.toString(), 'en', { month: 'long' }), year: String(first.year), figure: money(row ? row.paid - row.refunded : 0) }
 }))
 
-// Airbnb's cog: "Settings and documents" — the Payments page's tabs, and the payment link.
+// Airbnb's cog: "Settings and documents" — the Payments page's tabs.
 const settingsItems = computed(() => [[
   { label: 'Payments', icon: 'i-lucide-credit-card', to: `/dashboard/${route.params.orgSlug}/settings/payments` },
   { label: 'Payout settings', icon: 'i-lucide-landmark', to: `/dashboard/${route.params.orgSlug}/settings/payments?tab=payouts` },
   { label: 'Plan', icon: 'i-lucide-badge-check', to: `/dashboard/${route.params.orgSlug}/settings/payments?tab=plan` },
-], [
-  { label: 'Create a payment link', icon: 'i-lucide-link', to: `${level.path.value}/checkout` },
 ]])
 </script>

@@ -62,10 +62,6 @@
       :description="error"
     />
 
-    <div v-else-if="pending" class="space-y-3">
-      <USkeleton v-for="i in 3" :key="i" class="h-20 rounded-lg" />
-    </div>
-
     <div
       v-else-if="!items.length"
       class="rounded-xl border border-dashed border-default px-6 py-12 text-center"
@@ -182,7 +178,6 @@ const props = defineProps<{
   /** Names the add control for screen readers, e.g. "Add a question". */
   addLabel?: string
   readOnly?: boolean
-  pending?: boolean
   error?: string | null
   /** Lists with a persisted order gain move controls in the edit state. */
   reorderable?: boolean

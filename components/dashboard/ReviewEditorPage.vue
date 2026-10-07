@@ -6,6 +6,15 @@
     :auto-open="record ? `${recordPath}/visibility` : null"
   >
     <UAlert
+      v-if="loadError"
+      class="mb-6"
+      color="error"
+      variant="soft"
+      icon="i-lucide-triangle-alert"
+      title="Review could not be loaded"
+      :description="getErrorMessage(loadError, 'Reviews request failed')"
+    />
+    <UAlert
       v-if="errorMessage"
       class="mb-6"
       color="error"
@@ -21,7 +30,7 @@
       <p v-if="record.title" class="text-sm font-semibold text-highlighted">{{ record.title }}</p>
       <p class="whitespace-pre-line text-sm text-muted">{{ record.content }}</p>
     </div>
-    <EditorNavigationList :groups="navigationGroups" :active-item="level.child.value" />
+    <EditorNavigationList v-if="record" :groups="navigationGroups" :active-item="level.child.value" />
   </DashboardIndexPanel>
 </template>
 
@@ -56,7 +65,7 @@ const level = useRouteLevel()
 const organizationId = await useDashboardOrganizationId()
 
 const reviewId = computed(() => String(route.params.reviewId ?? ''))
-const recordPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/qa/reviews/${reviewId.value}`)
+const recordPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/settings/website/qa/reviews/${reviewId.value}`)
 // The list this review is a row of, so a moderated review reads the same in both.
 const listKey = computed(() => locationScope.value
   ? `dashboard-location-reviews-${organizationId}-${locationScope.value}`
@@ -67,13 +76,12 @@ const saving = ref(false)
 const errorMessage = ref('')
 
 // Reviews are listed per scope, so the record is found in its list.
-const { data, refresh } = await useAsyncData(
+const { data, error: loadError, refresh } = await useAsyncData(
   () => `dashboard-review-record-${organizationId}-${locationScope.value ?? 'organization'}-${reviewId.value}`,
   () => dashboardApi<{ reviews: OrganizationTestimonial[] }>(`/api/editor/organizations/${organizationId}/reviews`, {
     query: locationScope.value ? { location_id: locationScope.value } : undefined,
     validate: isTestimonialsResponse,
   }),
-  { server: false },
 )
 
 const record = computed(() => data.value?.reviews.find(row => row.id === reviewId.value) ?? null)
@@ -87,7 +95,7 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => [
   {
     id: 'review',
     items: [
-      { id: 'visibility', label: 'Visibility', summary: record.value ? REVIEW_STATUS_LABELS[form.status] : 'Loading', icon: 'i-lucide-eye', to: router.resolve({ path: `${recordPath.value}/visibility`, query: route.query }).fullPath },
+      { id: 'visibility', label: 'Visibility', summary: REVIEW_STATUS_LABELS[form.status], icon: 'i-lucide-eye', to: router.resolve({ path: `${recordPath.value}/visibility`, query: route.query }).fullPath },
     ],
   },
 ])

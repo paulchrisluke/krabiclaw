@@ -6,59 +6,53 @@
   <DashboardIndexPanel :id="personalScope ? 'account-calendar-day' : 'calendar-day'" :title="title">
     <div class="mx-auto w-full max-w-md space-y-6">
       <UAlert v-if="errorMessage" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="errorMessage" />
-      <div v-if="!ready" class="space-y-4">
-        <USkeleton class="h-40" />
-        <USkeleton class="h-14" />
+      <!--
+        Airbnb's day sheet leads with the date's state and why, and the one
+        action that flips it. A closure is the tenant's whole day, written to
+        the location's special hours — the same thing its hours leaf edits.
+      -->
+      <div v-if="location" class="rounded-xl bg-elevated/70 p-5">
+        <div class="flex items-center justify-between gap-3">
+          <p class="text-sm text-muted">{{ availability.open ? 'Available' : 'Unavailable' }}</p>
+          <span v-if="!availability.open" class="size-2 rounded-full bg-primary" aria-hidden="true" />
+        </div>
+        <p class="mt-2 text-lg font-medium text-highlighted">{{ availability.reason }}</p>
+        <UButton
+          v-if="availability.action === 'hours'"
+          class="mt-5 w-full justify-center"
+          color="neutral"
+          variant="soft"
+          size="lg"
+          label="Edit hours"
+          :to="{ path: `/dashboard/${route.params.orgSlug}/calendar/settings/hours`, query: route.query }"
+        />
+        <UButton
+          v-else-if="availability.action"
+          class="mt-5 w-full justify-center"
+          color="neutral"
+          variant="soft"
+          size="lg"
+          :label="availability.action === 'open' ? 'Open date' : 'Block date'"
+          :loading="saving"
+          @click="toggleClosure"
+        />
       </div>
-      <template v-else>
-        <!--
-          Airbnb's day sheet leads with the date's state and why, and the one
-          action that flips it. A closure is the tenant's whole day, written to
-          the location's special hours — the same thing its hours leaf edits.
-        -->
-        <div v-if="location" class="rounded-xl bg-elevated/70 p-5">
-          <div class="flex items-center justify-between gap-3">
-            <p class="text-sm text-muted">{{ availability.open ? 'Available' : 'Unavailable' }}</p>
-            <span v-if="!availability.open" class="size-2 rounded-full bg-primary" aria-hidden="true" />
-          </div>
-          <p class="mt-2 text-lg font-medium text-highlighted">{{ availability.reason }}</p>
-          <UButton
-            v-if="availability.action === 'hours'"
-            class="mt-5 w-full justify-center"
-            color="neutral"
-            variant="soft"
-            size="lg"
-            label="Edit hours"
-            :to="{ path: `/dashboard/${route.params.orgSlug}/calendar/settings/hours`, query: route.query }"
-          />
-          <UButton
-            v-else-if="availability.action"
-            class="mt-5 w-full justify-center"
-            color="neutral"
-            variant="soft"
-            size="lg"
-            :label="availability.action === 'open' ? 'Open date' : 'Block date'"
-            :loading="saving"
-            @click="toggleClosure"
-          />
-        </div>
-        <p v-else-if="!personalScope" class="text-sm text-muted">Choose a location to manage this day's availability.</p>
+      <p v-else-if="!personalScope" class="text-sm text-muted">Choose a location to manage this day's availability.</p>
 
-        <div v-if="items.length" class="divide-y divide-default border-y border-default">
-          <AgendaRow v-for="item in items" :key="item.id" :item="item" :to="openHere(item)" />
-        </div>
-        <div v-else-if="!errorMessage" class="py-6 text-center">
-          <img
-            src="https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/e10ff26b-ab52-4f93-8f48-36e23828aa00/w=224"
-            alt=""
-            aria-hidden="true"
-            width="112"
-            height="112"
-            class="mx-auto size-28 object-contain"
-          >
-          <p class="mt-4 text-sm text-muted">Nothing scheduled.</p>
-        </div>
-      </template>
+      <div v-if="items.length" class="divide-y divide-default border-y border-default">
+        <AgendaRow v-for="item in items" :key="item.id" :item="item" :to="openHere(item)" />
+      </div>
+      <div v-else-if="!errorMessage" class="py-6 text-center">
+        <img
+          src="https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/e10ff26b-ab52-4f93-8f48-36e23828aa00/w=224"
+          alt=""
+          aria-hidden="true"
+          width="112"
+          height="112"
+          class="mx-auto size-28 object-contain"
+        >
+        <p class="mt-4 text-sm text-muted">Nothing scheduled.</p>
+      </div>
     </div>
   </DashboardIndexPanel>
 </template>
@@ -96,7 +90,7 @@ const calendarLocation = inject(calendarLocationKey)!
 const location = computed(() => calendarLocation.location.value ?? null)
 const refreshLocation = calendarLocation.refresh
 
-const { data, error, pending } = await useAsyncData(
+const { data, error } = await useAsyncData(
   () => `calendar-day:${organizationId}:${day.value}:${locationId.value ?? ''}:${String(route.query.kinds ?? '')}`,
   async () => {
     const agenda = await dashboardApi<AgendaPayload>(`${apiBase}/agenda`, {
@@ -105,10 +99,8 @@ const { data, error, pending } = await useAsyncData(
     })
     return { items: agenda.items }
   },
-  { watch: [day, locationId] },
 )
 
-const ready = computed(() => !pending.value)
 // A booking opens as a leaf of this day; a post keeps its own screen. The
 // item id is `kind:record`, which is how the agenda names a row.
 function openHere(item: AgendaItem): string | undefined {

@@ -4,7 +4,7 @@
     one Google Maps place, so this is a list of locations, each a leaf.
   -->
   <DashboardIndexPanel id="integration-google-maps" title="Google Maps">
-    <USkeleton v-if="!integrations.summary.value" class="h-32 rounded-xl" />
+    <UAlert v-if="integrations.failure.value" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="integrations.failure.value" />
     <p v-else-if="!items.length" class="text-sm text-muted">Add a location first, then connect it to its Google Maps place.</p>
     <EditorNavigationList v-else :groups="[{ id: 'locations', items }]" :active-item="level.child.value" />
   </DashboardIndexPanel>

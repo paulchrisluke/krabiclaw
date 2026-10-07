@@ -4,7 +4,6 @@
     id="booking-refund"
     title="Send a refund"
     :lead="payment ? `Up to ${paymentMoney(remaining, payment.currency)} can be refunded. It comes from your Stripe balance; KrabiClaw Payments fees aren’t returned.` : ''"
-    :ready="Boolean(payment)"
     :saving="preparing"
     :disabled="!amount.trim() || !note.trim()"
     save-label="Review refund"

@@ -2,10 +2,9 @@
   <DashboardLeafPanel
     id="organization-page-block-record-field"
     :title="title"
-    :ready="editor.ready.value"
     :saving="editor.saving.value"
     :disabled="editor.saveDisabled.value"
-    :error="editor.errorMessage.value"
+    :error="editor.loadError.value ?? editor.errorMessage.value"
     @cancel="editor.revert"
     @save="editor.save"
   >

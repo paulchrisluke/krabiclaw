@@ -16,17 +16,12 @@
       />
     </template>
 
-    <div v-if="loading && !location" class="space-y-4">
-      <USkeleton class="aspect-[40/21] w-full rounded-2xl" />
-      <USkeleton v-for="index in 5" :key="index" class="h-20 rounded-2xl" />
-    </div>
-
     <UAlert
-      v-else-if="error"
+      v-if="overviewError"
       color="error"
       variant="soft"
       icon="i-lucide-triangle-alert"
-      :description="error"
+      :description="getErrorMessage(overviewError, 'Failed to load location overview')"
     />
 
     <!-- The same rows every other index draws, so a location reads like the rest of the dashboard. -->
@@ -88,11 +83,7 @@ const organizationId = await useDashboardOrganizationId()
 
 const locationId = computed(() => dashboardLocation.currentLocationId.value)
 
-const location = ref<LocationOverview | null>(null)
-const catalog = ref<CatalogCounts>({ total: 0, experiences: 0, dishes: 0 })
-const reservationConfig = ref<LocationReservationConfig | null>(null)
-const counts = ref<LocationContentCounts>({ photos: 0, posts: 0, qa: 0, reviews: 0, organizationQa: 0 })
-const error = ref<string | null>(null)
+const location = computed(() => overview.value?.location.location ?? null)
 
 const dashboardLocationRow = computed(() => dashboard.locations.value.find(candidate => candidate.id === locationId.value) ?? null)
 const locationImage = computed(() => dashboardLocationRow.value?.social_image?.url ?? '')
@@ -122,11 +113,11 @@ const currentOpeningState = computed(() => {
 // What this branch's catalogue is called: a studio's classes are experiences, a
 // restaurant's dishes are its menu, and a restaurant that also takes bookings
 // holds both — which is a catalog, not a menu with experiences filed inside it.
-const catalogLabelText = computed(() => catalogLabel(dashboard.organization.value?.vertical, catalog.value))
+const catalogLabelText = (catalog: CatalogCounts) => catalogLabel(dashboard.organization.value?.vertical, catalog)
 // One count per surface, each in its own words: "24 dishes · 3 experiences".
 // Plurals are each presentation's own ("Dish" → "Dishes"); appending an "s" is
 // how "dishs" reaches a merchant's screen.
-const catalogSummaryText = computed(() => catalogSummary(dashboard.organization.value?.vertical, catalog.value))
+const catalogSummaryText = (catalog: CatalogCounts) => catalogSummary(dashboard.organization.value?.vertical, catalog)
 
 function countSummary(total: number, noun: string, empty: string): string {
   if (!total) return empty
@@ -154,12 +145,14 @@ function scopedToLocation(path: string | undefined): string {
 }
 
 const cards = computed<HubCard[]>(() => {
-  const loc = location.value
-  if (!loc) return []
+  const resource = overview.value
+  if (!resource) return []
+  const loc = resource.location.location
+  const counts = resource.counts
   const contact = [loc.phone, loc.email].filter((value): value is string => Boolean(value?.trim())).join(' · ')
-  const policy = reservationConfig.value
+  const policy = resource.reservationConfig
   return [
-    { id: 'photos', title: 'Photos', description: countSummary(counts.value.photos, 'photo', 'Add photos'), to: `${locationPath.value}/photos`, image: locationImage.value || undefined, visible: hasFeature('photos') },
+    { id: 'photos', title: 'Photos', description: countSummary(counts.photos, 'photo', 'Add photos'), to: `${locationPath.value}/photos`, image: locationImage.value || undefined, visible: hasFeature('photos') },
     { id: 'name', title: 'Name', description: loc.title, to: `${locationPath.value}/name`, visible: true },
     { id: 'description', title: 'Description', description: loc.short_description?.trim() || loc.description?.trim() || 'Describe this location', to: `${locationPath.value}/description`, visible: true },
     { id: 'hours', title: 'Hours', description: currentOpeningState.value, to: `${locationPath.value}/hours`, visible: true },
@@ -170,10 +163,10 @@ const cards = computed<HubCard[]>(() => {
     // Built only when this site carries a catalogue at all: a vertical with no
     // product presentation has no word for one, and asking for it throws.
     ...(hasFeature('products')
-      ? [{ id: 'products', title: catalogLabelText.value, description: catalogSummaryText.value, to: scopedToLocation(organizationLinks.value?.catalog), visible: true }]
+      ? [{ id: 'products', title: catalogLabelText(resource.catalog), description: catalogSummaryText(resource.catalog), to: scopedToLocation(organizationLinks.value?.catalog), visible: true }]
       : []),
-    { id: 'posts', title: 'Posts', description: countSummary(counts.value.posts, 'published post', 'Write your first post'), to: scopedToLocation(organizationLinks.value?.posts), visible: hasFeature('posts') },
-    { id: 'qa', title: 'Reviews and Q&A', description: trustSummary(counts.value.qa, counts.value.reviews, counts.value.organizationQa), to: scopedToLocation(organizationLinks.value?.qa), visible: hasFeature('qa') },
+    { id: 'posts', title: 'Posts', description: countSummary(counts.posts, 'published post', 'Write your first post'), to: scopedToLocation(organizationLinks.value?.posts), visible: hasFeature('posts') },
+    { id: 'qa', title: 'Reviews and Q&A', description: trustSummary(counts.qa, counts.reviews, counts.organizationQa), to: scopedToLocation(organizationLinks.value?.qa), visible: hasFeature('qa') },
     {
       id: 'reservations',
       title: 'Reservations',
@@ -204,7 +197,7 @@ const isOverviewResponse = (value: unknown): value is LocationOverviewResource =
   && isRecord(value.counts) && typeof value.counts.photos === 'number'
 
 const overviewKey = computed(() => `dashboard-location-overview:${organizationId}:${locationId.value}`)
-const { data: overview, pending: overviewPending, error: overviewError } = await useAsyncData<LocationOverviewResource>(overviewKey, async () => {
+const { data: overview, error: overviewError } = await useAsyncData<LocationOverviewResource>(overviewKey, async () => {
   const requestedLocationId = locationId.value
   if (!requestedLocationId) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
   const shouldIncludeProducts = includeProducts.value
@@ -212,25 +205,7 @@ const { data: overview, pending: overviewPending, error: overviewError } = await
     `/api/dashboard/organizations/${organizationId}/locations/${requestedLocationId}/overview`,
     { query: { includeProducts: String(shouldIncludeProducts) }, validate: isOverviewResponse },
   )
-}, {
-  lazy: true,
 })
-
-const loading = computed(() => overviewPending.value || (!overview.value && !overviewError.value))
-
-watch([overview, overviewError], ([resource, cause]) => {
-  if (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Failed to load location overview'
-    return
-  }
-  if (!resource) return
-  location.value = resource.location.location
-  catalog.value = resource.catalog
-  reservationConfig.value = resource.reservationConfig
-  counts.value = resource.counts
-  error.value = null
-}, { immediate: true })
-
 
 useSeoMeta({ title: () => `${location.value?.title || 'Location'} | Krabiclaw`, robots: 'noindex, nofollow' })
 </script>

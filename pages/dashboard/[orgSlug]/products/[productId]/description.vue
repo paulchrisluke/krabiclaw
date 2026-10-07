@@ -1,16 +1,15 @@
 <template>
   <DashboardLeafPanel
     id="product-description"
-    :ready="p.ready.value"
     :title="p.sectionLabels['description']"
     :saving="p.saving.value"
     :disabled="p.saveDisabled.value"
     :save-label="p.saveLabel.value"
-    :error="p.saveError.value || p.photoError.value || ''"
+    :error="p.loadError.value || p.saveError.value || p.photoError.value || ''"
     @cancel="p.revert"
     @save="p.save"
   >
-    <UFormField label="Description">
+    <UFormField v-if="p.isNew.value || p.product.value" label="Description">
       <UTextarea v-model="p.form.description" :rows="10" autofocus class="w-full" />
     </UFormField>
   </DashboardLeafPanel>

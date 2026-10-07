@@ -19,7 +19,6 @@ export interface DashboardInvitationRow {
   status: string
   expiresAt: string
   createdAt: string
-  inviterName: string | null
 }
 
 // Shared by server/api/dashboard/members.get.ts and settings/members.vue's SSR
@@ -43,7 +42,8 @@ export async function getOrganizationMembersData(env: CloudflareEnv, organizatio
       }
       return rows
     })(),
-    adapter.listInvitations({ organizationId }),
+    // Better Auth's own reading of "pending": not yet answered and not yet expired.
+    adapter.findPendingInvitations({ organizationId }),
   ])
   const roleOrder = new Map([['owner', 0], ['admin', 1]])
   const members = memberRows.filter(member => member.user).map(member => ({
@@ -56,12 +56,11 @@ export async function getOrganizationMembersData(env: CloudflareEnv, organizatio
     image: member.user.image ?? null,
   })).sort((left, right) => (roleOrder.get(left.role) ?? 99) - (roleOrder.get(right.role) ?? 99) || left.name.localeCompare(right.name))
 
-  const invitations = invitationRows.filter(invitation => invitation.status === 'pending').map(invitation => ({
+  const invitations = invitationRows.map(invitation => ({
     id: invitation.id,
     email: invitation.email,
     role: invitation.role == null ? null : String(invitation.role),
     status: invitation.status,
-    inviterName: null,
     expiresAt: betterAuthTimestampToIso(invitation.expiresAt as BetterAuthTimestamp, 'invitation.expiresAt'),
     createdAt: betterAuthTimestampToIso(invitation.createdAt as BetterAuthTimestamp, 'invitation.createdAt'),
   })).sort((left, right) => right.createdAt.localeCompare(left.createdAt))

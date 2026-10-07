@@ -13,20 +13,11 @@ interface TenantBlogRepositoryOptions {
 
 export function tenantBlogRepository({ organizationId, orgSlug }: TenantBlogRepositoryOptions & { orgSlug: string }): BlogPostRepository {
   const baseUrl = `/api/editor/organizations/${organizationId}/blog`
-  const dashboardBaseUrl = `/dashboard/${orgSlug}/blog`
+  const dashboardBaseUrl = `/dashboard/${orgSlug}/settings/website/blog`
   const scope = { orgSlug }
   return {
     listUrl: dashboardBaseUrl,
     editUrl: postId => `${dashboardBaseUrl}/${postId}`,
-
-    async get(postId: string): Promise<BlogPost> {
-      const res = await dashboardFetch<{ post: BlogPost }>(
-        `${baseUrl}/${postId}`,
-        scope,
-        { validate: isBlogPostResponse },
-      )
-      return res.post
-    },
 
     async create(input: BlogPostCreateInput): Promise<BlogPost & { id: string }> {
       const res = await dashboardFetch<{ id: string; post: BlogPost }>(`${baseUrl}/posts`, scope, {

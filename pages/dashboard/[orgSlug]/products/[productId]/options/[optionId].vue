@@ -2,13 +2,12 @@
   <!-- One option: what it is called and the values a customer picks between. -->
   <DashboardLeafPanel
     id="product-option"
-    :ready="p.ready.value && Boolean(option)"
     :title="option?.name || 'Choice'"
     lead="Name a choice, such as Size, and add what customers can choose, such as Small and Large."
     :saving="p.saving.value"
     :disabled="p.saveDisabled.value"
     :save-label="p.saveLabel.value"
-    :error="removeError || p.saveError.value || ''"
+    :error="p.loadError.value || removeError || p.saveError.value || ''"
     @cancel="p.revert"
     @save="p.save(level.to.value ?? undefined)"
   >
@@ -55,7 +54,7 @@ const option = computed(() => p.form.options[index.value] ?? null)
 // Removing it empties this leaf on purpose, on the way back to the list.
 const removing = ref(false)
 watchEffect(() => {
-  if (p.ready.value && !option.value && !removing.value) showError(createError({ statusCode: 404, statusMessage: 'Choice not found' }))
+  if (p.product.value && !p.loadError.value && !option.value && !removing.value) showError(createError({ statusCode: 404, statusMessage: 'Choice not found' }))
 })
 
 const removeError = ref('')

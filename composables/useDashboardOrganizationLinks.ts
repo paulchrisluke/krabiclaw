@@ -4,17 +4,9 @@ export function useDashboardOrganizationLinks() {
   const dashboard = useDashboardOrganization()
 
   const orgPaths = computed(() => {
-    const base = '/dashboard'
     const organizationSlug = dashboard.scope.value?.orgSlug
-    const org = organizationSlug ? `${base}/${organizationSlug}` : base
-    const settings = `${org}/settings`
-
-    return {
-      base,
-      org,
-      settings,
-      accountProfile: `${base}/account/profile`,
-    }
+    const org = organizationSlug ? `/dashboard/${organizationSlug}` : '/dashboard'
+    return { org, settings: `${org}/settings` }
   })
 
   /**
@@ -29,12 +21,11 @@ export function useDashboardOrganizationLinks() {
     const organization = `/dashboard/${organizationSlug}`
     return {
       catalog: `${organization}/products`,
-      locations: `${organization}/locations`,
       newLocation: `${organization}/locations/new`,
-      posts: `${organization}/posts`,
-      pages: `${organization}/pages`,
-      blog: `${organization}/blog`,
-      qa: `${organization}/qa`,
+      posts: `${organization}/settings/posts`,
+      pages: `${organization}/settings/website/pages`,
+      blog: `${organization}/settings/website/blog`,
+      qa: `${organization}/settings/website/qa`,
     }
   })
 

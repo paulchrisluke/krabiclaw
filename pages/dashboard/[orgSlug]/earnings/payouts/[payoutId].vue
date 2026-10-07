@@ -4,7 +4,7 @@
     Payout ID, then a card per booking the payout carried — pictures, what,
     when, and its total — with Details opening the record.
   -->
-  <DashboardLeafPanel id="earnings-payout" :title="detail ? paymentMoney(detail.amount, detail.currency) : 'Payout'" :lead="detail ? `${payoutStatusLabel(detail.status)} · ${payoutDate(detail.arrivalDate, { month: 'long', day: 'numeric', year: 'numeric' })}` : ''" :footer="false" :ready="!pending" :error="error ? getErrorMessage(error, 'Payout request failed') : ''">
+  <DashboardLeafPanel id="earnings-payout" :title="detail ? paymentMoney(detail.amount, detail.currency) : 'Payout'" :lead="detail ? `${payoutStatusLabel(detail.status)} · ${payoutDate(detail.arrivalDate, { month: 'long', day: 'numeric', year: 'numeric' })}` : ''" :footer="false" :error="error ? getErrorMessage(error, 'Payout request failed') : ''">
     <template v-if="detail">
       <div class="flex flex-col items-center py-4">
         <span class="relative flex size-20 items-center justify-center rounded-full bg-elevated ring ring-default">
@@ -50,10 +50,9 @@ useSeoMeta({ title: 'Payout | Krabiclaw', robots: 'noindex, nofollow' })
 const route = useRoute()
 const api = useDashboardApi()
 const payoutId = String(route.params.payoutId || '')
-const { data: detail, pending, error } = await useAsyncData(
+const { data: detail, error } = await useAsyncData(
   () => `earnings-payout:${route.params.orgSlug}:${payoutId}`,
   () => api<PayoutDetail>('/api/dashboard/payments', { query: { view: 'payout', payout_id: payoutId }, validate: isPayoutDetail }),
-  { lazy: true },
 )
 function whenLabel(item: PayoutItem): string {
   const start = formatTimestamp(item.startsAt!, 'en', item.timeZone!, { month: 'short', day: 'numeric', year: 'numeric' })

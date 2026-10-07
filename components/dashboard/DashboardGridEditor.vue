@@ -41,10 +41,6 @@
       :description="error"
     />
 
-    <div v-else-if="pending" :class="gridClass">
-      <div v-for="i in 12" :key="i" class="aspect-square animate-pulse rounded-lg bg-elevated" />
-    </div>
-
     <div
       v-else-if="!items.length"
       class="rounded-xl border border-dashed border-default px-6 py-16 text-center"
@@ -164,7 +160,6 @@ const props = defineProps<{
   addLabel: string
   /** Bar title while selecting, e.g. "Select photos". */
   selectionTitle: string
-  pending?: boolean
   error?: string | null
   /** Tailwind grid classes, so a page can size its own tiles. */
   gridClass?: string

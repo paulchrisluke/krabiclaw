@@ -67,7 +67,8 @@ const SOURCE_PREVIEW_COLUMNS = `op.starts_at AS record_starts_at, op.ends_at AS 
 
 /*
   The picture the row leads with: the place the thread belongs to. A thread at
-  a location takes that location's hero; a thread that came to the business
+  a location takes that location's social sharing image — the still that
+  stands for the place everywhere it is shared, where its hero may be a video; a thread that came to the business
   itself — a contact form with no location — takes the business's logo, the
   same picture the menu's switcher shows for it. A place with neither has no
   picture, and the row draws its own placeholder rather than borrowing another
@@ -75,7 +76,7 @@ const SOURCE_PREVIEW_COLUMNS = `op.starts_at AS record_starts_at, op.ends_at AS 
 */
 const PLACE_IMAGE_SQL = `
   LEFT JOIN media_placements mp_hero ON mp_hero.owner_type = 'business_location' AND mp_hero.owner_id = gt.location_id
-    AND mp_hero.slot = 'hero' AND mp_hero.status = 'active'
+    AND mp_hero.slot = 'social_card' AND mp_hero.status = 'active'
   LEFT JOIN media_assets ma_hero ON ma_hero.id = mp_hero.asset_id AND ma_hero.status = 'active'
   LEFT JOIN media_placements mp_logo ON gt.location_id IS NULL AND mp_logo.owner_type = 'organization' AND mp_logo.owner_id = gt.organization_id
     AND mp_logo.slot = 'logo' AND mp_logo.status = 'active'

@@ -16,17 +16,10 @@
       </template>
     </UAlert>
 
-    <!-- Skeleton only before the first answer: a refresh keeps the conversation
-         on screen, so a live update never blanks the thread or loses the scroll. -->
-    <div v-if="!thread && pending" class="flex min-h-0 flex-1 flex-col gap-3 p-4">
-      <USkeleton class="h-20 rounded-lg" />
-      <USkeleton class="min-h-0 flex-1 rounded-lg" />
-    </div>
-
     <!-- A request that failed, or a conversation that is gone, is a state this
          surface shows rather than a blank column. -->
     <UAlert
-      v-else-if="!thread"
+      v-if="!thread"
       class="m-3"
       color="error"
       variant="soft"

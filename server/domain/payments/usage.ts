@@ -181,7 +181,7 @@ export async function setUpPaymentsBillingForSubscriptionEvent(db:DbClient,strip
  if(organizations.length>1)throw new Error('Stripe customer belongs to more than one organization')
  if(organizations[0]&&await hasOrganizationEntitlement(env,organizations[0].id,'payments'))await setUpPaymentsBilling(db,stripe,env,organizations[0].id)
 }
-export async function paymentsBillingPricing(db:DbClient,env:CloudflareEnv,organizationId:string) {
+async function paymentsBillingPricing(db:DbClient,env:CloudflareEnv,organizationId:string) {
  const account=await queryFirst<BillingAccount>(db,'SELECT * FROM payment_billing_accounts WHERE organization_id=?',[organizationId])
  if(!account?.metronome_customer_id||!account.metronome_contract_id)return {account,contract:null,pricing:null}
  const contract=await getPaymentsBillingContract(env,account)

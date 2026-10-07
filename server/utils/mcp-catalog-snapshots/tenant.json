@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:7a02ee20db24082c7ac2606ddbbc7ee005f4eecb5c9db2677571243ed798562d",
+  "fingerprint": "sha256:83f53877ff7e3969681138392ebbb844ca1ceecbaa08724d99506770db22ba97",
   "tools": [
     {
       "name": "append_content_block",
@@ -2307,43 +2307,6 @@
         "required": [
           "collection"
         ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "create_payment_checkout",
-      "description": "Create Stripe-hosted one-time order checkout for an active canonical Product/Variant without a booking calendar. Use create_product_booking for bookings and consultations. Operator checkout leaves buyer unclaimed; typed email never proves ownership. Fulfillment remains merchant-arranged.",
-      "inputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "idempotency_key": {
-            "type": "string"
-          },
-          "organization_id": {
-            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
-            "type": "string"
-          },
-          "product_id": {
-            "type": "string"
-          },
-          "quantity": {
-            "maximum": 100,
-            "minimum": 1,
-            "type": "integer"
-          },
-          "variant_id": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "product_id",
-          "variant_id",
-          "quantity",
-          "idempotency_key"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
         "type": "object"
       }
     },

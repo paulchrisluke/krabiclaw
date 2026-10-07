@@ -12,8 +12,8 @@
         <!-- A link from the onboarding email names one account and the business
              it opens. Showing it never impersonates; the button does. -->
         <template v-if="target">
-          <UAlert v-if="targetError" color="error" variant="soft" title="Could not open this customer" :description="targetError" />
-          <div v-else-if="targetUser" class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-default bg-elevated p-4" data-testid="focused-account">
+          <UAlert v-if="targetError" color="error" variant="soft" title="Could not open this customer" :description="getErrorMessage(targetError, 'Failed to load this account.')" />
+          <div v-else-if="targetUser && targetUser.id === target.userId" class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-default bg-elevated p-4" data-testid="focused-account">
             <div class="min-w-0">
               <p class="truncate text-base text-highlighted">{{ targetUser.name || targetUser.email }}</p>
               <p class="truncate text-sm text-muted">{{ targetUser.email }}</p>
@@ -29,14 +29,9 @@
               Impersonate and open their business
             </UButton>
           </div>
-          <USkeleton v-else class="h-20 rounded-lg" />
         </template>
 
-        <UAlert v-if="loadError" color="error" variant="soft" title="Could not load accounts" :description="loadError" />
-
-        <div v-else-if="loading" class="space-y-2">
-          <USkeleton v-for="i in 6" :key="i" class="h-12 rounded-lg" />
-        </div>
+        <UAlert v-if="loadError" color="error" variant="soft" title="Could not load accounts" :description="getErrorMessage(loadError, 'Failed to load accounts.')" />
 
         <ul v-else>
           <li v-for="user in users" :key="user.id" class="flex flex-wrap items-center justify-between gap-3 border-b border-default py-6 last:border-b-0">
@@ -61,8 +56,8 @@
         <div v-if="total > pageSize" class="flex items-center justify-between gap-3">
           <p class="text-sm text-muted">Showing {{ offset + 1 }}–{{ offset + users.length }} of {{ total }}.</p>
           <div class="flex gap-2">
-            <UButton color="neutral" variant="soft" :disabled="loading || offset === 0" @click="changePage(-1)">Previous</UButton>
-            <UButton color="neutral" variant="soft" :disabled="loading || offset + users.length >= total" @click="changePage(1)">Next</UButton>
+            <UButton color="neutral" variant="soft" :disabled="loading || offset === 0" @click="offset -= pageSize">Previous</UButton>
+            <UButton color="neutral" variant="soft" :disabled="loading || offset + users.length >= total" @click="offset += pageSize">Next</UButton>
           </div>
         </div>
       </div>
@@ -72,58 +67,36 @@
 
 <script setup lang="ts">
 import { authClient } from '~/lib/auth-client'
+import { canOpenPlatformAccounts } from '~/utils/platform-admin-access'
 
 // Every account on the platform, and the one platform-only tool a Better Auth
 // admin has: pick a person and act as them. It sits beside Team and Billing
 // because it is about accounts rather than about a site — under a site's URL it
-// read as "this site's people", which it has never been. Menu shows the row only
-// on Krabiclaw's own site.
+// read as "this site's people", which it has never been. It exists only inside
+// Krabiclaw's own organization and only for a Better Auth admin; anywhere else
+// it is not a page, the same rule that decides Menu's row.
 definePageMeta({ layout: 'dashboard' })
+
+const dashboard = useDashboardOrganization()
+const session = authClient.useSession()
+if (!dashboard.organization.value || !canOpenPlatformAccounts(dashboard.organization.value, (session.value.data?.user as { role?: string | null } | undefined)?.role)) {
+  throw createError({ statusCode: 404, statusMessage: 'Page not found' })
+}
 
 useSeoMeta({ title: 'Platform accounts | Krabiclaw Dashboard', robots: 'noindex, nofollow' })
 
 interface PlatformUser { id: string; name: string | null; email: string; role?: string | null; banned?: boolean | null }
 
 const impersonateError = ref<string | null>(null)
-const session = authClient.useSession()
 const currentUser = computed(() => session.value.data?.user ?? null)
 const refreshSession = () => session.value.refetch()
 const currentUserId = computed(() => currentUser.value?.id ?? null)
 
-const users = ref<PlatformUser[]>([])
-const total = ref(0)
 const pageSize = 50
 const offset = ref(0)
-const loading = ref(true)
-const loadError = ref<string | null>(null)
 const impersonatingUserId = ref<string | null>(null)
-
-// Only the latest search may write the list; a slow earlier response is ignored.
-let requestSequence = 0
-async function loadUsers(nextOffset = offset.value) {
-  const requestId = ++requestSequence
-  loading.value = true
-  loadError.value = null
-  try {
-    const result = await authClient.admin.listUsers({
-      query: { limit: pageSize, offset: nextOffset, sortBy: 'createdAt', sortDirection: 'desc' },
-    })
-    if (result.error) throw new Error(result.error.message)
-    if (requestId !== requestSequence) return
-    users.value = result.data.users.map((user: { id: string, name?: string | null, email: string, role?: string | null, banned?: boolean | null }) => ({ id: user.id, name: user.name ?? null, email: user.email, role: user.role ?? null, banned: user.banned ?? null }))
-    total.value = result.data.total
-    offset.value = nextOffset
-  } catch (error) {
-    if (requestId !== requestSequence) return
-    loadError.value = error instanceof Error ? error.message : 'Failed to load accounts.'
-  } finally {
-    if (requestId === requestSequence) loading.value = false
-  }
-}
-
-async function changePage(direction: number) {
-  await loadUsers(offset.value + direction * pageSize)
-}
+const toPlatformUser = (user: { id: string, name?: string | null, email: string, role?: string | null, banned?: boolean | null }): PlatformUser =>
+  ({ id: user.id, name: user.name ?? null, email: user.email, role: user.role ?? null, banned: user.banned ?? null })
 
 // With a business named, Better Auth makes it the impersonated session's active
 // organization, which it refuses unless the person belongs to it; refused, the
@@ -161,35 +134,28 @@ const target = computed(() => {
   const organizationId = typeof route.query.organization === 'string' ? route.query.organization : null
   return userId && organizationId ? { userId, organizationId } : null
 })
-const targetUser = ref<PlatformUser | null>(null)
-const targetError = ref<string | null>(null)
 
-async function loadTarget() {
-  targetUser.value = null
-  targetError.value = null
-  const requested = target.value
-  if (!requested) return
-  const result = await authClient.admin.listUsers({
-    query: { filterField: 'id', filterValue: requested.userId, filterOperator: 'eq', limit: 1 },
-  })
-  // Another link was opened while this one loaded.
-  if (target.value?.userId !== requested.userId || target.value.organizationId !== requested.organizationId) return
-  if (result.error) {
-    targetError.value = result.error.message ?? 'Failed to load this account.'
-    return
-  }
-  const user = result.data.users[0]
-  if (!user) {
-    targetError.value = 'This account no longer exists.'
-    return
-  }
-  targetUser.value = { id: user.id, name: user.name ?? null, email: user.email, role: user.role ?? null, banned: user.banned ?? null }
-}
-
-watch(target, () => void loadTarget())
-
-onMounted(() => {
-  void loadUsers()
-  void loadTarget()
-})
+// The page of accounts and, from an onboarding link, the one account it names load together.
+const [{ data: page, pending: loading, error: loadError }, { data: targetUser, error: targetError }] = await Promise.all([
+  useAsyncData(() => `platform-accounts:${offset.value}`, async () => {
+    const result = await authClient.admin.listUsers({
+      query: { limit: pageSize, offset: offset.value, sortBy: 'createdAt', sortDirection: 'desc' },
+    })
+    if (result.error) throw new Error(result.error.message)
+    return { users: result.data.users.map(toPlatformUser), total: result.data.total }
+  }),
+  useAsyncData(() => `platform-account:${target.value?.userId ?? ''}`, async () => {
+    const userId = target.value?.userId
+    if (!userId) return null
+    const result = await authClient.admin.listUsers({
+      query: { filterField: 'id', filterValue: userId, filterOperator: 'eq', limit: 1 },
+    })
+    if (result.error) throw new Error(result.error.message ?? 'Failed to load this account.')
+    const user = result.data.users[0]
+    if (!user) throw new Error('This account no longer exists.')
+    return toPlatformUser(user)
+  }),
+])
+const users = computed(() => page.value?.users ?? [])
+const total = computed(() => page.value?.total ?? 0)
 </script>

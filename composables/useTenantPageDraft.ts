@@ -166,6 +166,7 @@ export function useTenantPageDraft(organizationId: string, pageId: string) {
 
   // Every level calls this, and Nuxt shares one request and one state per key,
   // so opening a leaf four levels down costs no fetch the page has not made.
+  // The page level awaits `load`, so every level below renders the loaded page.
   const load = useAsyncData(
     key,
     async () => {
@@ -180,9 +181,8 @@ export function useTenantPageDraft(organizationId: string, pageId: string) {
       ])
       return { context: context.context, page: page?.page ?? null }
     },
-    { lazy: true },
   )
-  const { data, error, pending, refresh } = load
+  const { data, error } = load
 
   const draft = useState<TenantPageDraft>(`${key}-draft`, emptyDraft)
   /** The draft as it was last seeded or committed, so Save knows there is something to save. */
@@ -225,13 +225,6 @@ export function useTenantPageDraft(organizationId: string, pageId: string) {
   }, { immediate: true, flush: 'sync' })
 
   const dirty = computed(() => JSON.stringify(draft.value) !== baseline.value)
-
-  /**
-   * Whether the draft is the loaded page rather than the empty one it starts
-   * as. Every level below the page decides whether its section, part or record
-   * exists by looking into this draft, and "not loaded yet" is not "not there".
-   */
-  const ready = computed(() => seededFrom.value !== '')
 
   /** Discards the draft and returns to the values the page was loaded with. */
   function revert() {
@@ -307,7 +300,7 @@ export function useTenantPageDraft(organizationId: string, pageId: string) {
     return response.page
   }
 
-  return { load, data, error, pending, refresh, draft, dirty, ready, revert, commit, isNew, savedBlockIds, previewUrl }
+  return { load, data, error, draft, dirty, revert, commit, isNew, savedBlockIds, previewUrl }
 }
 
 /**

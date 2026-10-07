@@ -3,7 +3,6 @@
     id="integration-facebook"
     icon="i-logos-facebook"
     title="Facebook"
-    :ready="integrations.summary.value !== undefined"
     :saving="saving"
     :disabled="!accountId || !chosenPage"
     :error="error || data?.error || integrations.failure.value || loadFailure"
@@ -17,12 +16,9 @@
       :disconnecting="disconnecting"
       @disconnect="disconnect"
     >
-      <template v-if="!pending">
-        <UButton v-if="!accountId || loadFailure || data?.error || !choices.length" icon="i-simple-icons-facebook" size="xl" block :loading="linking" @click="connect()">Connect Facebook</UButton>
+      <UButton v-if="!accountId || loadFailure || data?.error || !choices.length" icon="i-simple-icons-facebook" size="xl" block :loading="linking" @click="connect()">Connect Facebook</UButton>
 
-        <URadioGroup v-if="choices.length" v-model="chosenPage" legend="Which Page is this business?" :items="choices" variant="card" />
-      </template>
-      <USkeleton v-else-if="pending" class="h-14 rounded-xl" />
+      <URadioGroup v-if="choices.length" v-model="chosenPage" legend="Which Page is this business?" :items="choices" variant="card" />
     </IntegrationConnection>
   </DashboardLeafPanel>
 </template>
@@ -52,10 +48,10 @@ const isLeaf = (value: unknown): value is FacebookLeaf =>
   && (value.connection === null || isRecord(value.connection)) && Array.isArray(value.choices)
 const isSuccess = (value: unknown): value is { success: true } => isRecord(value) && value.success === true
 
-const { data, pending, refresh, error: loadError } = await useAsyncData(
+const { data, refresh, error: loadError } = await useAsyncData(
   () => `integration-facebook:${integrations.organizationId}:${accountId.value ?? ''}`,
   () => dashboardApi(`${api}/pages`, { query: !facebook.value && accountId.value ? { account_id: accountId.value } : {}, validate: isLeaf }),
-  { lazy: true, watch: [accountId] },
+  { watch: [accountId] },
 )
 const choices = computed(() => (data.value?.choices ?? []).map(page => ({ value: page.id, label: page.name })))
 const chosenPage = ref<string | undefined>()

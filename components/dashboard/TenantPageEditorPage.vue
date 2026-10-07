@@ -12,9 +12,6 @@
       title="Page could not be loaded"
       :description="loadError"
     />
-    <div v-else-if="pending" class="space-y-3">
-      <USkeleton v-for="index in 4" :key="index" class="h-20 rounded-2xl" />
-    </div>
     <template v-else>
       <div v-if="isNew" class="mb-6 flex justify-end">
         <UButton :label="createActionLabel" :loading="saving" @click="startOrCreate" />
@@ -72,7 +69,8 @@ export type SectionKey = keyof typeof SECTION_LABELS
  */
 export interface TenantPageEditor {
   draft: Ref<TenantPageDraft>
-  ready: Ref<boolean>
+  /** Why the page could not be read. A leaf shows it instead of fields that would edit nothing. */
+  loadError: Ref<string | null>
   saving: Ref<boolean>
   saveDisabled: Ref<boolean>
   saveLabel: Ref<string | undefined>
@@ -135,7 +133,8 @@ const sectionUrl = (section: string) => router.resolve({ path: `${recordPath.val
 const organizationId = await useDashboardOrganizationId()
 const dashboardApi = useDashboardApi()
 
-const { data, error, pending, draft, dirty, revert, commit, isNew, previewUrl } = useTenantPageDraft(organizationId, pageId.value)
+const { load, data, error, draft, dirty, revert, commit, isNew, previewUrl } = useTenantPageDraft(organizationId, pageId.value)
+await load
 
 // A page that is not there is not a page. A request that failed is a state this
 // surface shows, because the page may well still exist.
@@ -213,7 +212,7 @@ const { createActionLabel, saveLabel, saveDisabled, save: saveOpenSection, start
   order: ['title'],
   missing: () => !draft.value.title.trim(),
   noun: 'page',
-  saving: computed(() => saving.value || pending.value),
+  saving,
   // An existing page saves what is in front of the tenant; there is nothing to
   // save when the draft still matches what was loaded.
   existingBlocked: () => !dirty.value,
@@ -245,7 +244,7 @@ function revertDraft() {
 
 provide(tenantPageEditorKey, {
   draft,
-  ready: computed(() => !pending.value),
+  loadError,
   saving,
   saveDisabled,
   saveLabel,

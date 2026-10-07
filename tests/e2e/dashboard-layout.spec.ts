@@ -38,43 +38,45 @@ test.describe('dashboard pane hierarchy', () => {
     await loginAs(page.request, baseURL!)
   })
 
-  test('Menu and Website rows keep their URLs and nest in the matched route tree', async ({ page }) => {
+  test('Menu and Website rows sit at the URLs of their place in the route tree', async ({ page }) => {
     await page.setViewportSize(WIDE)
     await open(page, `${ORG}/settings`)
-    const resolved = await page.evaluate((org) => {
+    const segments = ['settings/website/pages', 'settings/website/blog', 'settings/website/qa', 'settings/website/brand', 'settings/website/pages/links', 'settings/posts', 'settings/locations', 'products']
+    const resolved = await page.evaluate(({ org, segments }) => {
       const router = (document.querySelector('#__nuxt') as Element & {
         __vue_app__: { config: { globalProperties: { $router: { resolve: (path: string) => { path: string; matched: Array<{ path: string }> } } } } }
       }).__vue_app__.config.globalProperties.$router
-      return Object.fromEntries(['pages', 'blog', 'qa', 'brand', 'links', 'posts', 'locations', 'products'].map((segment) => {
+      return Object.fromEntries(segments.map((segment) => {
         const location = router.resolve(`${org}/${segment}`)
         // A directory's index.vue shares its parent's path; it is one level.
         const levels = location.matched.map(record => record.path).filter((path, at, all) => at === 0 || path !== all[at - 1])
         return [segment, { path: location.path, levels }]
       }))
-    }, ORG)
+    }, { org: ORG, segments })
 
     // Website's content and Brand sit under Website, Posts and Locations under
-    // Menu, and Catalog is a root of its own.
-    const website = ['/dashboard/:orgSlug()/settings', '/dashboard/:orgSlug()/settings/website']
+    // Menu, and Catalog is a root of its own — each at the URL of that place.
+    const menu = '/dashboard/:orgSlug()/settings'
+    const website = [menu, `${menu}/website`]
     expect(resolved).toEqual({
-      pages: { path: `${ORG}/pages`, levels: [...website, '/dashboard/:orgSlug/pages'] },
-      blog: { path: `${ORG}/blog`, levels: [...website, '/dashboard/:orgSlug/blog'] },
-      qa: { path: `${ORG}/qa`, levels: [...website, '/dashboard/:orgSlug/qa'] },
-      brand: { path: `${ORG}/brand`, levels: [...website, '/dashboard/:orgSlug/brand'] },
-      links: { path: `${ORG}/links`, levels: [...website, '/dashboard/:orgSlug/pages', '/dashboard/:orgSlug/links'] },
-      posts: { path: `${ORG}/posts`, levels: ['/dashboard/:orgSlug()/settings', '/dashboard/:orgSlug/posts'] },
-      locations: { path: `${ORG}/locations`, levels: ['/dashboard/:orgSlug()/settings', '/dashboard/:orgSlug/locations'] },
-      products: { path: `${ORG}/products`, levels: ['/dashboard/:orgSlug()/products'] },
+      'settings/website/pages': { path: `${ORG}/settings/website/pages`, levels: [...website, `${menu}/website/pages`] },
+      'settings/website/blog': { path: `${ORG}/settings/website/blog`, levels: [...website, `${menu}/website/blog`] },
+      'settings/website/qa': { path: `${ORG}/settings/website/qa`, levels: [...website, `${menu}/website/qa`] },
+      'settings/website/brand': { path: `${ORG}/settings/website/brand`, levels: [...website, `${menu}/website/brand`] },
+      'settings/website/pages/links': { path: `${ORG}/settings/website/pages/links`, levels: [...website, `${menu}/website/pages`, `${menu}/website/pages/links`] },
+      'settings/posts': { path: `${ORG}/settings/posts`, levels: [menu, `${menu}/posts`] },
+      'settings/locations': { path: `${ORG}/settings/locations`, levels: [menu, `${menu}/locations`] },
+      'products': { path: `${ORG}/products`, levels: ['/dashboard/:orgSlug()/products'] },
     })
   })
 
   test('a record list renders beside its parent and selects nothing', async ({ page }) => {
     await page.setViewportSize(WIDE)
     for (const [path, parent, pane] of [
-      ['pages', 'organization-website', 'organization-pages'],
-      ['blog', 'organization-website', 'organization-blog'],
-      ['posts', 'organization-settings', 'organization-posts'],
-      ['locations', 'organization-settings', 'locations'],
+      ['settings/website/pages', 'organization-website', 'organization-pages'],
+      ['settings/website/blog', 'organization-website', 'organization-blog'],
+      ['settings/posts', 'organization-settings', 'organization-posts'],
+      ['settings/locations', 'organization-settings', 'locations'],
       ['settings/members', 'organization-settings', 'organization-members'],
     ] as const) {
       await open(page, `${ORG}/${path}`)
@@ -88,7 +90,7 @@ test.describe('dashboard pane hierarchy', () => {
   test('Website opens Pages, and Catalog is a root that selects nothing', async ({ page }) => {
     await page.setViewportSize(WIDE)
     await open(page, `${ORG}/settings/website`)
-    await expect(page).toHaveURL(`${ORG}/pages`)
+    await expect(page).toHaveURL(`${ORG}/settings/website/pages`)
     await expectPanes(page, ['organization-website', 'organization-pages'])
     await open(page, `${ORG}/products`)
     await expectPanes(page, ['catalog'])
@@ -97,17 +99,17 @@ test.describe('dashboard pane hierarchy', () => {
 
   test('the deepest two levels of the page editor own the frame', async ({ page }) => {
     await page.setViewportSize(WIDE)
-    await open(page, `${ORG}/pages`)
+    await open(page, `${ORG}/settings/website/pages`)
     await expectPanes(page, ['organization-website', 'organization-pages'])
 
     // A page's editor opens its first section, so the frame re-roots onto the page.
     await page.locator('#dashboard-panel-organization-pages').getByRole('link', { name: /^Home/ }).click()
-    await expect(page).toHaveURL(new RegExp(`${ORG}/pages/[^/]+/sections$`))
+    await expect(page).toHaveURL(new RegExp(`${ORG}/settings/website/pages/[^/]+/sections$`))
     await expectPanes(page, ['organization-page', 'organization-page-sections'])
 
     // A section opens its first field: the section and that field own the frame.
     await page.locator('#dashboard-panel-organization-page-sections a[href*="/sections/"]').first().click()
-    await expect(page).toHaveURL(new RegExp(`${ORG}/pages/[^/]+/sections/[^/]+/[^/]+$`))
+    await expect(page).toHaveURL(new RegExp(`${ORG}/settings/website/pages/[^/]+/sections/[^/]+/[^/]+$`))
     await expectPanes(page, ['organization-page-block', 'organization-page-block-section'])
   })
 
@@ -338,11 +340,11 @@ test.describe('dashboard pane hierarchy', () => {
     }
 
     // A leaf is a sheet whose Close goes to the level that contains it.
-    await open(page, `${ORG}/links/title`)
+    await open(page, `${ORG}/settings/website/pages/links/title`)
     await expectPanes(page, ['organization-links-title'])
-    await expect(page.getByTestId('dashboard-navbar-close')).toHaveAttribute('href', `${ORG}/links`)
+    await expect(page.getByTestId('dashboard-navbar-close')).toHaveAttribute('href', `${ORG}/settings/website/pages/links`)
     await page.getByTestId('dashboard-navbar-close').click()
-    await expect(page).toHaveURL(`${ORG}/links`)
+    await expect(page).toHaveURL(`${ORG}/settings/website/pages/links`)
     await expectPanes(page, ['organization-links'])
   })
 
@@ -405,38 +407,79 @@ test.describe('dashboard pane hierarchy', () => {
     }
   })
 
-  // The row is impersonation tooling, so Better Auth's admin role decides it;
-  // the organization and its template never do.
-  test('Platform accounts follows the Better Auth admin role, on any organization', async ({ page, baseURL, playwright }) => {
+  // Krabiclaw runs on Krabiclaw: the row and its page exist only inside
+  // Krabiclaw's own organization, and only for a Better Auth admin.
+  test('Platform accounts opens only inside Krabiclaw, and only for a Better Auth admin', async ({ page, baseURL, playwright }) => {
     const services = '/dashboard/north-carolina-legal-services'
+    const krabiclaw = '/dashboard/platform'
     const menu = page.locator('#dashboard-panel-organization-settings')
     const admin = await playwright.request.newContext({ baseURL })
     const setRole = async (role: 'admin' | 'user') => {
       const response = await admin.post('/api/auth/admin/set-role', { headers: authRequestHeaders(baseURL!), data: { userId: 'user-e2e-ncls-owner', role } })
       expect(response.status(), await response.text()).toBe(200)
     }
+    const expectNoPlatformAccounts = async () => {
+      await open(page, `${services}/settings`)
+      await expect(menu.getByRole('link', { name: 'Team', exact: true })).toBeVisible()
+      await expect(menu.getByRole('link', { name: 'Platform accounts', exact: true })).toHaveCount(0)
+      await page.goto(`${services}/settings/people`)
+      await expect(page.getByRole('heading', { name: 'Page not found', exact: true })).toBeVisible()
+    }
     let elevated = false
     try {
       await page.setViewportSize(WIDE)
       await page.context().clearCookies()
       await loginAs(page.request, baseURL!, 'user-e2e-ncls-owner')
-      await open(page, `${services}/settings`)
-      await expect(menu.getByRole('link', { name: 'Team', exact: true })).toBeVisible()
-      await expect(menu.getByRole('link', { name: 'Platform accounts', exact: true })).toHaveCount(0)
+      await expectNoPlatformAccounts()
       // The screen's own reads stay Better Auth's to refuse.
       expect((await page.request.get('/api/auth/admin/list-users')).status()).toBe(403)
 
+      // A Better Auth admin in a customer's organization still has no such row or page.
       await loginAs(admin, baseURL!, 'user-e2e-platform-admin')
       await setRole('admin')
       elevated = true
       await page.context().clearCookies()
       await loginAs(page.request, baseURL!, 'user-e2e-ncls-owner')
-      await open(page, `${services}/settings`)
-      await expect(menu.getByRole('link', { name: 'Platform accounts', exact: true })).toHaveAttribute('href', `${services}/settings/people`)
+      await expectNoPlatformAccounts()
+
+      // Krabiclaw's own organization, opened by its owner, who is a Better Auth admin.
+      await page.context().clearCookies()
+      await loginAs(page.request, baseURL!)
+      const signedIn = await (await page.request.get('/api/auth/get-session')).json() as { user: { role?: string | null } }
+      expect(signedIn.user.role, 'the canary account is a Better Auth admin').toBe('admin')
+      await open(page, `${krabiclaw}/settings`)
+      await expect(menu.getByRole('link', { name: 'Platform accounts', exact: true })).toHaveAttribute('href', `${krabiclaw}/settings/people`)
     } finally {
       if (elevated) await setRole('user')
       await admin.dispose()
     }
+  })
+
+  // Account settings carries no organization in its URL. Better Auth's active
+  // organization keeps the shell in it, and a member's own availability —
+  // where Google Calendar connects — is that organization's page.
+  test('Account settings opened inside an organization stays in that organization', async ({ page, baseURL }) => {
+    const services = '/dashboard/north-carolina-legal-services'
+    const availability = '/dashboard/account/profile/calendar/org-ncls-blawby'
+    await page.context().clearCookies()
+    await loginAs(page.request, baseURL!, 'user-e2e-ncls-owner')
+    const activated = await page.request.post('/api/auth/organization/set-active', { headers: authRequestHeaders(baseURL!), data: { organizationId: 'org-ncls-blawby' } })
+    expect(activated.status(), await activated.text()).toBe(200)
+    await page.setViewportSize({ width: 390, height: 844 })
+
+    await open(page, '/dashboard/account/profile')
+    const mobileNav = page.getByTestId('dashboard-mobile-nav')
+    await expect(mobileNav.getByRole('link')).toHaveText(['Today', 'Calendar', 'Catalog', 'Messages', 'Menu'])
+    await expect(mobileNav.getByRole('link', { name: 'Catalog', exact: true })).toHaveAttribute('href', `${services}/products`)
+    await expect(page.getByTestId('dashboard-mobile-nav-menu-link')).toHaveAttribute('href', `${services}/settings`)
+    await page.getByRole('link', { name: /^Your availability/ }).click()
+    await expect(page).toHaveURL(availability)
+    await expect(page.getByRole('link', { name: /^Google Calendar/ })).toBeVisible()
+
+    // On the team, your own row opens the same page; the admin view is for everyone else.
+    await open(page, `${services}/settings/members`)
+    const ownRow = page.getByRole('listitem').filter({ hasText: 'ncls-owner@playwright.example' })
+    await expect(ownRow.getByRole('link', { name: 'Profile, hours & Calendar', exact: true })).toHaveAttribute('href', availability)
   })
 
   // Choosing, opening and deleting an organization are the account's; the
@@ -455,23 +498,23 @@ test.describe('dashboard pane hierarchy', () => {
     const { organizationId } = await draft.json() as { organizationId: string }
     const listed = async () => (await (await page.request.get('/api/auth/organization/list')).json() as Array<{ id: string }>).map(organization => organization.id)
     try {
+      // Deleting is the list's edit state, on the rows Better Auth lets this account delete.
       await open(page, '/dashboard/account/profile/organizations')
-      await page.getByRole('link', { name: new RegExp(`^${name}`) }).click()
-      await expect(page).toHaveURL(new RegExp(`/dashboard/account/profile/organizations/${organizationId}$`))
-      await expect(page.getByRole('link', { name: 'Open organization', exact: true }).or(page.getByRole('button', { name: 'Open organization', exact: true }))).toBeVisible()
-      await page.getByRole('link', { name: /^Delete organization/ }).click()
+      await page.getByTestId('list-editor-toggle').click()
+      await page.getByRole('button', { name: `Remove ${name}`, exact: true }).click()
       await expect(page).toHaveURL(new RegExp(`/dashboard/account/profile/organizations/${organizationId}/delete$`))
       const confirm = page.getByRole('button', { name: 'Delete permanently', exact: true })
       await expect(confirm).toBeDisabled()
       await page.getByPlaceholder('DELETE').fill('DELETE')
       await confirm.click()
       await expect(page).toHaveURL(/\/dashboard\/account\/profile\/organizations$/)
-      await expect(page.getByRole('link', { name: new RegExp(`^${name}`) })).toHaveCount(0)
+      await expect(page.getByTestId(`account-organization-${organizationId}`)).toHaveCount(0)
       expect(await listed()).not.toContain(organizationId)
 
-      // An organization this account is not in is not a page.
-      await page.goto(`/dashboard/account/profile/organizations/${organizationId}`)
-      await expect(page.getByRole('heading', { name: 'Page not found', exact: true })).toBeVisible()
+      // An organization this account is not in cannot be deleted from here: Better Auth says why.
+      await page.goto(`/dashboard/account/profile/organizations/${organizationId}/delete`)
+      await expect(page.getByText('User is not a member of the organization', { exact: true })).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Delete permanently', exact: true })).toBeDisabled()
     } finally {
       if ((await listed()).includes(organizationId)) {
         const removed = await page.request.post('/api/auth/organization/delete', { headers: authRequestHeaders(baseURL!), data: { organizationId } })

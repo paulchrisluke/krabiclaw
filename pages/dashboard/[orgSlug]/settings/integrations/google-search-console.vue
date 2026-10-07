@@ -3,7 +3,6 @@
     id="integration-google-search-console"
     icon="i-logos-google-search-console"
     title="Google Search Console"
-    :ready="integrations.summary.value !== undefined"
     :saving="saving"
     :disabled="!accountId || !selected"
     :error="error || data?.error || integrations.failure.value || loadFailure"
@@ -17,14 +16,11 @@
       :disconnecting="disconnecting"
       @disconnect="disconnect"
     >
-      <template v-if="!pending">
-        <UButton v-if="!accountId || loadFailure || data?.error || !options.length" icon="i-simple-icons-google" size="xl" block :loading="linking" @click="connect({ access_type: 'offline', prompt: 'consent select_account' })">Connect Google Search Console</UButton>
+      <UButton v-if="!accountId || loadFailure || data?.error || !options.length" icon="i-simple-icons-google" size="xl" block :loading="linking" @click="connect({ access_type: 'offline', prompt: 'consent select_account' })">Connect Google Search Console</UButton>
 
-        <UFormField v-if="data?.account_id" label="Property" :error="data.error ?? undefined">
-          <USelectMenu v-model="selected" :items="options" value-key="value" placeholder="Choose a property" class="w-full" />
-        </UFormField>
-      </template>
-      <USkeleton v-else-if="pending" class="h-14 rounded-xl" />
+      <UFormField v-if="data?.account_id" label="Property" :error="data.error ?? undefined">
+        <USelectMenu v-model="selected" :items="options" value-key="value" placeholder="Choose a property" class="w-full" />
+      </UFormField>
     </IntegrationConnection>
   </DashboardLeafPanel>
 </template>
@@ -56,10 +52,10 @@ const isLeaf = (value: unknown): value is SearchConsoleLeaf =>
   && (value.siteUrl === null || typeof value.siteUrl === 'string')
 const isSuccess = (value: unknown): value is { success: true } => isRecord(value) && value.success === true
 
-const { data, pending, refresh, error: loadError } = await useAsyncData(
+const { data, refresh, error: loadError } = await useAsyncData(
   () => `integration-google-search-console:${integrations.organizationId}:${accountId.value ?? ''}`,
   () => dashboardApi(`${api}/sites`, { query: !searchConsole.value && accountId.value ? { account_id: accountId.value } : {}, validate: isLeaf }),
-  { lazy: true, watch: [accountId] },
+  { watch: [accountId] },
 )
 const selected = ref<string | undefined>()
 

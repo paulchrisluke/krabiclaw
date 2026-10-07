@@ -31,7 +31,7 @@ export interface Payment {
   created_at: string
   updated_at: string
 }
-export type FinancialAction = 'read' | 'create' | 'refund' | 'disputes' | 'payouts' | 'integration'
+export type FinancialAction = 'read' | 'refund' | 'disputes' | 'payouts' | 'integration'
 export interface FinancialPrincipal { organizationId: string; userId: string; role: string }
 export async function authorizePayments(principal: FinancialPrincipal, action: FinancialAction): Promise<void> {
   await assertRoleAllows({ organizationId: principal.organizationId, role: principal.role, permissions: { payments: [action] } })

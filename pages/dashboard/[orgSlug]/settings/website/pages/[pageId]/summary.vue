@@ -2,14 +2,13 @@
   <DashboardLeafPanel
     id="organization-page-summary"
     title="Summary"
-    :ready="editor.ready.value"
     :saving="editor.saving.value"
     :disabled="editor.saveDisabled.value"
-    :error="editor.errorMessage.value"
+    :error="editor.loadError.value ?? editor.errorMessage.value"
     @cancel="editor.revert"
     @save="editor.save"
   >
-    <UFormField label="Summary">
+    <UFormField v-if="!editor.loadError.value" label="Summary">
       <UTextarea v-model="editor.draft.value.summary" :rows="5" autoresize autofocus class="w-full" />
     </UFormField>
   </DashboardLeafPanel>

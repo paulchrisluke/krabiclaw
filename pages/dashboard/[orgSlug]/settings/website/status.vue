@@ -2,7 +2,6 @@
   <DashboardLeafPanel
     id="organization-status"
     title="Status"
-    :ready="!editor.loading.value"
     :saving="editor.saving.value"
     :disabled="editor.saveDisabled.value || suspended"
     :error="editor.editorError.value ?? ''"

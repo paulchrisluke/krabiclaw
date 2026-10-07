@@ -3,7 +3,6 @@
   <!-- A level of Earnings: the approval sheet opens as its leaf. -->
   <DashboardIndexPanel id="earnings-refunds" title="Refunds and disputes">
     <UAlert v-if="error" color="error" :description="error.message" />
-    <USkeleton v-else-if="pending" class="h-32" />
     <template v-else-if="refunds && disputes">
       <section>
         <h2 class="text-base font-semibold text-highlighted">Refunds</h2>
@@ -32,10 +31,10 @@ const route = useRoute()
 const api = useDashboardApi()
 const isRows = (value: unknown): value is Rows => isRecord(value) && Array.isArray(value.rows) && value.rows.every(row => isRecord(row) && typeof row.id === 'string' && typeof row.payment_id === 'string' && Number.isSafeInteger(row.amount) && isCurrencyCode(row.currency) && typeof row.status === 'string')
 const load = (view: 'refunds' | 'disputes') => api<Rows>('/api/dashboard/payments', { query: { view }, validate: isRows })
-const { data, pending, error } = await useAsyncData(() => `earnings-refunds:${route.params.orgSlug}`, async () => {
+const { data, error } = await useAsyncData(() => `earnings-refunds:${route.params.orgSlug}`, async () => {
   const [refunds, disputes] = await Promise.all([load('refunds'), load('disputes')])
   return { refunds, disputes }
-}, { lazy: true })
+})
 const refunds = computed(() => data.value?.refunds)
 const disputes = computed(() => data.value?.disputes)
 const REFUND: Record<string, string> = { succeeded: 'Refunded', pending: 'On its way', queued: 'Requested', creating: 'Requested', requires_action: 'Needs attention', failed: 'Failed', canceled: 'Cancelled' }

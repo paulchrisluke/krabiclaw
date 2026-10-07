@@ -4,7 +4,7 @@
     pane it opens on Personal information, the way the reference does.
   -->
   <DashboardIndexPanel id="account-profile" title="Account settings" :auto-open="`${level.path.value}/personal`">
-    <EditorNavigationList :groups="groups" :active-item="level.child.value" @act="runRowAction" />
+    <EditorNavigationList :groups="groups" :active-item="openRow" @act="runRowAction" />
   </DashboardIndexPanel>
 
   <!-- OTP Verification Modal -->
@@ -83,7 +83,7 @@ export interface AccountEditor {
   phoneTouched: Ref<boolean>
   requestPhoneVerify: () => Promise<void>
   // login & security
-  googleStatus: Ref<'loading' | 'connected' | 'not-connected' | 'error'>
+  googleStatus: ComputedRef<'connected' | 'not-connected' | 'error'>
   sessions: Ref<Array<{ token: string; current: boolean; userAgent?: string | null; ipAddress?: string | null; updatedAt: string | Date }>>
   sessionsError: Ref<string | null>
   revoking: Ref<string | null>
@@ -118,7 +118,7 @@ const level = useRouteLevel()
 // The organizations this account belongs to, read off the layout's one list of them.
 const scopeHeaderModel = inject(dashboardScopeHeaderModelKey, null)
 const organizationsSummary = computed(() => {
-  const count = (scopeHeaderModel?.value.peers ?? []).filter(peer => peer.label !== 'Personal').length
+  const count = (scopeHeaderModel?.value.peers ?? []).filter(peer => peer.id).length
   return count === 0 ? 'New organization' : count === 1 ? '1 organization' : `${count} organizations`
 })
 const profilePath = level.path
@@ -126,7 +126,7 @@ const session = authClient.useSession()
 const sessionData = computed(() => session.value.data)
 const refreshSession = () => session.value.refetch()
 
-const { logOut } = useDashboardMenu()
+const { logOut, organization } = useDashboardMenu()
 const { formatExactDateTime } = useHumanTime()
 
 // Whether this account can sign in with Google. It is shown in the Sign in
@@ -134,19 +134,14 @@ const { formatExactDateTime } = useHumanTime()
 // never a setting of its own, since nothing here links or unlinks a provider.
 // An error stays distinct from "not connected": defaulting a failed lookup to
 // false would misreport a real Google-linked account as unlinked.
-const googleStatus = ref<'loading' | 'connected' | 'not-connected' | 'error'>('loading')
-onMounted(async () => {
-  try {
-    const { data, error } = await authClient.listAccounts()
-    if (error) {
-      googleStatus.value = 'error'
-      return
-    }
-    googleStatus.value = data?.some((account: { providerId: string }) => account.providerId === 'google') ? 'connected' : 'not-connected'
-  } catch {
-    googleStatus.value = 'error'
-  }
+const { data: linkedAccounts, error: linkedAccountsError } = await useAsyncData('account-linked-accounts', async () => {
+  const { data, error } = await authClient.listAccounts()
+  if (error) throw createError({ statusCode: error.status, statusMessage: error.message || 'Linked accounts could not be loaded' })
+  return data
 })
+const googleStatus = computed(() => linkedAccountsError.value
+  ? 'error'
+  : linkedAccounts.value?.some((account: { providerId: string }) => account.providerId === 'google') ? 'connected' : 'not-connected')
 
 // Device history: the sessions Better Auth holds for this user. The current
 // one is the token in hand; every other row can be logged out from here.
@@ -275,7 +270,8 @@ const groups = computed<EditorNavigationGroup[]>(() => [
       { id: 'personal', label: 'Personal information', summary: [sessionData.value?.user?.name, sessionData.value?.user?.phoneNumber].filter(Boolean).join(' · ') || 'Name, photo, WhatsApp number', to: `${profilePath.value}/personal` },
       { id: 'login', label: 'Login & security', summary: sessionData.value?.user?.email ?? '', to: `${profilePath.value}/login` },
       { id: 'notifications', label: 'Notifications', summary: notificationSummary.value, to: `${profilePath.value}/notifications` },
-      { id: 'calendar', label: 'Your availability', summary: 'Hours, time off and Google Calendar', to: `${profilePath.value}/calendar` },
+      // Inside an organization, availability is that organization's; Personal names one first.
+      { id: 'calendar', label: 'Your availability', summary: 'Hours, time off and Google Calendar', to: organization.value ? `${profilePath.value}/calendar/${encodeURIComponent(organization.value.id)}` : `${profilePath.value}/calendar` },
       { id: 'appearance', label: 'Appearance', summary: `${themePreference.value.charAt(0).toUpperCase()}${themePreference.value.slice(1)} theme`, to: `${profilePath.value}/appearance` },
       { id: 'payments', label: 'Payments', summary: 'Your payments and refunds', to: `${profilePath.value}/payments` },
       { id: 'organizations', label: 'Organizations', summary: organizationsSummary.value, to: `${profilePath.value}/organizations` },
@@ -283,6 +279,11 @@ const groups = computed<EditorNavigationGroup[]>(() => [
     ],
   },
 ])
+
+// The row whose screen is open. Your availability opens an organization's
+// screen below its own URL, so the open row is the one the path sits under.
+const route = useRoute()
+const openRow = computed(() => groups.value[0]!.items.find(item => item.to && (route.path === item.to || route.path.startsWith(`${item.to}/`)))?.id ?? null)
 
 function runRowAction(id: string) {
   if (id === 'log-out') void logOut()

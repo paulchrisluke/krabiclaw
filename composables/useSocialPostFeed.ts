@@ -45,26 +45,20 @@ export async function useSocialPostFeed(scope: () => { locationId?: string | nul
   )
   if (error.value) throw error.value
 
-  const extra = ref<PublicSocialPost[]>([])
-  const cursor = ref<string | null>(null)
-  const hasMore = ref(false)
   const loading = ref(false)
   const failed = ref<string | null>(null)
-  watch(first, (feed) => {
-    extra.value = []
-    cursor.value = feed?.page_info.next_cursor ?? null
-    hasMore.value = feed?.page_info.has_more ?? false
-  }, { immediate: true })
-  const posts = computed(() => [...(first.value?.posts ?? []), ...extra.value])
+  const posts = computed(() => first.value?.posts ?? [])
+  const hasMore = computed(() => first.value?.page_info.has_more ?? false)
   async function loadMore() {
-    if (!cursor.value || loading.value) return
+    const base = first.value
+    if (!base?.page_info.next_cursor || loading.value) return
     loading.value = true
     failed.value = null
     try {
-      const page = await publicApiRequest<{ success: true } & Feed>('/api/public/posts', { query: request(cursor.value), validate: isFeedResponse })
-      extra.value = [...extra.value, ...page.posts]
-      cursor.value = page.page_info.next_cursor
-      hasMore.value = page.page_info.has_more
+      const page = await publicApiRequest<{ success: true } & Feed>('/api/public/posts', { query: request(base.page_info.next_cursor), validate: isFeedResponse })
+      // A page read for the feed that was showing is dropped if the scope or locale changed meanwhile.
+      if (first.value !== base) return
+      first.value = { posts: [...base.posts, ...page.posts], page_info: page.page_info }
     } catch (cause) {
       failed.value = cause instanceof Error ? cause.message : String(cause)
     } finally {

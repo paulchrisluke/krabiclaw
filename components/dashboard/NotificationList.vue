@@ -23,17 +23,13 @@
         class="mb-4"
       >
         <template #actions>
-          <UButton color="warning" variant="soft" size="xs" :loading="loading" @click="retryNotifications">
+          <UButton color="warning" variant="soft" size="xs" :loading="status === 'pending'" @click="retryNotifications">
             Refresh
           </UButton>
         </template>
       </UAlert>
       <UAlert v-if="actionError" color="error" :description="actionError" class="mb-4" />
-      <div v-if="loading && notifications.length === 0" class="space-y-3">
-        <USkeleton v-for="index in 4" :key="index" class="h-16 rounded-lg" />
-      </div>
-
-      <div v-else-if="!loadError && !realtimeFailed && notifications.length === 0" class="py-16 text-center">
+      <div v-if="!loadError && !realtimeFailed && notifications.length === 0" class="py-16 text-center">
         <UIcon name="i-lucide-bell-off" class="mx-auto mb-3 size-7 text-muted" />
         <p class="text-sm text-muted">No updates yet.</p>
       </div>
@@ -111,14 +107,19 @@ const isNotificationResponse = (value: unknown): value is NotificationResponse =
   )
   && Number.isSafeInteger(value.unread_count) && Number(value.unread_count) >= 0
 
-const notifications = ref<DashboardNotification[]>([])
-const unreadCount = ref(0)
-const loading = ref(false)
+// Keyed by scope, so switching organization or to the personal inbox reads that list.
+const { data, error: loadError, status, refresh: refreshNotifications } = await useAsyncData(
+  () => `dashboard-notifications:${props.personalScope ? 'personal' : dashboardScope.value?.orgSlug ?? ''}`,
+  () => notificationApi.value<NotificationResponse>('/api/dashboard/notifications', {
+    query: { limit: 50, ...notificationQuery.value },
+    validate: isNotificationResponse,
+  }),
+)
+const notifications = computed(() => data.value?.notifications ?? [])
+const unreadCount = computed(() => data.value?.unread_count ?? 0)
 const markingAll = ref(false)
-const loadError = shallowRef<unknown>(null)
 const actionError = ref<string | null>(null)
 const realtimeFailed = computed(() => !props.personalScope && realtime.status.value === 'failed')
-let latestRequestId = 0
 
 /** The mark for what happened: a message, a booking, a review, a person. */
 function iconFor(template: string) {
@@ -137,25 +138,6 @@ function notificationDestination(value: string | null): string | null {
   if (resolved.origin === window.location.origin && (resolved.pathname === '/dashboard' || resolved.pathname.startsWith('/dashboard/'))) return `${resolved.pathname}${resolved.search}${resolved.hash}`
   if (resolved.protocol === 'https:' && (resolved.hostname === 'stripe.com' || resolved.hostname.endsWith('.stripe.com'))) return resolved.href
   throw new Error('This update has an invalid link.')
-}
-
-async function refreshNotifications() {
-  const requestId = ++latestRequestId
-  loading.value = true
-  try {
-    const response = await notificationApi.value<NotificationResponse>('/api/dashboard/notifications', {
-      query: { limit: 50, ...notificationQuery.value },
-      validate: isNotificationResponse,
-    })
-    if (requestId !== latestRequestId) return
-    notifications.value = response.notifications
-    unreadCount.value = response.unread_count
-    loadError.value = null
-  } catch (error) {
-    if (requestId === latestRequestId) loadError.value = error
-  } finally {
-    if (requestId === latestRequestId) loading.value = false
-  }
 }
 
 function retryNotifications() {
@@ -215,11 +197,6 @@ watch(realtime.connectionEpoch, (epoch) => {
 })
 
 watch(() => [props.personalScope, dashboardScope.value?.orgSlug], () => {
-  notifications.value = []
-  unreadCount.value = 0
   actionError.value = null
-  void refreshNotifications()
 })
-
-onMounted(() => void refreshNotifications())
 </script>

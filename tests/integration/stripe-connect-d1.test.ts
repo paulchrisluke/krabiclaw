@@ -6,11 +6,13 @@ import * as schema from '../../server/db/schema.ts'
 import {
   buildStripeConnectOnboardingUrls,
   deriveStripeConnectStatus,
+  ensureStripeConnectedAccount,
   getStripeConnectedAccount,
   projectStripeConnectedAccount,
   reserveStripeConnectedAccount,
 } from '../../server/utils/stripe-connect.ts'
 import { processStripeWebhookEvent } from '../../server/utils/stripe-webhook-events.ts'
+import type Stripe from 'stripe'
 
 async function withD1(run: (db: D1Database) => Promise<void>) {
   const runtime = new Miniflare({ workers: [{ config: {
@@ -33,22 +35,39 @@ async function withD1(run: (db: D1Database) => Promise<void>) {
 test('connected account reservation is organization-scoped and retry-stable', async () => {
   await withD1(async (db) => {
     const [first, second] = await Promise.all([
-      reserveStripeConnectedAccount(db, { organizationId: 'org', country: 'US', livemode: false }),
-      reserveStripeConnectedAccount(db, { organizationId: 'org', country: 'US', livemode: false }),
+      reserveStripeConnectedAccount(db, { organizationId: 'org', livemode: false }),
+      reserveStripeConnectedAccount(db, { organizationId: 'org', livemode: false }),
     ])
     assert.equal(first.id, second.id)
     assert.equal(first.status, 'creating')
     assert.equal(await db.prepare("SELECT count(*) FROM stripe_connected_accounts WHERE organization_id='org'").first('count(*)'), 1)
+    // The owner chooses the country in Stripe's onboarding, so a reservation has none.
+    assert.equal(await db.prepare("SELECT country FROM stripe_connected_accounts WHERE organization_id='org'").first('country'), null)
     await assert.rejects(
-      reserveStripeConnectedAccount(db, { organizationId: 'org', country: 'GB', livemode: false }),
-      /country cannot be changed/i,
+      reserveStripeConnectedAccount(db, { organizationId: 'org', livemode: true }),
+      /different Stripe mode/i,
     )
+  })
+})
+
+test('a new connected account leaves its country and capabilities to Stripe-hosted onboarding', async () => {
+  await withD1(async (db) => {
+    const created: Stripe.V2.Core.AccountCreateParams[] = []
+    const account = { id: 'acct_new', livemode: false, dashboard: 'express', identity: { country: null }, configuration: { merchant: {} }, defaults: { responsibilities: { fees_collector: 'application', losses_collector: 'stripe' } }, requirements: { entries: [] } }
+    const stripe = { v2: { core: { accounts: { create: async (params: Stripe.V2.Core.AccountCreateParams) => { created.push(params); return account } } } } } as unknown as Stripe
+    const connected = await ensureStripeConnectedAccount(db, stripe, { organizationId: 'org', organizationName: 'Org', contactEmail: 'owner@example.com', livemode: false })
+    assert.equal(created.length, 1)
+    assert.equal(created[0]!.identity, undefined)
+    assert.deepEqual(created[0]!.configuration, { merchant: {} })
+    assert.equal(connected.stripeAccountId, 'acct_new')
+    assert.equal(connected.country, null)
+    assert.equal(connected.status, 'pending_review')
   })
 })
 
 test('Stripe account projection preserves provider identity and derives onboarding state', async () => {
   await withD1(async (db) => {
-    const reserved = await reserveStripeConnectedAccount(db, { organizationId: 'org', country: 'US', livemode: false })
+    const reserved = await reserveStripeConnectedAccount(db, { organizationId: 'org', livemode: false })
     const actionRequired = deriveStripeConnectStatus({
       cardPaymentsStatus: 'pending',
       requirements: [{ awaitingActionFrom: 'user', deadlineStatus: 'currently_due' }],
@@ -72,6 +91,8 @@ test('Stripe account projection preserves provider identity and derives onboardi
     assert.equal(connected.status, 'ready')
     assert.equal(connected.cardPaymentsStatus, 'active')
     assert.deepEqual(connected.requirements, [])
+    // The country is the one Stripe reported for the account.
+    assert.equal(await db.prepare("SELECT country FROM stripe_connected_accounts WHERE stripe_account_id='acct_test'").first('country'), 'US')
   })
 })
 
@@ -122,5 +143,3 @@ test('Connect webhook work is claimed once across concurrent D1 deliveries', asy
     assert.equal(executions, 1)
   })
 })
-
-// Never advertise a country the Accounts v2 onboarding boundary cannot accept.

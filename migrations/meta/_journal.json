@@ -15,6 +15,13 @@
       "when": 1791298059212,
       "tag": "0001_ncls_service_products",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1791338557373,
+      "tag": "0002_stripe_connect_country_from_stripe",
+      "breakpoints": true
     }
   ]
 }

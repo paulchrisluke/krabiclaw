@@ -4,7 +4,6 @@
     id="calendar-settings-seats"
     title="Seats per time slot"
     lead="How many guests can start at the same time?"
-    :ready="!editor.loading.value"
     :saving="editor.saving.value"
     :disabled="editor.saveDisabled.value"
     :error="editor.editorError.value ?? ''"

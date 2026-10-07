@@ -1,16 +1,15 @@
 <template>
   <DashboardLeafPanel
     id="product-name"
-    :ready="p.ready.value"
     :title="p.sectionLabels['name']"
     :saving="p.saving.value"
     :disabled="p.saveDisabled.value"
     :save-label="p.saveLabel.value"
-    :error="p.saveError.value || p.photoError.value || ''"
+    :error="p.loadError.value || p.saveError.value || p.photoError.value || ''"
     @cancel="p.revert"
     @save="p.save"
   >
-    <UFormField label="Name" required>
+    <UFormField v-if="p.isNew.value || p.product.value" label="Name" required>
       <UInput v-model="p.form.name" autofocus class="w-full" />
     </UFormField>
   </DashboardLeafPanel>

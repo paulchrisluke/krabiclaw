@@ -25,12 +25,8 @@
             @click="applyPreset(days)">{{ days }}d</button>
         </div>
       </div>
-      <div v-if="loading" class="space-y-4" role="status" aria-label="Loading insights">
-        <USkeleton class="h-28 w-full rounded-2xl" />
-        <USkeleton class="h-80 w-full rounded-2xl" />
-      </div>
 
-      <div v-if="tab === 'views' && analytics && !loading && !loadError" class="space-y-8">
+      <div v-if="tab === 'views' && analytics && !loadError" class="space-y-8">
 
         <section class="border-b border-default pb-8 last:border-b-0">
           <div class="grid grid-cols-2 gap-x-6 gap-y-6">
@@ -99,17 +95,16 @@
             <header class="mb-4"><h2 class="font-semibold text-highlighted">Pageviews by language</h2></header>
             <div class="space-y-4">
               <DashboardAnalyticsRow
-                v-for="row in nativeLanguages.rows"
+                v-for="row in languageRows"
                 :key="row.language ?? 'unknown'"
                 :label="row.language ?? 'Language not recorded'"
                 :value="`${formatCount(row.pageViews)} pageviews · ${formatCount(row.sessions)} sessions`"
-                :percent="nativeLanguages.totalPageViews ? Math.round(row.pageViews / nativeLanguages.totalPageViews * 100) : 0"
+                :percent="languages?.totalPageViews ? Math.round(row.pageViews / languages.totalPageViews * 100) : 0"
               />
-              <p v-if="!nativeLanguages.loading && !nativeLanguages.rows.length && !nativeLanguages.error" class="text-sm text-muted">No pageviews recorded in this range.</p>
-              <p v-if="nativeLanguages.loading" class="text-sm text-muted">Loading languages…</p>
-              <p v-if="nativeLanguages.error" class="text-sm text-error">{{ nativeLanguages.error }}</p>
-              <p v-if="nativeLanguages.rows.length" class="text-xs text-muted">{{ formatCount(nativeLanguages.totalSessions) }} distinct sessions across all languages (not the sum of the rows).</p>
-              <UButton v-if="nativeLanguages.cursor" size="sm" variant="soft" :loading="nativeLanguages.loading" @click="loadLanguages(true)">Show more</UButton>
+              <p v-if="languagesError" class="text-sm text-error">{{ getErrorMessage(languagesError, 'Could not load pageviews by language') }}</p>
+              <p v-else-if="!languageRows.length" class="text-sm text-muted">No pageviews recorded in this range.</p>
+              <p v-if="languageRows.length && languages" class="text-xs text-muted">{{ formatCount(languages.totalSessions) }} distinct sessions across all languages (not the sum of the rows).</p>
+              <UButton v-if="languages?.cursor" size="sm" variant="soft" :loading="languagesPending" @click="languagesAfter = { period: languagePeriod, cursor: languages.cursor }">Show more</UButton>
             </div>
           </section>
           <section v-if="analytics.values.length || analytics.bookingValue.length" class="border-b border-default pb-8 last:border-b-0">
@@ -261,7 +256,7 @@
 
       </div>
 
-      <div v-else-if="tab === 'reviews' && reviews && !loading && !loadError" class="space-y-6">
+      <div v-else-if="tab === 'reviews' && reviews && !loadError" class="space-y-6">
         <div class="space-y-6">
           <section class="border-b border-default pb-8 last:border-b-0">
             <div class="flex items-baseline gap-2">
@@ -308,7 +303,7 @@
         </div>
       </div>
 
-      <div v-else-if="tab === 'opportunities' && setup && !loading && !loadError" class="space-y-6">
+      <div v-else-if="tab === 'opportunities' && setup && !loadError" class="space-y-6">
         <div class="space-y-6">
           <section v-if="setup" class="border-b border-default pb-8 last:border-b-0">
             <header class="mb-4">
@@ -456,7 +451,6 @@ const { data: insightsResource, pending: loading, error: resourceError, refresh 
       return true
     },
   }),
-  { lazy: true },
 )
 const analytics = computed<AnalyticsReport | null>(() => insightsResource.value?.report ?? null)
 
@@ -491,24 +485,17 @@ const setup = computed(() => insightsResource.value?.setup)
 const loadError = computed(() => resourceError.value?.message ?? null)
 // The same native query MCP exposes (query_organization_analytics), asked for the pageviews of the
 // selected range grouped by language. Every group is reachable: "Show more" follows the cursor.
-const nativeLanguages = reactive({
-  rows: [] as Array<{ language: string | null; pageViews: number; sessions: number }>,
-  totalPageViews: 0, totalSessions: 0, cursor: null as string | null, loading: false,
-  error: null as string | null,
-})
-let latestLanguageRequest = 0
-async function loadLanguages(more: boolean) {
-  const requestId = ++latestLanguageRequest
-  const period = analytics.value?.period
-  if (!more) {
-    nativeLanguages.rows = []
-    nativeLanguages.cursor = null
-    nativeLanguages.error = null
-  }
-  if (!period) return
-  nativeLanguages.loading = true
-  nativeLanguages.error = null
-  try {
+// A page of a range's groups adds to the rows already shown; a new range starts again from its first page.
+const languagePeriod = computed(() => analytics.value ? `${analytics.value.period.startDate}:${analytics.value.period.endDate}` : '')
+const languagesAfter = ref<{ period: string; cursor: string } | null>(null)
+const languageCursor = computed(() => languagesAfter.value?.period === languagePeriod.value ? languagesAfter.value.cursor : null)
+const languageRows = ref<Array<{ language: string | null; pageViews: number; sessions: number }>>([])
+const { data: languages, pending: languagesPending, error: languagesError } = await useAsyncData(
+  () => `dashboard-org-insights-languages:${scope.value?.orgSlug}:${languagePeriod.value}:${languageCursor.value ?? ''}`,
+  async () => {
+    const period = analytics.value?.period
+    if (!period) return null
+    const cursor = languageCursor.value
     const response = await dashboardApi<{
       rows: Array<{ dimensions: { locale: string | null }; metrics: { page_views: number; sessions: number } }>
       next_cursor: string | null
@@ -518,7 +505,7 @@ async function loadLanguages(more: boolean) {
       body: {
         mode: 'breakdown', start_date: period.startDate, end_date: period.endDate, filters: { kind: 'pageview' },
         dimensions: ['locale'], metrics: ['page_views', 'sessions'], limit: 20,
-        ...(more && nativeLanguages.cursor ? { cursor: nativeLanguages.cursor } : {}),
+        ...(cursor ? { cursor } : {}),
       },
       validate: (value): value is never => isRecord(value) && Array.isArray(value.rows)
         && value.rows.every(row => isRecord(row) && isRecord(row.dimensions)
@@ -527,19 +514,11 @@ async function loadLanguages(more: boolean) {
         && (value.next_cursor === null || typeof value.next_cursor === 'string')
         && isRecord(value.totals) && isNumberField(value.totals.page_views, 'value') && isNumberField(value.totals.sessions, 'value'),
     })
-    if (requestId !== latestLanguageRequest) return
     const rows = response.rows.map(row => ({ language: row.dimensions.locale, pageViews: row.metrics.page_views, sessions: row.metrics.sessions }))
-    nativeLanguages.rows = more ? [...nativeLanguages.rows, ...rows] : rows
-    nativeLanguages.cursor = response.next_cursor
-    nativeLanguages.totalPageViews = response.totals.page_views.value
-    nativeLanguages.totalSessions = response.totals.sessions.value
-  } catch (error) {
-    if (requestId === latestLanguageRequest) nativeLanguages.error = error instanceof Error ? error.message : 'Could not load pageviews by language'
-  } finally {
-    if (requestId === latestLanguageRequest) nativeLanguages.loading = false
-  }
-}
-watch(() => analytics.value ? `${scope.value?.orgSlug}:${analytics.value.period.startDate}:${analytics.value.period.endDate}` : null, (key) => { if (key) void loadLanguages(false) }, { immediate: true })
+    languageRows.value = cursor ? [...languageRows.value, ...rows] : rows
+    return { cursor: response.next_cursor, totalPageViews: response.totals.page_views.value, totalSessions: response.totals.sessions.value }
+  },
+)
 
 const dailyData = computed(() => analytics.value?.dailyData || [])
 const trafficSeries = computed(() => [

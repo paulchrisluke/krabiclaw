@@ -99,7 +99,7 @@ export interface ProductForm {
 /** The product's draft and what its leaves show or do beside their one field. */
 export interface ProductEditor {
   form: ProductForm
-  product: Ref<Product | null>
+  product: ComputedRef<Product | null>
   presentation: ComputedRef<{ itemLabel: string }>
   currency: string
   organizationId: string
@@ -110,13 +110,13 @@ export interface ProductEditor {
   organizationLocations: ComputedRef<DashboardLocation[]>
   organizationLocationsError: ComputedRef<string | null>
   /** Every collection the organization has, site-wide and per location. */
-  collections: Ref<Collection[]>
+  collections: ComputedRef<Collection[]>
   /** A URL beneath this record that keeps its scope. */
   sectionPath: (section: string) => string
   definitions: Ref<ProductDetailField[]>
   isNew: ComputedRef<boolean>
-  /** The product this route names has loaded, or it is being created. Until then a leaf has nothing to show or save. */
-  ready: ComputedRef<boolean>
+  /** Why the product this route names could not be read; a leaf shows it and offers nothing to edit. */
+  loadError: ComputedRef<string | null>
   sectionLabels: Record<SectionKey, string>
   saving: Ref<boolean>
   saveError: Ref<string | null>
@@ -133,8 +133,7 @@ export interface ProductEditor {
   listValue: (definition: ProductDetailField) => string[]
   textValue: (definition: ProductDetailField) => string
   weekdays: ReadonlyArray<{ value: number; label: string }>
-  scheduleLoading: Ref<boolean>
-  scheduleError: Ref<string | null>
+  scheduleError: ComputedRef<string | null>
   savedSlotsFor: (weekday: number) => ScheduleSlotDraft[]
   slotsFor: (weekday: number) => ScheduleSlotDraft[]
   addSlot: (weekday: number) => void
@@ -172,7 +171,6 @@ const productId = computed(() => String(route.params.productId ?? ''))
 const locationId = useLocationScope()
 // A product created from a collection joins it; the URL that opened the walk names it.
 const createCollectionId = computed(() => typeof route.query.collection_id === 'string' && route.query.collection_id ? route.query.collection_id : null)
-const product = ref<Product | null>(null)
 const level = useRouteLevel()
 /** The record's own URL. It is the route level's, never rebuilt from params. */
 const itemPath = level.path
@@ -225,12 +223,9 @@ const detailKey = computed(() => level.child.value)
 const editorKey = computed<SectionKey>(() => (detailKey.value ?? 'photo') as SectionKey)
 
 const isNew = computed(() => productId.value === 'new')
-const ready = computed(() => isNew.value || (product.value?.id === productId.value && !loadError.value))
 
 // ── Load ────────────────────────────────────────────────
-const collections = ref<Collection[]>([])
 const definitions = computed(() => form.kind ? productDetailFields(form.kind) : [])
-const loadError = ref<string | null>(null)
 const saveError = ref<string | null>(null)
 const photoError = ref<string | null>(null)
 const saving = ref(false)
@@ -248,45 +243,74 @@ const isOne = (value: unknown): value is { success: true, product: Product } =>
   isRecord(value) && isRecord(value.product)
 
 
-// What the last successful (or in-flight) load was for. locationId resolves
-// after mount on a cold navigation, so onMounted and the watcher below both
-// fire for the same product; this loads it once.
-//
-// `force` is for the writers. A save or a photo change has just made this row
-// different from what was loaded, so the key matching is exactly the wrong
-// answer there: it left `product` stale, and the photo preview and every index
-// summary read `product`, not the form.
-let loadedKey = ''
-
-async function load(options: { force?: boolean } = {}) {
-  if (isNew.value) return
-  const id = locationId.value
-  const key = `${id ?? 'organization'}:${productId.value}`
-  if (key === loadedKey && !options.force) return
-  loadedKey = key
-  loadError.value = null
-  try {
+// The product in this scope, read before the level renders. Keyed by location
+// and product, so a scope change reads that location's prices and settings.
+const { data: loaded, error: loadFailure, refresh } = await useAsyncData(
+  () => `dashboard-product:${organizationId}:${locationId.value ?? 'organization'}:${productId.value}`,
+  async () => {
+    if (isNew.value) return null
+    const id = locationId.value
     const [collectionResponse, productResponse] = await Promise.all([
       // Every collection, site-wide and per location: membership is the
       // product's, wherever the grouping lives.
       dashboardApi(`/api/editor/organizations/${organizationId}/collections`, { validate: isCollectionList }),
       dashboardApi(id ? `/api/editor/organizations/${organizationId}/locations/${encodeURIComponent(id)}/products/${encodeURIComponent(productId.value)}` : `/api/editor/organizations/${organizationId}/products/${encodeURIComponent(productId.value)}`, { validate: isOne }),
     ])
-    collections.value = collectionResponse.collections
-    product.value = productResponse.product
-    loadForm(productResponse.product)
-  } catch (error) {
-    loadedKey = ''
-    if (isNotFoundError(error)) return showError(createError({ statusCode: 404, statusMessage: `${presentation.value.itemLabel} not found` }))
-    loadError.value = getErrorMessage(error, `Failed to load this ${presentation.value.itemLabel.toLowerCase()}`)
-    if (options.force) throw error
-  }
+    return { collections: collectionResponse.collections, product: productResponse.product }
+  },
+)
+const product = computed(() => loaded.value?.product ?? null)
+const collections = computed(() => loaded.value?.collections ?? [])
+// A product that is not there is not a page. A request that failed is a state
+// this level shows, because the product may well still exist.
+watchEffect(() => {
+  if (loadFailure.value && isNotFoundError(loadFailure.value)) showError(createError({ statusCode: 404, statusMessage: `${presentation.value.itemLabel} not found` }))
+})
+const loadError = computed(() => (loadFailure.value && !isNotFoundError(loadFailure.value)
+  ? getErrorMessage(loadFailure.value, `Failed to load this ${presentation.value.itemLabel.toLowerCase()}`)
+  : null))
+
+/**
+ * A writer's re-read. A save or a photo change has just made this row different
+ * from what was loaded; the photo preview and every index summary read
+ * `product`, not the form. A failed re-read fails the write that asked for it.
+ */
+async function reload() {
+  await refresh()
+  if (loadFailure.value) throw loadFailure.value
 }
 
-// Called with no arguments on purpose: `watch` hands its listener
-// (value, oldValue, onCleanup), which would land in `options`.
-onMounted(() => { void load() })
-watch(locationId, () => { void load() })
+// ── The weekly schedule ─────────────────────────────────
+const isRuleList = (value: unknown): value is { success: true; rules: Array<{ weekday: number; start_time: string }> } =>
+  isRecord(value) && Array.isArray(value.rules)
+const scheduleUrl = () => `/api/editor/organizations/${organizationId}/products/${productId.value}/availability`
+/** An online schedule runs in the product's own time zone; until it has one there is no schedule to read. */
+const scheduleUnplaced = computed(() => Boolean(product.value?.booking) && !locationId.value && !product.value?.booking?.online_timezone)
+const scheduleReadable = computed(() => Boolean(product.value?.booking) && !scheduleUnplaced.value)
+// The start times in this scope, read before the level renders, beside the
+// product they belong to. A product without a booking calendar, or an online
+// one without a time zone, has none; the key says which, so the read follows
+// the product into a new scope. Every booking write re-reads it.
+const { data: scheduleData, error: scheduleFailure, refresh: refreshSchedule } = await useAsyncData(
+  () => `dashboard-product-schedule:${organizationId}:${locationId.value ?? 'online'}:${productId.value}:${scheduleReadable.value ? 'readable' : 'none'}`,
+  async () => {
+    if (!scheduleReadable.value) return null
+    const { rules } = await dashboardApi(`${scheduleUrl()}?location_id=${encodeURIComponent(locationId.value ?? 'online')}`, { validate: isRuleList })
+    return rules.map(rule => ({ weekday: rule.weekday, start_time: rule.start_time.slice(0, 5) }))
+  },
+)
+const savedSchedule = computed<ScheduleSlotDraft[]>(() => scheduleData.value ?? [])
+const scheduleError = computed(() => scheduleUnplaced.value
+  ? 'Choose a time zone in Meeting location before adding start times.'
+  : scheduleFailure.value ? getErrorMessage(scheduleFailure.value, 'Could not load the weekly schedule') : null)
+function savedSlotsFor(weekday: number) { return savedSchedule.value.filter(slot => slot.weekday === weekday) }
+// The draft the weekday leaves edit, seeded from every read of the schedule.
+const schedule = ref<ScheduleSlotDraft[]>([])
+watch(savedSchedule, (rows) => { schedule.value = rows.map(slot => ({ ...slot })) }, { immediate: true })
+async function reloadSchedule() {
+  await refreshSchedule()
+  if (scheduleFailure.value) throw scheduleFailure.value
+}
 
 // ── The form ────────────────────────────────────────────
 
@@ -323,6 +347,8 @@ function variantPriceMajor(variant: Product['variants'][number]): string {
 
 /** The options, variants and prices as loaded, so a save can tell what changed. */
 const loadedCatalogShape = ref('')
+// The draft is seeded from every read of the row, the first and each writer's re-read.
+watch(product, (row) => { if (row) loadForm(row) }, { immediate: true })
 
 function loadForm(row: Product) {
   form.kind = row.kind
@@ -485,8 +511,7 @@ function priceSummary(): string {
 
 function bookingSummary(): string {
   const minutes = `${form.booking_duration || '?'} minutes`
-  const id = locationId.value
-  if ((!id && !product.value?.booking?.online_timezone) || scheduleLoadedFor.value !== `${productId.value}:${id}`) return minutes
+  if (!scheduleData.value) return minutes
   const count = schedule.value.filter(slot => slot.start_time.trim()).length
   return count ? `${minutes} · ${count === 1 ? '1 start time' : `${count} start times`} a week` : `${minutes} · No weekly availability set`
 }
@@ -516,13 +541,8 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => {
       { id: 'name', label: 'Name', summary: form.name || 'Not named yet', placeholder: !form.name, to: sectionPath('name') },
     ],
   }]
-  // Until the row is here there is nothing to summarize. "Not named yet" and
-  // "Not bookable" are statements about a product; shown while loading they
-  // were statements about the network.
-  if (!product.value) return [{
-    id: 'item',
-    items: [{ id: 'loading', label: 'Loading', summary: `Loading this ${presentation.value.itemLabel.toLowerCase()}…`, placeholder: true }],
-  }]
+  // A product that failed to load has nothing to summarize; the level shows the failure.
+  if (!product.value) return []
   // One flat list, the same for every kind: what the product is, what it costs,
   // how it is booked, and where it is offered and shown.
   return [{
@@ -564,9 +584,8 @@ const openSections = computed(() => navigationGroups.value.flatMap(group => grou
 // A section this product does not have 404s. A watcher, not a setup-time check:
 // moving between leaves reuses this component.
 watchEffect(() => {
-  // It does not judge before the record arrives: until then the rows are a
-  // single "Loading" placeholder, and every real section read as unsupported —
-  // a cold load of `…/mi-1/price` 404'd a page that exists.
+  // A product that failed to load has no rows, and every real section would
+  // read as unsupported; the failure is shown instead, never a 404.
   if (!isNew.value && !product.value) return
   if (detailKey.value && !openSections.value.includes(detailKey.value)) {
     showError(createError({ statusCode: 404, statusMessage: 'Page not found' }))
@@ -666,7 +685,8 @@ const { createActionLabel, saveLabel: createSaveLabel, saveDisabled, save: saveC
   missing: key => key === 'name' ? !form.name.trim() : !form.kind,
   noun: () => form.kind ? presentationForProduct(vertical, { kind: assertProductKind(form.kind) }, dashboard.organization.value?.theme_id).itemLabel.toLowerCase() : 'product',
   saving,
-  existingBlocked: () => !sectionValid.value,
+  // A product that could not be read has no draft worth writing over it.
+  existingBlocked: () => !product.value || !sectionValid.value,
   commit,
 })
 
@@ -724,7 +744,10 @@ async function commit(bookingConcern?: BookingConcern) {
       if (editorKey.value === 'locations') await saveLocation()
       if (editorKey.value === 'collections') await saveCollections()
     }
-    await load({ force: true })
+    await reload()
+    // A booking write changes what the schedule is: its start times, whether the
+    // product has a calendar at all, or the time zone an online one runs in.
+    if (bookingConcern !== undefined) await reloadSchedule()
     await (closeTo.value ? navigateTo(closeTo.value) : level.close())
   } catch (error) {
     saveError.value = getErrorMessage(error, `Failed to save ${presentation.value.itemLabel.toLowerCase()}`)
@@ -789,9 +812,6 @@ async function saveBooking(concern: BookingConcern) {
   const url = `/api/editor/organizations/${organizationId}/products/${productId.value}/booking`
   if (concern === 'enabled' && !form.bookable) {
     await dashboardApi(url, { method: 'DELETE', validate: isRecord })
-    schedule.value = []
-    savedSchedule.value = []
-    scheduleLoadedFor.value = null
     return
   }
   const body = concern === 'duration' ? { duration_minutes: Number(form.booking_duration) }
@@ -805,21 +825,12 @@ async function saveBooking(concern: BookingConcern) {
   await dashboardApi(url, { method: 'PUT', body, validate: isRecord })
 }
 
-// ── The weekly schedule ─────────────────────────────────
+// ── Editing the weekly schedule ─────────────────────────
 // Product owns duration and guest limits; the weekly schedule owns start times.
 const WEEKDAYS = [
   { value: 1, label: 'Monday' }, { value: 2, label: 'Tuesday' }, { value: 3, label: 'Wednesday' },
   { value: 4, label: 'Thursday' }, { value: 5, label: 'Friday' }, { value: 6, label: 'Saturday' }, { value: 0, label: 'Sunday' },
 ]
-const schedule = ref<ScheduleSlotDraft[]>([])
-const savedSchedule = ref<ScheduleSlotDraft[]>([])
-const scheduleError = ref<string | null>(null)
-const scheduleLoading = ref(false)
-function savedSlotsFor(weekday: number) { return savedSchedule.value.filter(slot => slot.weekday === weekday) }
-const scheduleLoadedFor = ref<string | null>(null)
-const isRuleList = (value: unknown): value is { success: true; rules: Array<{ weekday: number; start_time: string }> } =>
-  isRecord(value) && Array.isArray(value.rules)
-
 function slotsFor(weekday: number) {
   return schedule.value.filter(slot => slot.weekday === weekday)
 }
@@ -830,45 +841,15 @@ function removeSlot(slot: ScheduleSlotDraft) {
   schedule.value = schedule.value.filter(entry => entry !== slot)
 }
 
-async function loadSchedule() {
-  const id = locationId.value
-  if (!product.value?.booking) return
-  if (!id && !product.value.booking.online_timezone) {
-    scheduleError.value = 'Choose a time zone in Meeting location before adding start times.'
-    return
-  }
-  const key = `${productId.value}:${id}`
-  if (scheduleLoadedFor.value === key) return
-  scheduleLoading.value = true
-  scheduleError.value = null
-  try {
-    const { rules } = await dashboardApi(`/api/editor/organizations/${organizationId}/products/${productId.value}/availability?location_id=${encodeURIComponent(id ?? 'online')}`, { validate: isRuleList })
-    // The reader moved on while this loaded; that location's own load owns the draft.
-    if (`${productId.value}:${locationId.value}` !== key) return
-    savedSchedule.value = rules.map(rule => ({ weekday: rule.weekday, start_time: rule.start_time.slice(0, 5) }))
-    schedule.value = savedSchedule.value.map(slot => ({ ...slot }))
-    scheduleLoadedFor.value = key
-  } catch (error) {
-    scheduleError.value = getErrorMessage(error, 'Could not load the weekly schedule')
-  } finally {
-    scheduleLoading.value = false
-  }
-}
-watch([editorKey, product, locationId], ([key]) => { if (key === 'booking') void loadSchedule() }, { immediate: true })
-
 /** Replace this weekday while retaining the other days read from the canonical writer. */
 async function saveSchedule(weekday: number) {
   const id = locationId.value
-  if ((!id && !product.value?.booking?.online_timezone) || scheduleLoadedFor.value !== `${productId.value}:${id}`) throw new Error('Load the schedule before saving times.')
+  if (scheduleError.value || !scheduleData.value) throw new Error('Load the schedule before saving times.')
   const times = slotsFor(weekday).map(slot => slot.start_time.trim())
   if (times.some(time => !MINUTE_TIME_PATTERN.test(time)) || new Set(times).size !== times.length) throw new Error('Choose a different, valid start time for each session.')
-  const url = `/api/editor/organizations/${organizationId}/products/${productId.value}/availability`
-  const { rules } = await dashboardApi(`${url}?location_id=${encodeURIComponent(id ?? 'online')}`, { validate: isRuleList })
+  const { rules } = await dashboardApi(`${scheduleUrl()}?location_id=${encodeURIComponent(id ?? 'online')}`, { validate: isRuleList })
   const slots = [...rules.filter(rule => rule.weekday !== weekday).map(rule => ({ weekday: rule.weekday, start_time: rule.start_time.slice(0, 5) })), ...times.map(start_time => ({ weekday, start_time }))]
-  await dashboardApi(url, { method: 'PUT', body: { location_id: id, slots }, validate: isRecord })
-  scheduleLoadedFor.value = null
-  await loadSchedule()
-  if (scheduleError.value) throw new Error(scheduleError.value)
+  await dashboardApi(scheduleUrl(), { method: 'PUT', body: { location_id: id, slots }, validate: isRecord })
 }
 
 /** A cancelled leaf puts the loaded product back before it closes. */
@@ -895,7 +876,7 @@ async function createPage() {
       body: { productId: row.id, path: `/services/${row.slug}`, title: row.name, pageType: 'custom', recipe: null, blocks: [] },
       validate: isRecord,
     })
-    await load({ force: true })
+    await reload()
   } catch (error) {
     saveError.value = getErrorMessage(error, 'Failed to create the page')
   } finally {
@@ -912,7 +893,7 @@ async function setPrimaryImage(assetId: string | null) {
       validate: isRecord,
     })
     form.image_asset_id = assetId
-    await load({ force: true })
+    await reload()
   } catch (error) {
     photoError.value = getErrorMessage(error, 'Failed to update the photo')
   }
@@ -1002,7 +983,7 @@ provide(productEditorKey, {
   sectionPath,
   definitions,
   isNew,
-  ready,
+  loadError,
   sectionLabels,
   saving,
   saveError,
@@ -1018,7 +999,6 @@ provide(productEditorKey, {
   listValue,
   textValue,
   weekdays: WEEKDAYS,
-  scheduleLoading,
   scheduleError,
   savedSlotsFor,
   slotsFor,

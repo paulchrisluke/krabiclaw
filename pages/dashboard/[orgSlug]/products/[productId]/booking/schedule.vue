@@ -1,7 +1,6 @@
 <template>
   <DashboardIndexPanel id="booking-schedule" title="Weekly schedule" :auto-open="groups[0]?.items[0]?.to ?? null">
-    <USkeleton v-if="!p.ready.value || p.scheduleLoading.value" class="h-32" />
-    <UAlert v-else-if="p.scheduleError.value" color="error" variant="soft" :description="p.scheduleError.value" />
+    <UAlert v-if="p.loadError.value || p.scheduleError.value" color="error" variant="soft" :description="p.loadError.value || p.scheduleError.value || ''" />
     <EditorNavigationList v-else :groups="groups" :active-item="level.child.value" />
   </DashboardIndexPanel>
 </template>

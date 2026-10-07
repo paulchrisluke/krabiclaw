@@ -5,6 +5,6 @@
 <script setup lang="ts">
 import LinksPageEditor from '~/components/dashboard/LinksPageEditor.vue'
 
-// A row on Pages, nested under it so Pages is both its pane and its Back; the URL stays `/links`.
-definePageMeta({ layout: 'dashboard', path: '/dashboard/:orgSlug/links' })
+// A row on Pages: Pages is both its pane and its Back.
+definePageMeta({ layout: 'dashboard' })
 </script>

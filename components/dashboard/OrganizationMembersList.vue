@@ -7,9 +7,15 @@
   <div class="space-y-8">
     <section>
       <h2 class="px-1 text-sm font-semibold text-muted">Team</h2>
-      <div v-if="pending && !data" class="mt-3 space-y-3">
-        <USkeleton v-for="i in 3" :key="i" class="h-14 rounded-lg" />
-      </div>
+      <UAlert
+        v-if="loadError"
+        class="mt-3"
+        color="error"
+        variant="soft"
+        icon="i-lucide-circle-alert"
+        title="The team could not be loaded"
+        :description="getErrorMessage(loadError, 'Members request failed')"
+      />
       <ul v-else-if="members.length">
         <li v-for="member in members" :key="member.id" class="border-b border-default py-6 last:border-b-0">
           <div class="flex items-center justify-between gap-4">
@@ -18,7 +24,8 @@
               <div class="min-w-0">
                 <p class="truncate text-base text-highlighted">{{ member.name || member.email }}</p>
                 <p class="truncate text-sm text-muted">{{ member.email }}</p>
-                <UButton color="neutral" variant="link" :to="`/dashboard/${dashboard.organization.value?.slug}/settings/members/${member.id}`">Profile, hours &amp; Calendar</UButton>
+                <!-- Your own row opens your availability, where you connect your Google Calendar; anyone else's is the admin view. -->
+                <UButton color="neutral" variant="link" :to="memberAvailabilityPath(member)">Profile, hours &amp; Calendar</UButton>
               </div>
             </div>
             <div class="flex shrink-0 items-center gap-2">
@@ -61,15 +68,12 @@
 
     <section>
       <h2 class="px-1 text-sm font-semibold text-muted">Pending Invitations</h2>
-      <div v-if="pending && !data" class="mt-3 space-y-3">
-        <USkeleton v-for="i in 2" :key="i" class="h-14 rounded-lg" />
-      </div>
-      <ul v-else-if="invitations.length">
+      <ul v-if="invitations.length">
         <li v-for="invitation in invitations" :key="invitation.id" class="flex items-center justify-between gap-4 border-b border-default py-6 last:border-b-0">
           <div class="min-w-0">
             <p class="truncate text-base text-highlighted">{{ invitation.email }}</p>
             <p class="truncate text-sm text-muted">
-              <template v-if="invitation.inviterName">Invited by {{ invitation.inviterName }} · </template>Expires {{ formatDate(invitation.expiresAt) }}
+              Expires {{ formatDate(invitation.expiresAt) }}
             </p>
           </div>
           <div class="flex shrink-0 items-center gap-2">
@@ -86,7 +90,7 @@
           </div>
         </li>
       </ul>
-      <p v-else class="mt-3 px-1 text-sm text-muted">No pending invitations.</p>
+      <p v-else-if="!loadError" class="mt-3 px-1 text-sm text-muted">No pending invitations.</p>
       <UAlert v-if="pendingInvitationError" class="mt-4" color="error" variant="soft" icon="i-lucide-circle-alert" :description="pendingInvitationError" />
     </section>
   </div>
@@ -96,6 +100,7 @@
 import { formatTimestamp } from '~/utils/timezone'
 
 import { authClient } from '~/lib/auth-client'
+import { getErrorMessage } from '~/utils/errors'
 import { organizationMembersKey } from '~/utils/organization-members'
 
 const dashboardApi = useDashboardApi()
@@ -117,7 +122,6 @@ interface InvitationRow {
   status: string
   expiresAt: string
   createdAt: string
-  inviterName: string | null
 }
 
 const isMembersResponse = (
@@ -133,16 +137,12 @@ const route = useRoute()
 const dashboard = useDashboardOrganization()
 const membersKey = computed(() => organizationMembersKey(String(route.params.orgSlug ?? '')))
 
-const { data, pending, refresh } = await useAsyncData(
+const { data, error: loadError, refresh } = await useAsyncData(
   membersKey,
   () => dashboardApi<{ members: MemberRow[]; invitations: InvitationRow[] }>(
     '/api/dashboard/members',
     { validate: isMembersResponse },
   ),
-  // Nuxt blocks navigation on useAsyncData by default; the client does not
-  // need to wait for this to paint the route, and `pending` already drives a
-  // loading state here.
-  { lazy: true },
 )
 
 const members = computed(() => data.value?.members ?? [])
@@ -155,6 +155,14 @@ const currentUserRole = computed(() => {
   return match?.role ?? null
 })
 const isOwner = computed(() => currentUserRole.value === 'owner')
+
+function memberAvailabilityPath(member: MemberRow) {
+  const organization = dashboard.organization.value
+  if (!organization) throw createError({ statusCode: 503, statusMessage: 'Dashboard context not loaded' })
+  return member.userId === currentUser.value?.id
+    ? `/dashboard/account/profile/calendar/${encodeURIComponent(organization.id)}`
+    : `/dashboard/${encodeURIComponent(organization.slug)}/settings/members/${encodeURIComponent(member.id)}`
+}
 
 const BASE_ROLE_OPTIONS = [
   { label: 'Member', value: 'member' }, { label: 'Admin', value: 'admin' },

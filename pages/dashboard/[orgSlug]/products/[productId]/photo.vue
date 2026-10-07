@@ -1,17 +1,16 @@
 <template>
   <DashboardLeafPanel
     id="product-photo"
-    :ready="p.ready.value"
     :title="p.sectionLabels['photo']"
     :saving="p.saving.value"
     :disabled="p.saveDisabled.value"
     :save-label="p.saveLabel.value"
-    :error="p.saveError.value || p.photoError.value || ''"
+    :error="p.loadError.value || p.saveError.value || p.photoError.value || ''"
     :footer="false"
     @cancel="p.revert"
     @save="p.save"
   >
-    <div class="space-y-4">
+    <div v-if="p.isNew.value || p.product.value" class="space-y-4">
       <p class="text-base text-muted">The picture guests recognise this by, in the list and on your site.</p>
       <DashboardCoverPhotoField
         :organization-id="p.organizationId"

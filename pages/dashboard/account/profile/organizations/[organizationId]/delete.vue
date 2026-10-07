@@ -2,7 +2,6 @@
   <DashboardLeafPanel
     id="organization-delete"
     title="Delete organization"
-    :ready="ready"
     :footer="false"
   >
     <p class="text-base text-muted">
@@ -25,15 +24,15 @@ definePageMeta({ layout: 'dashboard' })
 const route = useRoute()
 const level = useRouteLevel()
 const organizationId = computed(() => String(route.params.organizationId))
-const { canDelete, permissionPending, permissionError } = useOrganizationDeletePermission(organizationId)
-const ready = computed(() => !permissionPending.value)
+const { deletable, permissionError } = await useOrganizationDeletePermission(computed(() => [organizationId.value]))
+const canDelete = computed(() => deletable.value.has(organizationId.value))
 const confirmText = ref('')
 const deleting = ref(false)
 const deletionError = ref('')
 
 // Better Auth decides who may delete; a member it refuses has no such page.
 watchEffect(() => {
-  if (level.mode.value === 'yield' || permissionPending.value || permissionError.value) return
+  if (level.mode.value === 'yield' || permissionError.value) return
   if (!canDelete.value) showError(createError({ statusCode: 403, statusMessage: 'Only an owner can delete this organization' }))
 })
 

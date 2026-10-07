@@ -5,10 +5,7 @@
     account, which is not a row.
   -->
   <DashboardIndexPanel id="organization-integrations" title="Integrations" :auto-open="items[0]?.to ?? null">
-    <div v-if="pending && !summary" class="space-y-4">
-      <USkeleton v-for="i in 5" :key="i" class="h-16 rounded-xl" />
-    </div>
-    <UAlert v-else-if="error" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="error.message" />
+    <UAlert v-if="error" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="error.message" />
     <EditorNavigationList v-else :groups="[{ id: 'integrations', items }]" :active-item="level.child.value" />
   </DashboardIndexPanel>
 </template>
@@ -73,10 +70,9 @@ const isSummaryResponse = (value: unknown): value is { settings: { integrations:
   isRecord(value) && isRecord(value.settings) && isRecord(value.settings.integrations)
   && Array.isArray(value.settings.integrations.google_maps)
 
-const { data: summary, pending, error, refresh } = await useAsyncData(
+const { data: summary, error, refresh } = await useAsyncData(
   () => `dashboard-integrations:${String(route.params.orgSlug)}`,
   async () => (await dashboardApi('/api/dashboard/settings', { validate: isSummaryResponse })).settings.integrations,
-  { lazy: true },
 )
 
 // A connection that exists names what it is connected to.

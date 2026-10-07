@@ -7,7 +7,6 @@
   <DashboardIndexPanel id="earnings-payouts" title="Paid">
     <div class="mx-auto w-full max-w-3xl pb-24">
       <UAlert v-if="error" color="error" :description="error.message" />
-      <USkeleton v-else-if="pending && !data" class="h-32" />
       <template v-else-if="data">
         <template v-if="data.configured === false">
           <p class="text-base text-muted">Payouts start once your business is connected to Stripe.</p>
@@ -61,7 +60,7 @@ const api = useDashboardApi()
 const level = useRouteLevel()
 const after = ref<string | null>(null)
 const loaded = ref<PayoutRow[]>([])
-const { data, pending, error } = await useAsyncData(
+const { data, error } = await useAsyncData(
   () => `earnings-paid:${route.params.orgSlug}:${after.value ?? ''}`,
   async () => {
     const page = await api<PayoutsView>('/api/dashboard/payments', { query: { view: 'payouts', ...(after.value ? { after: after.value } : {}) }, validate: isPayoutsView })
@@ -69,7 +68,7 @@ const { data, pending, error } = await useAsyncData(
     loaded.value = after.value ? [...loaded.value, ...page.payouts] : page.payouts
     return page
   },
-  { lazy: true, watch: [after] },
+  { watch: [after] },
 )
 const upcoming = computed(() => loaded.value.filter(row => row.status === 'pending' || row.status === 'in_transit'))
 const paid = computed(() => loaded.value.filter(row => row.status === 'paid'))

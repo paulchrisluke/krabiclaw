@@ -2,13 +2,12 @@
   <DashboardLeafPanel
     id="organization-blog-post-category"
     title="Category"
-    :ready="!editor.loadPending.value && !editor.loadError.value && editor.categories.value !== undefined"
     :saving="editor.saving.value"
     :error="editor.actionError.value || editor.loadError.value || categoriesFailure"
     @cancel="editor.revert"
     @save="editor.save"
   >
-    <div class="space-y-6">
+    <div v-if="editor.post.value" class="space-y-6">
       <!-- A category belongs to one collection, so choosing the collection is choosing whose categories are offered. -->
       <UFormField label="Collection">
         <USelect v-model="editor.form.collection" :items="editor.collectionOptions" value-key="value" class="w-full" />
@@ -18,7 +17,7 @@
           v-model="editor.form.category_id"
           :items="categoryOptions"
           value-key="value"
-          :placeholder="categoryOptions.length ? 'Choose a category' : 'No categories yet'"
+          :placeholder="editor.categories.value?.length === 0 ? 'No categories yet' : 'Choose a category'"
           class="w-full"
         />
         <template #hint>
@@ -37,7 +36,7 @@ definePageMeta({ layout: 'dashboard' })
 
 const editor = inject(blogEditorKey)!
 const route = useRoute()
-const categoriesPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/blog/categories`)
+const categoriesPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/settings/website/blog/categories`)
 // A nested category reads with the categories above it: "Integrations › Google".
 const categoryOptions = computed(() => {
   const all = editor.categories.value ?? []

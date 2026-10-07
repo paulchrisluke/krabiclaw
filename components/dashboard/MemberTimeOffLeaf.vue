@@ -1,9 +1,12 @@
 <template>
- <DashboardLeafPanel id="member-time-off" title="Time off" lead="Block dates when you’re away." :ready="editor.loaded.value" :footer="false" :error="editor.error.value">
-  <div v-for="(interval,index) in editor.record.value?.time_off ?? []" :key="index" class="border-b border-default">
-   <UButton class="w-full justify-between py-6" color="neutral" variant="ghost" trailing-icon="i-lucide-chevron-right" @click="edit(index)">{{ label(interval.start) }} – {{ label(interval.end) }}</UButton>
-  </div>
-  <UButton class="mt-6" color="neutral" variant="outline" icon="i-lucide-plus" @click="edit(null)">Add time off</UButton>
+ <DashboardLeafPanel id="member-time-off" title="Time off" lead="Block dates when you’re away." :footer="false" :error="editor.error.value">
+  <!-- Nothing to edit until the schedule has been read; a failed read is the error above. -->
+  <template v-if="editor.loaded.value">
+    <div v-for="(interval,index) in editor.record.value?.time_off ?? []" :key="index" class="border-b border-default">
+     <UButton class="w-full justify-between py-6" color="neutral" variant="ghost" trailing-icon="i-lucide-chevron-right" @click="edit(index)">{{ label(interval.start) }} – {{ label(interval.end) }}</UButton>
+    </div>
+    <UButton class="mt-6" color="neutral" variant="outline" icon="i-lucide-plus" @click="edit(null)">Add time off</UButton>
+  </template>
  </DashboardLeafPanel>
  <DashboardListItemDialog v-model:open="open" title="Time off" :removable="selected !== null" :saving="editor.saving.value" :error="editor.error.value" :save-disabled="!start || !end || (selected !== null && start === originalStart && end === originalEnd)" @save="save" @remove="remove">
   <UFormField label="Starts"><UInput v-model="start" type="datetime-local" class="w-full" /></UFormField>

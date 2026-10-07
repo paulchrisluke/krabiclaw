@@ -2,7 +2,6 @@
   <DashboardLeafPanel
     :id="`integration-google-maps-${String(route.params.locationSlug)}`"
     :title="location?.title ?? 'Google Maps'"
-    :ready="integrations.summary.value !== undefined"
     :saving="saving"
     :error="error || integrations.failure.value"
     :footer="false"

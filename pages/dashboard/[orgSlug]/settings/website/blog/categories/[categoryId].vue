@@ -2,7 +2,6 @@
   <DashboardLeafPanel
     id="organization-blog-category"
     :title="category?.name ?? 'Category'"
-    :ready="category !== null"
     :saving="saving"
     :disabled="!dirty || !name.trim()"
     :error="actionError || loadFailure"
@@ -62,7 +61,7 @@ const localizationFields = computed(() => [
   { key: 'name', label: 'Name', source: category.value?.name },
   { key: 'description', label: 'Description', source: category.value?.description, multiline: true },
 ])
-const { data: siblings } = useArticleCategories(organizationId, () => category.value?.collection ?? 'blog')
+const { data: siblings } = await useArticleCategories(organizationId, () => category.value?.collection ?? 'blog')
 // The top of the collection is the empty choice; a category cannot sit under itself or anything under it.
 const TOP_LEVEL = ''
 const parentOptions = computed(() => {

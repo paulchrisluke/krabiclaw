@@ -8,11 +8,10 @@
     v-if="isLeaf"
     id="organization-page-block"
     :title="blockLabel"
-    :ready="ready || isNew"
     :saving="saving"
     :disabled="saveDisabled"
     :save-label="saveLabel"
-    :error="errorMessage"
+    :error="loadError ?? errorMessage"
     @cancel="revertDraft"
     @save="saveOpenSection"
   >
@@ -46,7 +45,7 @@
   </DashboardLeafPanel>
 
   <DashboardIndexPanel v-else id="organization-page-block" :title="blockLabel" :auto-open="navigationGroups[0]?.items.find(item => item.to)?.to ?? null">
-    <UFormField v-if="isNew" label="Section type" required class="mb-6">
+    <UFormField v-if="isNew && !loadError" label="Section type" required class="mb-6">
       <USelect
         :model-value="newType"
         :items="typeOptions"
@@ -57,7 +56,7 @@
         @update:model-value="chooseType($event)"
       />
     </UFormField>
-    <UAlert v-if="errorMessage" class="mb-6" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="errorMessage" />
+    <UAlert v-if="loadError || errorMessage" class="mb-6" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="loadError ?? errorMessage" />
     <div v-if="isNew && newBlock" class="mb-6 flex justify-end">
       <UButton :label="createActionLabel" :loading="saving" @click="startOrCreate" />
     </div>
@@ -80,7 +79,8 @@ import { TENANT_PAGE_RECORD_NOUNS, tenantPageBlockLabel, tenantPageBlockSections
 export interface TenantPageBlockEditor {
   block: ComputedRef<TenantPageBlock | null>
   sections: ComputedRef<readonly TenantPageBlockSection[]>
-  ready: Ref<boolean>
+  /** Why the page could not be read; the page level's, for the leaves below this one. */
+  loadError: Ref<string | null>
   saving: Ref<boolean>
   saveDisabled: Ref<boolean>
   saveLabel: Ref<string | undefined>
@@ -97,12 +97,16 @@ export const tenantPageBlockEditorKey = Symbol('tenant-page-block-editor') as In
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import TenantPageBlockFields from '~/components/dashboard/TenantPageBlockFields.vue'
 import { getErrorMessage, showNotFound } from '~/utils/errors'
+import { tenantPageEditorKey } from '~/components/dashboard/TenantPageEditorPage.vue'
 import { createTenantPageEditorData, tenantPageBlockSummary, validateTenantPageBlock } from '~/utils/tenant-page-editor'
 
 const props = defineProps<{ organizationId: string; pageId: string; blockId: string }>()
 
 const level = useRouteLevel()
-const { draft, dirty, ready, revert, commit } = useTenantPageDraft(props.organizationId, props.pageId)
+const { error, draft, dirty, revert, commit } = useTenantPageDraft(props.organizationId, props.pageId)
+// The page level reads the page and reports when it could not, as a missing
+// page or as the failure this level and its leaves show.
+const { loadError } = inject(tenantPageEditorKey)!
 const newBlock = useTenantPageNewBlock(props.organizationId, props.pageId)
 
 const isNew = computed(() => props.blockId === 'new')
@@ -121,9 +125,10 @@ const singleSection = computed(() => (sections.value.length === 1 ? sections.val
 const isLeaf = computed(() => !isNew.value && Boolean(block.value) && (!sections.value.length || (singleSection.value?.kind === 'leaf')))
 
 // A section that is not there is not a page; a level below a block that has
-// no such concern is not one either.
+// no such concern is not one either. A page that was not read has no sections
+// to look in, and that is the page level's failure to report, not a 404 here.
 watchEffect(() => {
-  if (!ready.value && !isNew.value) return
+  if (error.value) return
   if (!isNew.value && !block.value) return showNotFound('Section not found')
   const open = level.child.value
   if (!open) return
@@ -298,7 +303,7 @@ onBeforeRouteLeave((to) => {
 provide(tenantPageBlockEditorKey, {
   block,
   sections,
-  ready: computed(() => ready.value || isNew.value),
+  loadError,
   saving,
   saveDisabled,
   saveLabel,

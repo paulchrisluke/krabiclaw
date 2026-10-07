@@ -5,7 +5,6 @@
       title="Posts"
       description="Short posts: news, photos, events and offers, in your own words."
       :items="listItems"
-      :pending="pending"
       :error="loadError"
       empty-title="No posts yet"
       empty-icon="i-lucide-file-text"
@@ -91,30 +90,27 @@ const fetchPage = (cursor?: string) => dashboardApi<{ posts: ApiRecord[]; page_i
   query: { ...(locationId.value ? { location_id: locationId.value } : {}), ...(statusFilter.value ? { status: statusFilter.value } : {}), ...(cursor ? { cursor } : {}) },
   validate: isPostsResponse,
 })
-const { data, pending, error, refresh } = await useAsyncData(postsKey, () => fetchPage(), { lazy: true, watch: [statusFilter, locationId] })
+const { data, error, refresh } = await useAsyncData(postsKey, () => fetchPage())
 /** A path in this list's scope: the explicit location rides along. */
 const scoped = (path: string) => router.resolve({ path, query: { location_id: route.query.location_id } }).fullPath
 
 const loadError = computed(() => (error.value ? getErrorMessage(error.value, 'Failed to load posts') : null))
-const more = ref<ApiRecord[]>([])
-const nextCursor = ref<string | null>(null)
-watch(data, value => { more.value = []; nextCursor.value = value?.page_info.has_more ? value.page_info.next_cursor : null }, { immediate: true })
+const nextCursor = computed(() => (data.value?.page_info.has_more ? data.value.page_info.next_cursor : null))
 const loadingMore = ref(false)
 async function loadMore() {
-  if (!nextCursor.value) return
-  // A page fetched for the list that was showing is dropped if the filter changed meanwhile.
   const base = data.value
+  if (!base || !nextCursor.value) return
   loadingMore.value = true
   try {
     const page = await fetchPage(nextCursor.value)
+    // A page fetched for the list that was showing is dropped if the filter changed meanwhile.
     if (data.value !== base) return
-    more.value = [...more.value, ...page.posts]
-    nextCursor.value = page.page_info.has_more ? page.page_info.next_cursor : null
+    data.value = { posts: [...base.posts, ...page.posts], page_info: page.page_info }
   } finally {
     loadingMore.value = false
   }
 }
-const visiblePosts = computed(() => [...(data.value?.posts ?? []), ...more.value])
+const visiblePosts = computed(() => data.value?.posts ?? [])
 
 const listItems = computed(() => visiblePosts.value.map(row => ({
   id: String(row.id),

@@ -6,22 +6,23 @@
   -->
   <DashboardLeafPanel
     id="product-collections"
-    :ready="p.ready.value"
     :title="p.sectionLabels['collections']"
     :saving="p.saving.value"
     :disabled="p.saveDisabled.value"
     :save-label="p.saveLabel.value"
-    :error="p.saveError.value || ''"
+    :error="p.loadError.value || p.saveError.value || ''"
     @cancel="p.revert"
     @save="p.save"
   >
-    <SettingRow
-      v-for="collection in rows"
-      :key="collection.id"
-      :model-value="p.form.collection_ids.includes(collection.id)"
-      :label="collection.label"
-      @update:model-value="toggle(collection.id, $event)"
-    />
+    <template v-if="p.product.value">
+      <SettingRow
+        v-for="collection in rows"
+        :key="collection.id"
+        :model-value="p.form.collection_ids.includes(collection.id)"
+        :label="collection.label"
+        @update:model-value="toggle(collection.id, $event)"
+      />
+    </template>
   </DashboardLeafPanel>
 </template>
 

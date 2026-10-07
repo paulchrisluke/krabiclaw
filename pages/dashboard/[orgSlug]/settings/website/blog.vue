@@ -7,7 +7,7 @@
 <script setup lang="ts">
 import BlogPostList from '~/components/dashboard/BlogPostList.vue'
 
-// A row on Website, nested under it so Website is both its pane and its Back; the URL stays `/blog`.
-definePageMeta({ layout: 'dashboard', path: '/dashboard/:orgSlug/blog' })
+// A row on Website: Website is both its pane and its Back.
+definePageMeta({ layout: 'dashboard' })
 
 </script>

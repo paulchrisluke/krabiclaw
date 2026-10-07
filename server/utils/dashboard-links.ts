@@ -84,38 +84,38 @@ export function collectionEditorPath(orgSlug: string, collectionId: string, loca
 export function pageEditorPath(orgSlug: string, page: { id: string; product_id: string | null }): string {
   return page.product_id
     ? `${organizationBase(orgSlug)}/products/${encodeURIComponent(page.product_id)}/page`
-    : `${organizationBase(orgSlug)}/pages/${encodeURIComponent(page.id)}`
+    : `${organizationBase(orgSlug)}/settings/website/pages/${encodeURIComponent(page.id)}`
 }
 
 export function blogEditorPath(orgSlug: string, articleId: string): string {
-  return `${organizationBase(orgSlug)}/blog/${encodeURIComponent(articleId)}`
+  return `${organizationBase(orgSlug)}/settings/website/blog/${encodeURIComponent(articleId)}`
 }
 
 export function articleCategoryEditorPath(orgSlug: string, categoryId: string): string {
-  return `${organizationBase(orgSlug)}/blog/categories/${encodeURIComponent(categoryId)}`
+  return `${organizationBase(orgSlug)}/settings/website/blog/categories/${encodeURIComponent(categoryId)}`
 }
 
 export function brandEditorPath(orgSlug: string): string {
-  return `${organizationBase(orgSlug)}/brand`
+  return `${organizationBase(orgSlug)}/settings/website/brand`
 }
 
 export function linksEditorPath(orgSlug: string): string {
-  return `${organizationBase(orgSlug)}/links`
+  return `${organizationBase(orgSlug)}/settings/website/pages/links`
 }
 
 export function postEditorPath(orgSlug: string, postId: string, locationId?: string | null): string {
-  return scopedTo(`${organizationBase(orgSlug)}/posts/${encodeURIComponent(postId)}`, locationId)
+  return scopedTo(`${organizationBase(orgSlug)}/settings/posts/${encodeURIComponent(postId)}`, locationId)
 }
 
 export function qaEditorPath(orgSlug: string, qaId: string, locationId?: string | null): string {
-  return scopedTo(`${organizationBase(orgSlug)}/qa/${encodeURIComponent(qaId)}`, locationId)
+  return scopedTo(`${organizationBase(orgSlug)}/settings/website/qa/${encodeURIComponent(qaId)}`, locationId)
 }
 
 /** A review is a row of the Reviews tab beside Q&A, listed per scope, so its location rides along. */
 export function reviewEditorPath(orgSlug: string, reviewId: string, locationId?: string | null): string {
-  return scopedTo(`${organizationBase(orgSlug)}/qa/reviews/${encodeURIComponent(reviewId)}`, locationId)
+  return scopedTo(`${organizationBase(orgSlug)}/settings/website/qa/reviews/${encodeURIComponent(reviewId)}`, locationId)
 }
 
 export function locationEditorPath(orgSlug: string, locationSlug: string): string {
-  return `${organizationBase(orgSlug)}/locations/${encodeURIComponent(locationSlug)}`
+  return `${organizationBase(orgSlug)}/settings/locations/${encodeURIComponent(locationSlug)}`
 }

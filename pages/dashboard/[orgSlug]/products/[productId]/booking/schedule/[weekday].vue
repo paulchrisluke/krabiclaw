@@ -1,6 +1,6 @@
 <template>
-  <DashboardLeafPanel :id="`booking-schedule-${route.params.weekday}`" :title="day?.label ?? ''" :lead="lead" :ready="p.ready.value && !p.scheduleLoading.value" :saving="p.saving.value" :disabled="!valid || !dirty || Boolean(p.scheduleError.value)" :error="p.saveError.value ?? p.scheduleError.value ?? ''" @cancel="p.revert" @save="save">
-    <div v-if="day" class="space-y-4">
+  <DashboardLeafPanel :id="`booking-schedule-${route.params.weekday}`" :title="day?.label ?? ''" :lead="lead" :saving="p.saving.value" :disabled="!p.product.value || !valid || !dirty || Boolean(p.scheduleError.value)" :error="p.loadError.value ?? p.saveError.value ?? p.scheduleError.value ?? ''" @cancel="p.revert" @save="save">
+    <div v-if="day && p.product.value" class="space-y-4">
       <div v-for="(slot, index) in slots" :key="index" class="flex items-end gap-3">
         <UFormField :label="`Start time ${index + 1}`" class="flex-1">
           <UInput v-model="slot.start_time" type="time" step="60" class="w-full" />
@@ -26,7 +26,7 @@ const lead = computed(() => `Choose when sessions start${!p.locationId.value && 
 const valid = computed(() => slots.value.every(slot => MINUTE_TIME_PATTERN.test(slot.start_time)) && new Set(slots.value.map(slot => slot.start_time)).size === slots.value.length)
 const dirty = computed(() => day.value && JSON.stringify(slots.value) !== JSON.stringify(p.savedSlotsFor(day.value.value)))
 watchEffect(() => {
-  if (level.mode.value !== 'yield' && (!day.value || (p.ready.value && !p.product.value?.booking))) showError(createError({ statusCode: 404, statusMessage: 'Page not found' }))
+  if (level.mode.value !== 'yield' && (!day.value || (p.product.value && !p.loadError.value && !p.product.value.booking))) showError(createError({ statusCode: 404, statusMessage: 'Page not found' }))
 })
 watch(() => route.params.weekday, () => p.revert())
 onBeforeRouteLeave(() => { p.revert() })

@@ -8,11 +8,10 @@ import { dashboardOrganizationParentKey } from '~/lib/components/workspace/dashb
  * The nested route tree is the one parent graph. A level's parent pane and its
  * Back are the same record: the nearest level above it in `route.matched`, found
  * from the record the `<RouterView>` rendering the caller provides through
- * `matchedRouteKey`. A level that must keep a URL its parent does not prefix —
- * Pages at `/pages` under Menu at `/settings` — is still nested as a file and
- * names its URL with an absolute `definePageMeta({ path })`, so the router keeps
- * it in `matched` beside its parent. Levels are counted in matched records, not
- * URL segments, for that reason.
+ * `matchedRouteKey`. A level's URL is its place in the file tree, so the URL,
+ * the panes and Back all name the same parent. Levels are counted in matched
+ * records, not URL segments, because a directory's `index.vue` adds a record
+ * without adding a level.
  *
  * A directory's `index.vue` is a second record at the same URL — `/links/items`
  * matches both `items` and `items/index` — and it is one level, not two.
@@ -61,9 +60,17 @@ export function routeRecordPath(router: AppRouter, record: RouteRecord, params: 
 }
 
 export function useRouteLevel() {
+  // Nuxt's page route: while a page is on its way out, it keeps the route that
+  // page rendered for, so the screen being left stays whole until the next one
+  // is ready (Nuxt's RouteProvider).
   const route = useRoute()
   const router = useRouter()
-  const ownRecord = inject(matchedRouteKey, null)
+  // The record this level renders, read once: a component is mounted for one
+  // record and never becomes another. Vue Router's ref follows the live route,
+  // so during a navigation it named the next screen's record while `route`
+  // still named this one — the level found itself nowhere, yielded, and its
+  // pane vanished while its open child stayed on screen.
+  const ownRecord = inject(matchedRouteKey, null)?.value ?? null
   // The layout's answer to "which organization" for a route that carries none, such as Account settings.
   const organizationParent = inject(dashboardOrganizationParentKey, null)
 
@@ -72,20 +79,16 @@ export function useRouteLevel() {
   /**
    * Where this level sits among the matched levels, or `-1` once it sits nowhere.
    *
-   * A component whose own record has left `route.matched` is being torn down
-   * after a navigation, and it is not a level any more. Answering with the
-   * deepest level instead makes every question below report for somebody
-   * else's level: a location index unmounting on the way to Pages read its path
-   * off the new route and its `autoOpen` replaced the URL with a child of it,
-   * which took the tenant to a URL nothing matches.
+   * A component whose own record is not in its route is not a level any more.
+   * Answering with the deepest level instead makes every question below report
+   * for somebody else's level.
    *
    * A component mounted outside a page has no record to find and takes the
    * deepest level, which is the one it is drawn inside.
    */
   const index = computed(() => {
-    const record = ownRecord?.value
-    if (!record) return levels.value.length - 1
-    return levels.value.findIndex(level => level.path === record.path)
+    if (!ownRecord) return levels.value.length - 1
+    return levels.value.findIndex(level => level.path === ownRecord.path)
   })
 
   /**

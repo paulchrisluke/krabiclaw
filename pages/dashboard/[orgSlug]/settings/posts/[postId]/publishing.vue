@@ -57,7 +57,6 @@ const isConnections = (value: unknown): value is { channels: Channel[] } => isRe
 const { data: connections, error } = await useAsyncData(
   () => `post-publish-targets:${dashboardLocation.currentLocationId.value ?? ''}`,
   () => dashboardApi('/api/integrations/social-connections', { query: { locationId: dashboardLocation.currentLocationId.value ?? '' }, validate: isConnections }),
-  { lazy: true },
 )
 const connectionsError = computed(() => (error.value ? getErrorMessage(error.value, 'Failed to read connections') : null))
 

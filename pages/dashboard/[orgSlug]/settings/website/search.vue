@@ -3,7 +3,6 @@
     id="organization-search"
     title="Search appearance"
     lead="The title and description search engines show for the homepage and any page without its own. Left empty, they fall back to the brand name and description."
-    :ready="!editor.loading.value"
     :saving="editor.saving.value"
     :disabled="editor.saveDisabled.value"
     :error="editor.editorError.value ?? ''"

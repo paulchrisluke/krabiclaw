@@ -1,7 +1,7 @@
 import {isCurrencyCode} from './currencies'
 import {paymentMoney} from './payment-display'
 
-/** What `/api/dashboard/payments?view=overview` answers for a period. */
+/** What `/api/dashboard/payments` answers for a period with no `view`: the summary the Menu's Earnings card shows. */
 export interface EarningsAmount { currency:string; captured_amount:number; refunded_amount:number; disputed_amount:number }
 export interface EarningsSummary { summary:{ amounts:EarningsAmount[]; refreshed_at:string } }
 export function isEarningsSummary(value:unknown):value is EarningsSummary {

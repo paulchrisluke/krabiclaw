@@ -15,8 +15,8 @@
         <USelect v-model="b.changeDraft.value.locationId" :items="b.booking.value.locations.map(location => ({ label: location.title, value: location.id }))" class="w-full" />
       </UFormField>
       <!-- A consultation moves to another open time of its service; the list is the service's own sessions with a place left. -->
-      <UFormField v-else-if="field === 'session'" label="Date and time" :hint="sessionsPending ? 'Loading times…' : `${sessionItems.length} open times`">
-        <USelect v-model="b.changeDraft.value.sessionId" :items="sessionItems" :loading="sessionsPending" class="w-full" @update:model-value="rememberSessionLabel" />
+      <UFormField v-else-if="field === 'session'" label="Date and time" :hint="`${sessionItems.length} open times`">
+        <USelect v-model="b.changeDraft.value.sessionId" :items="sessionItems" class="w-full" @update:model-value="rememberSessionLabel" />
       </UFormField>
       <UAlert v-if="sessionsError" class="mt-4" color="error" variant="soft" :description="getErrorMessage(sessionsError, 'Open times could not be loaded')" />
     </div>
@@ -42,12 +42,11 @@ else b.beginChangeField(field)
 type SessionRow = { id: string; starts_at: string; ends_at: string; timezone: string; remaining: number | null; status: string }
 const isSessionList = (value: unknown): value is { sessions: SessionRow[] } => isRecord(value) && Array.isArray(value.sessions)
   && value.sessions.every(row => isRecord(row) && typeof row.id === 'string' && typeof row.starts_at === 'string' && typeof row.timezone === 'string' && (row.remaining === null || typeof row.remaining === 'number'))
-const { data: sessionData, pending: sessionsPending, error: sessionsError } = await useAsyncData(
+const { data: sessionData, error: sessionsError } = await useAsyncData(
   () => `booking-change-sessions:${b.booking.value?.experienceId ?? ''}`,
   () => field === 'session' && b.booking.value?.experienceId && b.booking.value.organizationId
     ? api<{ sessions: SessionRow[] }>(`/api/editor/organizations/${b.booking.value.organizationId}/products/${b.booking.value.experienceId}/sessions`, { query: { status: 'scheduled' }, validate: isSessionList })
     : Promise.resolve(null),
-  { lazy: true },
 )
 const sessionItems = computed(() => (sessionData.value?.sessions ?? [])
   .filter(row => row.id === b.booking.value?.sessionId || row.remaining === null || row.remaining > 0)

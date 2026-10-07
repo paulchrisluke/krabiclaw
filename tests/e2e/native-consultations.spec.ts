@@ -174,7 +174,7 @@ test('native online review uses canonical Products, holds capacity, and releases
     // A bound page is its Product's Page content: edited there, and no longer a row of Pages.
     await page.goto(`/dashboard/north-carolina-legal-services/products/${products[0]!.id}/page`)
     await expect(page.locator('#dashboard-panel-organization-page')).toContainText(service.title)
-    await page.goto('/dashboard/north-carolina-legal-services/pages')
+    await page.goto('/dashboard/north-carolina-legal-services/settings/website/pages')
     const pagesList = page.locator('#dashboard-panel-organization-pages')
     await expect(pagesList.getByText('About', { exact: true })).toBeVisible()
     await expect(pagesList.getByText(service.title, { exact: true })).toHaveCount(0)

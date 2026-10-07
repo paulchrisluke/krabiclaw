@@ -112,7 +112,7 @@ test('Sarabun saves through Brand and renders for its Saya tenant in English, Th
     const cms = await dashboard.newPage()
     // The deployed dashboard serves the Zaraz consent modal, whose overlay
     // intercepts pointer events until it is dismissed; openTenantPage accepts it.
-    await openTenantPage(cms, `${baseURL}/dashboard/${organizationId}/brand/font`, {})
+    await openTenantPage(cms, `${baseURL}/dashboard/${organizationId}/settings/website/brand/font`, {})
     // Every wait names what it was waiting for: the config sets no action timeout.
     await cms.getByRole('combobox').click({ timeout: 30_000 })
     await cms.getByRole('option', { name: 'Sarabun', exact: true }).click({ timeout: 30_000 })
@@ -221,7 +221,7 @@ test('every catalog preset saves through MCP and renders on Blawby and the platf
     const dashboard = await browser.newContext({ baseURL, storageState: await owner.storageState(), viewport: { width: 1280, height: 900 } })
     try {
       const cms = await dashboard.newPage()
-      await openTenantPage(cms, `${baseURL}/dashboard/north-carolina-legal-services/brand/font`, {})
+      await openTenantPage(cms, `${baseURL}/dashboard/north-carolina-legal-services/settings/website/brand/font`, {})
       await expect(cms.getByRole('combobox')).toContainText(last.label, { timeout: 30_000 })
       await expect(cms.getByTestId('site-font-preview').locator('p').first()).toHaveCSS('font-family', new RegExp(`^"?${last.label.split(' with ')[0]}`))
     } finally { await dashboard.close() }
@@ -280,7 +280,7 @@ test('a starter palette saved through Brand colors the Saya site in light and da
   try {
     await expectStatus(await owner.patch(settingsUrl, { data: { palette: null } }), 200)
     const cms = await dashboard.newPage()
-    await openTenantPage(cms, `${baseURL}/dashboard/${organizationId}/brand/color`, {})
+    await openTenantPage(cms, `${baseURL}/dashboard/${organizationId}/settings/website/brand/color`, {})
     await cms.getByRole('button', { name: 'Use the Forest palette' }).click({ timeout: 30_000 })
     await expect(cms.getByTestId('palette-preview-dark')).toHaveCSS('background-color', rgb(forest.dark.ground))
     const saved = await Promise.all([
@@ -346,7 +346,7 @@ test('palette changes through MCP reach the CMS and Blawby, and invalid colors a
     const dashboard = await browser.newContext({ baseURL, storageState: await owner.storageState(), viewport: { width: 1280, height: 900 } })
     try {
       const cms = await dashboard.newPage()
-      await openTenantPage(cms, `${baseURL}/dashboard/north-carolina-legal-services/brand/color`, {})
+      await openTenantPage(cms, `${baseURL}/dashboard/north-carolina-legal-services/settings/website/brand/color`, {})
       await expect(cms.getByRole('textbox', { name: 'Action light hex color' })).toHaveValue('#0F4C5C', { timeout: 30_000 })
     } finally { await dashboard.close() }
 

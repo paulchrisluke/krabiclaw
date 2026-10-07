@@ -9,7 +9,6 @@
     v-model:editing="editing"
     title="Q&A"
     :items="listItems"
-    :pending="pending"
     :error="qaError ? getErrorMessage(qaError, 'Q&A request failed') : null"
     :empty-title="locationScope ? 'No Q&A yet' : 'No site Q&A yet'"
     empty-icon="i-lucide-circle-help"
@@ -115,7 +114,7 @@ const qaAsyncData = useAsyncData(
 const [
   { data: tenantPages },
   { data: existingQaScopes },
-  { data, pending, refresh, error: qaError },
+  { data, refresh, error: qaError },
 ] = await Promise.all([tenantPagesAsyncData, existingQaScopesAsyncData, qaAsyncData])
 
 const pageScopes = computed(() => {

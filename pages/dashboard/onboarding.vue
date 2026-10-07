@@ -8,15 +8,11 @@
         </div>
 
         <div class="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
-          <NuxtPage v-if="restored" />
-          <p v-else-if="draft.error.value" class="py-16 text-sm text-error" role="alert">{{ draft.error.value }}</p>
-          <div v-else class="flex h-full items-center justify-center py-16" aria-live="polite">
-            <UIcon name="i-lucide-loader-circle" class="size-6 animate-spin text-muted" />
-            <span class="sr-only">Loading your answers</span>
-          </div>
+          <p v-if="restoreError" class="py-16 text-sm text-error" role="alert">{{ getErrorMessage(restoreError, 'Your saved answers could not be loaded.') }}</p>
+          <NuxtPage v-else />
         </div>
 
-        <div v-if="currentStep && restored" class="shrink-0 border-t border-default px-6 py-4">
+        <div v-if="currentStep && !restoreError" class="shrink-0 border-t border-default px-6 py-4">
           <p v-if="draft.error.value" class="mb-3 text-sm text-error">{{ draft.error.value }}</p>
           <div class="flex items-center justify-between gap-4">
             <UButton variant="link" color="neutral" label="Back" @click="goBack" />
@@ -87,9 +83,9 @@ import {
 import { useOnboardingDraft } from '~/composables/useOnboardingDraft'
 
 // This route creates a new site, so it has no org or site of its own yet: there
-// is no orgSlug segment, so the dashboard layout requests no context and
-// renders the shared header without org nav.
-definePageMeta({ layout: 'dashboard' })
+// is no orgSlug segment, so the dashboard layout requests no context, and it
+// declares no tabs, so the layout renders the shared header without them.
+definePageMeta({ layout: 'dashboard', tabs: false })
 
 const route = useRoute()
 const router = useRouter()
@@ -115,22 +111,14 @@ const canAdvance = computed(() => {
 // step reloaded mid-flow, a step URL opened cold. This component is the parent
 // route — step-to-step navigation keeps it mounted — so the draft is fetched
 // once per page load and never again while the flow runs.
-const restored = ref(false)
-
-onMounted(async () => {
-  const requested = currentStep.value
-  // Starting from an empty form would save blanks over the draft, so a draft
-  // that cannot be read stops the flow here.
-  try {
-    await draft.restore()
-  } catch (cause) {
-    draft.error.value = getErrorMessage(cause, 'Your saved answers could not be loaded.')
-    return
-  }
-
+const requested = currentStep.value
+// Starting from an empty form would save blanks over the draft, so a draft
+// that cannot be read stops the flow here.
+const { error: restoreError } = await useAsyncData('onboarding-draft', () => draft.restore())
+if (!restoreError.value) {
   if (route.params.step && !requested) {
     // Not a step at all.
-    await router.replace('/dashboard/onboarding')
+    await navigateTo('/dashboard/onboarding', { replace: true })
   } else if (requested) {
     // A step the owner has not reached, or one that no longer applies to the
     // answers they gave, is not theirs to land on: an empty form there would
@@ -139,12 +127,10 @@ onMounted(async () => {
     // where it goes.
     const resume = resumeStep.value
     if (indexOf(requested.id) === -1 || indexOf(requested.id) > indexOf(resume.id)) {
-      await router.replace(onboardingStepPath(resume.id))
+      await navigateTo(onboardingStepPath(resume.id), { replace: true })
     }
   }
-
-  restored.value = true
-})
+}
 
 async function goBack() {
   const target = previousStep.value

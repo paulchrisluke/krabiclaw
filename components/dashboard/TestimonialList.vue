@@ -3,7 +3,6 @@
     read-only
     title="Reviews"
     :items="listItems"
-    :pending="pending"
     :error="error ? getErrorMessage(error, 'Reviews request failed') : null"
     empty-title="No reviews yet"
     empty-icon="i-lucide-star"
@@ -44,16 +43,12 @@ const dashboardApi = useDashboardApi()
 const level = useRouteLevel()
 const organizationId = await useDashboardOrganizationId()
 
-const { data, pending, error } = await useAsyncData(
+const { data, error } = await useAsyncData(
   () => locationScope.value ? `dashboard-location-reviews-${organizationId}-${locationScope.value}` : `dashboard-organization-reviews-${organizationId}`,
   () => dashboardApi<{ reviews: OrganizationTestimonial[] }>(
     `/api/editor/organizations/${organizationId}/reviews`,
     { query: locationScope.value ? { location_id: locationScope.value } : undefined, validate: isTestimonialsResponse },
   ),
-  // Nuxt blocks navigation on useAsyncData by default; the client does not
-  // need to wait for this to paint the route, and `pending` already drives a
-  // loading state here.
-  { lazy: true },
 )
 
 const testimonials = computed(() => data.value?.reviews ?? [])

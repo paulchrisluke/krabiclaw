@@ -557,9 +557,8 @@ async function writeSelection(action: 'block' | 'open'): Promise<void> {
 
 const locationOptions = computed(() => [{ label: 'All locations', value: AGENDA_FILTER_ALL, imageUrl: null as string | null }, ...locations.value.map(location => ({ label: location.title, value: location.id, imageUrl: location.imageUrl }))])
 
-onMounted(async () => {
-  await ensureLoaded(neededKeys())
-})
+// The period on screen is read before the level renders; others as they are shown.
+await ensureLoaded(neededKeys())
 
 // The URL says which view and which month; the data follows the period.
 watch([view, monthKey, shownYear], () => {

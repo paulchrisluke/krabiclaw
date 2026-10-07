@@ -2,13 +2,12 @@
   <!-- One attribute, edited in its own type: a number typed into a text box arrives as a string the validator refuses. -->
   <DashboardLeafPanel
     id="product-attribute"
-    :ready="p.ready.value && Boolean(definition)"
     :title="definition?.name ?? ''"
     :lead="definition?.description ?? undefined"
     :saving="p.saving.value"
     :disabled="p.saveDisabled.value"
     :save-label="p.saveLabel.value"
-    :error="p.saveError.value || ''"
+    :error="p.loadError.value || p.saveError.value || ''"
     @cancel="p.revert"
     @save="p.save(level.to.value ?? undefined)"
   >
@@ -42,6 +41,6 @@ const definition = computed(() => p.definitions.value.find(entry => entry.id ===
 
 // An attribute this catalog does not define is not a page (DESIGN.md).
 watchEffect(() => {
-  if (p.ready.value && !definition.value) showError(createError({ statusCode: 404, statusMessage: 'Page not found' }))
+  if (p.product.value && !p.loadError.value && !definition.value) showError(createError({ statusCode: 404, statusMessage: 'Page not found' }))
 })
 </script>

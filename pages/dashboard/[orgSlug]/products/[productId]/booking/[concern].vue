@@ -1,32 +1,34 @@
 <template>
-  <DashboardLeafPanel :id="`booking-${concern}`" :title="setting.title" :lead="setting.lead" :ready="p.ready.value" :saving="p.saving.value" :disabled="!valid || !dirty" :error="p.saveError.value ?? ''" @cancel="p.revert" @save="save">
-    <SettingRow v-if="concern === 'enabled'" v-model="p.form.bookable" label="Use a booking calendar" />
-    <UFormField v-else-if="concern === 'duration'" label="Duration in minutes" required>
-      <UInput v-model="p.form.booking_duration" inputmode="numeric" pattern="[0-9]*" class="w-full" />
-    </UFormField>
-    <div v-else-if="concern === 'capacity'" class="space-y-6">
-      <URadioGroup v-model="capacityChoice" :items="capacityOptions" variant="card" />
-      <UFormField v-if="capacityChoice === 'group'" label="Maximum guests per session" required>
-        <UInput v-model="p.form.booking_capacity" inputmode="numeric" pattern="[0-9]*" class="w-full" />
+  <DashboardLeafPanel :id="`booking-${concern}`" :title="setting.title" :lead="setting.lead" :saving="p.saving.value" :disabled="!p.product.value || !valid || !dirty" :error="p.loadError.value ?? p.saveError.value ?? ''" @cancel="p.revert" @save="save">
+    <template v-if="p.product.value">
+      <SettingRow v-if="concern === 'enabled'" v-model="p.form.bookable" label="Use a booking calendar" />
+      <UFormField v-else-if="concern === 'duration'" label="Duration in minutes" required>
+        <UInput v-model="p.form.booking_duration" inputmode="numeric" pattern="[0-9]*" class="w-full" />
       </UFormField>
-    </div>
-    <URadioGroup v-else-if="concern === 'confirmation'" v-model="p.form.confirmation_mode" :items="[{ value: 'instant', label: 'Confirm automatically' }, { value: 'review', label: 'Review each request' }]" variant="card" />
-    <UFormField v-else-if="concern === 'assignment'" label="Who guests meet">
-      <p v-if="membersError" role="alert" class="mb-3 text-error">Team members could not be loaded.</p>
-      <URadioGroup v-else v-model="assignedMember" :items="memberOptions" variant="card" class="w-full" />
-    </UFormField>
-    <div v-else-if="concern === 'payment'">
-      <SettingRow v-model="p.form.online_payment_required" :disabled="!paymentEntitled && !p.form.online_payment_required" label="Require online payment for paid sessions" />
-      <template v-if="!paymentEntitled">
-        <p class="mt-4 text-sm text-muted">Online payments require Commerce. Paid sessions can be booked without online payment when this setting is off.</p>
-        <UButton class="mt-3" :to="`/dashboard/${route.params.orgSlug}/settings/payments?tab=plan`" variant="outline">View plans</UButton>
-      </template>
-    </div>
-    <LocationTimezoneField v-else-if="concern === 'location'" v-model="onlineTimezone" />
-    <UFormField v-else-if="concern === 'calendar'" label="Calendar name" hint="Optional">
-      <p class="mb-3 text-sm text-muted">{{ p.form.calendar_group.length }}/64</p>
-      <UInput v-model="p.form.calendar_group" :maxlength="64" variant="none" :ui="{ base: 'px-0 text-2xl md:text-2xl' }" class="w-full" />
-    </UFormField>
+      <div v-else-if="concern === 'capacity'" class="space-y-6">
+        <URadioGroup v-model="capacityChoice" :items="capacityOptions" variant="card" />
+        <UFormField v-if="capacityChoice === 'group'" label="Maximum guests per session" required>
+          <UInput v-model="p.form.booking_capacity" inputmode="numeric" pattern="[0-9]*" class="w-full" />
+        </UFormField>
+      </div>
+      <URadioGroup v-else-if="concern === 'confirmation'" v-model="p.form.confirmation_mode" :items="[{ value: 'instant', label: 'Confirm automatically' }, { value: 'review', label: 'Review each request' }]" variant="card" />
+      <UFormField v-else-if="concern === 'assignment'" label="Who guests meet">
+        <p v-if="membersError" role="alert" class="mb-3 text-error">Team members could not be loaded.</p>
+        <URadioGroup v-else v-model="assignedMember" :items="memberOptions" variant="card" class="w-full" />
+      </UFormField>
+      <div v-else-if="concern === 'payment'">
+        <SettingRow v-model="p.form.online_payment_required" :disabled="!paymentEntitled && !p.form.online_payment_required" label="Require online payment for paid sessions" />
+        <template v-if="!paymentEntitled">
+          <p class="mt-4 text-sm text-muted">Online payments require Commerce. Paid sessions can be booked without online payment when this setting is off.</p>
+          <UButton class="mt-3" :to="`/dashboard/${route.params.orgSlug}/settings/payments?tab=plan`" variant="outline">View plans</UButton>
+        </template>
+      </div>
+      <LocationTimezoneField v-else-if="concern === 'location'" v-model="onlineTimezone" />
+      <UFormField v-else-if="concern === 'calendar'" label="Calendar name" hint="Optional">
+        <p class="mb-3 text-sm text-muted">{{ p.form.calendar_group.length }}/64</p>
+        <UInput v-model="p.form.calendar_group" :maxlength="64" variant="none" :ui="{ base: 'px-0 text-2xl md:text-2xl' }" class="w-full" />
+      </UFormField>
+    </template>
   </DashboardLeafPanel>
 </template>
 
@@ -58,13 +60,13 @@ const paymentEntitled = computed(() => {
   if (!plan) throw createError({ statusCode: 500, statusMessage: 'Organization billing status is unavailable', fatal: true })
   return getPlanEntitlements(plan).payments === true
 })
-const { data: members, error: membersError, status: membersStatus } = await useFetch<{ members: { id: string; name: string }[] }>(() => `/api/organizations/${dashboard.organization.value?.id}/members/scheduling`, { server: false })
+const { data: members, error: membersError, status: membersStatus } = await useFetch<{ members: { id: string; name: string }[] }>(() => `/api/organizations/${dashboard.organization.value?.id}/members/scheduling`)
 const assignedMember = computed({ get: () => p.form.assigned_member_id, set: (value: string | null) => { p.form.assigned_member_id = value ?? ''; p.form.scheduling_mode = value ? 'provider' : 'legacy' } })
 const memberOptions = computed(() => [{ label: 'Use the business schedule', value: '' }, ...(members.value?.members.map(member => ({ label: member.name, value: member.id })) ?? [])])
 const setting = computed(() => settings[concern.value as keyof typeof settings] ?? { title: '', lead: '' })
 watchEffect(() => {
   if (level.mode.value === 'yield') return
-  if ((['location', 'calendar'].includes(concern.value) && p.locationId.value) || (concern.value === 'calendar' && p.ready.value && !p.product.value?.booking?.online_timezone) || !(concern.value in settings) || (concern.value !== 'enabled' && !p.product.value?.booking && p.ready.value)) showError(createError({ statusCode: 404, statusMessage: 'Page not found' }))
+  if ((['location', 'calendar'].includes(concern.value) && p.locationId.value) || (concern.value === 'calendar' && p.product.value && !p.loadError.value && !p.product.value.booking?.online_timezone) || !(concern.value in settings) || (concern.value !== 'enabled' && p.product.value && !p.loadError.value && !p.product.value.booking)) showError(createError({ statusCode: 404, statusMessage: 'Page not found' }))
 })
 const capacityOptions = [{ value: 'one', label: 'One guest' }, { value: 'group', label: 'A group of guests' }, { value: 'unlimited', label: 'No guest limit' }, { value: 'closed', label: 'Closed to new guests' }]
 const capacityChoice = ref('unlimited')

@@ -13,6 +13,15 @@
     </template>
 
     <UAlert
+      v-if="loadError"
+      class="mb-6"
+      color="error"
+      variant="soft"
+      icon="i-lucide-triangle-alert"
+      title="Question could not be loaded"
+      :description="getErrorMessage(loadError, 'Q&A request failed')"
+    />
+    <UAlert
       v-if="errorMessage"
       class="mb-6"
       color="error"
@@ -61,7 +70,7 @@ const router = useRouter()
 const dashboardApi = useDashboardApi()
 
 const qaId = computed(() => String(route.params.qaId ?? ''))
-const qaPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/qa`)
+const qaPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/settings/website/qa`)
 const recordPath = computed(() => `${qaPath.value}/${qaId.value}`)
 const sectionUrl = (section: SectionKey) => router.resolve({ path: `${recordPath.value}/${section}`, query: route.query }).fullPath
 const level = useRouteLevel()
@@ -91,7 +100,7 @@ const errorMessage = ref('')
  * attribute it reports back, which the scoped PATCH needs. A location's list
  * is not scoped, so its record is found in the list.
  */
-const { data, refresh } = await useAsyncData(
+const { data, error: loadError, refresh } = await useAsyncData(
   () => `dashboard-qa-record-${organizationId}-${locationScope.value ?? 'organization'}-${qaId.value}`,
   async () => isNew.value
     ? null
@@ -99,7 +108,6 @@ const { data, refresh } = await useAsyncData(
       query: locationScope.value ? undefined : { id: qaId.value },
       validate: isQaResponse,
     }),
-  { server: false },
 )
 
 const record = computed(() => data.value?.qa.find(row => row.id === qaId.value) ?? null)

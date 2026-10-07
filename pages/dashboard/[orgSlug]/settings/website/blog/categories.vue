@@ -11,7 +11,6 @@
         title="Categories"
         description="Readers browse articles by category, in this order, with subcategories under their parent. Every published article is in one."
         :items="listItems"
-        :pending="pending"
         :error="loadError"
         empty-title="No categories yet"
         empty-icon="i-lucide-folder"
@@ -69,7 +68,7 @@ const level = useRouteLevel()
 
 const collectionTabs = ARTICLE_COLLECTION_SLUGS.map(slug => ({ value: slug, label: ARTICLE_COLLECTIONS[slug].label }))
 const collection = ref<ArticleCollection>('blog')
-const { data, pending, error, refresh } = useArticleCategories(organizationId, collection)
+const { data, error, refresh } = await useArticleCategories(organizationId, collection)
 
 const editing = ref(false)
 const removingId = ref<string | null>(null)

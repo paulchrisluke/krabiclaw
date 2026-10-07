@@ -5,12 +5,9 @@
     here, and owns both columns while it is open.
   -->
   <DashboardIndexPanel id="organization-links-items" title="Links">
-    <UAlert v-if="editor.errorMessage.value" class="mb-6" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="editor.errorMessage.value" />
-    <div v-if="!editor.editorReady.value" class="space-y-3">
-      <USkeleton v-for="index in 3" :key="index" class="h-20 rounded-2xl" />
-    </div>
+    <UAlert v-if="editor.loadError.value || editor.errorMessage.value" class="mb-6" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="editor.loadError.value ?? editor.errorMessage.value" />
     <DashboardListEditor
-      v-else
+      v-if="!editor.loadError.value"
       v-model:editing="editing"
       title="Links"
       description="Add, hide, and reorder the buttons shown on /links."
@@ -34,7 +31,7 @@
 
     <!-- Reordering and removing are draft edits, committed here. -->
     <template #footer>
-      <DashboardPanelFooter :loading="editor.saving.value" :disabled="!editor.editorReady.value" @cancel="revert" @save="editor.save" />
+      <DashboardPanelFooter :loading="editor.saving.value" :disabled="Boolean(editor.loadError.value)" @cancel="revert" @save="editor.save" />
     </template>
   </DashboardIndexPanel>
 </template>

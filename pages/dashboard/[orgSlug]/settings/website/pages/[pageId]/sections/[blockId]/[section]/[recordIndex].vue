@@ -12,10 +12,9 @@
     v-else
     id="organization-page-block-record"
     :title="records.recordTitle.value"
-    :ready="editor.ready.value"
     :saving="editor.saving.value"
     :disabled="editor.saveDisabled.value"
-    :error="editor.errorMessage.value"
+    :error="editor.loadError.value ?? editor.errorMessage.value"
     @cancel="editor.revert"
     @save="editor.save"
   >
@@ -60,7 +59,8 @@ const records = useTenantPageBlockRecords(organizationId, pageId, blockId, colle
 
 // A record that is not there is not a page, and neither is a concern it does not have.
 watchEffect(() => {
-  if (!editor.ready.value) return
+  // A page that was not read has no records to look in; the page level reports why.
+  if (editor.loadError.value) return
   if (!records.record.value) return showNotFound()
   const open = level.child.value
   if (open && !records.recordSections.value.some(section => section.key === open)) showNotFound()

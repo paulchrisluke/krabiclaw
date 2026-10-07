@@ -3,15 +3,14 @@
     id="organization-page-url"
     title="URL"
     lead="Where this page lives on your website. Changing it keeps the old address working by redirecting it here."
-    :ready="editor.ready.value"
     :saving="editor.saving.value"
     :disabled="editor.saveDisabled.value || Boolean(pathError)"
     :save-label="editor.saveLabel.value"
-    :error="pathError || editor.errorMessage.value"
+    :error="editor.loadError.value ?? (pathError || editor.errorMessage.value)"
     @cancel="editor.revert"
     @save="editor.save"
   >
-    <UFormField label="Path" required>
+    <UFormField v-if="!editor.loadError.value" label="Path" required>
       <UInput v-model="editor.draft.value.path" autofocus class="w-full" />
     </UFormField>
   </DashboardLeafPanel>

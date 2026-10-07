@@ -23,12 +23,8 @@
           :description="loadError"
           class="mb-4"
         />
-        <div v-if="loading" class="space-y-3">
-          <USkeleton v-for="i in 3" :key="i" class="h-16 rounded-md" />
-        </div>
-
         <UEmpty
-          v-else-if="!loadError && domainGroups.length === 0"
+          v-if="!loadError && !domainGroups?.length"
           icon="i-lucide-globe"
           title="No custom domains"
           description="Add a paid-plan domain when you are ready to connect one."
@@ -255,13 +251,10 @@ if (!organizationId.value) {
 const { trackDomainConnected } = useAnalytics()
 const route = useRoute()
 
-const loading = ref(true)
-const loadError = ref<string | null>(null)
 const adding = ref(false)
 const syncingGroupId = ref<string | null>(null)
 const promotingGroupId = ref<string | null>(null)
 const deletingGroupId = ref<string | null>(null)
-const domainGroups = ref<DomainGroup[]>([])
 const expandedGroups = ref<Record<string, boolean>>({})
 const addModalOpen = ref(false)
 const addError = ref('')
@@ -277,23 +270,6 @@ const recordColumns = [
   { accessorKey: 'value', header: 'Value' },
   { id: 'actions', header: '' },
 ]
-
-async function loadDomains({ background = false }: { background?: boolean } = {}) {
-  if (!organizationId.value) return
-  if (!background) loading.value = true
-  loadError.value = null
-  try {
-    const response = await dashboardApi<DomainsResponse>(
-      `/api/organizations/${organizationId.value}/domains`,
-      { validate: isDomainsResponse },
-    )
-    domainGroups.value = response.domain_groups
-  } catch (error) {
-    loadError.value = getErrorMessage(error, 'Failed to load domains')
-  } finally {
-    if (!background) loading.value = false
-  }
-}
 
 function openAddModal() {
   addModalOpen.value = true
@@ -330,7 +306,7 @@ async function addDomain() {
           && requestedHostnames.every(hostname => typeof hostname === 'string')
       },
     })
-    domainGroups.value = mergeGroups(domainGroups.value, response.domain_groups ?? [])
+    domainGroups.value = mergeGroups(domainGroups.value ?? [], response.domain_groups ?? [])
     const newGroup = response.domain_groups?.[0]
     if (newGroup) expandedGroups.value[newGroup.id] = true
     trackDomainConnected(addForm.domain.trim(), organizationId.value)
@@ -430,7 +406,7 @@ async function syncGroup(group: DomainGroup) {
       validate: (value): value is { success: true; domain: ApiRecord } =>
         isRecord(value) && value.success === true && isRecord(value.domain),
     })
-    await loadDomains({ background: true })
+    await loadDomains()
   } catch {
     actionError.value = 'Domain check failed'
   } finally {
@@ -449,7 +425,7 @@ async function makePrimary(group: DomainGroup) {
       validate: (value): value is { success: true; domain: ApiRecord } =>
         isRecord(value) && value.success === true && isRecord(value.domain),
     })
-    await loadDomains({ background: true })
+    await loadDomains()
   } catch {
     actionError.value = 'Failed to update primary domain'
   } finally {
@@ -470,9 +446,9 @@ async function deleteGroup(group: DomainGroup) {
           isRecord(value) && value.success === true,
       })
     }
-    domainGroups.value = domainGroups.value.filter((candidate) => candidate.id !== group.id)
+    domainGroups.value = domainGroups.value?.filter((candidate) => candidate.id !== group.id)
   } catch {
-    await loadDomains({ background: true })
+    await loadDomains()
     actionError.value = 'Failed to remove domain'
   } finally {
     deletingGroupId.value = null
@@ -493,14 +469,17 @@ function formatDateTime(value: string) {
 
 watch(() => route.params.orgSlug, () => {
   expandedGroups.value = {}
-  void loadDomains()
 })
 
 watch(addModalOpen, (open) => {
   if (!open) resetAddModal()
 })
 
-await loadDomains()
+const { data: domainGroups, error: domainsError, refresh: loadDomains } = await useAsyncData(
+  () => `organization-domains:${organizationId.value}`,
+  async () => (await dashboardApi<DomainsResponse>(`/api/organizations/${organizationId.value}/domains`, { validate: isDomainsResponse })).domain_groups,
+)
+const loadError = computed(() => domainsError.value ? getErrorMessage(domainsError.value, 'Failed to load domains') : null)
 
 useSeoMeta({ title: 'Domains | Krabiclaw Dashboard', robots: 'noindex, nofollow' })
 </script>

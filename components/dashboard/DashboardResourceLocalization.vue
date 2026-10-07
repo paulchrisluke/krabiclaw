@@ -356,15 +356,13 @@ function requestClose(): void {
   modalOpen.value = false
 }
 
-// Client-only: the sheet is, and a mode reached by a link opens on arrival.
-onMounted(() => {
-  watch([open, () => props.resourceId], ([value]) => {
-    requestGeneration += 1
-    clearDraft()
-    markDraftClean()
-    editorError.value = null
-    if (value) void loadLanguages().then(load)
-  }, { immediate: true })
-  watch(locale, () => { void load() })
-})
+// A mode reached by a link opens on arrival.
+watch([open, () => props.resourceId], ([value]) => {
+  requestGeneration += 1
+  clearDraft()
+  markDraftClean()
+  editorError.value = null
+  if (value) void loadLanguages().then(load)
+}, { immediate: true })
+watch(locale, () => { void load() })
 </script>

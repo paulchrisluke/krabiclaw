@@ -29,16 +29,32 @@ export function useDashboardPane() {
 export function useDashboardMenu() {
   const route = useRoute()
   const scopeHeaderModel = inject(dashboardScopeHeaderModelKey, null)
-  const organizationSettings = useOrganizationSettingsNavigation()
-  const personal = computed(() => typeof route.name === 'string' && route.name.startsWith('dashboard-account'))
+  const session = authClient.useSession()
+  const organizationsState = authClient.useListOrganizations()
 
-  const orgBase = computed(() => {
-    const slug = route.params.orgSlug
-    return typeof slug === 'string' && slug ? `/dashboard/${slug}` : null
+  /**
+   * The organization the shell is in. A dashboard route that names an
+   * organization is that organization's — the server authorized it for this
+   * request. Every other route — Account settings, Your availability — is in
+   * Better Auth's active organization: reading the scope off the route name
+   * flipped an owner inside an organization to Personal the moment they opened
+   * one. Personal is a route with no organization and a session with no active
+   * organization, which "Switch to Personal" sets.
+   */
+  const dashboard = useDashboardOrganization()
+  const activeOrganizationId = computed(() => (session.value.data?.session as { activeOrganizationId?: string | null } | undefined)?.activeOrganizationId ?? null)
+  const organization = computed(() => {
+    const routed = dashboard.organization.value
+    if (routed) return { id: routed.id, slug: routed.slug, name: routed.name }
+    return unref(organizationsState).data?.find(candidate => candidate.id === activeOrganizationId.value) ?? null
   })
+  const personal = computed(() => !dashboard.organization.value && !activeOrganizationId.value)
+  const organizationSettings = useOrganizationSettingsNavigation(organization)
+
+  const orgBase = computed(() => organization.value ? `/dashboard/${encodeURIComponent(organization.value.slug)}` : null)
 
   /** The Menu tab is the organization's settings level; its rows are the leaves beneath it. */
-  const menuPageTo = computed(() => personal.value ? '/dashboard/account/menu' : orgBase.value ? `${orgBase.value}/settings` : '/dashboard')
+  const menuPageTo = computed(() => orgBase.value ? `${orgBase.value}/settings` : '/dashboard/account/menu')
 
   const notificationsTo = computed(() => orgBase.value ? `${orgBase.value}/settings/notifications` : null)
 
@@ -52,7 +68,7 @@ export function useDashboardMenu() {
   // Airbnb's "Switch to hosting": one row above Log out. One organization switches straight to it;
   // several open the list under Account settings; none offers to start one.
   const switchRow = computed(() => {
-    const organizations = (scopeHeaderModel?.value.peers ?? []).filter(peer => peer.label !== 'Personal')
+    const organizations = (scopeHeaderModel?.value.peers ?? []).filter(peer => peer.id)
     if (organizations.length === 1) return organizations[0]!.to ? { id: 'switch-organization', label: `Switch to ${organizations[0]!.label}`, to: organizations[0]!.to } : { id: 'switch-organization', label: `Switch to ${organizations[0]!.label}`, action: {} }
     if (organizations.length > 1) return { id: 'switch-organization', label: 'Switch to an organization', to: '/dashboard/account/profile/organizations' }
     return { id: 'switch-organization', label: 'New organization', to: '/dashboard/onboarding' }
@@ -69,5 +85,5 @@ export function useDashboardMenu() {
   /** Organization switcher. */
   const scopeModel = computed(() => scopeHeaderModel?.value ?? null)
 
-  return { menuPageTo, notificationsTo, groups, activeItem, scopeModel, logOut, personal }
+  return { menuPageTo, notificationsTo, groups, activeItem, scopeModel, logOut, personal, organization, activeOrganizationId }
 }

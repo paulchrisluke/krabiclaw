@@ -7,7 +7,6 @@
       :title="collection?.name ?? presentation.collectionLabel"
       :description="`Customers see ${presentation.itemLabelPlural.toLowerCase()} in this order.`"
       :items="listItems"
-      :pending="pending"
       :error="loadError"
       :empty-title="`No ${presentation.itemLabelPlural.toLowerCase()} here yet`"
       empty-icon="i-lucide-utensils"
@@ -74,9 +73,6 @@ import DashboardMediaThumb from '~/components/dashboard/DashboardMediaThumb.vue'
 import DashboardListItemDialog from '~/components/dashboard/DashboardListItemDialog.vue'
 import type { Product } from '~/server/types/products'
 import { getErrorMessage } from '~/utils/errors'
-import { formatProductMoney } from '~/utils/product-money'
-import { selectPrice } from '~/shared/prices'
-import { isCurrencyCode } from '~/shared/currencies'
 import { requireProductPresentation } from '~/utils/product-presentation'
 
 
@@ -91,14 +87,10 @@ if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Organization
 // The organization's own words: a restaurant's Section of dishes, everyone else's Collection.
 const presentation = requireProductPresentation(vertical, dashboard.organization.value?.theme_id)
 const collectionId = computed(() => String(route.params.collectionId ?? route.params.categoryId ?? ''))
-const rawCurrency = dashboard.organization.value?.default_currency
-if (!isCurrencyCode(rawCurrency)) throw createError({ statusCode: 500, statusMessage: 'Unsupported organization currency' })
-const currency = rawCurrency
 const locationId = useLocationScope()
 
 const catalog = useProductCatalog(organizationId, locationId)
 const collections = catalog.collections
-const pending = catalog.pending
 
 // Reorder is a mode: the local order stands while the edit state is open and
 // commits once when it closes, so it is held apart from the shared catalog.
@@ -134,18 +126,13 @@ const loadError = computed(() => (catalog.error.value ? getErrorMessage(catalog.
 const catalogPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/products`)
 const scoped = (path: string, query: Record<string, string | undefined> = {}) => router.resolve({ path, query: { location_id: locationId.value ?? undefined, ...query } }).fullPath
 const listItems = computed(() => products.value.map(row => ({ id: row.id, title: row.name, to: scoped(`${catalogPath.value}/${row.id}`), row })))
-// Another collection in the same scope.
-const moveTargets = computed(() => collections.value.filter(row => row.id !== collectionId.value))
+// Another collection in the same scope: the site-wide ones, or this one's location's.
+const moveTargets = computed(() => collections.value.filter(row => row.id !== collectionId.value && row.location_id === collection.value?.location_id))
 
 useSeoMeta({ title: () => `${collection.value?.name ?? presentation.collectionLabel} | Krabiclaw Dashboard`, robots: 'noindex, nofollow' })
 
-/** The offer this location shows, resolved through the one selection contract. */
-function priceLabel(product: Product) {
-  const selection = { currency, location_id: locationId.value, at: new Date().toISOString() }
-  const offers = product.variants.flatMap(variant => selectPrice(variant.prices, selection) ?? [])
-  const lowest = offers.reduce<typeof offers[number] | null>((best, offer) => (!best || offer.unit_amount < best.unit_amount ? offer : best), null)
-  return formatProductMoney(lowest)
-}
+const { locations } = await useOrganizationLocations()
+const { priceLabel } = useCatalogPrice(locationId, locations)
 
 const load = catalog.refresh
 
