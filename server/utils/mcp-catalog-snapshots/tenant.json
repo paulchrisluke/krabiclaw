@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:7700b391c79dcec88ca2cddf1bff821bc6cff286cd09534bc3ba1ca69831a1d3",
+  "fingerprint": "sha256:c877b3e799fb9e9d955fdd56a779d039e6c6477ee92d1f2458f80209e930b094",
   "tools": [
     {
       "name": "append_content_block",
@@ -19649,7 +19649,7 @@
             "type": "string"
           },
           "font_preset": {
-            "description": "Website heading and body fonts, on every template: default (Default), mali (Mali), sarabun (Sarabun), prompt (Prompt), kanit (Kanit with Sarabun), ibm-plex-sans-thai (IBM Plex Sans Thai), noto-serif-thai (Noto Serif Thai with Noto Sans Thai), inter (Inter), dm-sans (DM Sans), montserrat (Montserrat), lora (Lora), playfair-display (Playfair Display with Inter), cormorant-garamond (Cormorant Garamond with Inter). Thai and Japanese text renders in every choice.",
+            "description": "Website heading and body fonts, on every template: default (Default), mali (Mali), sarabun (Sarabun), prompt (Prompt), kanit (Kanit with Sarabun), ibm-plex-sans-thai (IBM Plex Sans Thai), noto-serif-thai (Noto Serif Thai with Noto Sans Thai), inter (Inter), dm-sans (DM Sans), montserrat (Montserrat), lora (Lora), playfair-display (Playfair Display with Inter), cormorant-garamond (Cormorant Garamond with Inter). Thai, Vietnamese and Japanese text renders in every choice.",
             "enum": [
               "default",
               "mali",

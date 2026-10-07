@@ -5,7 +5,7 @@
   browser downloads a face only when rendered text uses it, so only the
   selected preset's files are fetched. Without a preset rule, the theme's own
   --font-heading and --font-sans apply. Every stack ends with the script
-  fallbacks from base.css, so a family without Thai or Japanese glyphs leaves
+  fallbacks from base.css, so a family without Thai, Vietnamese or Japanese glyphs leaves
   those characters to a font that has them.
 */
 /* Each template's own heading face: what Default renders. The CMS preview names
