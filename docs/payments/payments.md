@@ -98,6 +98,33 @@ Growth's features and Payments. Free and Growth do not include Payments;
 historical Basic/Starter catalog names do not grant it. Existing transaction,
 refund, dispute, receipt and usage servicing is independent of new-sale entitlement.
 
+## Payments help articles
+
+The platform's canonical Docs collection owns these articles. They were created
+and published through MCP on October 7, 2026 under **Payments and payouts**:
+
+- [When you'll get your payout](https://krabiclaw.com/docs/when-youll-get-your-payout)
+- [How refunds work](https://krabiclaw.com/docs/how-refunds-work)
+- [Fees and invoices](https://krabiclaw.com/docs/fees-and-invoices)
+- [Disputes](https://krabiclaw.com/docs/disputes)
+- [Changing your bank account](https://krabiclaw.com/docs/changing-your-bank-account)
+
+`PaymentsHelp` links these stable platform URLs from Earnings, Paid, payout
+details and Payments → Payouts. The articles remain CMS content; dashboard
+components own only their links. Absolute platform URLs keep tenant-hosted
+dashboards pointed at the same articles. Go to your transactions remains scoped
+to the selected business.
+
+Stripe's settlement timing and payout schedule are separate. Krabiclaw does not
+apply Airbnb check-in payout-release rules. Bank changes use Stripe Express;
+sent payouts cannot be redirected. Merchant refunds require authenticated browser
+approval; paid business cancellation/rejection refunds the remaining principal.
+Dispute evidence is submitted in Stripe, and Managed Risk covers unrecoverable
+negative balances rather than guaranteeing that disputed funds are retained.
+The 1.4% captured-volume fee remains billable after refunds/disputes; actual Stripe
+costs and subscription billing remain separate. Provider guidance is linked in
+the articles and brief verbatim excerpts are attributed.
+
 ## Activity and payment details
 
 Buyer navigation is Today, Calendar, Activity, Messages and Menu. Tenant

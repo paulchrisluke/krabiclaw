@@ -1,7 +1,7 @@
 # Stripe Connect onboarding
 
 Krabiclaw creates one Stripe Accounts v2 merchant account per Better Auth
-organization. The account uses Stripe's full dashboard and Stripe-hosted
+organization. The account uses Stripe's Express Dashboard and Stripe-hosted
 onboarding. Stripe collects and stores verification data; Krabiclaw stores only
 the Stripe account ID, capability status, normalized requirements, country, and
 mode.

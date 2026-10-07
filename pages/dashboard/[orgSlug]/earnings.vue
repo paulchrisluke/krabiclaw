@@ -73,6 +73,7 @@
         </div>
         <UButton class="mt-4" color="neutral" variant="soft" label="View all reports" :to="`${level.path.value}/performance`" />
       </section>
+      <PaymentsHelp />
     </div>
   </DashboardIndexPanel>
 </template>
@@ -80,6 +81,7 @@
 <script setup lang="ts">
 import { getLocalTimeZone, today } from '@internationalized/date'
 import PayoutCard from '~/components/dashboard/PayoutCard.vue'
+import PaymentsHelp from '~/components/dashboard/PaymentsHelp.vue'
 import { paymentMoney } from '~/shared/payment-display'
 import { isEarningsPerformance, isPayoutsView, type EarningsPerformance, type PayoutsView } from '~/shared/earnings-display'
 import { formatCalendarDate } from '~/utils/timezone'

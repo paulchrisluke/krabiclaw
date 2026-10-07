@@ -35,6 +35,7 @@
           <UButton v-if="data.next_cursor" class="mt-4" color="neutral" variant="soft" label="Show more" @click="after = data.next_cursor" />
         </template>
       </template>
+      <PaymentsHelp class="mt-8" />
     </div>
 
     <template v-if="paid.length" #footer>
@@ -47,6 +48,7 @@
 </template>
 
 <script setup lang="ts">
+import PaymentsHelp from '~/components/dashboard/PaymentsHelp.vue'
 import { paymentMoney } from '~/shared/payment-display'
 import { downloadCsv, isPayoutsView, payoutDate, payoutStatusLabel, type PayoutRow, type PayoutsView } from '~/shared/earnings-display'
 import { minorAmountToMajor } from '~/shared/prices'
