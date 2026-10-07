@@ -266,7 +266,9 @@ export interface BookingChangeEventInput {
 
 export function bookingChangeMessage(input: BookingChangeEventInput): NotificationMessage {
   return {
-    title: `${input.guestName} ${input.status} the ${input.recordKind} change`,
+    title: input.status === 'requested'
+      ? `Changes requested for ${input.guestName}'s ${input.recordKind}`
+      : `${input.guestName} ${input.status} the ${input.recordKind} changes`,
     preheader: input.summary,
     hero: null,
     intro: input.summary,

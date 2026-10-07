@@ -1217,9 +1217,6 @@ export async function notifyBookingChangeOwner(
   },
 ) {
   const noun = opts.noun
-  const title = opts.status === 'requested'
-    ? `Changes requested for ${opts.guestName}'s ${noun}`
-    : `${opts.guestName} ${opts.status} the ${noun} changes`
   const message = opts.status === 'requested'
     ? 'The guest has been asked to accept or decline. The original details remain unchanged until they accept.'
     : opts.status === 'accepted'
@@ -1242,7 +1239,7 @@ export async function notifyBookingChangeOwner(
   await notifyOwner(env, db, {
     ...opts,
     template: `${noun}.change_${opts.status}`,
-    title,
+    title: ownerMessage.title,
     payload: {
       request_id: opts.threadId,
       submission_type: opts.submissionType,
