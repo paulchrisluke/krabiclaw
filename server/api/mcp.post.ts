@@ -43,7 +43,7 @@ function logMcpEventDetached(
     : {};
   const toolName = MCP_TOOLS.find(tool => tool.name === input.toolName)?.name ?? null;
   const logInput = {
-    env, ...input, ...attribution, toolName, unknownToolName: input.unknownToolName ?? (input.toolName && !toolName ? input.toolName : null), cfRayId: input.cfRayId ?? (event.req.headers.get("cf-ray")) ?? null, sessionId: input.sessionId ?? (event.req.headers.get("mcp-session-id")) ?? null, catalogFingerprint: input.catalogFingerprint ?? TENANT_CATALOG_FINGERPRINT, };
+    env, ...input, ...attribution, toolName, unknownToolName: input.unknownToolName ?? (input.toolName && !toolName ? input.toolName : null), cfRayId: input.cfRayId ?? (event.req.headers.get("cf-ray")) ?? null, sessionId: input.sessionId ?? (event.req.headers.get("mcp-session-id")) ?? null, protocolVersion: input.protocolVersion ?? event.req.headers.get('mcp-protocol-version'), catalogFingerprint: input.catalogFingerprint ?? TENANT_CATALOG_FINGERPRINT, };
   const logged = logMcpToolCallEvent(db, logInput);
   const waitUntil = getCloudflareWaitUntil(event);
   waitUntil!(logged);
@@ -83,6 +83,7 @@ interface McpFactoryContext {
   event: H3Event;
   mcpUser: McpUserContext | undefined;
   cfEnv: ReturnType<typeof cloudflareEnv>;
+  requestId: JsonRpcId | undefined;
 }
 
 function factoryContextFrom(ctx: McpRequestContext): McpFactoryContext {
@@ -148,7 +149,7 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
   });
 
   server.setRequestHandler("tools/list", async () => {
-    const { event, mcpUser, cfEnv } = factoryContextFrom(ctx);
+    const { event, mcpUser, cfEnv, requestId } = factoryContextFrom(ctx);
     if (!mcpUser) throw new ProtocolError(MCP_ERROR.internal, "Missing authenticated MCP request context.");
     // organization_id is a KrabiClaw-specific extension for site-scoped tool
     // discovery — not part of the MCP spec's ListToolsRequestParams (only
@@ -201,7 +202,7 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
 
     const domains = [...new Set(tools.map((tool) => tool._meta["krabiclaw/toolInfo"].domain))];
     logMcpEventDetached(event, cfEnv.DB, {
-      organizationId: organizationCtx?.organizationId ?? null,  userId: mcpUser.userId, requestId: null, method: "tools/list", result: { count: tools.length, domains }, status: "success", httpStatus: 200, oauthClientId: mcpUser.oauthClientId ?? null, });
+      organizationId: organizationCtx?.organizationId ?? null,  userId: mcpUser.userId, requestId, method: "tools/list", arguments: { organization_id: organizationIdHeader }, result: { count: tools.length, domains, tools, _meta: catalogMeta(MCP_PUBLIC_TOOLS) }, status: "success", httpStatus: 200, oauthClientId: mcpUser.oauthClientId ?? null, });
 
     // Our own McpToolDefinition types inputSchema/outputSchema as a loose
     // Record<string, unknown>; every entry in mcp-tools/*.ts is a real JSON
@@ -211,13 +212,17 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
   });
 
   server.setRequestHandler("tools/call", async (request) => {
-    const { event, mcpUser, cfEnv } = factoryContextFrom(ctx);
+    const { event, mcpUser, cfEnv, requestId } = factoryContextFrom(ctx);
     if (!mcpUser) throw new ProtocolError(MCP_ERROR.internal, "Missing authenticated MCP request context.");
     const toolName = typeof request.params?.name === "string" ? request.params.name : "";
     const rawArgsValue = (request.params as { arguments?: unknown } | undefined)?.arguments;
     const rawArgs = (rawArgsValue && typeof rawArgsValue === "object" && !Array.isArray(rawArgsValue)
       ? rawArgsValue as Record<string, unknown>
       : {});
+    const telemetryArgs = { ...rawArgs, _request: {
+      meta: request.params?._meta, user_agent: event.req.headers.get('user-agent'),
+      request_id: getRequestDataMetrics(event).requestId,
+    } };
 
     const toolDef = MCP_TOOLS.find((t) => t.name === toolName);
     const toolStartedAt = Date.now();
@@ -236,7 +241,7 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
       recordRequestPhase(event, "mcp_execute", executionStartedAt);
       const mcpErr = asMcpError(toolError);
       console.error({
-        event: "mcp_tool_failed", tool: toolDef?.name ?? null, request_id: null,
+        event: "mcp_tool_failed", tool: toolDef?.name ?? null, request_id: requestId ?? null,
         ray_id: event.req.headers.get("cf-ray"), duration_ms: Date.now() - toolStartedAt,
         error_code: mcpErr.code, error_kind: mcpErr.kind,
       });
@@ -248,18 +253,19 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
         // instead of falling back to a generic internal error.
         const telemetryErrorMessage = describeErrorForTelemetry(toolError);
         logMcpEventDetached(event, cfEnv.DB, {
-          userId: mcpUser.userId, requestId: null, method: "tools/call", toolName, toolDomain: toolDef?.domain ?? null, isMutating: false, arguments: rawArgs, status: "error", errorCode: mcpErr.code, errorMessage: telemetryErrorMessage, httpStatus: 200, jsonrpcErrorCode: mcpErr.code, jsonrpcErrorMessage: telemetryErrorMessage, unknownToolName: toolDef ? null : toolName || null, oauthClientId: mcpUser.oauthClientId ?? null, durationMs: Date.now() - toolStartedAt, });
+          userId: mcpUser.userId, requestId, method: "tools/call", toolName, toolDomain: toolDef?.domain ?? null, isMutating: false, arguments: telemetryArgs, result: { error: mcpErr }, status: "error", errorCode: mcpErr.code, errorMessage: telemetryErrorMessage, httpStatus: 200, jsonrpcErrorCode: mcpErr.code, jsonrpcErrorMessage: telemetryErrorMessage, unknownToolName: toolDef ? null : toolName || null, oauthClientId: mcpUser.oauthClientId ?? null, durationMs: Date.now() - toolStartedAt, });
         throw new ProtocolError(mcpErr.code, mcpErr.message, mcpErr.data);
       }
-      logMcpEventDetached(event, cfEnv.DB, {
-        userId: mcpUser.userId, requestId: null, method: "tools/call", toolName, toolDomain: toolDef?.domain ?? null, isMutating: isMcpMutatingTool(toolDef), arguments: rawArgs, status: "error", errorCode: mcpErr.code, errorMessage: describeErrorForTelemetry(toolError), httpStatus: 200, oauthClientId: mcpUser.oauthClientId ?? null, durationMs: Date.now() - toolStartedAt, });
       // Any other tool-execution failure (including a plain `throw new
       // Error(...)` from a business-rule guard, which asMcpError falls back
       // to classifying as kind:'transport') must still resolve as a
       // graceful isError:true CallToolResult, not a JSON-RPC error — MCP
       // clients can't act on a transport-level error mid-tool-call.
-      return mcpFinancialApprovalErrorResult(toolError, cfEnv.NUXT_PUBLIC_PLATFORM_DOMAIN, mcpErr.message)
-        ?? { isError: true, content: [{ type: "text", text: mcpErr.message }] };
+      const failure = mcpFinancialApprovalErrorResult(toolError, cfEnv.NUXT_PUBLIC_PLATFORM_DOMAIN, mcpErr.message)
+        ?? { isError: true, content: [{ type: "text" as const, text: mcpErr.message }] };
+      logMcpEventDetached(event, cfEnv.DB, {
+        userId: mcpUser.userId, requestId, method: "tools/call", toolName, toolDomain: toolDef?.domain ?? null, isMutating: isMcpMutatingTool(toolDef), arguments: telemetryArgs, result: failure, status: "error", errorCode: mcpErr.code, errorMessage: describeErrorForTelemetry(toolError), httpStatus: 200, oauthClientId: mcpUser.oauthClientId ?? null, durationMs: Date.now() - toolStartedAt, });
+      return failure;
     }
 
     recordRequestPhase(event, "mcp_execute", executionStartedAt);
@@ -294,13 +300,13 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
         recordRequestPhase(event, "mcp_cache_purge", cacheStartedAt);
       }
     }
-    logMcpEventDetached(event, cfEnv.DB, {
-      userId: mcpUser.userId, requestId: null, method: "tools/call", toolName, toolDomain: toolDef?.domain ?? null, isMutating: isMcpMutatingTool(toolDef), arguments: rawArgs, result: structuredContent, status: purgeFailure ? "error" : "success", errorMessage: purgeFailure, httpStatus: 200, oauthClientId: mcpUser.oauthClientId ?? null, durationMs: Date.now() - toolStartedAt, });
-
-    return {
-      isError: purgeFailure !== null, structuredContent, content: [{ type: "text", text: purgeFailure ? `${purgeFailure}\n\n${modelText}` : modelText }],
+    const response = {
+      isError: purgeFailure !== null, structuredContent, content: [{ type: "text" as const, text: purgeFailure ? `${purgeFailure}\n\n${modelText}` : modelText }],
       ...(isRender && result.privateMeta ? { _meta: result.privateMeta } : {}),
     };
+    logMcpEventDetached(event, cfEnv.DB, {
+      userId: mcpUser.userId, requestId, method: "tools/call", toolName, toolDomain: toolDef?.domain ?? null, isMutating: isMcpMutatingTool(toolDef), arguments: telemetryArgs, result: response, status: purgeFailure ? "error" : "success", errorMessage: purgeFailure, httpStatus: 200, oauthClientId: mcpUser.oauthClientId ?? null, durationMs: Date.now() - toolStartedAt, });
+    return response;
   });
 
   return mcpServer;
@@ -415,7 +421,7 @@ export default defineHandler(async (event) => {
       }
     }
 
-    const factoryContext: McpFactoryContext = { event, mcpUser, cfEnv };
+    const factoryContext: McpFactoryContext = { event, mcpUser, cfEnv, requestId };
     const authInfo: AuthInfo = {
       token: "resolved", clientId: mcpUser?.oauthClientId ?? "session", scopes: mcpUser?.scopes ?? [],
       extra: factoryContext as unknown as Record<string, unknown>,
