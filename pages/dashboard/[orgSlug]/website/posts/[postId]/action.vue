@@ -10,7 +10,7 @@
     @save="post.save"
   >
     <div class="space-y-6">
-      <p class="text-base text-muted">An optional button under the post, in your words. Facebook and Instagram get it as a line under the caption; Instagram shows it as text.</p>
+      <p class="text-base text-muted">An optional button under the post, in your words. Facebook, Instagram and Discord get it as a line under the caption; Instagram shows it as text.</p>
       <UFormField label="Button label">
         <UInput :model-value="action.label" placeholder="Book a table" class="w-full" :maxlength="60" @update:model-value="write('label', String($event))" />
       </UFormField>

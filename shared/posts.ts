@@ -18,7 +18,7 @@ const absent = { type: 'null' } as const
 export const postCallToActionJsonSchema = {
   type: 'object',
   additionalProperties: false,
-  description: 'A button the author wrote: its label and an http(s) or tel: destination. Sent to Facebook and Instagram as a separate "label: url" line under the caption; Instagram shows it as text, not a button.',
+  description: 'A button the author wrote: its label and an http(s) or tel: destination. Sent to Facebook, Instagram and Discord as a separate "label: url" line under the caption; Instagram shows it as text, not a button.',
   properties: {
     label: { type: 'string', minLength: 1, maxLength: POST_CALL_TO_ACTION_LABEL_MAX },
     url: { type: 'string', description: 'https://…, http://… or tel:+…' },
@@ -155,7 +155,7 @@ export function callToActionLine(action: PostCallToAction | null): string | null
 }
 
 /**
- * What Facebook and Instagram are sent as the post's text: the author's body,
+ * What Facebook, Instagram and Discord are sent as the post's text: the author's body,
  * then their call to action on its own line. Nothing is paraphrased, and
  * nothing is added when both are absent.
  */

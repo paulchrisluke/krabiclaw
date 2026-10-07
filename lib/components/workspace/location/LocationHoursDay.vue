@@ -1,11 +1,11 @@
 <template>
   <!--
-    One weekday: whether it is closed, then its opening periods. A day with no
+    One weekday: whether it is open, then its opening periods. A day with no
     periods is closed; Closed is an answer the owner gives, not something read
     off an empty day, so a week that has never been answered shows its times.
   -->
   <div>
-    <SettingRow :model-value="closed" label="Closed" @update:model-value="setOpen(!$event)" />
+    <SettingRow :model-value="!closed" :label="closed ? 'Closed' : 'Open'" @update:model-value="setOpen" />
     <div v-if="!closed" class="space-y-4 pt-6">
       <div v-for="period in periods" :key="period.index" class="flex items-end gap-3">
         <template v-if="!period.value.close">

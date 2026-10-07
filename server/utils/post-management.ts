@@ -47,10 +47,11 @@ export interface PostMedia {
 /** What the management surfaces are told about one external publication. Never public. */
 export interface PostPublicationSummary {
   id: string
-  channel: 'facebook' | 'instagram'
+  channel: 'facebook' | 'instagram' | 'discord'
   target_id: string
   state: 'preparing' | 'publishing' | 'published' | 'failed' | 'unknown' | 'removed'
   provider_post_id: string | null
+  /** The provider's link: a public permalink for Meta, the message's place in Discord for people who can open that channel. */
   public_url: string | null
   code: string | null
   message: string | null
@@ -176,7 +177,7 @@ export async function postPayloadFingerprint(post: Pick<Post, 'body' | 'call_to_
 interface PublicationRow {
   id: string
   post_id: string
-  channel: 'facebook' | 'instagram'
+  channel: PostPublicationSummary['channel']
   provider_target_id: string
   state: PostPublicationSummary['state']
   provider_post_id: string | null
@@ -511,8 +512,9 @@ async function projectPublicPosts(env: CloudflareEnv, db: DbClient, organization
     resolveOrganizationPublicOrigin(db, organizationId),
     loadPostMedia(db, organizationId, rootIds),
     loadPublicSocialMedia(db, organizationId, 'content_document', rows.map(row => row.representation_id)),
+    // A Discord channel's messages are readable only by its members, so the public page names only Meta's public posts.
     queryAll<{ post_id: string; channel: 'facebook' | 'instagram'; provider_permalink: string | null; provider_target_id: string }>(db, `SELECT post_id, channel, provider_permalink, provider_target_id
-      FROM post_publications WHERE organization_id = ? AND state = 'published' AND post_id IN (SELECT value FROM json_each(?)) ORDER BY channel`,
+      FROM post_publications WHERE organization_id = ? AND state = 'published' AND channel IN ('facebook', 'instagram') AND post_id IN (SELECT value FROM json_each(?)) ORDER BY channel`,
     [organizationId, d1JsonStringSet(rootIds)]),
     locale === 'en' ? Promise.resolve([]) : loadExactPublicLocalizations(env, db, organizationId, locale),
     readIntegration(db, organizationId, 'facebook'),

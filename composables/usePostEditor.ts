@@ -33,7 +33,7 @@ export const isPostResponse = (value: unknown): value is { post: ApiRecord } =>
   isRecord(value) && isRecord(value.post) && typeof value.post.id === 'string' && typeof value.post.updated_at === 'string'
 
 export interface PublishOutcome {
-  channel: 'organization' | 'facebook' | 'instagram'
+  channel: 'organization' | SocialChannel
   target_id: string
   status: 'published' | 'already_published' | 'processing' | 'failed' | 'unknown' | 'skipped'
   publication_id?: string
@@ -42,7 +42,8 @@ export interface PublishOutcome {
   message?: string
 }
 export interface PublishResult { ok: boolean; post_id: string; updated_at: string; outcomes: PublishOutcome[] }
-export type PublishTarget = { channel: 'organization' } | { channel: 'facebook' | 'instagram'; target_id: string; connection_revision: string }
+export type SocialChannel = 'facebook' | 'instagram' | 'discord'
+export type PublishTarget = { channel: 'organization' } | { channel: SocialChannel; target_id: string; connection_revision: string }
 
 const isPublishResult = (value: unknown): value is PublishResult =>
   isRecord(value) && typeof value.ok === 'boolean' && typeof value.updated_at === 'string' && Array.isArray(value.outcomes)
@@ -216,11 +217,12 @@ export function usePostEditor(organizationId: string, locationId: Ref<string | n
     }
   }
 
-  async function reconcile(postId: string, publicationId: string): Promise<boolean> {
+  /** Discord cannot be searched, so its unknown outcome is checked against the message id the owner found. */
+  async function reconcile(postId: string, publicationId: string, providerPostId?: string): Promise<boolean> {
     error.value = null
     try {
       await dashboardApi(`/api/editor/organizations/${organizationId}/post-publications/${publicationId}/reconcile`, {
-        method: 'POST', body: {}, validate: (value): value is ApiRecord => isRecord(value),
+        method: 'POST', body: providerPostId ? { provider_post_id: providerPostId } : {}, validate: (value): value is ApiRecord => isRecord(value),
       })
       await reload(postId)
       return true
