@@ -150,7 +150,7 @@ test.describe('dashboard pane hierarchy', () => {
     await expect(page).toHaveURL(`${ORG}/payments?tab=plan`)
   })
 
-  test('five destinations keep tenant management in Menu and personal activity in its own context', async ({ page }) => {
+  test('five destinations keep tenant management in Menu and personal activity in its own context', async ({ page, baseURL }) => {
     await page.setViewportSize(WIDE)
     await open(page, `${ORG}/menu`)
     await expect(page.getByTestId('dashboard-top-nav').getByRole('navigation', { name: 'Dashboard' }).getByRole('link')).toHaveText(['Today', 'Calendar', 'Catalog', 'Messages'])
@@ -192,6 +192,10 @@ test.describe('dashboard pane hierarchy', () => {
     await expect(page.getByRole('heading', { name: 'Payment methods', exact: true })).toBeVisible()
     await open(page, `${ORG}/payments?tab=plan`)
     await expect(page.getByText(/^(Manage|Choose a plan)$/)).toBeVisible()
+    // Personal is a switch in Better Auth, not a URL: with no active organization
+    // the account is its own context, with its own tabs.
+    const personal = await page.request.post('/api/auth/organization/set-active', { headers: authRequestHeaders(baseURL!), data: { organizationId: null } })
+    expect(personal.status(), await personal.text()).toBe(200)
     await open(page, '/account')
     await expect(page).toHaveURL('/dashboard/account')
     await expect(mobileNav.getByRole('link')).toHaveText(['Today', 'Calendar', 'Messages', 'Menu'])
