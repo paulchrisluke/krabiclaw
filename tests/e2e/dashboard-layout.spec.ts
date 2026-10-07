@@ -362,7 +362,8 @@ test.describe('dashboard pane hierarchy', () => {
     const name = `E2E Service ${Date.now().toString(36)}`
     await page.getByRole('textbox', { name: 'Name' }).fill(name)
     const created = page.waitForResponse(response => new URL(response.url()).pathname === `${editor}/products` && response.request().method() === 'POST')
-    await page.getByRole('button', { name: /^Create / }).click()
+    // The walk's index and its Name leaf both offer the commit; the leaf's is the one beside the field.
+    await page.locator('#dashboard-panel-product-name').getByRole('button', { name: 'Create service', exact: true }).click()
     const response = await created
     expect(response.status(), await response.text()).toBe(201)
     const request = response.request().postDataJSON() as { idempotency_key?: string }
