@@ -52,6 +52,7 @@ export type ExecuteOperationInput = {
   idempotencyKey?: string
   actorUserId: string
   financialAuthorizationId?: string
+  financialWritesAllowed?: boolean
 }
 
 interface ThreadContext {
@@ -409,7 +410,7 @@ async function executeSourceMutation(
     : null
   // Declining or cancelling a paid booking returns the payment in the same batch, once the operator approved it.
   const refundPlan = plan.kind === 'booking' && (plan.action === 'reject' || plan.action === 'cancel') && context.record
-    ? await bookingRefundQueries(db,{action:plan.action,organizationId:input.organizationId,actorUserId:input.actorUserId,bookingId:context.record.id,authorizationId:input.financialAuthorizationId,note:input.body,entryId,now}) : {queries:[],guard:null}
+    ? await bookingRefundQueries(db,{action:plan.action,organizationId:input.organizationId,actorUserId:input.actorUserId,bookingId:context.record.id,authorizationId:input.financialAuthorizationId,financialWritesAllowed:input.financialWritesAllowed,note:input.body,entryId,now}) : {queries:[],guard:null}
   const queries = [
     operationEntryQuery(context, plan, input, entryId, dedupeKey, now, subject,refundPlan.guard),
     sourceUpdateQuery(context, plan, input, entryId, now),

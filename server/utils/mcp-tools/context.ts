@@ -21,7 +21,7 @@ export const CONTEXT_TOOLS: McpToolDefinition[] = [
     })),
   globalTool(withToolAnnotations({
       name: 'set_workspace_context',
-      description: "Save the selected active site and optional location for this connection. Use internal IDs returned by site/location reads. Explicit IDs supplied to later tools still determine their targets.",
+      description: "Save the selected active site and optional location for the signed-in user, shared across their connections. Returns the saved site and location. Use internal IDs returned by site/location reads. Explicit IDs supplied to later tools still determine their targets.",
       domain: 'context',
       minimumRole: 'admin',
       confirmRequired: false,
@@ -29,7 +29,7 @@ export const CONTEXT_TOOLS: McpToolDefinition[] = [
         type: 'object',
         properties: {
           organization_id: { type: 'string' },
-          location_id: { type: 'string', description: 'Location id or slug.' },
+          location_id: { type: 'string', description: 'Internal location ID from list_locations or get_workspace_context.' },
         },
         anyOf: [
           { required: ['organization_id'] },

@@ -163,7 +163,18 @@ export interface CreateProductInput {
   source?: ProductSource
 }
 
-export type UpdateProductInput = Partial<Omit<CreateProductInput, 'source'>>
+/** Existing identities accept partial fields; a new entry must supply its required fields. */
+export type ProductVariantPatchInput = Omit<Partial<ProductVariantInput>, 'prices'> & {
+  prices?: Partial<PriceInput>[]
+  /** Merge preserves unmentioned prices. Replace removes prices omitted from the supplied list. */
+  prices_mode?: 'merge' | 'replace'
+}
+
+export type UpdateProductInput = Partial<Omit<CreateProductInput, 'source' | 'variants'>> & {
+  variants?: ProductVariantPatchInput[]
+  /** Merge preserves unmentioned variants. Replace removes variants omitted from the supplied list. */
+  variants_mode?: 'merge' | 'replace'
+}
 
 export interface SetProductPublicationInput {
   organization_id: string

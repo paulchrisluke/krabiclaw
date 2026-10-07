@@ -141,10 +141,10 @@ export const ORGANIZATIONS_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'update_organization_settings',
-      description: "Change the selected site’s brand, description, website font, colors, contact email, default currency, announcement or Live/Draft status. Only supplied settings change. An announcement replaces all its fields, and null removes it. Logos and announcement images are separate media placements; this tool does not change them.",
+      description: "Change the selected site’s brand, description, website font, colors, contact email, default currency, visitor announcement popup or Live/Draft status. Only supplied settings change. An announcement replaces all its fields, and null removes it. Logos and announcement images are separate media placements; this tool does not change them. Returns the updated settings. Published website settings change immediately; this does not create a short post, blog article or social publication.",
       domain: 'organizations',
       minimumRole: 'admin',
-      confirmRequired: false,
+      confirmRequired: true,
       inputSchema: {
         name: { type: 'string' },
         brand_description: { type: 'string' },

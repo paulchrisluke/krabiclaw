@@ -11,6 +11,27 @@ import { acquireTenantMutationLock } from './helpers/tenant-mutation-lock'
 // lifecycle, and Product/post/media workflows.
 
 test.describe('stateless MCP server', () => {
+  test('saved workspace location survives readback and supplies a location-scoped call while explicit targets win', async ({ request, baseURL }) => {
+    await loginAs(request, baseURL!)
+    const call = async <T>(toolName: string, args: Record<string, unknown>) => {
+      const response = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName, args })
+      expect(response.status()).toBe(200)
+      return mcpData<T>(await response.json())
+    }
+    const locations = await call<{ locations: Array<{ id: string }> }>('list_locations', { organization_id: MCP_ORGANIZATION_ID })
+    expect(locations.locations.length).toBeGreaterThan(0)
+    const locationId = locations.locations[0]!.id
+    await call('set_workspace_context', { organization_id: MCP_ORGANIZATION_ID, location_id: locationId })
+    const workspace = await call<{ context: { organization_id: string; location_id: string } }>('get_workspace_context', {})
+    expect(workspace.context).toMatchObject({ organization_id: MCP_ORGANIZATION_ID, location_id: locationId })
+    const implicit = await call<{ context: { organization_id: string; location_id: string } }>('get_location', {})
+    expect(implicit.context).toMatchObject({ organization_id: MCP_ORGANIZATION_ID, location_id: locationId })
+    const explicit = await call<{ context: { organization_id: string } }>('get_organization', { organization_id: E2E_POTTERY_ORGANIZATION_ID })
+    expect(explicit.context.organization_id).toBe(E2E_POTTERY_ORGANIZATION_ID)
+    const unchanged = await call<{ context: { organization_id: string; location_id: string } }>('get_workspace_context', {})
+    expect(unchanged.context).toMatchObject({ organization_id: MCP_ORGANIZATION_ID, location_id: locationId })
+  })
+
   test('booking pagination rejects a cursor from a different member filter', async ({ request, baseURL }) => {
     await loginAs(request, baseURL!)
     const organizationId = E2E_POTTERY_ORGANIZATION_ID

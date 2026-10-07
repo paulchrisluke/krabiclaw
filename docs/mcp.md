@@ -11,7 +11,8 @@ through it with the same tools.
 - Scope: `tenant`
 - Exposes: existing-tenant content management, menus, experiences, posts, articles
   (blog and, on Krabiclaw's own site, documentation), media, reviews,
-  submissions, notifications, Q&A, analytics, bookings and member availability
+  customer inquiries, Q&A, analytics, bookings, guest change proposals, member
+  availability and financial reads
 - Site creation and location creation, copying, and deletion are CMS-only. MCP
   retains daily content operations, including media asset and experience deletion.
 - Google Places lookup and domain setup are CMS-only. Connecting a Facebook Page or
@@ -79,10 +80,32 @@ output schema, and executor must agree. Unknown tool names return JSON-RPC
 
 - `list_*` discovers a collection; `get_*` reads a selected record or aggregate.
 - `preview_*` computes a proposal without saving; `update_*` saves supplied changes.
-- `reconcile_products` is one atomic create/update operation for an explicitly selected location, not an ongoing sync. Each row supplies its intended Price or null. `set_missing_unavailable: true` explicitly makes omitted products unavailable.
+- `update_product` merges supplied variants and prices by ID. Omitted siblings,
+  their prices and option selections remain. `variants_mode: "replace"` and each
+  variant's `prices_mode: "replace"` explicitly remove omitted entries. Supplied
+  options and details remain complete replacement values.
+- `reconcile_products` synchronizes supplied complete catalog entries. Supplied
+  options, variants and prices replace their corresponding lists. Omitted
+  products remain unless `deactivate_missing: true` disables their sale.
 - `replace_resource_localizations` replaces only the submitted resources’ translations for one resource type and locale; omitted resources are untouched.
 
 MCP names map to shared domain functions. REST uses HTTP methods on the same resources; it does not need duplicate verb-named endpoints. `get_organization`, `list_organizations`, and workspace context expose the canonical public site URL; publishing a post returns its full public URL. DNS setup remains in the CMS.
+
+`set_workspace_context` saves the signed-in user's organization and location
+preference across connections. Explicit organization/location arguments always
+control the current operation.
+
+Every retained tool declares `readOnlyHint`, `destructiveHint` and `openWorldHint`
+explicitly. A tool is classified against all supported branches, including optional
+guest email and explicit record/content replacement. Confirmation metadata does
+not replace server permissions or financial approval. Provider hosting alone is
+not open-world: the selected business's Stripe account, media storage and linked
+accounts remain bounded targets. Guest email, host attachment downloads and
+external social audiences cross that scope.
+
+The [metadata evaluation corpus](mcp-metadata-evaluation.md) contains direct,
+indirect and nearby negative prompts for every retained tool. Its prompts are
+prepared checks; selection outcomes require an actual refreshed ChatGPT session.
 
 ### Release sequence
 
@@ -136,10 +159,11 @@ readback.
 Creation uses `server/domain/product-bookings.ts#createProductBooking`, the same
 service as the public Product booking route. It derives pending/confirmed status
 from Product confirmation policy. A positive Price supports pay-later when online
-collection is disabled. Required online collection returns `payment_required`
-before allocation until the canonical Payments checkout handoff is integrated;
-only a valid explicit zero Price skips required collection. MCP never asserts a
-Stripe payment, creates paid records, or performs a provider financial mutation.
+collection is disabled. Required positive online collection returns
+`financial_action_required` with an authenticated product booking dashboard URL
+before allocating capacity or creating a Booking, request, Checkout, hold, payment
+or authorization. Only a valid explicit zero Price skips required collection.
+MCP never changes the payment requirement to make a booking succeed.
 
 Every creation requires a caller `idempotency_key`, `source`, and explicit
 `guest_acknowledgement` boolean; `external_reference` and `guest_phone` are optional.
@@ -161,7 +185,14 @@ it must never be represented as a new payment or fabricated paid Stripe record.
 `operational_booking_id` means `bookings.id`. `request_id` means the guest inbox
 thread ID; the legacy public `booking_id` continues to mean that request ID.
 Review confirmation/rejection and cancellation invoke the canonical guest-thread
-operation service with durable operation keys and guest status messages. Changes
+operation service with durable operation keys and guest status messages. Confirm
+approves a pending booking; reject declines a pending booking; cancel ends a
+pending or confirmed booking. If cancellation or rejection requires a refund,
+MCP returns the existing authenticated booking dashboard URL before changing the
+Booking or creating financial records. Repeating this handoff creates no refund
+authorization. The result states `success: false`, `operation_completed: false`,
+`action_required: true` and `code: "financial_action_required"`; clients must keep
+the absolute `dashboard_url` and report the operation as incomplete. Changes
 invoke the existing immutable guest proposal flow: they do not mutate the booking
 until guest acceptance, and acceptance retains review status and operational ID.
 
@@ -169,7 +200,22 @@ Restaurant table Reservations remain separate. `cancel_table_reservation` takes
 `operational_reservation_id` (`reservations.id`);
 `request_table_reservation_change` proposes location/date/time/party changes through
 the same guest approval flow. Restaurant Reservations have no pending review
-confirmation/rejection tools. Existing `get_reservation_inquiries` remains valid.
+confirmation/rejection tools. `list_reservation_inquiries` reads them.
+
+## Financial reads and dashboard actions
+
+`list_payments` lists customer transactions, `get_payment` reads one purchase and
+its refunds/disputes, and `get_payment_summary` reports period totals per currency.
+`get_payment_payouts` reads the connected account's balance and payout history;
+`get_payments_usage` reads Payments operating usage and invoices. These calls do
+not mutate finance records or move money. Existing records remain readable after
+a plan downgrade, subject to the same payment/billing permissions.
+
+`get_payments_dashboard_link` is an owner-only read that returns the authenticated
+Payments integration URL. It does not start onboarding or create an account.
+Refund preparation/execution, Checkout creation, transfers and payouts are not
+MCP operations. Financial approval, execution and interrupted-refund recovery
+remain in the authenticated dashboard and canonical Payments service.
 
 All writes carry explicit reviewed real-world annotations and `confirmRequired`.
 The client must obtain approval for the exact operation; no model-supplied

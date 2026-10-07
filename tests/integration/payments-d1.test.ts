@@ -20,6 +20,12 @@ import { retainPaymentsForTenantDeletion } from '../../server/domain/payments/re
 import paymentsReconcile from '../../server/tasks/payments-reconcile.ts'
 import { deliverPaymentsUsage, paymentsUsageStatus, reconcileNativeBillingCredit } from '../../server/domain/payments/usage.ts'
 import { getStripe } from '../../server/utils/billing.ts'
+import { executeGuestThreadOperation } from '../../server/domain/guest-threads/operations.ts'
+import { approveRefundAuthorization, executeRefund, requirePayment } from '../../server/domain/payments/index.ts'
+import { mcpFinancialApprovalErrorResult } from '../../server/utils/mcp-financial-handoff.ts'
+import { handlePaymentsTools } from '../../server/utils/mcp-tools/payments.ts'
+import { resolveOrganizationMembership } from '../../server/utils/member-access.ts'
+import type { McpOrganizationContext } from '../../server/utils/mcp-auth.ts'
 import type { CloudflareEnv } from '../../server/utils/auth.ts'
 const ORG = 'payments-org', NOW = '2026-10-01T00:00:00.000Z'
 async function boot(){
@@ -51,6 +57,151 @@ test('an active payment hold consumes the canonical session capacity until relea
   await db.prepare("UPDATE payment_checkout_holds SET status='released' WHERE payment_id='held'").run()
   const booking = await claimSessionCapacity(db, { organizationId: ORG, productId: 'product', sessionId: 'session', productVariantId: 'variant', partySize: 1 })
   assert.equal(await db.prepare('SELECT party_size FROM bookings WHERE id=?').bind(booking.bookingId).first('party_size'), 1)
+ } finally { await runtime.dispose() }
+})
+test('MCP paid booking cancellation and rejection hand off without preparing money, while dashboard approval and interrupted refund recovery complete once', { timeout: 120_000 }, async t => {
+ for (const action of ['cancel', 'reject'] as const) {
+  const { db, runtime } = await boot()
+  try {
+   await db.prepare("INSERT INTO member(id,organizationId,userId,role) VALUES('owner',?,'verified','owner')").bind(ORG).run()
+   const opening = { id: 'paid-request', kind: 'booking' as const, organization_id: ORG, location_id: null, user_id: 'guest', review_id: null, conversation_state: 'needs_attention' as const, resolved_at: null, payload: threadPayloadForGuest({ name: 'Guest', email: 'guest@example.com' }), created_at: NOW, updated_at: NOW }
+   await db.batch(requestInsertQueries(opening).map(write => db.prepare(write.query).bind(...write.params)))
+   const booking = await claimSessionCapacity(db, { organizationId: ORG, productId: 'product', sessionId: 'session', productVariantId: 'variant', partySize: 1, userId: 'guest', requestId: opening.id })
+   await payable(db, 'paid')
+   await db.prepare("UPDATE payments SET subject_id=?,captured_amount=10000,state='captured',stripe_payment_intent_id='pi_paid' WHERE id='paid'").bind(booking.bookingId).run()
+   await db.prepare("UPDATE payment_checkout_holds SET request_id=?,status='converted',converted_booking_id=? WHERE payment_id='paid'").bind(opening.id,booking.bookingId).run()
+   const env = { ...await runtime.getBindings<CloudflareEnv>(), BETTER_AUTH_URL: 'https://proof.example', BETTER_AUTH_SECRET: 'local-proof-secret-long-enough-for-auth', NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://proof.example', EMAIL_REPLY_SECRET: 'local-proof-reply', EMAIL_DELIVERY_MODE: 'log_only', WHATSAPP_DELIVERY_MODE: 'log_only', STRIPE_SECRET_KEY: 'sk_test_local_boundary' }
+   const input = { organizationId: ORG, threadId: opening.id, action, actorUserId: 'verified', idempotencyKey: 'same-request', env }
+   const tables = ['bookings', 'requests', 'activity_entries', 'guest_thread_deliveries', 'payments', 'payment_attempts', 'payment_checkout_holds', 'payment_orders', 'payment_order_lines', 'payment_authorizations', 'payment_refunds', 'payment_usage_events']
+   const before = await Promise.all(tables.map(async table => (await db.prepare(`SELECT * FROM ${table} ORDER BY id`).all()).results))
+   for (let retry = 0; retry < 2; retry++) {
+    await assert.rejects(() => executeGuestThreadOperation(db, { ...input, financialWritesAllowed: false }), error => {
+     assert(error instanceof HTTPError)
+     assert.equal(error.statusCode,409)
+     assert.equal(error.data?.code,'financial_action_required')
+     const handoff = mcpFinancialApprovalErrorResult(error,env.NUXT_PUBLIC_PLATFORM_DOMAIN,error.statusMessage!)
+     assert(handoff)
+     assert.deepEqual(handoff.structuredContent, { success: false, operation_completed: false, action_required: true, code: 'financial_action_required', dashboard_url: 'https://proof.example/dashboard/payments/bookings/booking/paid-request' })
+     assert.equal(handoff.isError,true)
+     return true
+    })
+    assert.deepEqual(await Promise.all(tables.map(async table => (await db.prepare(`SELECT * FROM ${table} ORDER BY id`).all()).results)), before)
+   }
+   let authorizationId = ''
+   await assert.rejects(() => executeGuestThreadOperation(db,input), error => {
+    assert(error instanceof HTTPError)
+    const handoff = mcpFinancialApprovalErrorResult(error,env.NUXT_PUBLIC_PLATFORM_DOMAIN,error.statusMessage!)
+    assert(handoff)
+    assert.equal(handoff.structuredContent.operation_completed,false)
+    assert.match(handoff.structuredContent.dashboard_url,/^https:\/\/proof\.example\/dashboard\/payments\/earnings\/refunds\/approve\?id=/u)
+    authorizationId = new URL(handoff.structuredContent.dashboard_url).searchParams.get('id')!
+    return true
+   })
+   assert.equal(await db.prepare('SELECT COUNT(*) n FROM payment_authorizations').first('n'),1)
+   const principal = { organizationId: ORG, userId: 'verified', role: 'owner' }
+   await approveRefundAuthorization(db,principal,authorizationId)
+   const approvedInput = { ...input, financialAuthorizationId: authorizationId }
+   const approvedState = await Promise.all(tables.map(async table => (await db.prepare(`SELECT * FROM ${table} ORDER BY id`).all()).results))
+   await assert.rejects(() => executeGuestThreadOperation(db,{...approvedInput,financialWritesAllowed:false}), error => {
+    assert(error instanceof HTTPError)
+    assert.equal(error.data?.code,'financial_action_required')
+    return true
+   })
+   assert.deepEqual(await Promise.all(tables.map(async table => (await db.prepare(`SELECT * FROM ${table} ORDER BY id`).all()).results)),approvedState)
+   assert.equal((await executeGuestThreadOperation(db,approvedInput)).ok,true)
+   assert.equal((await executeGuestThreadOperation(db,approvedInput)).ok,true)
+   assert.equal(await db.prepare('SELECT status FROM bookings WHERE id=?').bind(booking.bookingId).first('status'),'cancelled')
+   assert.equal(await db.prepare("SELECT COUNT(*) n FROM activity_entries WHERE request_id=? AND event_name=?").bind(opening.id,`booking.${action}`).first('n'),1)
+   assert.equal(await db.prepare('SELECT COUNT(*) n FROM guest_thread_deliveries').first('n'),1)
+   assert.equal(await db.prepare("SELECT status FROM payment_refunds WHERE payment_id='paid'").first('status'),'queued')
+   assert.equal(await db.prepare('SELECT consumed_at FROM payment_authorizations WHERE id=?').bind(authorizationId).first('consumed_at')!==null,true)
+   const refundRow = await db.prepare("SELECT id FROM payment_refunds WHERE payment_id='paid'").first<{id:string}>()
+   assert(refundRow)
+   const nativeRefund = { id: 're_paid', object: 'refund', amount: 10000, currency: 'usd', status: 'succeeded', payment_intent: 'pi_paid', reason: 'requested_by_customer', metadata: { krabiclaw_refund_id: refundRow.id } }
+   const originalFetch = globalThis.fetch
+   let creations = 0
+   const fetchMock = t.mock.method(globalThis,'fetch',async (request, init) => {
+    const url = new URL(request instanceof Request ? request.url : String(request))
+    if(url.origin!=='https://api.stripe.com')return originalFetch(request,init)
+    assert.equal(new Headers(init?.headers).get('stripe-account'),'acct_seller')
+    if(url.pathname==='/v1/refunds' && init?.method==='POST') {
+     creations++
+     return Response.json({error:{type:'api_error',message:'Native response interrupted'}},{status:503,headers:{'stripe-should-retry':'false'}})
+    }
+    assert.equal(init?.method,'GET')
+    if(url.pathname==='/v1/refunds')return Response.json({object:'list',data:[nativeRefund],has_more:false})
+    if(url.pathname==='/v1/refunds/re_paid')return Response.json(nativeRefund)
+    assert.equal(decodeURIComponent(url.pathname),'/v1/checkout/sessions/cs:paid')
+    return Response.json({id:'cs:paid',object:'checkout.session',client_reference_id:'paid',livemode:false,currency:'usd',payment_intent:'pi_paid',customer_details:{email:'guest@example.com'}})
+   })
+   try {
+    const stripe = new Stripe(env.STRIPE_SECRET_KEY,{maxNetworkRetries:0,httpClient:Stripe.createFetchHttpClient()})
+    const key = `${action==='reject'?'rejected':'cancelled'}:${booking.bookingId}`
+    const payment = await requirePayment(db,ORG,'paid')
+    const refund = () => executeRefund(db,stripe,payment,10000,key,'requested_by_customer','verified',env)
+    await assert.rejects(refund,/Native response interrupted/u)
+    await db.prepare("UPDATE payment_authorizations SET expires_at='2000-01-01T00:00:00.000Z' WHERE id=?").bind(authorizationId).run()
+    await approveRefundAuthorization(db,principal,authorizationId)
+    assert.equal((await executeGuestThreadOperation(db,approvedInput)).ok,true)
+    assert.equal((await refund()).status,'succeeded')
+    assert.equal((await refund()).status,'succeeded')
+    assert.equal(creations,1)
+    assert.equal(await db.prepare("SELECT COUNT(*) n FROM payment_refunds WHERE payment_id='paid'").first('n'),1)
+    assert.equal(await db.prepare("SELECT refunded_amount FROM payments WHERE id='paid'").first('refunded_amount'),10000)
+   } finally { fetchMock.mock.restore() }
+  } finally { await runtime.dispose() }
+ }
+})
+test('MCP financial reads return bounded reports and authenticated detail links without bank data, provider mappings, private notes or financial writes', { timeout: 120_000 }, async t => {
+ const { db, runtime } = await boot()
+ try {
+  await db.prepare("INSERT INTO member(id,organizationId,userId,role) VALUES('report-owner',?,'verified','owner')").bind(ORG).run()
+  await payable(db,'report')
+  await db.prepare("UPDATE payments SET captured_amount=10000,refunded_amount=1000,state='captured',price_snapshot_json=? WHERE id='report'").bind(JSON.stringify({title:'Original consultation',quantity:1,price:{unit_amount:10000,currency:'USD',type:'one_time',tax_behavior:'exclusive',provider_secret:'private-provider-value'},buyer_email:'private-buyer@example.test'})).run()
+  await db.prepare("INSERT INTO payment_refunds(id,payment_id,idempotency_key,amount,reason,note,status,error,created_by,created_at,updated_at) VALUES('report-refund','report','private-retry-key',1000,'requested_by_customer','private-guest-note','succeeded','private-refund-diagnostic','other',?,?)").bind(NOW,NOW).run()
+  await db.prepare("INSERT INTO payment_usage_events(id,organization_id,payment_id,kind,currency,amount,source_id,provider_occurred_at,error,created_at) VALUES('report-usage',?,'report','stripe_cost','USD',100,'private-provider-source',?,'private-usage-diagnostic',?)").bind(ORG,NOW,NOW).run()
+  await db.prepare("INSERT INTO stripe_connected_accounts(id,organization_id,stripe_account_id,livemode,country,status,created_at,updated_at) VALUES('report-connected',?,'acct_seller',0,'US','ready',?,?)").bind(ORG,NOW,NOW).run()
+  const env = { ...await runtime.getBindings<CloudflareEnv>(), BETTER_AUTH_URL:'https://proof.example', BETTER_AUTH_SECRET:'local-proof-secret-long-enough-for-auth', NUXT_PUBLIC_PLATFORM_DOMAIN:'https://proof.example', STRIPE_SECRET_KEY:'sk_test_local_boundary' }
+  const membership = await resolveOrganizationMembership(env,{organizationId:ORG,userId:'verified'})
+  assert(membership)
+  const organization: McpOrganizationContext = { env,db,userId:'verified',isPlatformAdmin:false,scopes:['organization:read'],organizationId:ORG,organizationSlug:membership.organizationSlug!,role:'owner',membership }
+  const call = (toolName:string,args:Record<string,unknown>={}) => handlePaymentsTools({organization,toolName,args}) as Promise<Record<string,unknown>>
+  const tables = ['payments','payment_attempts','payment_checkout_holds','payment_orders','payment_order_lines','payment_authorizations','payment_refunds','payment_usage_events','stripe_connected_accounts']
+  const before = await Promise.all(tables.map(async table => (await db.prepare(`SELECT * FROM ${table} ORDER BY id`).all()).results))
+  const listed = await call('list_payments',{from:'2000-01-01T00:00:00.000Z',to:'2099-01-01T00:00:00.000Z'})
+  assert.equal(listed.organization_id,ORG)
+  assert.deepEqual((listed.payments as Array<Record<string,unknown>>).map(payment=>({id:payment.id,title:payment.title,currency:payment.currency,captured_amount:payment.captured_amount,refunded_amount:payment.refunded_amount,to:payment.to})),[{id:'report',title:'Original consultation',currency:'USD',captured_amount:10000,refunded_amount:1000,to:'https://proof.example/dashboard/payments/bookings/payment/report'}])
+  const detail = await call('get_payment',{payment_id:'report'})
+  assert.deepEqual(detail.purchase,{title:'Original consultation',quantity:1,product_id:undefined,variant_id:undefined,session_id:undefined,price:{unit_amount:10000,currency:'USD',type:'one_time',tax_behavior:'exclusive'}})
+  assert.deepEqual(detail.refunds,[{id:'report-refund',amount:1000,status:'succeeded'}])
+  assert.equal(detail.dashboard_url,'https://proof.example/dashboard/payments/bookings/payment/report')
+  const usage = await call('get_payments_usage')
+  assert.deepEqual(usage.pending,[{currency:'USD',kind:'stripe_cost',event_count:1,amount:100,action_required:true}])
+  assert.equal(usage.dashboard_url,'https://proof.example/dashboard/payments/payments/invoices')
+  const originalFetch = globalThis.fetch
+  const payoutReads:string[]=[]
+  const fetchMock = t.mock.method(globalThis,'fetch',async (request,init) => {
+   const url = new URL(request instanceof Request?request.url:String(request))
+   if(url.origin!=='https://api.stripe.com')return originalFetch(request,init)
+   assert.equal(init?.method,'GET')
+   assert.equal(new Headers(init?.headers).get('stripe-account'),'acct_seller')
+   if(url.pathname==='/v1/balance')return Response.json({object:'balance',livemode:false,available:[{currency:'usd',amount:9000,source_types:{card:9000}}],pending:[],connect_reserved:[{currency:'usd',amount:500}],metadata:{private_bank_account:'private-bank-value'}})
+   assert.equal(url.pathname,'/v1/payouts')
+   payoutReads.push(url.searchParams.get('starting_after')??'first')
+   const next = url.searchParams.has('starting_after')
+   return Response.json({object:'list',has_more:!next,data:next?[]:[{id:'po_report',object:'payout',livemode:false,amount:9000,currency:'usd',status:'paid',arrival_date:1900000000,created:1899990000,automatic:true,destination:'private-bank-value',metadata:{note:'private-payout-note'}}]})
+  })
+  let payouts:Record<string,unknown>
+  try {
+   payouts = await call('get_payment_payouts')
+   assert.deepEqual(payouts.balance,{available:[{currency:'USD',amount:9000}],pending:[]})
+   assert.equal(payouts.next_cursor,'po_report')
+   assert.deepEqual((payouts.payouts as Array<Record<string,unknown>>).map(payout=>({id:payout.id,amount:payout.amount,currency:payout.currency,dashboard_url:payout.dashboard_url})),[{id:'po_report',amount:9000,currency:'USD',dashboard_url:'https://proof.example/dashboard/payments/earnings/payouts/po_report'}])
+   assert.deepEqual((await call('get_payment_payouts',{after:'po_report'})).payouts,[])
+   assert.deepEqual(payoutReads,['first','po_report'])
+  } finally { fetchMock.mock.restore() }
+  for(const value of [listed,detail,usage,payouts])assert.doesNotMatch(JSON.stringify(value),/private-|acct_seller|buyer_user_id|stripe_account_id|price_snapshot_json|idempotency_key|created_by|source_types|connect_reserved/u)
+  assert.deepEqual(await Promise.all(tables.map(async table => (await db.prepare(`SELECT * FROM ${table} ORDER BY id`).all()).results)),before)
  } finally { await runtime.dispose() }
 })
 test('Stripe cost report replay and correction bill attributable deltas while conflicting tenant mappings remain unbilled', {timeout:120000},async()=>{

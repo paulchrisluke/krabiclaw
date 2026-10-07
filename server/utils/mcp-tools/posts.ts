@@ -188,7 +188,7 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
     description: "Check an unknown or existing Facebook, Instagram or Discord publication when the user wants to resolve or refresh its outcome. Reads the connected provider and updates the stored publication receipt; it does not publish. Supply provider_post_id only when the exact post is known and belongs to that connected Page, account or channel. Discord cannot be searched: an unknown Discord publication needs the message id, and is resolved only when that message was sent by the connected webhook with this post's exact text and media during the attempt. An unproven outcome remains unknown.",
     domain: 'posts',
     minimumRole: 'admin',
-    confirmRequired: true,
+    confirmRequired: false,
     inputSchema: {
       publication_id: { type: 'string', description: 'The publication id from get_post or a publish_post outcome.' },
       provider_post_id: { type: 'string', description: 'Optional: the Facebook post id, Instagram media id or Discord message id it became. Required for an unknown Discord publication.' },

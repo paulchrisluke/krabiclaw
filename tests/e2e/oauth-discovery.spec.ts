@@ -27,6 +27,16 @@ function oauthAuthorizeUrl(baseURL: string, params: Record<string, string>) {
 }
 
 test.describe('OAuth discovery endpoints', () => {
+  test('consent discloses customer, booking, publishing, financial read and background access', async ({ page, baseURL }) => {
+    await page.goto(`${baseURL}/oauth/consent?scope=openid%20tenant%20offline_access`)
+    await expect(page.getByText('• Read customer inquiries, reservations, booking details, names, contact information, and messages', { exact: true })).toBeVisible()
+    await expect(page.getByText('• Save attachments as public media and publish to your website or connected Facebook and Instagram accounts', { exact: true })).toBeVisible()
+    await expect(page.getByText('• Create and manage bookings, cancel reservations, and email guests about confirmations, cancellations, and proposed changes', { exact: true })).toBeVisible()
+    await expect(page.getByText('• Read payment reports, transactions, balances, payout history, and usage invoices; payment collection and refunds require the dashboard', { exact: true })).toBeVisible()
+    await expect(page.getByText('Keep this connection active', { exact: true })).toBeVisible()
+    await expect(page.getByText('Submit and track work requests', { exact: true })).toHaveCount(0)
+  })
+
   // Two cases sign in as user-e2e-oauth-cimd against the same CIMD client, and
   // one of them rotates that user's remembered consent, so run in parallel they
   // read each other's consent state. In order, in one worker, they cannot.
@@ -83,6 +93,16 @@ test.describe('OAuth discovery endpoints', () => {
     const result = await mcpJson<{ result: { isError: boolean; structuredContent: { organizations: Array<{ id: string }> } } }>(workspace)
     expect(result.result.isError).toBe(false)
     expect(result.result.structuredContent.organizations.map(organization => organization.id)).toContain('org-bVY8SxxUuG6Ctk2CQnfCk8T2cPsj4jJX')
+    const organizationRead = await request.post(`${baseURL}/api/mcp`, {
+      headers: { Authorization: `Bearer ${authorizationResult.access_token}`, Accept: 'application/json, text/event-stream' },
+      data: { jsonrpc: '2.0', id: 2, method: 'tools/call', params: {
+        name: 'get_organization', arguments: { organization_id: 'org-bVY8SxxUuG6Ctk2CQnfCk8T2cPsj4jJX' },
+      } },
+    })
+    expect(organizationRead.status()).toBe(200)
+    const organizationResult = await mcpJson<{ result: { isError: boolean; structuredContent: { context: { organization_id: string } } } }>(organizationRead)
+    expect(organizationResult.result.isError).toBe(false)
+    expect(organizationResult.result.structuredContent.context.organization_id).toBe('org-bVY8SxxUuG6Ctk2CQnfCk8T2cPsj4jJX')
   })
 
   // One discovery pass: a client reads all three documents back to back, and
