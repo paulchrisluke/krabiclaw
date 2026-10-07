@@ -51,6 +51,8 @@ AI_SEARCH_INSTANCE_ID = "krabiclaw-platform-knowledge"
 # that default now fails closed (log_only) precisely so a missing var elsewhere never sends real messages.
 EMAIL_DELIVERY_MODE = "provider"
 WHATSAPP_DELIVERY_MODE = "provider"
+# Startup workflow debugging: detailed MCP inputs/results expire after seven days.
+MCP_DIAGNOSTICS_ENABLED = "true"
 # Internal cron/API endpoints use CRON_SECRET:
 #   yarn wrangler secret put CRON_SECRET
 # GA4_API_SECRET (Measurement Protocol) is a secret, not a var. It belongs to the

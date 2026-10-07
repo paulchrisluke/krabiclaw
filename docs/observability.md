@@ -179,6 +179,38 @@ Each `tools/call` with an organization also writes a `usage_events` row (`resour
 
 `summarizeForTelemetry()` records only an explicit set of typed operational fields: finite counts/amounts, confirmation/completion flags, and known status values. Only named result, pagination, booking, reservation and payment containers are traversed, with bounded depth. Unknown fields and free text are omitted, including customer names, messages, booking notes, emails, attachment URLs, tokens and passwords. Error-message columns contain a fixed failure label; unknown tool names are hashed and user-agent text is omitted. Full conversational text and tool outputs are not stored in these summaries.
 
+### Startup workflow diagnostics
+
+`MCP_DIAGNOSTICS_ENABLED = "true"` in the Worker's vars enables detailed external
+`tools/call` and `tools/list` capture. Production enables this during startup debugging.
+The existing argument/result columns then contain `{ "_diagnostic": true,
+"data": ... }`: tool arguments and the returned MCP result, including its model
+text, structured data and failure result. Actual errors replace the fixed label.
+The RPC request ID, Cloudflare ray, user and authorized site identify each call.
+Arguments also carry `_request`: host-supplied request metadata, user agent and
+the Worker request ID, without authentication headers.
+Credentials, private `_meta`, and URL query strings are redacted. Each payload is
+bounded at 256,000 characters; oversized payloads explicitly record truncation
+and their original length. These diagnostic rows expire after seven days via the
+same daily cleanup, even after the flag is disabled. Normal operational rows
+retain their 180-day limit. Staging has no scheduled retention task, so detailed
+capture remains disabled there. Local disposable-D1 tests exercise diagnostic mode.
+
+MCP receives the selected tool and arguments, not the user's ChatGPT messages or
+ChatGPT's final reply. A shared conversation is still needed to compare the
+user's request and ChatGPT's claims with the actual tool trace. Earlier omitted
+inputs cannot be reconstructed. Diagnostic payloads can contain customer content
+and contact details; access them through the operator's authenticated D1 access.
+
+```sql
+SELECT e.created_at, e.request_id, e.cf_ray_id, e.organization_id,
+       e.tool_name, e.status, e.arguments_summary_json,
+       e.result_summary_json, e.error_message
+FROM mcp_tool_call_events e JOIN user u ON u.id = e.user_id
+WHERE u.email = ? AND e.created_at >= ?
+ORDER BY e.created_at;
+```
+
 Tenant-scoped calls are attributed to the organization authorized by the executor, including when it resolves a saved workspace for a bearer token. Location attribution uses the validated selected location. Global discovery/context calls are not assigned to a guessed organization. These events still carry the operation, status, error code, duration, and catalog fingerprint needed to investigate failures.
 
 ### Querying
