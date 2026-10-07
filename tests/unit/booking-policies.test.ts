@@ -38,3 +38,13 @@ test('renderBookingPolicySummary localizes Thai summaries', () => {
   assert.equal(summary.heading, 'นโยบายการจอง')
   assert(summary.items.some((item) => item.text.includes('2 ชั่วโมง')))
 })
+
+test('renderBookingPolicySummary localizes Vietnamese summaries', () => {
+  const summary = formatBookingPolicySummary(reservationPolicy(), 'vi')
+  assert.equal(summary.heading, 'Chính sách đặt bàn')
+  assert.deepEqual(summary.items, [{ id: 'cancellation', text: 'Hủy miễn phí trước giờ đặt tối đa 2 giờ.' }])
+})
+
+test('renderBookingPolicySummary refuses a locale without a platform catalog', () => {
+  assert.throws(() => formatBookingPolicySummary(reservationPolicy(), 'fr'), /No platform locale catalog/)
+})

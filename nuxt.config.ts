@@ -92,14 +92,14 @@ export default defineNuxtConfig({
   // sheet carries only its own @font-face rules; a browser fetches a face only
   // when rendered text uses it, so the site-font catalog in
   // assets/css/font-presets.css costs nothing until a site selects one, and the
-  // Thai fallback nothing until a page has Thai text.
+  // Thai and Vietnamese fallbacks nothing until a page has that text.
   fonts: {
     priority: ['google'],
     throwOnError: true,
     defaults: {
       weights: [400, 500, 600, 700],
       styles: ['normal'],
-      subsets: ['latin', 'thai'],
+      subsets: ['latin', 'thai', 'vietnamese'],
     },
     families: [
       { name: 'Jost', weights: ['100 900'] },
@@ -109,6 +109,10 @@ export default defineNuxtConfig({
       // keeps them and drops the Latin ones the site font already covers.
       { name: 'Noto Sans JP', weights: [400, 700], subsets: ['japanese'] },
       { name: 'Noto Serif JP', weights: [400, 700], subsets: ['japanese'] },
+      // Vietnamese fallbacks for site faces without Vietnamese letters; the
+      // Latin the site font already draws is not fetched again.
+      { name: 'Noto Sans Display', subsets: ['vietnamese'] },
+      { name: 'Noto Serif Display', subsets: ['vietnamese'] },
     ],
   },
 

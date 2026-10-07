@@ -1,5 +1,11 @@
 import { getPlanEntitlements } from '../server/utils/billing-entitlements'
 import { STARTER_PLAN_ID, NEW_SALE_PAID_PLAN_IDS } from './billing-model'
+import { PLATFORM_LOCALES } from './platform-locales'
+
+const ADDITIONAL_LANGUAGE_NAMES = new Intl.ListFormat('en', { type: 'conjunction' }).format(
+  PLATFORM_LOCALES.filter(({ locale }) => locale !== 'en')
+    .map(({ locale }) => new Intl.DisplayNames('en', { type: 'language' }).of(locale)!),
+)
 
 // Reviewed comparison copy, not Stripe's paid marketing_features. Source ownership
 // and unresolved policies are recorded in docs/design/pricing/implementation-plan.md.
@@ -47,7 +53,7 @@ export const PRICING_COMPARISON: ReadonlyArray<{ title: string; rows: readonly P
     { id: 'places.refresh', label: 'Google Places re-import', detail: 'Connect a selected Place and explicitly refresh its details.', entitlement: 'google_places' },
     { id: 'places.refresh', label: 'Weekly Google review refresh', detail: 'Scheduled review and rating refresh for connected Places; not continuous synchronization of all business details.', entitlement: 'google_places' },
     { id: 'content.locales', label: 'English source website', detail: 'Source content remains available while additional languages are authored.', included: 'Included' },
-    { id: 'content.additional-locales', label: 'Additional website languages', detail: 'Manually author and publish Japanese and Thai; no automatic translation.', limits: Object.fromEntries([STARTER_PLAN_ID, ...NEW_SALE_PAID_PLAN_IDS].map(plan => {
+    { id: 'content.additional-locales', label: 'Additional website languages', detail: `Manually author and publish ${ADDITIONAL_LANGUAGE_NAMES}; no automatic translation.`, limits: Object.fromEntries([STARTER_PLAN_ID, ...NEW_SALE_PAID_PLAN_IDS].map(plan => {
       const limit = getPlanEntitlements(plan).additional_languages
       if (typeof limit !== 'number') throw new Error(`Missing language allowance for plan ${plan}`)
       return [plan, limit]
