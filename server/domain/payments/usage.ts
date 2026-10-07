@@ -202,7 +202,7 @@ export async function paymentsUsageStatus(db:DbClient,env:CloudflareEnv,organiza
     OR json_type(billing_basis_json,'$.amount')<>'integer',1) END) AS invalid_basis,
   MAX(error) AS error FROM payment_usage_events WHERE organization_id=? AND delivery_at IS NULL GROUP BY currency,kind`,[organizationId])
  if(pending.some(row=>row.invalid_basis!==0||!Number.isSafeInteger(row.billing_amount)))throw new Error('Accrued Payments usage is missing its native currency billing receipt')
- if(!account?.metronome_customer_id||!account.metronome_contract_id||!native)return {configured:false,pending,pricing:null,invoices:[],credits:[],source:'Metronome configuration missing; durable accrued events retained'}
+ if(!account?.metronome_customer_id||!account.metronome_contract_id||!native)return {configured:false,account:null,pending,pricing:null,invoices:[],credits:[],source:'Metronome configuration missing; durable accrued events retained',refreshed_at:null}
  const stripe=getStripe(env)
  const invoices=await metronomeInvoices(env,account.metronome_customer_id,account.metronome_contract_id)
  const negative=await queryAll<{id:string;source_id:string;kind:string;currency:string;amount:number;provider_occurred_at:string;error:string|null;billing_basis_json:string|null}>(db,"SELECT id,source_id,kind,currency,amount,provider_occurred_at,error,billing_basis_json FROM payment_usage_events WHERE organization_id=? AND kind IN ('stripe_cost','stripe_cost_adjustment') AND amount<0 AND delivery_at IS NULL AND billing_timestamp IS NULL",[organizationId])

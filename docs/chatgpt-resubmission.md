@@ -50,8 +50,11 @@ After the staging PR is merged and the tested changes are promoted to production
 1. Record the deployed commit, `https://krabiclaw.com/api/mcp`, catalog fingerprint
    and exact discovered tool names. Compare the deployed catalog with the
    committed snapshot.
-2. Uninstall and reinstall the user's live ChatGPT connection to refresh its
-   tools, then verify normal login and the expanded OAuth disclosure.
+2. In the installed development plugin, open **Manage**, choose **Refresh
+   tools**, and start a new chat. Verify that its calls match the deployed
+   schemas. Uninstalling and reinstalling alone did not refresh the tool
+   definitions in the live walkthrough. Separately verify normal login and
+   the expanded OAuth disclosure through a fresh connection.
 3. Run the five positive and three negative cases independently with prepared
    data. Also repeat #1259's uploaded-menu-image price-edit workflow and the
    direct, indirect and negative selection prompts in

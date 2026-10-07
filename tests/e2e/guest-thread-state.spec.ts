@@ -685,12 +685,10 @@ test('Today uses the CMS patterns and sends one reservation change request', asy
     const token = createHmac('sha256', 'local-playwright-email-reply-secret')
       .update(`booking-change:v1:${before.booking.threadId}:${request.id}`)
       .digest('hex')
-    const accepted = await page.request.post(
-      `/api/public/booking-changes/${before.booking.threadId}/${request.id}`,
-      { headers: { authorization: `Bearer ${token}` }, data: { decision: 'accept' } },
-    )
-    await expectStatus(accepted, 200)
-    expect(await accepted.json()).toMatchObject({ status: 'accepted' })
+    await page.goto(`${baseURL}/booking-changes/${before.booking.threadId}/${request.id}#${token}`)
+    await expect(page.getByRole('button', { name: 'Accept changes', exact: true })).toBeVisible()
+    await page.getByRole('button', { name: 'Accept changes', exact: true }).click()
+    await expect(page.getByText('Your reservation has been updated.', { exact: true })).toBeVisible()
 
     const afterResponse = await page.request.get(
       `/api/dashboard/bookings/reservation/${upcomingBookingId}`,

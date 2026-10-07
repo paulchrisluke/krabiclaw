@@ -34,6 +34,7 @@ import { getErrorMessage } from '~/utils/errors'
 import type { respondToBookingChange } from '~/server/domain/guest-threads/booking-changes'
 
 definePageMeta({ layout: false })
+const route = useRoute()
 useSocialMetadata(() => ({
   path: `/booking-changes/${encodeURIComponent(String(route.params.threadId))}/${encodeURIComponent(String(route.params.requestId))}`,
   title: 'Review reservation changes',
@@ -43,7 +44,6 @@ useSocialMetadata(() => ({
 }))
 useHead({ meta: [{ name: 'referrer', content: 'no-referrer' }] })
 type Proposal = Awaited<ReturnType<typeof respondToBookingChange>>
-const route = useRoute()
 const endpoint = `/api/public/booking-changes/${encodeURIComponent(String(route.params.threadId))}/${encodeURIComponent(String(route.params.requestId))}`
 const token = computed(() => route.hash.slice(1))
 const { data: proposal, pending, error } = await useAsyncData(endpoint, () => $fetch<Proposal>(endpoint, { headers: { authorization: `Bearer ${token.value}` } }), { server: false })

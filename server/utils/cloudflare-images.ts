@@ -73,7 +73,7 @@ export async function uploadImageBuffer(
   buffer: ArrayBuffer | Uint8Array<ArrayBuffer>,
   filename: string,
   contentType = 'image/png',
-  imageId: string = crypto.randomUUID(),
+  imageId: string = `image-${crypto.randomUUID()}`,
 ): Promise<{ imageId: string; publicUrl: string; thumbnailUrl: string }> {
   assertCloudflareImagesConfigured(env)
   const form = new FormData()
@@ -101,7 +101,7 @@ export async function uploadImageBuffer(
     } catch (readError) {
       throw new AggregateError([error,readError], `The upload result for image ${imageId} could not be read`, {cause:readError})
     }
-    if (!uploaded || uploaded.draft || uploaded.metadata?.content_sha256 !== contentHash) throw new Error(`Image ${imageId} has no matching completed upload`, {cause:error})
+    if (!uploaded || uploaded.draft || uploaded.metadata?.content_sha256 !== contentHash) throw error
   }
   return {
     imageId,
