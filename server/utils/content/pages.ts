@@ -31,7 +31,7 @@ import { buildSingleMediaPlacementQueries, insertInitialMediaPlacements, hydrate
 import { isSingleMediaPlacement } from '~/shared/media-placement-contract'
 import { getMediaPlacements } from '~/server/utils/media-placement'
 import { loadOrganizationTemplate } from '~/server/utils/content/publishing'
-import { templateAllowsPageDocumentAt, templateRendersPageDocumentAt } from '~/shared/tenant-page-paths'
+import { templateAllowsPageDocumentAt, templatePageDocumentPaths } from '~/shared/tenant-page-paths'
 import type { PublicTemplateDefinition } from '~/utils/template-registry'
 import { CLAIMED_PUBLIC_ROUTES } from '#claimed-public-routes'
 import { formatTenantLocalePath } from '~/utils/tenant-locale-path'
@@ -473,7 +473,7 @@ export async function listTenantPages(db: DbClient, organizationId: string, opts
     // The product this page belongs to, read off its source page. A bound page
     // is edited from its product; the relationship, not its path, says so.
     product_id: row.product_id,
-    removable: !templateRendersPageDocumentAt(template, normalizeTenantPagePath(row.path)),
+    removable: !templatePageDocumentPaths(template).includes(normalizeTenantPagePath(row.path)),
   }))
 }
 
@@ -890,7 +890,10 @@ export async function deleteTenantPage(db: DbClient, variantId: string, input: {
   if (document.updated_at !== input.expectedUpdatedAt) conflict('Tenant page content was updated by another writer')
 
   const { template } = await loadOrganizationTemplate(db, row.organization_id)
-  if (templateRendersPageDocumentAt(template, normalizeTenantPagePath(row.path))) {
+  // Only a page the template guarantees is refused. A subtree it serves as
+  // documents, Blawby's /services/, holds pages an owner or a Product made,
+  // and they delete like any other.
+  if (templatePageDocumentPaths(template).includes(normalizeTenantPagePath(row.path))) {
     conflict("This page is one the organization's template renders, so it cannot be deleted")
   }
 

@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type APIResponse, type Page } from '@playwright/test'
-import { openTenantPage } from './helpers'
+import { openTenantPage, waitForNuxtHydration } from './helpers'
 import { loginAs } from './helpers/auth'
 import { mcpRequest } from './helpers/mcp'
 import { E2E_KIKUZUKI_ORGANIZATION_ID, kikuzukiTestBaseUrl, kikuzukiTestExtraHeaders, testBaseUrl } from './test-env'
@@ -184,7 +184,9 @@ test('Kikuzuki Brand translations open from their URL in the stored language', a
       await expect(cms.locator('#dashboard-panel-organization-brand').getByRole('link', { name: /^Translations/ })).toHaveAttribute('href', `${brandPath}?editMode=translations`)
       const loaded = cms.waitForResponse(response => response.request().method() === 'GET'
         && new URL(response.url()).pathname === `/api/editor/organizations/${organizationId}/localization/organization/${organizationId}/${locale}`)
-      await openTenantPage(cms, `${baseURL}${brandPath}?editMode=translations&locale=${locale}`, {})
+      // A plain load: openTenantPage dismisses whatever dialog is open, which here is the mode under test.
+      await cms.goto(`${baseURL}${brandPath}?editMode=translations&locale=${locale}`)
+      await waitForNuxtHydration(cms)
       expect((await loaded).status()).toBe(200)
       await expect(cms.getByTestId('localize-field-name')).toHaveValue('Kikuzuki กระบี่ ประเทศไทย')
       await expect(cms.getByTestId('localize-field-brand_description')).toHaveValue('อาหารญี่ปุ่นต้นตำรับในกระบี่')
