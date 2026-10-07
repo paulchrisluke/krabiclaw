@@ -23,7 +23,8 @@
             <p v-if="row.detail" class="mt-1 text-xs text-muted">{{ row.detail }}</p>
             <div class="mt-2 flex flex-wrap gap-2">
               <UButton v-if="row.url" :to="row.url" target="_blank" size="xs" color="neutral" variant="soft" icon="i-lucide-external-link">View</UButton>
-              <UButton v-if="row.reconcileId" size="xs" color="neutral" variant="outline" :loading="reconciling === row.reconcileId" @click="reconcile(row.reconcileId)">Check with {{ row.name }}</UButton>
+              <UInput v-if="row.reconcileId && row.channel === 'discord'" v-model="messageId" size="xs" placeholder="Discord message id" aria-label="Discord message id" class="w-44" />
+              <UButton v-if="row.reconcileId" size="xs" color="neutral" variant="outline" :disabled="row.channel === 'discord' && !messageId.trim()" :loading="reconciling === row.reconcileId" @click="reconcile(row.reconcileId, row.channel === 'discord' ? messageId.trim() : undefined)">Check with {{ row.name }}</UButton>
               <UButton v-if="row.connectUrl" :to="row.connectUrl" size="xs" color="neutral" variant="link">Connect</UButton>
             </div>
           </div>
@@ -42,7 +43,7 @@
 
 <script setup lang="ts">
 import { postEditorKey } from '~/components/dashboard/PostEditorPage.vue'
-import type { PublishOutcome, PublishTarget } from '~/composables/usePostEditor'
+import type { PublishOutcome, PublishTarget, SocialChannel } from '~/composables/usePostEditor'
 import { getErrorMessage } from '~/utils/errors'
 
 definePageMeta({ layout: 'dashboard' })
@@ -51,7 +52,7 @@ const post = inject(postEditorKey)!
 const dashboardApi = useDashboardApi()
 const dashboardLocation = useDashboardLocation()
 
-interface Channel { channel: 'facebook' | 'instagram'; connected: boolean; target_id: string | null; target_name: string | null; connection_revision: string | null; problems: Array<{ code: string; message: string }>; connect_url: string }
+interface Channel { channel: SocialChannel; connected: boolean; target_id: string | null; target_name: string | null; connection_revision: string | null; problems: Array<{ code: string; message: string }>; connect_url: string }
 const isConnections = (value: unknown): value is { channels: Channel[] } => isRecord(value) && Array.isArray(value.channels)
 // The same answer get_social_connections gives an assistant.
 const { data: connections, error } = await useAsyncData(
@@ -61,8 +62,15 @@ const { data: connections, error } = await useAsyncData(
 const connectionsError = computed(() => (error.value ? getErrorMessage(error.value, 'Failed to read connections') : null))
 
 const lastOutcomes = ref<PublishOutcome[]>([])
-const selected = ref<Array<'organization' | 'facebook' | 'instagram'>>([])
+const selected = ref<Array<'organization' | SocialChannel>>([])
 const reconciling = ref<string | null>(null)
+const messageId = ref('')
+
+const CHANNELS: Record<SocialChannel, { name: string; icon: string }> = {
+  facebook: { name: 'Facebook', icon: 'i-logos-facebook' },
+  instagram: { name: 'Instagram', icon: 'i-skill-icons-instagram' },
+  discord: { name: 'Discord', icon: 'i-logos-discord-icon' },
+}
 
 const STATE_WORDS: Record<string, string> = {
   published: 'Published', preparing: 'Being prepared', publishing: 'Publishing', failed: 'Not published', unknown: 'Outcome unknown — check it', removed: 'Removed from the channel',
@@ -83,17 +91,18 @@ const rows = computed(() => {
   }
   const social = (connections.value?.channels ?? []).map((channel) => {
     const publication = publications.find(item => item.channel === channel.channel)
-    const name = channel.channel === 'facebook' ? 'Facebook' : 'Instagram'
+    const { name, icon } = CHANNELS[channel.channel]
     const state = publication ? String(publication.state) : null
     const blocked = !channel.connected || channel.problems.length > 0
     return {
-      channel: channel.channel, name, icon: channel.channel === 'facebook' ? 'i-logos-facebook' : 'i-skill-icons-instagram',
+      channel: channel.channel, name, icon,
       target: channel.target_name,
       selectable: !blocked && (!publication || state === 'failed' || state === 'preparing'),
       state: state ? STATE_WORDS[state] ?? state : blocked ? channel.problems.map(problem => problem.message).join(' ') || 'Not connected' : 'Not published there',
       tone: state === 'published' ? 'text-success' : state === 'failed' || state === 'unknown' ? 'text-warning' : 'text-muted',
       detail: outcome(channel.channel)?.message ?? (publication?.message ? String(publication.message) : null)
-        ?? (publication?.local_content_changed ? 'The website post changed after this was sent; the post there was not edited.' : null),
+        ?? (publication?.local_content_changed ? 'The website post changed after this was sent; the post there was not edited.' : null)
+        ?? (state === 'unknown' && channel.channel === 'discord' ? 'Discord cannot be searched for it. If the message is in the channel, copy its id (Copy Message ID) and check it here.' : null),
       url: typeof publication?.public_url === 'string' ? publication.public_url : null,
       reconcileId: state === 'unknown' ? String(publication!.id) : null,
       connectUrl: channel.connected ? null : channel.connect_url,
@@ -102,7 +111,7 @@ const rows = computed(() => {
   return [website, ...social]
 })
 
-function toggle(channel: 'organization' | 'facebook' | 'instagram', checked: boolean) {
+function toggle(channel: 'organization' | SocialChannel, checked: boolean) {
   selected.value = checked ? [...new Set([...selected.value, channel])] : selected.value.filter(item => item !== channel)
 }
 
@@ -118,8 +127,10 @@ async function publish() {
   selected.value = []
 }
 
-async function reconcile(publicationId: string) {
+async function reconcile(publicationId: string, providerPostId?: string) {
   reconciling.value = publicationId
-  try { await post.editor.reconcile(post.postId.value, publicationId) } finally { reconciling.value = null }
+  try {
+    if (await post.editor.reconcile(post.postId.value, publicationId, providerPostId)) messageId.value = ''
+  } finally { reconciling.value = null }
 }
 </script>

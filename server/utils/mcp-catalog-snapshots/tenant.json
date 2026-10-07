@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:e98eb166f17967f77966d25f8cc4ad475b0505ac8f1bc4cb525e33bc0e4e83de",
+  "fingerprint": "sha256:7700b391c79dcec88ca2cddf1bff821bc6cff286cd09534bc3ba1ca69831a1d3",
   "tools": [
     {
       "name": "append_content_block",
@@ -2332,7 +2332,7 @@
             "anyOf": [
               {
                 "additionalProperties": false,
-                "description": "A button the author wrote: its label and an http(s) or tel: destination. Sent to Facebook and Instagram as a separate \"label: url\" line under the caption; Instagram shows it as text, not a button.",
+                "description": "A button the author wrote: its label and an http(s) or tel: destination. Sent to Facebook, Instagram and Discord as a separate \"label: url\" line under the caption; Instagram shows it as text, not a button.",
                 "properties": {
                   "label": {
                     "maxLength": 60,
@@ -2599,7 +2599,8 @@
                     "channel": {
                       "enum": [
                         "facebook",
-                        "instagram"
+                        "instagram",
+                        "discord"
                       ],
                       "type": "string"
                     },
@@ -2630,7 +2631,7 @@
                       ]
                     },
                     "public_url": {
-                      "description": "The provider's own permalink, when it returned one.",
+                      "description": "The provider's own permalink, when it returned one. A Discord message link opens only for members of that channel.",
                       "type": [
                         "string",
                         "null"
@@ -4410,14 +4411,15 @@
     },
     {
       "name": "delete_channel_post",
-      "description": "Permanently delete exactly the provider_post_id on the explicitly selected connected Facebook Page. Keeps the website post and marks its publication receipt removed. Read get_social_connections and list_channel_posts first. Instagram deletion is unavailable with this app's Instagram Login connection; delete Instagram posts in Instagram. Use delete_post to remove website content separately.",
+      "description": "Permanently delete exactly the provider_post_id on the explicitly selected connected Facebook Page, or a Discord message the connected webhook sent to the connected channel. Keeps the website post and marks its publication receipt removed. Read get_social_connections first, then identify the post with list_channel_posts or, for Discord, a confirmed receipt or verified message id. Instagram deletion is unavailable with this app's Instagram Login connection; delete Instagram posts in Instagram. Use delete_post to remove website content separately.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
           "channel": {
             "enum": [
               "facebook",
-              "instagram"
+              "instagram",
+              "discord"
             ],
             "type": "string"
           },
@@ -4449,7 +4451,8 @@
         "properties": {
           "channel": {
             "enum": [
-              "facebook"
+              "facebook",
+              "discord"
             ],
             "type": "string"
           },
@@ -4608,7 +4611,7 @@
     },
     {
       "name": "delete_post",
-      "description": "Delete a post from the website. Its Facebook and Instagram posts are not deleted; use delete_channel_post for an explicit supported channel deletion. Refused while a publication of it is in progress or unresolved.",
+      "description": "Delete a post from the website. Its Facebook, Instagram and Discord posts are not deleted; use delete_channel_post for an explicit supported channel deletion. Refused while a publication of it is in progress or unresolved.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -5307,14 +5310,15 @@
     },
     {
       "name": "get_channel_post",
-      "description": "Read one post from the selected connected Facebook Page or Instagram professional account when the user wants its current caption, media or public link. Use provider_post_id from list_channel_posts and the exact target from get_social_connections. Website content is unchanged.",
+      "description": "Read one post from the selected connected Facebook Page, Instagram professional account or Discord channel when the user wants its current caption, media or link. Use provider_post_id from list_channel_posts, or for Discord the provider_post_id of a confirmed publication receipt or a message id the connected webhook sent, with the exact target from get_social_connections. Website content is unchanged.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
           "channel": {
             "enum": [
               "facebook",
-              "instagram"
+              "instagram",
+              "discord"
             ],
             "type": "string"
           },
@@ -5356,7 +5360,8 @@
               "channel": {
                 "enum": [
                   "facebook",
-                  "instagram"
+                  "instagram",
+                  "discord"
                 ],
                 "type": "string"
               },
@@ -5405,6 +5410,7 @@
                 "type": "string"
               },
               "public_url": {
+                "description": "The provider link. A Discord message link opens only for members of that channel.",
                 "type": [
                   "string",
                   "null"
@@ -7510,7 +7516,7 @@
     },
     {
       "name": "get_post",
-      "description": "Read a short website post before editing or publishing it. Returns its caption, call to action, ordered media, website status, draft preview link and stored Facebook or Instagram publication receipts. Use get_channel_post for current provider content.",
+      "description": "Read a short website post before editing or publishing it. Returns its caption, call to action, ordered media, website status, draft preview link and stored Facebook, Instagram or Discord publication receipts. Use get_channel_post for current provider content.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -7683,7 +7689,8 @@
                     "channel": {
                       "enum": [
                         "facebook",
-                        "instagram"
+                        "instagram",
+                        "discord"
                       ],
                       "type": "string"
                     },
@@ -7714,7 +7721,7 @@
                       ]
                     },
                     "public_url": {
-                      "description": "The provider's own permalink, when it returned one.",
+                      "description": "The provider's own permalink, when it returned one. A Discord message link opens only for members of that channel.",
                       "type": [
                         "string",
                         "null"
@@ -9007,7 +9014,7 @@
     },
     {
       "name": "get_social_connections",
-      "description": "Read the site’s website, Facebook Page and Instagram publishing connections before selecting a publication target. Returns target_id, connection_revision, supported formats and operations, setup links, and problems, including whether Meta currently accepts each connection’s access; a rejected one names Meta’s error code. Credentials are not returned.",
+      "description": "Read the site’s website, Facebook Page, Instagram and Discord channel publishing connections before selecting a publication target. Returns target_id, connection_revision, supported formats and operations, setup links, and problems, including whether Meta or Discord currently accepts each connection and whether a Discord webhook still posts to the connected channel. Credentials are not returned.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -9027,7 +9034,8 @@
                 "channel": {
                   "enum": [
                     "facebook",
-                    "instagram"
+                    "instagram",
+                    "discord"
                   ],
                   "type": "string"
                 },
@@ -9045,6 +9053,13 @@
                   ]
                 },
                 "deletion_unavailable_reason": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "listing_unavailable_reason": {
+                  "description": "Why list_channel_posts is not available for this channel.",
                   "type": [
                     "string",
                     "null"
@@ -9109,6 +9124,7 @@
                 "problems",
                 "supported_operations",
                 "deletion_unavailable_reason",
+                "listing_unavailable_reason",
                 "connect_url"
               ],
               "type": "object"
@@ -9658,7 +9674,7 @@
     },
     {
       "name": "list_channel_posts",
-      "description": "Read live posts directly from the explicitly selected connected Facebook Page or Instagram professional account. Does not import website posts or media. Read get_social_connections first and supply the exact channel, target_id and connection_revision. next_after is Meta's cursor; pass it as after for the next page.",
+      "description": "Read live posts directly from the explicitly selected connected Facebook Page or Instagram professional account. Does not import website posts or media. Read get_social_connections first and supply the exact channel, target_id and connection_revision. next_after is Meta's cursor; pass it as after for the next page. Discord is not listable: an incoming webhook cannot read channel history; read a Discord message with get_channel_post instead.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -9668,7 +9684,8 @@
           "channel": {
             "enum": [
               "facebook",
-              "instagram"
+              "instagram",
+              "discord"
             ],
             "type": "string"
           },
@@ -9719,7 +9736,8 @@
                 "channel": {
                   "enum": [
                     "facebook",
-                    "instagram"
+                    "instagram",
+                    "discord"
                   ],
                   "type": "string"
                 },
@@ -9768,6 +9786,7 @@
                   "type": "string"
                 },
                 "public_url": {
+                  "description": "The provider link. A Discord message link opens only for members of that channel.",
                   "type": [
                     "string",
                     "null"
@@ -11014,7 +11033,8 @@
                       "channel": {
                         "enum": [
                           "facebook",
-                          "instagram"
+                          "instagram",
+                          "discord"
                         ],
                         "type": "string"
                       },
@@ -11045,7 +11065,7 @@
                         ]
                       },
                       "public_url": {
-                        "description": "The provider's own permalink, when it returned one.",
+                        "description": "The provider's own permalink, when it returned one. A Discord message link opens only for members of that channel.",
                         "type": [
                           "string",
                           "null"
@@ -11969,7 +11989,7 @@
     },
     {
       "name": "publish_post",
-      "description": "Publish a post to exactly the targets listed, and nowhere else: {\"channel\":\"organization\"} for the website, and {\"channel\":\"facebook\"|\"instagram\",\"target_id\",\"connection_revision\"} from get_social_connections. Returns one outcome per target; ok is true only when every target is published. Repeating the call returns the existing receipts and never posts twice. processing means Meta is still preparing the media: call publish_post again to finish the same post. unknown means the final step was not confirmed: resolve it with reconcile_post_publication, never by publishing again. A post is published once per channel; publish a new post for another Page or account. Facebook takes text, a link, photos or one video; Instagram takes one JPEG image, a carousel of up to ten items, or one video as a Reel, and shows the call to action as text.",
+      "description": "Publish a post to exactly the targets listed, and nowhere else: {\"channel\":\"organization\"} for the website, and {\"channel\":\"facebook\"|\"instagram\"|\"discord\",\"target_id\",\"connection_revision\"} from get_social_connections. Returns one outcome per target; ok is true only when every target is published. Repeating the call returns the existing receipts and never posts twice. processing means Meta is still preparing the media, or Discord rate limited the send: call publish_post again to finish the same post. unknown means the final step was not confirmed: resolve it with reconcile_post_publication, never by publishing again. A post is published once per channel; publish a new post for another Page, account or channel. Facebook takes text, a link, photos or one video; Instagram takes one JPEG image, a carousel of up to ten items, or one video as a Reel, and shows the call to action as text. Discord takes up to 2000 characters of text and call to action, never truncated, with up to ten JPEG, PNG, GIF, WebP, MP4, MOV or WebM attachments of at most 20 MiB each and 25 MiB together; mentions are not pinged; forum and media channels are refused.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -12009,7 +12029,8 @@
                     "channel": {
                       "enum": [
                         "facebook",
-                        "instagram"
+                        "instagram",
+                        "discord"
                       ]
                     },
                     "connection_revision": {
@@ -12017,7 +12038,7 @@
                       "type": "string"
                     },
                     "target_id": {
-                      "description": "The Page or professional account id from get_social_connections.",
+                      "description": "The Page, professional account or Discord channel id from get_social_connections.",
                       "type": "string"
                     }
                   },
@@ -12030,7 +12051,7 @@
                 }
               ]
             },
-            "maxItems": 3,
+            "maxItems": 4,
             "minItems": 1,
             "type": "array"
           }
@@ -12057,7 +12078,8 @@
                   "enum": [
                     "organization",
                     "facebook",
-                    "instagram"
+                    "instagram",
+                    "discord"
                   ],
                   "type": "string"
                 },
@@ -12797,7 +12819,7 @@
     },
     {
       "name": "reconcile_post_publication",
-      "description": "Check an unknown or existing Facebook or Instagram publication when the user wants to resolve or refresh its outcome. Reads the connected provider and updates the stored publication receipt; it does not publish. Supply provider_post_id only when the exact post is known and belongs to that connected Page or account. An unproven outcome remains unknown.",
+      "description": "Check an unknown or existing Facebook, Instagram or Discord publication when the user wants to resolve or refresh its outcome. Reads the connected provider and updates the stored publication receipt; it does not publish. Supply provider_post_id only when the exact post is known and belongs to that connected Page, account or channel. Discord cannot be searched: an unknown Discord publication needs the message id, and is resolved only when that message was sent by the connected webhook with this post's exact text and media during the attempt. An unproven outcome remains unknown.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -12806,7 +12828,7 @@
             "type": "string"
           },
           "provider_post_id": {
-            "description": "Optional: the Facebook post id or Instagram media id it became.",
+            "description": "Optional: the Facebook post id, Instagram media id or Discord message id it became. Required for an unknown Discord publication.",
             "type": "string"
           },
           "publication_id": {
@@ -19830,7 +19852,7 @@
     },
     {
       "name": "update_post",
-      "description": "Change a post's title, body, call_to_action, location, visibility or (while a draft) slug. Only the fields sent change. expected_updated_at is the updated_at you last read; a stale one conflicts. Media changes go through set_media, attach_media, remove_media and reorder_media on the post. Words and media cannot change while a Facebook or Instagram publication of this post is in progress or unresolved. Editing a published post changes the website only; nothing already sent to Facebook or Instagram is edited.",
+      "description": "Change a post's title, body, call_to_action, location, visibility or (while a draft) slug. Only the fields sent change. expected_updated_at is the updated_at you last read; a stale one conflicts. Media changes go through set_media, attach_media, remove_media and reorder_media on the post. Words and media cannot change while a Facebook, Instagram or Discord publication of this post is in progress or unresolved. Editing a published post changes the website only; nothing already sent to Facebook, Instagram or Discord is edited.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -19850,7 +19872,7 @@
             "anyOf": [
               {
                 "additionalProperties": false,
-                "description": "A button the author wrote: its label and an http(s) or tel: destination. Sent to Facebook and Instagram as a separate \"label: url\" line under the caption; Instagram shows it as text, not a button.",
+                "description": "A button the author wrote: its label and an http(s) or tel: destination. Sent to Facebook, Instagram and Discord as a separate \"label: url\" line under the caption; Instagram shows it as text, not a button.",
                 "properties": {
                   "label": {
                     "maxLength": 60,
@@ -20094,7 +20116,8 @@
                     "channel": {
                       "enum": [
                         "facebook",
-                        "instagram"
+                        "instagram",
+                        "discord"
                       ],
                       "type": "string"
                     },
@@ -20125,7 +20148,7 @@
                       ]
                     },
                     "public_url": {
-                      "description": "The provider's own permalink, when it returned one.",
+                      "description": "The provider's own permalink, when it returned one. A Discord message link opens only for members of that channel.",
                       "type": [
                         "string",
                         "null"

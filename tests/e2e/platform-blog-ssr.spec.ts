@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { loginAs } from './helpers/auth'
 import { waitForNuxtHydration } from './helpers'
+import { docsCategoryArt } from '../../utils/docs-category-art'
 
 test('platform blog renders its public API posts in server HTML', async ({ request }) => {
   const api = await request.get('/api/public/blog')
@@ -231,16 +232,22 @@ test('docs category landings explain published tasks and preserve canonical guid
       await expect(image).toHaveAttribute('src', '/platform/docs/categories/krabiclaw-getting-started-category.png')
       await expect.poll(() => image.evaluate(element => (element as HTMLImageElement).complete && (element as HTMLImageElement).naturalWidth > 0)).toBe(true)
     }
-    await expect(page.locator('[data-category-illustration]')).toHaveCount(1)
+    // Artwork exists for the categories that have it in code; a category the
+    // CMS adds later renders without it and shares the site's social image.
+    const art = docsCategoryArt(category.slug)
+    await expect(page.locator('[data-category-illustration]')).toHaveCount(art ? 1 : 0)
     await expect(feature.locator('figcaption')).toHaveCount(0)
     const og = await page.locator('meta[property="og:image"]').getAttribute('content')
-    expect(og).toMatch(/\/platform\/docs\/categories\/.+-og\.png$/)
+    expect(og).toBeTruthy()
     await expect(page.locator('meta[name="twitter:image"]')).toHaveAttribute('content', og!)
-    await expect(page.locator('meta[property="og:image:width"]')).toHaveAttribute('content', '1200')
-    await expect(page.locator('meta[property="og:image:height"]')).toHaveAttribute('content', '630')
+    if (art) {
+      expect(new URL(og!, baseURL!).pathname).toBe(art.og)
+      await expect(page.locator('meta[property="og:image:width"]')).toHaveAttribute('content', '1200')
+      await expect(page.locator('meta[property="og:image:height"]')).toHaveAttribute('content', '630')
+    }
     const ogResponse = await page.request.get(og!)
     expect(ogResponse.status()).toBe(200)
-    expect(ogResponse.headers()['content-type']).toContain('image/png')
+    expect(ogResponse.headers()['content-type']).toMatch(/^image\//)
     for (const image of await page.locator('[data-category-illustration]').all()) {
       await expect.poll(() => image.evaluate(element => (element as HTMLImageElement).complete && (element as HTMLImageElement).naturalWidth > 0)).toBe(true)
     }

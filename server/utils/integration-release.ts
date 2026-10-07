@@ -11,8 +11,10 @@ import { reconcileZarazAnalytics } from './zaraz-analytics'
  *
  * An integration is the organization's selection — a GA4 property, a Search
  * Console site, a Facebook Page, an Instagram account — and the Better Auth
- * linked account it was made through. Disconnecting removes the selection and
- * stops channel management; website content and the user's linked account stay.
+ * linked account it was made through, or a Discord webhook the organization
+ * holds itself. Disconnecting removes the selection, and with it a Discord
+ * webhook's stored token, and stops channel management; website content, the
+ * user's linked account and messages already in Discord stay.
  * A verified Meta data-deletion request erases that person's provider receipts
  * and linked identity. The organization's authored posts and media stay.
  */
@@ -22,6 +24,7 @@ export type IntegrationProduct =
   | 'google-search-console'
   | 'facebook'
   | 'instagram'
+  | 'discord'
 
 export interface ReleaseIntegrationResult {
   product: IntegrationProduct
@@ -34,6 +37,7 @@ const PROVIDER: Record<IntegrationProduct, IntegrationProvider> = {
   'google-search-console': 'google_search_console',
   'facebook': 'facebook',
   'instagram': 'instagram',
+  'discord': 'discord',
 }
 
 export async function releaseIntegration(

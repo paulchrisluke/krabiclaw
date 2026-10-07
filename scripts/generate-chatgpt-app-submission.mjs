@@ -48,7 +48,7 @@ const effects = {
   delete_content_block: 'Deletes one block, and the blocks nested under it, from the selected blog article or tenant page after a version check.',
   delete_collection: 'Deletes the selected collection and every product membership in it; the products themselves are untouched.',
   delete_media_asset: 'Removes an asset and its placements, and deletes backing Cloudflare storage when no other asset references it.',
-  delete_post: 'Deletes the selected short post from the website; its Facebook and Instagram posts are left as they are.',
+  delete_post: 'Deletes the selected short post from the website; its Facebook, Instagram and Discord posts are left as they are.',
   delete_product: 'Deletes the selected product and its owned variants, prices, attributes and placements; booking history or a referencing site page prevents deletion.',
   delete_resource_localization: 'Deletes the selected translated resource representation.',
   get_blog_post: 'Reads the selected tenant blog article and content for editing.',
