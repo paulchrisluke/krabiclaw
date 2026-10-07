@@ -2,87 +2,36 @@ import { execute, type DbClient } from "~/server/db";
 import { anonymizeId } from "~/server/utils/platform-telemetry";
 import { recordUsageEvent } from "~/server/utils/usage-metering";
 
-// Field names that must never be logged verbatim, regardless of tool.
-const SENSITIVE_KEY_PATTERN =
-  /token|secret|password|authoriz|api[_-]?key|access[_-]?key|credential|cookie|base64|image_data|file_data|attachment_id|download_url|external_url/i;
+// Only typed operational facts are stored. Free text, names, identifiers,
+// attachment URLs and arbitrary request/result fields never enter summaries.
+const COUNT_FIELDS = new Set(['count', 'total', 'limit', 'offset', 'party_size', 'quantity', 'capacity', 'remaining_capacity', 'duration_ms', 'unit_amount', 'amount']);
+const BOOLEAN_FIELDS = new Set(['success', 'isError', 'completed', 'operation_completed', 'action_required', 'has_more', 'has_next_page', 'acknowledge_guest', 'confirm', 'replayed']);
+const STATUS_VALUES = new Set(['success', 'error', 'auth_required', 'blocked', 'action_required', 'pending', 'pending_review', 'confirmed', 'cancelled', 'declined', 'rejected', 'draft', 'published', 'unpublished', 'active', 'inactive', 'paid', 'unpaid', 'refunded', 'partially_refunded', 'failed', 'processing', 'completed']);
+const CONTAINER_FIELDS = new Set(['structuredContent', 'result', 'data', 'page_info', 'booking', 'reservation', 'payment']);
+const MCP_METHODS = new Set(['initialize', 'ping', 'notifications/initialized', 'tools/list', 'tools/call', 'resources/list', 'resources/templates/list', 'resources/read', 'prompts/list', 'prompts/get']);
 
-// Field names that may contain user PII — logged as a length marker, not the value.
-const PII_KEY_PATTERN = /email|phone|address/i;
-
-// Business/entity name fields — not personal data, safe to log verbatim even
-// though they end in "_name" like the person-name keys below.
-const NON_PERSONAL_NAME_KEYS = new Set([
-  "organization_name", "business_name", "name", "location_name",
-  "product_name", "experience_name",
-]);
-
-function isPersonNameKey(key: string): boolean {
-  return /(^|_)name$/i.test(key) && !NON_PERSONAL_NAME_KEYS.has(key.toLowerCase());
+export function mcpTelemetryMethod(method: string | null | undefined): string {
+  return method && MCP_METHODS.has(method) ? method : 'unknown';
 }
 
-const MAX_STRING_LENGTH = 200;
-const MAX_SUMMARY_LENGTH = 4000;
-const MAX_ARRAY_ITEMS = 10;
-const MAX_DEPTH = 4;
-
-function looksLikeBase64(value: string): boolean {
-  return value.length > 200 && /^[A-Za-z0-9+/]+={0,2}$/.test(value);
-}
-
-function redactValue(key: string, value: unknown, depth: number): unknown {
-  if (value == null) return value;
-
-  if (SENSITIVE_KEY_PATTERN.test(key)) return "[redacted]";
-  if (PII_KEY_PATTERN.test(key) || isPersonNameKey(key)) {
-    return typeof value === "string" ? `[redacted:len=${value.length}]` : "[redacted]";
-  }
-
-  if (typeof value === "string") {
-    if (looksLikeBase64(value)) return `[base64:len=${value.length}]`;
-    if (value.length > MAX_STRING_LENGTH) {
-      return `${value.slice(0, MAX_STRING_LENGTH)}…[truncated:len=${value.length}]`;
+function operationalSummary(value: unknown, depth = 0): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || depth > 3) return null;
+  const summary: Record<string, unknown> = {};
+  for (const [key, field] of Object.entries(value)) {
+    if (COUNT_FIELDS.has(key) && typeof field === 'number' && Number.isFinite(field)) summary[key] = field;
+    else if (BOOLEAN_FIELDS.has(key) && typeof field === 'boolean') summary[key] = field;
+    else if (key === 'status' && typeof field === 'string' && STATUS_VALUES.has(field)) summary[key] = field;
+    else if (CONTAINER_FIELDS.has(key)) {
+      const nested = operationalSummary(field, depth + 1);
+      if (nested) summary[key] = nested;
     }
-    return value;
   }
-
-  if (typeof value === "number" || typeof value === "boolean") return value;
-
-  if (Array.isArray(value)) {
-    if (depth >= MAX_DEPTH) return "[array]";
-    return value.slice(0, MAX_ARRAY_ITEMS).map((item) => redactValue(key, item, depth + 1));
-  }
-
-  if (typeof value === "object") {
-    if (depth >= MAX_DEPTH) return "[object]";
-    const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      out[k] = redactValue(k, v, depth + 1);
-    }
-    return out;
-  }
-
-  return String(value);
+  return Object.keys(summary).length ? summary : null;
 }
 
-// Redacts sensitive/PII fields and truncates long strings before storage.
-// Used for both call arguments and tool results — never store either raw.
 export function summarizeForTelemetry(value: unknown): string | null {
-  if (value == null) return null;
-  try {
-    const redacted = redactValue("", value, 0);
-    const json = JSON.stringify(redacted);
-    if (!json) return null;
-    return json.length > MAX_SUMMARY_LENGTH
-      ? JSON.stringify({ truncated: true, summary: json.slice(0, MAX_SUMMARY_LENGTH) })
-      : json;
-  } catch {
-    return JSON.stringify("[unserializable]");
-  }
-}
-
-export function truncateText(value: string | null | undefined, maxLength = 500): string | null {
-  if (!value) return null;
-  return value.length > maxLength ? `${value.slice(0, maxLength)}…[truncated]` : value;
+  const summary = operationalSummary(value);
+  return summary ? JSON.stringify(summary) : null;
 }
 
 export type McpToolCallStatus = "success" | "error" | "auth_required" | "blocked";
@@ -152,25 +101,25 @@ export async function logMcpToolCallEvent(
         input.userId ?? null,
         mcpSurface,
         input.requestId == null ? null : String(input.requestId),
-        input.method,
-        input.toolName ?? null,
+        mcpTelemetryMethod(input.method),
+        input.unknownToolName ? null : input.toolName ?? null,
         input.toolDomain ?? null,
         input.isMutating == null ? null : input.isMutating ? 1 : 0,
         summarizeForTelemetry(input.arguments),
         summarizeForTelemetry(input.result),
         input.status,
         input.errorCode == null ? null : String(input.errorCode),
-        truncateText(input.errorMessage, 1000),
+        input.errorMessage ? "MCP operation failed; see error code and status." : null,
         input.httpStatus ?? null,
         input.jsonrpcErrorCode ?? (typeof input.errorCode === "number" ? input.errorCode : null),
-        truncateText(input.jsonrpcErrorMessage ?? input.errorMessage, 1000),
+        (input.jsonrpcErrorMessage ?? input.errorMessage) ? "MCP operation failed; see error code and status." : null,
         input.protocolVersion ?? null,
         hashIdentifier(input.env, input.sessionId),
         hashIdentifier(input.env, input.oauthClientId),
-        truncateText(input.userAgent, 500),
+        null,
         input.cfRayId ?? null,
         input.catalogFingerprint ?? null,
-        input.unknownToolName ?? null,
+        hashIdentifier(input.env, input.unknownToolName),
         input.durationMs ?? null,
       ],
   );

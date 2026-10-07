@@ -109,7 +109,7 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
   }),
   organizationTool({
     name: 'replace_resource_localizations',
-    description: 'Atomically replace 1–250 exact localizations of one resource type for one locale. Omitted resources remain untouched; any invalid item rejects the whole submitted batch.',
+    description: 'Atomically replace 1–250 exact localizations of one resource type for one locale. Omitted resources remain untouched; any invalid item rejects the whole submitted batch. Returns the saved representations; supplied document content replaces its complete representation and can remove blocks. This uses supplied translations, without generating them.',
     domain: 'locales',
     minimumRole: 'admin',
     confirmRequired: true,

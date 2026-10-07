@@ -24,11 +24,11 @@ export const BOOKINGS_TOOLS: McpToolDefinition[] = [
     inputSchema: { product_id: { type: 'string' }, from: { type: 'string', description: 'Inclusive ISO UTC instant.' }, to: { type: 'string', description: 'Exclusive ISO UTC instant, at most 93 days after from.' }, ...paginationInputSchema }, required: ['product_id', 'from', 'to'],
   }),
   organizationTool({ name: 'list_product_bookings', domain: 'bookings', minimumRole: 'admin', confirmRequired: false,
-    description: 'List operational Product bookings in this tenant, with guest snapshots and canonical status. Returns bookings.id separately from the guest thread request_id.',
+    description: 'List the selected business’s product bookings and consultations, with guests, session times, assigned members and current status. Results are paginated; use operational_booking_id to read or manage a booking and request_id to identify its inbox thread. Restaurant table reservations use list_reservation_inquiries.',
     inputSchema: { assigned_member_id: {type: 'string'}, ...paginationInputSchema },
   }),
   organizationTool({ name: 'create_product_booking', domain: 'bookings', minimumRole: 'admin', confirmRequired: true,
-    description: `Create an ordinary Product→Variant→Session booking using the public booking service. Review offerings arrive pending; instant offerings arrive confirmed. Positive prices may be pay-later. Required positive online collection reserves an expiring hold and hands off to hosted Stripe Checkout; authenticated native capture alone creates the Booking. No import, paid assertion or direct charge is performed by the tool. ${description}`,
+    description: `Create a product booking or consultation for the named guest at a session from list_product_booking_sessions. Review offerings arrive pending; instant offerings arrive confirmed. Positive prices are allowed only when online collection is disabled; an explicit zero price uses the free flow. Required positive online collection returns financial_action_required and a dashboard URL before creating a booking, hold, Checkout or payment record. Owner notifications and an inbox record are created; guest_acknowledgement chooses whether to email the guest. Reuse the same idempotency_key only for an identical retry; completed deliveries are not sent again. ${description}`,
     inputSchema: {
       product_slug: { type: 'string' }, session_id: { type: 'string' }, variant_id: { type: 'string' },
       party_size: { type: 'integer', minimum: 1, maximum: 99 }, guest_name: { type: 'string', minLength: 1 },
@@ -42,12 +42,12 @@ export const BOOKINGS_TOOLS: McpToolDefinition[] = [
     description: 'Read one product booking or consultation when the user wants its guest details, status or current session. Use its updated_at when proposing a change.', inputSchema: { operational_booking_id: bookingId }, required: ['operational_booking_id'],
   }),
   ...([
-    ['confirm', 'Confirm a pending product booking or consultation after staff review. Keeps its existing capacity allocation and emails the guest confirmation.'],
-    ['reject', 'Decline a pending product booking or consultation after staff review. Cancels the booking, releases its places and emails the guest the decision.'],
-    ['cancel', 'Cancel a pending or confirmed product booking or consultation when the user requests cancellation. Releases its places and emails the guest the cancellation.'],
+    ['confirm', 'Confirm a pending product booking or consultation after staff review. Keeps its existing session and capacity allocation, changes its status to confirmed and emails the guest. Does not collect payment.'],
+    ['reject', 'Decline a pending product booking or consultation after staff review. Cancels the booking, releases its places and emails the guest the decision. If a refund is required, returns financial_action_required and a dashboard URL before changing status or preparing a refund; the rejection is incomplete. Use cancel_product_booking for a confirmed booking.'],
+    ['cancel', 'Cancel a pending or confirmed product booking or consultation when the user requests cancellation. Releases its places and emails the guest. If a refund is required, returns financial_action_required and a dashboard URL before changing status or preparing a refund; the cancellation is incomplete.'],
   ] as const).map(([action, purpose]) => organizationTool({
     name: `${action}_product_booking`, domain: 'bookings', minimumRole: 'admin', confirmRequired: true,
-    description: `${purpose} ${action} a Product booking through the canonical inbox operation service. Confirm/reject apply to pending review bookings. Paid rejection requires an actor-bound authenticated browser financial approval and refunds full principal. Cancellation releases capacity exactly once. Guest status messages are delivered by the same workflow as dashboard. ${description}`,
+    description: `${purpose} Reuse the same idempotency_key only for an identical retry; a completed operation does not repeat its capacity change or delivered guest email. ${description}`,
     inputSchema: { operational_booking_id: bookingId, idempotency_key: key }, required: ['operational_booking_id', 'idempotency_key'],
   })),
   organizationTool({ name: 'request_product_booking_change', domain: 'bookings', minimumRole: 'admin', confirmRequired: true,
@@ -91,7 +91,7 @@ export async function handleBookingsTools(ctx: McpExecutorContext): Promise<unkn
   if (toolName === 'create_product_booking') {
     if (!event) throw new HTTPError({ statusCode: 500, message: 'Booking creation requires the request context' })
     const result = await createProductBooking(event, {
-      organizationId, slug: requiredString(args, 'product_slug'), body: args,
+      organizationId, slug: requiredString(args, 'product_slug'), body: args, financialWritesAllowed: false,
       operator: { userId: organization.userId, idempotencyKey: requiredString(args, 'idempotency_key'), source: requiredString(args, 'source'), externalReference: optionalString(args, 'external_reference') ?? null, guestAcknowledgement: args.guest_acknowledgement === true },
     })
     return { success: result.status < 400, ...result.body, http_status: result.status }
@@ -111,7 +111,7 @@ export async function handleBookingsTools(ctx: McpExecutorContext): Promise<unkn
     await publishGuestInboxThreadEvent(env, db, { threadId: thread.id, type: 'thread.changed' })
     return { success: true, request_id: thread.id, change_status: 'awaiting_guest_acceptance', record: await getThreadOperationalRecord(db, thread.id) }
   }
-  const outcome = await executeGuestThreadOperation(db, { threadId: thread.id, organizationId, action: toolName.split('_')[0]!, actorUserId: organization.userId, idempotencyKey: key, env })
+  const outcome = await executeGuestThreadOperation(db, { threadId: thread.id, organizationId, action: toolName.split('_')[0]!, actorUserId: organization.userId, idempotencyKey: key, env, financialWritesAllowed: false })
   if (outcome.ok || outcome.reason === 'delivery_failed') await publishGuestInboxThreadEvent(env, db, { threadId: thread.id, type: 'thread.changed' })
   return { ...outcome, record: await getThreadOperationalRecord(db, thread.id) }
 }

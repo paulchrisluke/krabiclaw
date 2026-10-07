@@ -678,9 +678,7 @@ function buildCatalog() {
   const variants = form.variants.map((variant, index) => ({
     id: variant.id ?? undefined,
     name: variant.name,
-    // Restated whole: the server takes a submitted variant as its complete
-    // state, so omitting these would clear a SKU and switch a disabled variant
-    // back on.
+    // The form supplies the full intended variant state.
     sku: variant.sku,
     active: variant.active,
     sort_order: index,
@@ -713,7 +711,13 @@ function payload() {
     name: form.name.trim(),
     description: form.description,
     order_url: form.order_url || null,
-    ...(changed && describesCatalog ? catalog : {}),
+    ...(changed && describesCatalog ? {
+      ...catalog,
+      ...(!isNew.value ? {
+        variants_mode: 'replace',
+        variants: catalog.variants.map(variant => ({ ...variant, prices_mode: 'replace' })),
+      } : {}),
+    } : {}),
     details: form.details,
     active: form.active,
   }

@@ -4,13 +4,34 @@ import test from "node:test";
 import { describeErrorForTelemetry, errorChainForTelemetry } from "../../server/utils/error-telemetry.ts";
 import { summarizeForTelemetry } from "../../server/utils/mcp-telemetry.ts";
 
-test("oversized MCP summaries remain parseable JSON with redaction", () => {
-  const summary = summarizeForTelemetry(Object.fromEntries(Array.from({ length: 100 }, (_, index) => [`field_${index}`, '"\\\n'.repeat(80)])));
-  assert.ok(summary);
-  const parsed = JSON.parse(summary);
-  assert.equal(parsed.truncated, true);
-  assert.ok(parsed.summary.length <= 4000);
-  assert.equal(JSON.parse(summarizeForTelemetry({ password: 'secret' })!).password, '[redacted]');
+test("MCP summaries retain only typed operational fields, including inside known result containers", () => {
+  const privateText = 'Alice Customer customer@example.com password-secret';
+  const summary = summarizeForTelemetry({
+    name: privateText, guest_name: privateText, message: privateText, notes: privateText,
+    password: privateText, token: privateText, download_url: privateText,
+    status: 'success', count: 2, confirm: true,
+    structuredContent: { booking: { status: 'confirmed', party_size: 3, notes: privateText } },
+    data: { status: privateText, count: privateText },
+    content: [{ text: privateText }],
+  });
+  assert.deepEqual(JSON.parse(summary!), {
+    status: 'success', count: 2, confirm: true,
+    structuredContent: { booking: { status: 'confirmed', party_size: 3 } },
+  });
+  assert.doesNotMatch(summary!, /Alice|customer@|password-secret/);
+  assert.equal(summarizeForTelemetry({ name: privateText, message: privateText }), null);
+  assert.equal(summarizeForTelemetry(privateText), null);
+  assert.equal(summarizeForTelemetry({ count: Infinity, total: NaN }), null);
+});
+
+test("unknown keys and cyclic payloads cannot enter MCP summaries", () => {
+  const payload: Record<string, unknown> = { count: 1 };
+  payload.data = payload;
+  payload.secret = 'hidden';
+  const summary = summarizeForTelemetry(payload)!;
+  assert.ok(summary.length < 4000);
+  assert.doesNotMatch(summary, /hidden|secret/);
+  assert.equal(JSON.parse(summary).count, 1);
 });
 
 test("describeErrorForTelemetry preserves a nested database root cause", () => {

@@ -47,7 +47,13 @@ async function main() {
 
   const initialRead = await mcp(headers, 'get_product', { organization_id: organizationId, product_id: productId })
   expectSuccess('get_product succeeds after create', initialRead)
-  expectValue('created Product has initial Price on its variant', toolData(initialRead.body)?.product?.variants?.[0]?.prices?.[0]?.unit_amount === 1250, initialRead.body)
+  const initialProduct = toolData(initialRead.body)?.product
+  const initialVariant = initialProduct?.variants?.[0]
+  const initialPrice = initialVariant?.prices?.[0]
+  if (initialProduct?.variants?.length !== 1 || initialVariant?.prices?.length !== 1 || !initialVariant.id || !initialPrice?.id) {
+    throw new Error('get_product must return the created variant and price identities before editing them')
+  }
+  expectValue('created Product has initial Price on its variant', initialPrice.unit_amount === 1250, initialRead.body)
 
   const batch = await mcp(headers, 'batch_create_products', {
     organization_id: organizationId,
@@ -59,11 +65,11 @@ async function main() {
   expectSuccess('batch_create_products succeeds', batch)
   expectValue('batch_create_products adds two Products atomically', toolData(batch.body)?.products?.length === 2, batch.body)
 
-  const productUpdate = await mcp(headers, 'update_product', { kind: 'dish',
+  const productUpdate = await mcp(headers, 'update_product', {
     organization_id: organizationId,
     product_id: productId,
     name: 'MCP Ops Green Curry',
-    variants: [{ name: 'Standard', prices: [{ unit_amount: 1300, currency: 'USD' }] }],
+    variants: [{ id: initialVariant.id, prices: [{ id: initialPrice.id, unit_amount: 1300 }] }],
   })
   expectSuccess('update_product price succeeds', productUpdate)
 
@@ -71,7 +77,11 @@ async function main() {
   expectSuccess('get_product succeeds', productRead)
   expectValue('get_product includes updated Product', toolData(productRead.body)?.product?.name === 'MCP Ops Green Curry', productRead.body)
   expectValue('get_product reports where the Product is offered', (toolData(productRead.body)?.product?.locations ?? []).some(entry => entry.location_id === locationId && entry.published), productRead.body)
-  expectValue('updated Product has replacement Price', toolData(productRead.body)?.product?.variants?.[0]?.prices?.[0]?.unit_amount === 1300, productRead.body)
+  const updatedVariant = toolData(productRead.body)?.product?.variants?.[0]
+  const updatedPrice = updatedVariant?.prices?.[0]
+  expectValue('updated Product keeps its variant and Price identities', toolData(productRead.body)?.product?.variants?.length === 1
+    && updatedVariant?.prices?.length === 1 && updatedVariant.id === initialVariant.id && updatedPrice?.id === initialPrice.id, productRead.body)
+  expectValue('updated Product has the requested Price amount', updatedPrice?.unit_amount === 1300, productRead.body)
   const productDelete = await mcp(headers, 'delete_product', { organization_id: organizationId, product_id: productId })
   expectSuccess('delete_product succeeds', productDelete)
   expectValue('delete_product returns deleted true', toolData(productDelete.body)?.deleted === true, productDelete.body)

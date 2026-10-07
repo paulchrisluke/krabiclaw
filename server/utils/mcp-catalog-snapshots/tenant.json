@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:83f53877ff7e3969681138392ebbb844ca1ceecbaa08724d99506770db22ba97",
+  "fingerprint": "sha256:e98eb166f17967f77966d25f8cc4ad475b0505ac8f1bc4cb525e33bc0e4e83de",
   "tools": [
     {
       "name": "append_content_block",
@@ -1449,7 +1449,7 @@
     },
     {
       "name": "block_dates",
-      "description": "Close a location for a whole-day date range when the user wants to prevent bookings on those dates. Both endpoints are inclusive. Adds a closure to special hours while retaining existing closures and dated hours.",
+      "description": "Close a location for a whole-day date range when the user wants to prevent bookings on those dates. Both endpoints are inclusive. Adds a closure to special hours while retaining existing closures and dated hours. Returns the saved hours; existing bookings and reservations are not cancelled or messaged.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -1528,7 +1528,7 @@
     },
     {
       "name": "cancel_product_booking",
-      "description": "Cancel a pending or confirmed product booking or consultation when the user requests cancellation. Releases its places and emails the guest the cancellation. cancel a Product booking through the canonical inbox operation service. Confirm/reject apply to pending review bookings. Paid rejection requires an actor-bound authenticated browser financial approval and refunds full principal. Cancellation releases capacity exactly once. Guest status messages are delivered by the same workflow as dashboard. Call after the user approves the exact change. Records the action in the inbox history and may send email to the guest.",
+      "description": "Cancel a pending or confirmed product booking or consultation when the user requests cancellation. Releases its places and emails the guest. If a refund is required, returns financial_action_required and a dashboard URL before changing status or preparing a refund; the cancellation is incomplete. Reuse the same idempotency_key only for an identical retry; a completed operation does not repeat its capacity change or delivered guest email. Call after the user approves the exact change. Records the action in the inbox history and may send email to the guest.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -1590,7 +1590,7 @@
     },
     {
       "name": "confirm_product_booking",
-      "description": "Confirm a pending product booking or consultation after staff review. Keeps its existing capacity allocation and emails the guest confirmation. confirm a Product booking through the canonical inbox operation service. Confirm/reject apply to pending review bookings. Paid rejection requires an actor-bound authenticated browser financial approval and refunds full principal. Cancellation releases capacity exactly once. Guest status messages are delivered by the same workflow as dashboard. Call after the user approves the exact change. Records the action in the inbox history and may send email to the guest.",
+      "description": "Confirm a pending product booking or consultation after staff review. Keeps its existing session and capacity allocation, changes its status to confirmed and emails the guest. Does not collect payment. Reuse the same idempotency_key only for an identical retry; a completed operation does not repeat its capacity change or delivered guest email. Call after the user approves the exact change. Records the action in the inbox history and may send email to the guest.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -1621,7 +1621,7 @@
     },
     {
       "name": "create_article_category",
-      "description": "Create a category in the blog or the documentation, at the top level or under another category (parent_id). It goes last among its siblings; place it with reorder_article_categories. Its slug comes from the name and does not change later.",
+      "description": "Create a category in the blog or the documentation, at the top level or under another category (parent_id). It goes last among its siblings; place it with reorder_article_categories. Its slug comes from the name and does not change later. Returns the category and ID; articles are assigned separately.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -2227,7 +2227,7 @@
     },
     {
       "name": "create_collection",
-      "description": "Create an empty collection. Products are added to it afterwards with set_collection_products.",
+      "description": "Create an empty product collection, such as a menu section, site-wide or at the named location. Returns the saved collection and its ID. Add products separately with set_collection_products; existing products and collections stay unchanged.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -3985,7 +3985,7 @@
     },
     {
       "name": "create_product_booking",
-      "description": "Create an ordinary Product→Variant→Session booking using the public booking service. Review offerings arrive pending; instant offerings arrive confirmed. Positive prices may be pay-later. Required positive online collection reserves an expiring hold and hands off to hosted Stripe Checkout; authenticated native capture alone creates the Booking. No import, paid assertion or direct charge is performed by the tool. Call after the user approves the exact change. Records the action in the inbox history and may send email to the guest.",
+      "description": "Create a product booking or consultation for the named guest at a session from list_product_booking_sessions. Review offerings arrive pending; instant offerings arrive confirmed. Positive prices are allowed only when online collection is disabled; an explicit zero price uses the free flow. Required positive online collection returns financial_action_required and a dashboard URL before creating a booking, hold, Checkout or payment record. Owner notifications and an inbox record are created; guest_acknowledgement chooses whether to email the guest. Reuse the same idempotency_key only for an identical retry; completed deliveries are not sent again. Call after the user approves the exact change. Records the action in the inbox history and may send email to the guest.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -4136,7 +4136,7 @@
     },
     {
       "name": "create_site_page",
-      "description": "Create an authored site-page language variant. For a secondary language, page_id must name an existing source-language page. Content must be supplied for that language; this tool does not translate it.",
+      "description": "Create an authored site page in the named language, returning its document, blocks and editor information. A secondary language must name an existing source page. Supply the actual content for that language; no translation is generated. Pages on a live site can become public immediately; blog articles and short announcements use their own tools.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -4496,7 +4496,7 @@
     },
     {
       "name": "delete_collection",
-      "description": "Delete a collection. The products in it are untouched.",
+      "description": "Permanently delete the selected product collection and its memberships when the user asks to remove that group. Returns deleted status; its products remain in the catalog and other collections.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -4527,7 +4527,7 @@
     },
     {
       "name": "delete_content_block",
-      "description": "Delete one block, and any blocks nested under it, from a blog article or site page. Requires the block's own updated_at from the last read.",
+      "description": "Permanently delete the selected content block and all blocks nested under it from an article or site page. Requires the block’s own updated_at from the latest read; stale tokens conflict. Returns the remaining document and timestamps. Published content changes immediately.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -4674,7 +4674,7 @@
     },
     {
       "name": "delete_product_booking_config",
-      "description": "Disable booking for a carried product. Refused whenever any booking history exists, including cancelled bookings.",
+      "description": "Delete the selected product’s booking configuration to disable its session booking. Returns deleted status. Refused if any booking history exists, including cancelled bookings; the catalog product itself remains.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -6011,7 +6011,7 @@
     },
     {
       "name": "get_organization_analytics",
-      "description": "Read the selected site’s website traffic, attribution, conversion rates, booking values, verified purchase revenue, refunds and signup-cohort summaries. Dates are inclusive in the site’s timezone; the default is 30 days. Amounts are minor units per currency; booking quotes are not collected revenue. Cash amounts include tax, while value fields exclude it. Session conversion rates compare converting sessions with sessions in the same attribution group; signup counts and business counts use distinct populations.",
+      "description": "Read the selected site’s website overview when the user asks how the business is doing: traffic, attribution, conversion rates, booking values, verified purchase revenue, refunds and signup-cohort summaries. Dates are inclusive in the site’s timezone; the default is 30 days. Amounts are minor units per currency; booking quotes are not collected revenue. Cash amounts include tax, while value fields exclude it. Session conversion rates compare converting sessions with sessions in the same attribution group; signup counts and business counts use distinct populations.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -7384,7 +7384,7 @@
     },
     {
       "name": "get_payment",
-      "description": "Read one seller Payment, immutable purchase snapshot, refund and dispute projections.",
+      "description": "Read one customer payment belonging to the selected business, including its original purchase details, current refund records, disputes and authenticated dashboard URL. Requires payment_id from list_payments. Does not issue a refund, prepare an approval or change payment state; use the authenticated dashboard for financial actions.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -7407,10 +7407,14 @@
     },
     {
       "name": "get_payment_payouts",
-      "description": "Read connected Stripe balance and payouts with source and retrieval time. Does not transfer funds.",
+      "description": "Read the selected business’s connected Stripe balance and payout history, with source and retrieval time. Continue with next_cursor as after for another page. Use get_payment_summary for customer payment totals. This is a read of the business’s own connected account; it does not create a payout or transfer funds.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
+          "after": {
+            "description": "next_cursor from the previous payout page.",
+            "type": "string"
+          },
           "organization_id": {
             "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
@@ -7425,12 +7429,12 @@
     },
     {
       "name": "get_payment_summary",
-      "description": "Report seller captured volume, refunds and disputes separately by currency in a UTC period. Trust receipts are not labeled earned revenue. Existing records remain serviceable after downgrade.",
+      "description": "Read totals for the selected business’s customer payments in a UTC period: captured volume, refunds and disputes, separately by currency. Use list_payments for individual transactions. Trust receipts are distinct from earned revenue. Does not change payments or move money.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
           "from": {
-            "description": "Inclusive UTC ISO instant",
+            "description": "Inclusive UTC ISO instant.",
             "type": "string"
           },
           "organization_id": {
@@ -7438,7 +7442,7 @@
             "type": "string"
           },
           "to": {
-            "description": "Exclusive UTC ISO instant",
+            "description": "Exclusive UTC ISO instant.",
             "type": "string"
           }
         },
@@ -7453,8 +7457,42 @@
       }
     },
     {
+      "name": "get_payments_dashboard_link",
+      "description": "Get the selected business’s authenticated Payments setup and dashboard URL when the owner wants to manage its Stripe integration. Returns a link for the person to open; it does not open a page, create an account, start onboarding, prepare a refund or change the integration. Identity and bank details are entered only in the dashboard’s Stripe-hosted flow.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "dashboard_url": {
+            "type": "string"
+          },
+          "organization_id": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "organization_id",
+          "dashboard_url",
+          "source"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "get_payments_usage",
-      "description": "Read Metronome Payments invoices, accrued usage and undelivered provider-cost events separately from Better Auth subscription billing.",
+      "description": "Read the selected business’s KrabiClaw Payments usage, Metronome invoices, accrued usage and undelivered provider-cost events. These are operating costs, separate from customer payments and platform subscription billing. Requires payment and billing read access. Does not change billing or move money.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -8566,7 +8604,7 @@
     },
     {
       "name": "get_reservation_policy",
-      "description": "Get the reservation policy for one location. A null policy means the location does not take reservations; there is no site-level policy underneath it.",
+      "description": "Read one location’s table reservation settings and guest-facing policy summary, including capacity, advance notice and cancellation terms. A null policy means this location does not take reservations. Product session bookings use get_product for their separate configuration.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -9249,29 +9287,6 @@
       }
     },
     {
-      "name": "issue_payment_refund",
-      "description": "Execute a seller refund only with an unexpired authorization approved by this operator in the authenticated browser. A model cannot mint the authorization. Uses connected-account native refunds, stable idempotency and current refundable principal.",
-      "inputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "authorization_id": {
-            "type": "string"
-          },
-          "organization_id": {
-            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "authorization_id"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "type": "object"
-      }
-    },
-    {
       "name": "list_article_categories",
       "description": "List categories and subcategories in one site blog or documentation collection, in public display order, with article and child-category counts. Published articles require a category in their collection.",
       "inputSchema": {
@@ -9922,7 +9937,7 @@
     },
     {
       "name": "list_location_products",
-      "description": "List the products offered at one explicit location.",
+      "description": "List products offered at one selected location, including their catalog identities, variants, prices and availability. Results are paginated; published_only narrows to visible items. Use list_products for the whole site.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -10747,15 +10762,16 @@
     },
     {
       "name": "list_payments",
-      "description": "List tenant customer Payments with canonical payable links and currency minor amounts. Cursor pages seller records, never platform subscription transactions.",
+      "description": "List the selected business’s customer payment records in a UTC period, with purchase links and amounts in each currency’s minor units. Use the returned cursor as after for another page and get_payment for one transaction’s details. These are customer payments, separate from the business’s platform subscription bill. Does not change payments.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
           "after": {
+            "description": "The cursor returned by the previous payment page.",
             "type": "string"
           },
           "earnings_type": {
-            "description": "Only payments still paid, or only ones with a refund",
+            "description": "Only payments still paid, or only payments with a refund.",
             "enum": [
               "paid",
               "refunded"
@@ -10763,7 +10779,7 @@
             "type": "string"
           },
           "from": {
-            "description": "Inclusive UTC ISO instant",
+            "description": "Inclusive UTC ISO instant.",
             "type": "string"
           },
           "location_id": {
@@ -10774,7 +10790,7 @@
             "type": "string"
           },
           "to": {
-            "description": "Exclusive UTC ISO instant",
+            "description": "Exclusive UTC ISO instant.",
             "type": "string"
           }
         },
@@ -11186,7 +11202,7 @@
     },
     {
       "name": "list_product_bookings",
-      "description": "List operational Product bookings in this tenant, with guest snapshots and canonical status. Returns bookings.id separately from the guest thread request_id.",
+      "description": "List the selected business’s product bookings and consultations, with guests, session times, assigned members and current status. Results are paginated; use operational_booking_id to read or manage a booking and request_id to identify its inbox thread. Restaurant table reservations use list_reservation_inquiries.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -11545,7 +11561,7 @@
     },
     {
       "name": "open_dates",
-      "description": "Remove temporary closures for an inclusive date range when the user wants to reopen a location. Closure dates outside the range and their notes are preserved. Regularly closed weekdays stay closed; change opening_hours with update_location to open those weekdays.",
+      "description": "Remove temporary closures for an inclusive date range when the user wants to reopen a location. Closure dates outside the range and their notes are preserved. Regularly closed weekdays stay closed; change opening_hours with update_location to open those weekdays. Returns the saved hours without creating or changing existing bookings.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -11616,26 +11632,8 @@
       }
     },
     {
-      "name": "open_payments_onboarding",
-      "description": "Open authenticated merchant Stripe Payments integration management. Stripe-native onboarding collects KYC and bank details; never collect these in chat.",
-      "inputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "organization_id": {
-            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
-            "type": "string"
-          }
-        },
-        "required": [],
-        "type": "object"
-      },
-      "outputSchema": {
-        "type": "object"
-      }
-    },
-    {
       "name": "publish_blog_post",
-      "description": "Publish the selected draft blog or documentation article when publication is requested. Requires expected_updated_at from the latest read. An already published article is unchanged, including its date and announcement.",
+      "description": "Publish the selected draft blog or documentation article when publication is requested. Requires expected_updated_at from the latest read. An already published article is unchanged, including its date and announcement. Returns the article and website URL; this does not publish to Facebook or Instagram.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -12845,7 +12843,7 @@
     },
     {
       "name": "reconcile_products",
-      "description": "Create or update a supplied catalog batch when the user wants to synchronize products. A supplied product_id identifies the product to update or create; an entry without product_id creates a new product, so retrying it can create duplicates. Omitted products stay unchanged unless deactivate_missing is true, which disables their sale without deleting them.",
+      "description": "Create or update a supplied catalog batch when the user explicitly wants to synchronize complete product entries. A supplied product_id identifies the product to update or create; an entry without product_id creates a new product, so retrying it can create duplicates. Supplied options, variants and prices replace their corresponding lists; preserve existing IDs and every entry to retain. Omitted products stay unchanged unless deactivate_missing is true, which disables their sale without deleting them. Returns the resulting products; use update_product for a partial price edit.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -13937,7 +13935,7 @@
     },
     {
       "name": "reject_product_booking",
-      "description": "Decline a pending product booking or consultation after staff review. Cancels the booking, releases its places and emails the guest the decision. reject a Product booking through the canonical inbox operation service. Confirm/reject apply to pending review bookings. Paid rejection requires an actor-bound authenticated browser financial approval and refunds full principal. Cancellation releases capacity exactly once. Guest status messages are delivered by the same workflow as dashboard. Call after the user approves the exact change. Records the action in the inbox history and may send email to the guest.",
+      "description": "Decline a pending product booking or consultation after staff review. Cancels the booking, releases its places and emails the guest the decision. If a refund is required, returns financial_action_required and a dashboard URL before changing status or preparing a refund; the rejection is incomplete. Use cancel_product_booking for a confirmed booking. Reuse the same idempotency_key only for an identical retry; a completed operation does not repeat its capacity change or delivered guest email. Call after the user approves the exact change. Records the action in the inbox history and may send email to the guest.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -14154,7 +14152,7 @@
     },
     {
       "name": "remove_product_location",
-      "description": "Stop offering a product at one location. The product and its other locations are untouched.",
+      "description": "Remove the selected product’s offering at one explicit location and return the updated product. This removes that location relationship; the catalog product, prices and other location offerings remain.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -15231,7 +15229,7 @@
     },
     {
       "name": "reorder_collections",
-      "description": "Change the order of whole collections. Send every collection id in the scope exactly once, in the intended order; a partial order is rejected.",
+      "description": "Set the display order of product collections for the whole site or one explicit location. Supply every collection ID in that scope exactly once; a partial list is rejected. Returns the ordered collections without changing their products.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -15580,7 +15578,7 @@
     },
     {
       "name": "replace_content_block",
-      "description": "Replace one block's data and media in place, keeping its position. Requires the block's own updated_at from the last read; a stale token is rejected with a conflict.",
+      "description": "Replace one selected block’s complete data and any supplied media in an article or site page, keeping its ID and position. Omitted data fields are removed; omitted media is preserved. Read the block first and keep fields outside the requested change. Requires its own updated_at; a stale token conflicts. Returns the whole updated document. Published content changes immediately.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -15795,7 +15793,7 @@
     },
     {
       "name": "replace_resource_localizations",
-      "description": "Atomically replace 1–250 exact localizations of one resource type for one locale. Omitted resources remain untouched; any invalid item rejects the whole submitted batch.",
+      "description": "Atomically replace 1–250 exact localizations of one resource type for one locale. Omitted resources remain untouched; any invalid item rejects the whole submitted batch. Returns the saved representations; supplied document content replaces its complete representation and can remove blocks. This uses supplied translations, without generating them.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -15886,40 +15884,6 @@
           "resource_type",
           "updated_resource_ids"
         ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "request_payment_refund",
-      "description": "Prepare full or partial direct-charge refund for explicit authenticated browser approval. Returns a bound approval handoff; this request does not refund principal. Never treat model confirm=true as financial authorization.",
-      "inputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "amount": {
-            "description": "Refund principal in the Payment currency minor units",
-            "minimum": 1,
-            "type": "integer"
-          },
-          "note": {
-            "description": "What the buyer is told about this refund",
-            "maxLength": 500,
-            "type": "string"
-          },
-          "organization_id": {
-            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
-            "type": "string"
-          },
-          "payment_id": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "payment_id",
-          "amount"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
         "type": "object"
       }
     },
@@ -16539,7 +16503,7 @@
     },
     {
       "name": "set_member_busy_calendars",
-      "description": "Select 1–10 Google busy-input calendars on the member’s own already-linked account with granted free/busy scopes, pause checking with an empty calendar_ids list, or disconnect with null account and empty calendar_ids. This tool never grants OAuth access. Busy input must be separate from organization booking output. Selected stale/disconnected data blocks that member’s new availability; no selection uses internal scheduling.",
+      "description": "Select 1–10 Google busy-input calendars on the member’s own already-linked account with granted free/busy scopes, pause checking with an empty calendar_ids list, or disconnect with null account and empty calendar_ids. This tool never grants OAuth access. Busy input must be separate from organization booking output. Stale or disconnected selected calendars block new availability; when no calendars are selected, availability uses internal scheduling. Returns scheduling and refreshed busy-check status. Only this member’s input selection changes; Google events and existing bookings are unchanged.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -16578,7 +16542,7 @@
     },
     {
       "name": "set_member_scheduling",
-      "description": "Replace a member’s own timezone, weekly working hours and UTC time-off intervals using the latest updated_at. Owner/admin may oversee any member and approve public profile. Profile edits revoke approval unless explicitly approved by an admin. Existing Booking assignments and times stay fixed.",
+      "description": "Replace a member’s own timezone, weekly working hours and UTC time-off intervals using the latest updated_at. Owner/admin may oversee any member and approve public profile. Profile edits revoke approval unless explicitly approved by an admin. Existing Booking assignments and times stay fixed. Returns the saved scheduling record; no guest messages are sent.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -18286,7 +18250,7 @@
     },
     {
       "name": "set_workspace_context",
-      "description": "Save the selected active site and optional location for this connection. Use internal IDs returned by site/location reads. Explicit IDs supplied to later tools still determine their targets.",
+      "description": "Save the selected active site and optional location for the signed-in user, shared across their connections. Returns the saved site and location. Use internal IDs returned by site/location reads. Explicit IDs supplied to later tools still determine their targets.",
       "inputSchema": {
         "additionalProperties": false,
         "anyOf": [
@@ -18303,7 +18267,7 @@
         ],
         "properties": {
           "location_id": {
-            "description": "Location id or slug.",
+            "description": "Internal location ID from list_locations or get_workspace_context.",
             "type": "string"
           },
           "organization_id": {
@@ -18451,7 +18415,7 @@
     },
     {
       "name": "update_article_category",
-      "description": "Rename a category, change its description, or move it under another category (parent_id; null moves it to the top level, where it goes last). Its page's address (slug) stays the same.",
+      "description": "Rename a category, change its description, or move it under another category (parent_id; null moves it to the top level, where it goes last). Its page's address (slug) stays the same. Omitted fields stay unchanged; returns the updated category without moving its articles.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -19064,7 +19028,7 @@
     },
     {
       "name": "update_collection",
-      "description": "Rename a collection or change its description or position.",
+      "description": "Change the selected product collection’s name, description or display position and return the saved collection. Only supplied fields change; membership uses set_collection_products and ordering several collections uses reorder_collections.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -19145,7 +19109,7 @@
     },
     {
       "name": "update_location",
-      "description": "Update a location's own details: regular opening hours, temporary closures/special hours, and contact info. To change its hero media, call set_media with { owner_type: \"business_location\", owner_id: <location.id>, slot: \"hero\" }. Only provided fields are changed.",
+      "description": "Update a location's own details: regular opening hours, temporary closures/special hours, and contact info. To change its hero media, call set_media with { owner_type: \"business_location\", owner_id: <location.id>, slot: \"hero\" }. Only provided fields are changed. Returns the updated location; website details can change immediately. This does not change reservation capacity or a product’s session schedule.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -19574,7 +19538,7 @@
     },
     {
       "name": "update_organization_settings",
-      "description": "Change the selected site’s brand, description, website font, colors, contact email, default currency, announcement or Live/Draft status. Only supplied settings change. An announcement replaces all its fields, and null removes it. Logos and announcement images are separate media placements; this tool does not change them.",
+      "description": "Change the selected site’s brand, description, website font, colors, contact email, default currency, visitor announcement popup or Live/Draft status. Only supplied settings change. An announcement replaces all its fields, and null removes it. Logos and announcement images are separate media placements; this tool does not change them. Returns the updated settings. Published website settings change immediately; this does not create a short post, blog article or social publication.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -20277,7 +20241,7 @@
     },
     {
       "name": "update_product",
-      "description": "Edit an existing product. Only supplied fields change. A variant restated with its id keeps every field it does not restate, and its prices are merged by id: a price restated with its id keeps its identity and unstated fields, a price without an id is added, and a price left out is kept, so a price change is the variant id, the price id and the new unit_amount. Stop an offer with active false or valid_until_at. Variants left out of a supplied list are removed, which is refused once anything was booked on them. Options and details replace their existing values when supplied. Publication and location offerings use separate tools.",
+      "description": "Edit the selected product and return its updated catalog record. Only supplied fields change. Variants and their prices merge by ID by default: omitted sibling variants, prices, fields and option selections stay unchanged. A price-only edit supplies variant id, price id and unit_amount. Use variants_mode replace or a variant’s prices_mode replace only for explicit removal of omitted entries; booking history protects variant removal. Supplied options and details are complete replacements, so retain values outside the requested change. Publication and location offerings use separate tools.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -20422,6 +20386,7 @@
             "type": "string"
           },
           "options": {
+            "description": "Complete option list when supplied; omitted options are removed. Omit to preserve existing options and selections.",
             "items": {
               "additionalProperties": false,
               "description": "A customer choice such as Size, with values such as Small and Large. Variants combine these choices and carry prices. Descriptive facts belong in details.",
@@ -20496,10 +20461,10 @@
             ]
           },
           "variants": {
-            "description": "The variants to keep, each by id. A variant left out is removed (refused once anything was booked on it; turn it off with active instead). A restated variant keeps the fields and prices it does not restate.",
+            "description": "Partial existing variants by id or new variants. Omitted variants and their prices/options remain unless variants_mode is replace. Existing variant and price IDs retain their identities.",
             "items": {
               "additionalProperties": false,
-              "description": "One buyable configuration. A product with no options still has exactly one. Keep the id when editing: a variant that keeps its id keeps its bookings.",
+              "description": "A partial update to an existing variant by id, or a new variant. Existing variants retain omitted fields and option selections. New variants require a name and complete option selections.",
               "properties": {
                 "active": {
                   "type": "boolean"
@@ -20518,6 +20483,7 @@
                   "type": "object"
                 },
                 "prices": {
+                  "description": "Partial existing prices by id or new offers. Omitted prices remain unless prices_mode is replace. A new offer requires unit_amount.",
                   "items": {
                     "additionalProperties": false,
                     "description": "A monetary offer on this variant. unit_amount is an integer in the currency smallest unit; 0 is an explicit free offer, and a variant with no price is not purchasable rather than free. Billing recurrence describes when the customer is charged, never when a class runs.",
@@ -20623,6 +20589,15 @@
                   "maxItems": 20,
                   "type": "array"
                 },
+                "prices_mode": {
+                  "default": "merge",
+                  "description": "merge keeps prices omitted from the supplied list. replace explicitly removes omitted prices; an empty list clears them. Applies only with prices.",
+                  "enum": [
+                    "merge",
+                    "replace"
+                  ],
+                  "type": "string"
+                },
                 "sku": {
                   "type": [
                     "string",
@@ -20639,6 +20614,15 @@
             "maxItems": 250,
             "minItems": 1,
             "type": "array"
+          },
+          "variants_mode": {
+            "default": "merge",
+            "description": "merge preserves variants omitted from the supplied list. replace explicitly removes omitted variants and their owned records; removal is refused once a variant has booking history. Applies only with variants.",
+            "enum": [
+              "merge",
+              "replace"
+            ],
+            "type": "string"
           }
         },
         "required": [
