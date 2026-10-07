@@ -10,6 +10,7 @@ import { fetchCimdMetadataResource } from '../../server/utils/cimd-metadata-fetc
 const BASE_URL = 'https://auth.test'
 const CLIENT_ID = 'https://client.example/oauth/client.json'
 const REDIRECT_URI = 'https://client.example/callback'
+const SCOPES = ['openid', 'email', 'offline_access', 'tenant']
 const METADATA = {
   client_id: CLIENT_ID,
   client_name: 'Conditional metadata client',
@@ -30,7 +31,7 @@ async function createProvider(database: DatabaseSync) {
       oauthProvider({
         loginPage: '/login',
         consentPage: '/consent',
-        scopes: ['openid'],
+        scopes: SCOPES,
         silenceWarnings: { oauthAuthServerConfig: true, openidConfig: true },
       }),
       cimd({ fetchClientMetadataResource: fetchCimdMetadataResource }),
@@ -45,7 +46,7 @@ async function authorize(auth: ReturnType<typeof betterAuth>) {
     client_id: CLIENT_ID,
     redirect_uri: REDIRECT_URI,
     response_type: 'code',
-    scope: 'openid',
+    scope: SCOPES.join(' '),
     code_challenge: 'test-pkce-challenge-0123456789-abcdefghijklmnop',
     code_challenge_method: 'S256',
   })
@@ -71,11 +72,12 @@ test('validated client metadata survives conditional 304 revalidation', async (t
     assert.equal(requests.length, 2)
     assert.equal(requests[0]!.get('if-none-match'), null)
     assert.equal(requests[1]!.get('if-none-match'), '"metadata-v1"')
-    const client = database.prepare('SELECT name, redirectUris, clientDiscoveryId FROM oauthClient WHERE clientId = ?')
-      .get(CLIENT_ID) as { name: string; redirectUris: string; clientDiscoveryId: string }
+    const client = database.prepare('SELECT name, redirectUris, clientDiscoveryId, scopes FROM oauthClient WHERE clientId = ?')
+      .get(CLIENT_ID) as { name: string; redirectUris: string; clientDiscoveryId: string; scopes: string }
     assert.equal(client.name, METADATA.client_name)
     assert.deepEqual(JSON.parse(client.redirectUris), [REDIRECT_URI])
     assert.equal(client.clientDiscoveryId, 'cimd')
+    assert.deepEqual(JSON.parse(client.scopes), SCOPES)
   }
   finally {
     database.close()
