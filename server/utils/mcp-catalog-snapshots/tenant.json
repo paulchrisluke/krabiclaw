@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:ab8dd09822ace581f098a77104bbb30a00128897bf05722887444a129ca14b1d",
+  "fingerprint": "sha256:fa03aae69b79923bb1c2d782826b001c28cf43b0a9662e76b9bc6e79922b569f",
   "tools": [
     {
       "name": "append_content_block",
@@ -26741,6 +26741,24 @@
                 "active": {
                   "type": "boolean"
                 },
+                "collections": {
+                  "items": {
+                    "properties": {
+                      "collection_id": {
+                        "type": "string"
+                      },
+                      "sort_order": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "collection_id",
+                      "sort_order"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
                 "featured": {
                   "type": "boolean"
                 },
@@ -26759,6 +26777,76 @@
                 "name": {
                   "type": "string"
                 },
+                "prices": {
+                  "items": {
+                    "properties": {
+                      "currency": {
+                        "enum": [
+                          "THB",
+                          "USD",
+                          "EUR",
+                          "GBP",
+                          "JPY",
+                          "AUD",
+                          "CAD",
+                          "SGD",
+                          "HKD",
+                          "MYR",
+                          "IDR",
+                          "PHP",
+                          "VND",
+                          "INR"
+                        ],
+                        "type": "string"
+                      },
+                      "location_id": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "recurring_interval": {
+                        "enum": [
+                          "day",
+                          "week",
+                          "month",
+                          "year"
+                        ],
+                        "type": "string"
+                      },
+                      "recurring_interval_count": {
+                        "minimum": 1,
+                        "type": "integer"
+                      },
+                      "type": {
+                        "enum": [
+                          "one_time",
+                          "recurring"
+                        ],
+                        "type": "string"
+                      },
+                      "unit_amount": {
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "variant_id": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "variant_id",
+                      "location_id",
+                      "currency",
+                      "unit_amount",
+                      "type"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "pricing_note": {
+                  "type": "string"
+                },
                 "slug": {
                   "type": "string"
                 },
@@ -26773,7 +26861,9 @@
                 "slug",
                 "active",
                 "featured",
-                "variant_count"
+                "variant_count",
+                "collections",
+                "prices"
               ],
               "type": "object"
             },
@@ -28622,6 +28712,24 @@
                 "active": {
                   "type": "boolean"
                 },
+                "collections": {
+                  "items": {
+                    "properties": {
+                      "collection_id": {
+                        "type": "string"
+                      },
+                      "sort_order": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "collection_id",
+                      "sort_order"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
                 "featured": {
                   "type": "boolean"
                 },
@@ -28640,6 +28748,76 @@
                 "name": {
                   "type": "string"
                 },
+                "prices": {
+                  "items": {
+                    "properties": {
+                      "currency": {
+                        "enum": [
+                          "THB",
+                          "USD",
+                          "EUR",
+                          "GBP",
+                          "JPY",
+                          "AUD",
+                          "CAD",
+                          "SGD",
+                          "HKD",
+                          "MYR",
+                          "IDR",
+                          "PHP",
+                          "VND",
+                          "INR"
+                        ],
+                        "type": "string"
+                      },
+                      "location_id": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "recurring_interval": {
+                        "enum": [
+                          "day",
+                          "week",
+                          "month",
+                          "year"
+                        ],
+                        "type": "string"
+                      },
+                      "recurring_interval_count": {
+                        "minimum": 1,
+                        "type": "integer"
+                      },
+                      "type": {
+                        "enum": [
+                          "one_time",
+                          "recurring"
+                        ],
+                        "type": "string"
+                      },
+                      "unit_amount": {
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "variant_id": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "variant_id",
+                      "location_id",
+                      "currency",
+                      "unit_amount",
+                      "type"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "pricing_note": {
+                  "type": "string"
+                },
                 "slug": {
                   "type": "string"
                 },
@@ -28654,7 +28832,9 @@
                 "slug",
                 "active",
                 "featured",
-                "variant_count"
+                "variant_count",
+                "collections",
+                "prices"
               ],
               "type": "object"
             },
@@ -41800,6 +41980,24 @@
                 "active": {
                   "type": "boolean"
                 },
+                "collections": {
+                  "items": {
+                    "properties": {
+                      "collection_id": {
+                        "type": "string"
+                      },
+                      "sort_order": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "collection_id",
+                      "sort_order"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
                 "featured": {
                   "type": "boolean"
                 },
@@ -41818,6 +42016,76 @@
                 "name": {
                   "type": "string"
                 },
+                "prices": {
+                  "items": {
+                    "properties": {
+                      "currency": {
+                        "enum": [
+                          "THB",
+                          "USD",
+                          "EUR",
+                          "GBP",
+                          "JPY",
+                          "AUD",
+                          "CAD",
+                          "SGD",
+                          "HKD",
+                          "MYR",
+                          "IDR",
+                          "PHP",
+                          "VND",
+                          "INR"
+                        ],
+                        "type": "string"
+                      },
+                      "location_id": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "recurring_interval": {
+                        "enum": [
+                          "day",
+                          "week",
+                          "month",
+                          "year"
+                        ],
+                        "type": "string"
+                      },
+                      "recurring_interval_count": {
+                        "minimum": 1,
+                        "type": "integer"
+                      },
+                      "type": {
+                        "enum": [
+                          "one_time",
+                          "recurring"
+                        ],
+                        "type": "string"
+                      },
+                      "unit_amount": {
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "variant_id": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "variant_id",
+                      "location_id",
+                      "currency",
+                      "unit_amount",
+                      "type"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "pricing_note": {
+                  "type": "string"
+                },
                 "slug": {
                   "type": "string"
                 },
@@ -41832,7 +42100,9 @@
                 "slug",
                 "active",
                 "featured",
-                "variant_count"
+                "variant_count",
+                "collections",
+                "prices"
               ],
               "type": "object"
             },

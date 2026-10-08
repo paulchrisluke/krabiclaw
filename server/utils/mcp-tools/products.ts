@@ -7,7 +7,7 @@ import { queryFirst } from '~/server/db'
 import { PRODUCT_LIMITS } from '~/server/utils/product-validation'
 import { SUPPORTED_CURRENCIES } from '~/shared/currencies'
 import { PRODUCT_KINDS, productDetailsSchema } from '~/shared/product-details'
-import { billingOf, selectPrice, PRICE_RECURRING_INTERVALS, PRICE_TAX_BEHAVIORS, PRICE_TYPES } from '~/shared/prices'
+import { selectPrice, PRICE_RECURRING_INTERVALS, PRICE_TAX_BEHAVIORS, PRICE_TYPES, type PriceBilling } from '~/shared/prices'
 import { setProductBookingConfig, deleteProductBookingConfig, replaceWeeklySchedule, type ProductBookingSetupInput } from '~/server/utils/availability'
 import type { CreateProductInput, Product, ReconcileProductInput, UpdateProductInput } from '~/server/types/products'
 import {
@@ -355,7 +355,9 @@ function productListItem(product: Product, locationId?: string, at = new Date().
   const locations = locationId === undefined ? [null, ...product.locations.map(location => location.location_id)] : [locationId]
   const prices = product.variants.filter(variant => variant.active).flatMap(variant => {
     const terms = new Map(variant.prices.map(price => {
-      const billing = billingOf(price)
+      const billing: PriceBilling = price.type === 'recurring'
+        ? { type: 'recurring', interval: price.recurring_interval!, interval_count: price.recurring_interval_count! }
+        : { type: 'one_time' }
       return [JSON.stringify([price.currency, billing]), { currency: price.currency, billing }] as const
     }))
     const current = new Map(locations.flatMap(location_id => [...terms.values()].flatMap(term => {
