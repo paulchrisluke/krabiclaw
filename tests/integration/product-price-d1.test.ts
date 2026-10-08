@@ -117,6 +117,14 @@ test('public experiences require a configured booking flow and retain full or te
       .bind(JSON.stringify([{ kind: 'closure', starts_on: tomorrow, ends_on: tomorrow, note: 'Private event' }])).run()
     assert.deepEqual(await productBookingReadiness(db, ORG, await getProduct(db, ORG, legacy.id)), { ready: true, missing: [] })
     assert.deepEqual((await visible()).sort(), ids, 'a temporary closure changes availability, not the published experience')
+    for (const product of [legacy, external]) {
+      await updateProduct(db, { organizationId: ORG, productId: product.id, actor: ACTOR, patch: { active: false } })
+      const paused = await getProduct(db, ORG, product.id)
+      assert.deepEqual(await productBookingReadiness(db, ORG, paused), { ready: true, missing: [] }, 'pausing bookings retains a configured public experience')
+      assert.equal((await productBookingReadiness(db, ORG, paused, { requireAllocation: true })).missing.includes('active'), true)
+      await assert.rejects(listPublicBookingSessions(db, ORG, product.slug, {} as CloudflareEnv), (error: { statusCode?: number }) => error.statusCode === 404)
+      assert.deepEqual((await visible()).sort(), ids, 'Accept bookings controls sale availability rather than deleting the published information')
+    }
   } finally { await runtime.dispose() }
 })
 

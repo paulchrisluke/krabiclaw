@@ -330,7 +330,7 @@ export async function listProducts(db: DbClient, organizationId: string): Promis
 /** Public experiences use the same readiness check as publication, including sold-out sessions. */
 async function publicProductWindow(db: DbClient, organizationId: string, products: Product[], window?: { limit: number; offset: number }): Promise<Product[]> {
   const visible = await Promise.all(products.map(async product => product.kind !== 'experience'
-    || (product.active && (await productBookingReadiness(db, organizationId, product)).ready)))
+    || (await productBookingReadiness(db, organizationId, product)).ready))
   const published = products.filter((_, index) => visible[index])
   return window ? published.slice(window.offset, window.offset + window.limit + 1) : published
 }
@@ -1468,9 +1468,9 @@ async function productCacheInvalidations(db: DbClient, organizationId: string, p
  * disabled product is not unpublished.
  */
 export async function productBookingReadiness(db: DbClient, organizationId: string, product: Product, options: { requireAllocation?: boolean } = {}): Promise<{ ready: boolean; missing: string[]; allocation?: BatchQuery }> {
-  if (product.order_url) return { ready: true, missing: [] }
   const missing: string[] = []
-  if (!product.active) missing.push('active')
+  if (options.requireAllocation && !product.active) missing.push('active')
+  if (product.order_url) return { ready: missing.length === 0, missing }
   if (!product.booking) missing.push('booking')
   else if (!product.booking.duration_minutes) missing.push('booking.duration_minutes')
   const currency = await organizationDefaultCurrency(db, organizationId)
