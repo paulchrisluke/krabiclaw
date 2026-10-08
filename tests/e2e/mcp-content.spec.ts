@@ -125,7 +125,8 @@ test.describe('stateless MCP server', () => {
       expect(publish.status()).toBe(200)
       const publishResult = (await publish.json()).result
       expect(publishResult.isError).toBe(true)
-      const publishData = publishResult.structuredContent as { ok: boolean, updated_at: string, outcomes: Array<{ channel: string, status: string, code?: string }> }
+      expect(publishResult.structuredContent).toBeUndefined()
+      const publishData = JSON.parse(publishResult.content[0].text) as { ok: boolean, updated_at: string, outcomes: Array<{ channel: string, status: string, code?: string }> }
       expect(publishData.ok).toBe(false)
       expect(publishData.outcomes.find(outcome => outcome.channel === 'organization')?.status).toBe('published')
       expect(publishData.outcomes.find(outcome => outcome.channel === 'facebook')).toMatchObject({ status: 'skipped', code: facebook.problems[0]!.code })
