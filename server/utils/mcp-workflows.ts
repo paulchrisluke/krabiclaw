@@ -1,6 +1,4 @@
-
-import {
-} from "~/server/utils/whatsapp";
+import { HTTPError } from 'nitro'
 import type { CloudflareEnv } from "~/server/utils/auth";
 import { queryAll, queryFirst } from "~/server/db";
 import { d1JsonStringSet } from '~/server/db/d1-limits'
@@ -40,7 +38,7 @@ export async function getOrganizationForMcp(
     `, [organizationId]);
 
   const membership = await resolveOrganizationMembership(env, { organizationId, userId })
-  if (!organization || !membership) throw new Error("Organization not found or access denied");
+  if (!organization || !membership) throw new HTTPError({ statusCode: 404, statusMessage: 'Organization not found or access denied' });
   return organization;
 }
 
@@ -194,4 +192,3 @@ export async function listLocationReviews(
 export function buildTenantPageReplacementConfirmationToken(expectedUpdatedAt: string, removedBlockIds: readonly string[]) {
   return `tenant-page-replacement:${expectedUpdatedAt}:${[...removedBlockIds].sort().join(',')}`
 }
-

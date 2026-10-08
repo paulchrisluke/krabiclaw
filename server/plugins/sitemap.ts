@@ -14,7 +14,7 @@ import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { assertOrganizationLanguageEntitlement } from '~/server/utils/localization'
-import { PUBLIC_PRODUCT_SQL } from '~/server/utils/product-management'
+import { listOrganizationProducts } from '~/server/utils/product-management'
 
 interface SitemapEntry {
   loc: string
@@ -152,6 +152,7 @@ export default definePlugin((nitroApp) => {
 
     const template = resolvePublicTemplate({ themeId: organization.theme_id, vertical: organization.vertical })
     const productPresentation = resolveProductPresentation(organization.vertical)
+    const publicProductIds = JSON.stringify((await listOrganizationProducts(db, { organizationId, publishedOnly: true })).map(product => product.id))
 
     const localizedLocales = await queryAll<{ locale: string; organization_id: string }>(db, `
       SELECT l.locale, l.organization_id
@@ -174,8 +175,9 @@ export default definePlugin((nitroApp) => {
         queryAll<{ route_path: string; updated_at: string }>(db, `
           SELECT route_path, updated_at FROM resource_localizations
            WHERE organization_id = ? AND locale = ? AND route_path IS NOT NULL
+             AND (resource_type <> 'product' OR resource_id IN (SELECT value FROM json_each(?)))
            ORDER BY route_path
-        `, [organizationId, candidate.locale]),
+        `, [organizationId, candidate.locale, publicProductIds]),
         queryAll<{ path: string; updated_at: string }>(db, `
           SELECT d.path, d.updated_at FROM content_documents d
             JOIN content_documents root ON root.id = d.root_id AND root.row_role = 'root'
@@ -194,16 +196,15 @@ export default definePlugin((nitroApp) => {
                  p.kind
             FROM resource_localizations rl
             JOIN products p ON p.id = rl.resource_id AND p.organization_id = rl.organization_id AND p.active = 1
-            JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
-             AND pub.organization_id = rl.organization_id AND (${PUBLIC_PRODUCT_SQL})
             LEFT JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id
              AND pl.published = 1 AND pl.active = 1
             LEFT JOIN business_locations bl ON bl.id = pl.location_id AND bl.organization_id = rl.organization_id AND bl.status = 'active'
             LEFT JOIN resource_localizations ll ON ll.resource_type='business_location' AND ll.resource_id=bl.id AND ll.organization_id=rl.organization_id AND ll.locale=rl.locale
            WHERE rl.organization_id = ? AND rl.locale = ? AND rl.resource_type = 'product'
+             AND p.id IN (SELECT value FROM json_each(?))
              AND (bl.id IS NOT NULL OR EXISTS (SELECT 1 FROM product_booking_configs bc WHERE bc.product_id=p.id AND bc.organization_id=p.organization_id AND bc.online_timezone IS NOT NULL) OR p.order_url IS NOT NULL)
            ORDER BY bl.slug, p.slug
-        `, [organizationId, candidate.locale])
+        `, [organizationId, candidate.locale, publicProductIds])
         for (const product of localizedProducts) {
           const presentation = presentationForProduct(organization.vertical, product)
           const locationSlug = product.location_path?.split('/').filter(Boolean).at(-1)
@@ -247,16 +248,15 @@ export default definePlugin((nitroApp) => {
         `SELECT p.id, p.slug, pl.location_id, bl.slug AS location_slug, p.updated_at,
                 p.kind
          FROM products p
-         JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id AND (${PUBLIC_PRODUCT_SQL})
          LEFT JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id AND pl.published = 1 AND pl.active = 1
          LEFT JOIN business_locations bl
            ON bl.id = pl.location_id
-          AND bl.organization_id = pub.organization_id
+          AND bl.organization_id = p.organization_id
           AND bl.status = 'active'
-         WHERE pub.organization_id = ? AND p.active = 1
+         WHERE p.organization_id = ? AND p.active = 1 AND p.id IN (SELECT value FROM json_each(?))
            AND (bl.id IS NOT NULL OR EXISTS (SELECT 1 FROM product_booking_configs bc WHERE bc.product_id = p.id AND bc.organization_id = p.organization_id AND bc.online_timezone IS NOT NULL) OR p.order_url IS NOT NULL)
          ORDER BY pl.location_id, p.name, p.id`,
-        [organizationId],
+        [organizationId, publicProductIds],
       ),
       listSitemapArticleEntries(db, organizationId, template),
       listPublishedTenantSitemapPages(db, organizationId),

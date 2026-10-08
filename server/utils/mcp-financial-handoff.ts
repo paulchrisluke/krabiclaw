@@ -11,10 +11,11 @@ export function mcpFinancialApprovalErrorResult(error: unknown, platformOrigin: 
   let url: URL
   try { url = new URL(path, platformOrigin) } catch { return null }
   if (!['https:', 'http:'].includes(url.protocol)) return null
-  const structuredContent = {
+  const action = {
+    status: Number(error.statusCode), message,
     success: false, operation_completed: false, action_required: true,
     code: dashboard ? 'financial_action_required' : 'financial_approval_required', dashboard_url: url.toString(),
     ...(approval ? { confirmation_required: true, financial_approval_url: url.toString() } : {}),
   }
-  return { isError: true, structuredContent, content: [{ type: 'text' as const, text: `${message}\nContinue in the authenticated dashboard: ${url}` }] }
+  return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(action) }] }
 }

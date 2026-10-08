@@ -81,7 +81,8 @@ test('MCP paid booking cancellation and rejection hand off without preparing mon
      assert.equal(error.data?.code,'financial_action_required')
      const handoff = mcpFinancialApprovalErrorResult(error,env.NUXT_PUBLIC_PLATFORM_DOMAIN,error.statusMessage!)
      assert(handoff)
-     assert.deepEqual(handoff.structuredContent, { success: false, operation_completed: false, action_required: true, code: 'financial_action_required', dashboard_url: 'https://proof.example/dashboard/payments/bookings/booking/paid-request' })
+     assert.equal('structuredContent' in handoff, false)
+     assert.deepEqual(JSON.parse(handoff.content[0]!.text), { status: 409, message: error.statusMessage, success: false, operation_completed: false, action_required: true, code: 'financial_action_required', dashboard_url: 'https://proof.example/dashboard/payments/bookings/booking/paid-request' })
      assert.equal(handoff.isError,true)
      return true
     })
@@ -92,9 +93,10 @@ test('MCP paid booking cancellation and rejection hand off without preparing mon
     assert(error instanceof HTTPError)
     const handoff = mcpFinancialApprovalErrorResult(error,env.NUXT_PUBLIC_PLATFORM_DOMAIN,error.statusMessage!)
     assert(handoff)
-    assert.equal(handoff.structuredContent.operation_completed,false)
-    assert.match(handoff.structuredContent.dashboard_url,/^https:\/\/proof\.example\/dashboard\/payments\/earnings\/refunds\/approve\?id=/u)
-    authorizationId = new URL(handoff.structuredContent.dashboard_url).searchParams.get('id')!
+    const action = JSON.parse(handoff.content[0]!.text)
+    assert.equal(action.operation_completed,false)
+    assert.match(action.dashboard_url,/^https:\/\/proof\.example\/dashboard\/payments\/earnings\/refunds\/approve\?id=/u)
+    authorizationId = new URL(action.dashboard_url).searchParams.get('id')!
     return true
    })
    assert.equal(await db.prepare('SELECT COUNT(*) n FROM payment_authorizations').first('n'),1)

@@ -59,21 +59,22 @@ export function asMcpError(error: unknown): McpErrorShape {
     return { code: shape.code, message: shape.message, data: shape.data, kind: shape.kind }
   }
 
-  // REST and MCP share business guards. A rejected operation is a tool result,
-  // including plan limits and conflicts; it is not a broken transport.
+  // REST and MCP share typed failures. Preserve their status and recovery fields.
   const status = error && typeof error === 'object' && 'statusCode' in error ? Number(error.statusCode) : NaN
-  if (error && typeof error === 'object' && status >= 400 && status < 500) {
+  if (error && typeof error === 'object' && Number.isInteger(status) && status >= 400 && status < 600) {
     const message = typeof (error as { statusMessage?: unknown }).statusMessage === 'string'
       ? (error as { statusMessage: string }).statusMessage
       : error instanceof Error ? error.message : 'Invalid request.'
     const details = 'data' in error && error.data && typeof error.data === 'object' ? error.data : {}
     const data = {
+      status,
       ...('code' in details && typeof details.code === 'string' ? { code: details.code } : {}),
+      ...('missing' in details && Array.isArray(details.missing) && details.missing.every(field => typeof field === 'string' && /^[a-zA-Z_][a-zA-Z0-9_.]*$/u.test(field)) ? { missing: details.missing } : {}),
       ...('dashboard_url' in details && typeof details.dashboard_url === 'string' ? { dashboard_url: details.dashboard_url } : {}),
     }
     return { code: [400, 404].includes(status) ? MCP_ERROR.invalidParams : MCP_ERROR.internal, message,
-      kind: status === 401 ? 'auth' : status === 403 ? 'forbidden' : 'tool_execution',
-      ...(Object.keys(data).length ? { data } : {}),
+      kind: status === 401 ? 'auth' : status === 403 ? 'forbidden' : status >= 500 ? 'transport' : 'tool_execution',
+      data,
     }
   }
 

@@ -329,7 +329,7 @@ export async function handleOrganizationsTools(ctx: McpExecutorContext): Promise
       const auth = createAuth(organization.env)
       const invitationId = requiredString(args, 'invitation_id')
       const invitations = await auth.api.listInvitations({ headers, query: { organizationId: organization.organizationId } })
-      if (!invitations.some(invitation => invitation.id === invitationId)) throw mcpProtocolError(MCP_ERROR.invalidParams, 'Invitation not found in this business')
+      if (!invitations.some(invitation => invitation.id === invitationId)) throw new HTTPError({ statusCode: 404, statusMessage: 'Invitation not found in this business' })
       const invitation = await auth.api.cancelInvitation({ headers, body: { invitationId } })
       if (!invitation) throw new Error('Better Auth did not return the cancelled invitation')
       const fact = { ...invitation, createdAt: invitation.createdAt.toISOString(), expiresAt: invitation.expiresAt.toISOString() }

@@ -198,13 +198,16 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
           NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN: env.NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN,
         }, resolvedOrganizationId);
       } catch (purgeError) {
-        purgeFailure = `${toolName} wrote its change to organization ${resolvedOrganizationId}, but the public cache was not purged, so the site may keep serving what the write replaced: ${describeErrorForTelemetry(purgeError)}`;
+        console.error({ event: "mcp_public_cache_purge_failed", tool: toolName, organization_id: resolvedOrganizationId, request_id: requestId, error: describeErrorForTelemetry(purgeError) });
+        purgeFailure = "Change saved; public website refresh failed";
       } finally {
         recordRequestPhase(event, "mcp_cache_purge", cacheStartedAt);
       }
     }
+    if (purgeFailure) return mcpToolErrorResult(purgeFailure, { status: 502, code: "PUBLIC_SITE_REFRESH_FAILED" });
+    const failed = isRender && result.isError === true;
     const response = {
-      isError: purgeFailure !== null || (isRender && result.isError === true), structuredContent, content: [{ type: "text" as const, text: purgeFailure ? `${purgeFailure}\n\n${modelText}` : modelText }],
+      isError: failed, ...(failed ? {} : { structuredContent }), content: [{ type: "text" as const, text: failed ? JSON.stringify(structuredContent) : modelText }],
       ...(isRender && result.privateMeta ? { _meta: result.privateMeta } : {}),
     };
     return response;

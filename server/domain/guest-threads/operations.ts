@@ -108,14 +108,15 @@ function conflict(message = 'Idempotency key was reused with a different request
 async function successfulOutcome(
   db: DbClient,
   context: ThreadContext,
-): Promise<SuccessfulOperationOutcome> {
-  const thread = await getGuestRequest(db, context.thread.id, context.thread.organization_id)
-  const record = await getThreadOperationalRecord(db, context.thread.id)
+): Promise<OperationOutcome> {
+  const current = await loadThreadContext(db, context.thread.id, context.thread.organization_id)
+  if ('ok' in current) return current
+  if (context.record && !current.record) return { ok: false, status: 404, reason: 'source_not_found' }
   return {
     ok: true,
     status: 200,
-    thread: thread ?? context.thread,
-    availableActions: requestActions(record, new Date().toISOString()),
+    thread: current.thread,
+    availableActions: requestActions(current.record, new Date().toISOString()),
   }
 }
 
@@ -384,6 +385,7 @@ async function executeSourceMutation(
   context: ThreadContext,
   input: ExecuteOperationInput,
 ): Promise<OperationOutcome> {
+  if (!context.record) return { ok: false, status: 404, reason: 'source_not_found' }
   const dedupeKey = operationDedupeKey(input)
   const eventName = `${context.thread.kind}.${input.action}`
   const existing = await findEntryByDedupeKey(db, dedupeKey)

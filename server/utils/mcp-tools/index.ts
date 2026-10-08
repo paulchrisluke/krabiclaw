@@ -248,7 +248,7 @@ export async function executeMcpToolCall(
       LIMIT 1
     `, [explicitLocationId, organization.organizationId]);
     if (!location) {
-      throw mcpProtocolError(MCP_ERROR.invalidParams, "Location not found for this organization.");
+      throw new HTTPError({ statusCode: 404, statusMessage: 'Location not found for this organization' });
     }
   }
 

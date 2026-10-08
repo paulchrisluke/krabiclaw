@@ -24,7 +24,7 @@ const description = 'Call after the user approves the exact change. Records the 
 const text = { type: 'string' }
 const nullableText = { type: ['string', 'null'] }
 const guest = { type: 'object', properties: { name: text, email: text, phone: nullableText }, required: ['name', 'email'] }
-const record = { type: ['object', 'null'], properties: { id: text, kind: text, status: { type: 'string', enum: ['pending', 'confirmed', 'cancelled'] }, party_size: { type: 'integer', minimum: 1 }, starts_at: text, ends_at: text, timezone: text } }
+const record = { type: 'object', properties: { id: text, kind: text, status: { type: 'string', enum: ['pending', 'confirmed', 'cancelled'] }, party_size: { type: 'integer', minimum: 1 }, starts_at: text, ends_at: text, timezone: text } }
 const booking = { type: 'object', properties: { operational_booking_id: text, request_id: nullableText, product_id: text, product_variant_id: nullableText, product_session_id: text, status: { type: 'string', enum: [...BOOKING_STATUSES] }, is_complete: { type: 'boolean' }, party_size: { type: 'integer' }, user_id: nullableText, updated_at: text, assigned_member_id: nullableText, location_id: nullableText, starts_at: text, ends_at: text, timezone: text, guest: { ...guest, type: ['object', 'null'] }, provenance: { type: ['object', 'null'], properties: { source: text, external_reference: nullableText, guest_acknowledgement: { type: 'boolean' } } } }, required: ['operational_booking_id', 'request_id', 'product_id', 'product_session_id', 'status', 'is_complete', 'party_size', 'location_id', 'starts_at', 'ends_at', 'timezone'] }
 const session = { type: 'object', properties: { assigned_member_id: nullableText, id: text, organization_id: text, product_id: text, location_id: nullableText, timezone: text, starts_at: text, ends_at: text, updated_at: text, capacity: { type: ['integer', 'null'] }, status: text, claimed: { type: 'integer' }, remaining: { type: ['integer', 'null'] }, is_full: { type: 'boolean' } }, required: ['id', 'product_id', 'location_id', 'assigned_member_id', 'starts_at', 'ends_at', 'timezone', 'capacity', 'status', 'claimed', 'remaining', 'is_full', 'updated_at'] }
 const operationResult = { type: 'object', properties: { ok: { const: true }, status: { const: 200 }, request_id: text, record, availableActions: { type: 'array', items: text }, thread: { type: 'object', properties: { id: text, kind: text, conversation_state: text } } }, required: ['ok', 'status', 'record'] }
@@ -161,15 +161,22 @@ export async function handleBookingsTools(ctx: McpExecutorContext): Promise<unkn
   if (!row?.request_id) throw new HTTPError({ statusCode: 404, message: 'Operational booking with an inbox thread not found in this organization' })
   const thread = await getGuestRequest(db, row.request_id, organizationId, reservation ? 'reservation' : 'booking')
   if (!thread) throw new HTTPError({ statusCode: 404, message: 'Booking thread not found' })
-  if (toolName === 'get_product_booking') return { operational_booking_id: id, request_id: thread.id, updated_at: thread.updated_at, operational_updated_at: row.updated_at, guest_user_id: thread.user_id, guest: thread.payload.guest, provenance: thread.kind === 'booking' ? thread.payload.provenance ?? null : null, record: await getThreadOperationalRecord(db, thread.id) }
+  let operationalRecord = await getThreadOperationalRecord(db, thread.id)
+  if (!operationalRecord || operationalRecord.id !== id || operationalRecord.kind !== thread.kind || operationalRecord.organization_id !== organizationId) throw new HTTPError({ statusCode: 404, message: 'Operational booking record not found in this organization' })
+  if (toolName === 'get_product_booking') return { operational_booking_id: id, request_id: thread.id, updated_at: thread.updated_at, operational_updated_at: row.updated_at, guest_user_id: thread.user_id, guest: thread.payload.guest, provenance: thread.kind === 'booking' ? thread.payload.provenance ?? null : null, record: operationalRecord }
   const key = requiredString(args, 'idempotency_key')
   if (toolName.startsWith('request_')) {
     const fields = reservation ? { kind: 'reservation', overridePolicy: args.override_policy, locationId: requiredString(args, 'location_id'), bookingDate: requiredString(args, 'date'), bookingTime: requiredString(args, 'time'), partySize: args.party_size } : { kind: 'booking', sessionId: requiredString(args, 'session_id'), partySize: args.party_size }
     await requestBookingChange(db, env, thread, organization.userId, { ...fields, expectedUpdatedAt: requiredString(args, 'expected_updated_at') }, key)
     await publishGuestInboxThreadEvent(env, db, { threadId: thread.id, type: 'thread.changed' })
-    return { success: true, request_id: thread.id, change_status: 'awaiting_guest_acceptance', record: await getThreadOperationalRecord(db, thread.id) }
+    operationalRecord = await getThreadOperationalRecord(db, thread.id)
+    if (!operationalRecord || operationalRecord.id !== id || operationalRecord.kind !== thread.kind || operationalRecord.organization_id !== organizationId) throw new HTTPError({ statusCode: 404, message: 'Operational booking record not found in this organization' })
+    return { success: true, request_id: thread.id, change_status: 'awaiting_guest_acceptance', record: operationalRecord }
   }
   const outcome = await executeGuestThreadOperation(db, { threadId: thread.id, organizationId, action: toolName.split('_')[0]!, actorUserId: organization.userId, idempotencyKey: key, env, financialWritesAllowed: false })
   if (outcome.ok || outcome.reason === 'delivery_failed') await publishGuestInboxThreadEvent(env, db, { threadId: thread.id, type: 'thread.changed' })
-  return renderStructuredResponse({ ...outcome, record: await getThreadOperationalRecord(db, thread.id) }, undefined, undefined, !outcome.ok)
+  if (!outcome.ok) return renderStructuredResponse(outcome, undefined, undefined, true)
+  operationalRecord = await getThreadOperationalRecord(db, thread.id)
+  if (!operationalRecord || operationalRecord.id !== id || operationalRecord.kind !== thread.kind || operationalRecord.organization_id !== organizationId) throw new HTTPError({ statusCode: 404, message: 'Operational booking record not found in this organization' })
+  return renderStructuredResponse({ ...outcome, record: operationalRecord })
 }

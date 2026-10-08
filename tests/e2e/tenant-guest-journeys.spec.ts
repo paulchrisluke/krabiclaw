@@ -158,7 +158,11 @@ test.describe('tenant guest journeys (disposable local/preview data only)', () =
         if (original) {
           const current = await request.get(policyUrl)
           expect(current.status(), await current.text()).toBe(200)
-          const restored = await request.put(policyUrl, { data: { duration_minutes: original.duration_minutes, expected_updated_at: (await current.json()).config.updated_at } })
+          // A location that had no usable reservation policy is returned to
+          // disabled reservations, rather than writing an incomplete policy.
+          const restored = original.duration_minutes === null
+            ? await request.delete(policyUrl)
+            : await request.put(policyUrl, { data: { duration_minutes: original.duration_minutes, expected_updated_at: (await current.json()).config.updated_at } })
           expect(restored.status(), await restored.text()).toBe(200)
         }
       } finally {

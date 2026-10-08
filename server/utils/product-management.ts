@@ -63,7 +63,7 @@ import {
 
 const MAX_SLUG_SUFFIX_ATTEMPTS = 100
 
-/** Public experiences require a booking flow; exhausted availability remains visible. */
+/** Coarse publication gate; public catalogue readers also require booking readiness. */
 export const PUBLIC_PRODUCT_SQL = `pub.published = 1 AND (p.kind <> 'experience' OR NULLIF(trim(p.order_url), '') IS NOT NULL
   OR EXISTS (SELECT 1 FROM product_booking_configs cfg WHERE cfg.product_id = p.id AND cfg.organization_id = p.organization_id AND cfg.duration_minutes > 0))`
 
@@ -327,26 +327,31 @@ export async function listProducts(db: DbClient, organizationId: string): Promis
  * organization catalog when a site has published nothing: an empty site
  * catalog renders an empty state that says so.
  */
-/**
- * `window` reads one page instead of the whole catalog.
- *
- * Hydration loads every relationship of everything it is given, so a request
- * for fifty products should not carry four hundred through it. One extra row
- * is asked for, and never returned: its presence is how the caller knows there
- * is another page.
- */
+/** Public experiences use the same readiness check as publication, including sold-out sessions. */
+async function publicProductWindow(db: DbClient, organizationId: string, products: Product[], window?: { limit: number; offset: number }): Promise<Product[]> {
+  const visible = await Promise.all(products.map(async product => product.kind !== 'experience'
+    || (product.active && (await productBookingReadiness(db, organizationId, product)).ready)))
+  const published = products.filter((_, index) => visible[index])
+  return window ? published.slice(window.offset, window.offset + window.limit + 1) : published
+}
+
+/** Editable catalogue pages read one extra row. Public experience readiness precedes pagination. */
 export async function listOrganizationProducts(db: DbClient, input: {
-  organizationId: string; publishedOnly?: boolean; window?: { limit: number; offset: number }
+  organizationId: string; kind?: ProductKind; publishedOnly?: boolean; window?: { limit: number; offset: number }
 }): Promise<Product[]> {
+  const requireReadiness = input.publishedOnly === true && (!input.kind || input.kind === 'experience')
+  const window = requireReadiness ? undefined : input.window
   const rows = await queryAll<Row>(db, `
     SELECT ${PRODUCT_COLUMNS} FROM products p
     JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
-    WHERE p.organization_id = ? AND (? = 0 OR (${PUBLIC_PRODUCT_SQL}))
+    WHERE p.organization_id = ? AND (? = 0 OR (${PUBLIC_PRODUCT_SQL}))${input.kind ? ' AND p.kind = ?' : ''}
     ORDER BY p.name, p.id
-    ${input.window ? 'LIMIT ? OFFSET ?' : ''}
+    ${window ? 'LIMIT ? OFFSET ?' : ''}
   `, [input.organizationId, input.publishedOnly ? 1 : 0,
-    ...(input.window ? [input.window.limit + 1, input.window.offset] : [])])
-  return hydrate(db, input.organizationId, rows.map(mapProductRow))
+    ...(input.kind ? [input.kind] : []),
+    ...(window ? [window.limit + 1, window.offset] : [])])
+  const products = await hydrate(db, input.organizationId, rows.map(mapProductRow))
+  return requireReadiness ? publicProductWindow(db, input.organizationId, products, input.window) : products
 }
 
 /**
@@ -358,20 +363,24 @@ export async function listOrganizationProducts(db: DbClient, input: {
  * offering disables ordering or booking while its information stays visible.
  */
 export async function listLocationProducts(db: DbClient, input: {
-  organizationId: string; locationId: string; publishedOnly?: boolean; window?: { limit: number; offset: number }
+  organizationId: string; locationId: string; kind?: ProductKind; publishedOnly?: boolean; window?: { limit: number; offset: number }
 }): Promise<Product[]> {
   const published = input.publishedOnly === true
+  const requireReadiness = published && (!input.kind || input.kind === 'experience')
+  const window = requireReadiness ? undefined : input.window
   const rows = await queryAll<Row>(db, `
     SELECT ${PRODUCT_COLUMNS} FROM products p
     JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id
     ${published ? `JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
       AND (${PUBLIC_PRODUCT_SQL})` : ''}
-    WHERE p.organization_id = ? AND pl.location_id = ?${published ? ' AND pl.published = 1' : ''}
+    WHERE p.organization_id = ? AND pl.location_id = ?${published ? ' AND pl.published = 1' : ''}${input.kind ? ' AND p.kind = ?' : ''}
     ORDER BY p.name, p.id
-    ${input.window ? 'LIMIT ? OFFSET ?' : ''}
+    ${window ? 'LIMIT ? OFFSET ?' : ''}
   `, [input.organizationId, input.locationId,
-    ...(input.window ? [input.window.limit + 1, input.window.offset] : [])])
-  return hydrate(db, input.organizationId, rows.map(mapProductRow))
+    ...(input.kind ? [input.kind] : []),
+    ...(window ? [window.limit + 1, window.offset] : [])])
+  const products = await hydrate(db, input.organizationId, rows.map(mapProductRow))
+  return requireReadiness ? publicProductWindow(db, input.organizationId, products, input.window) : products
 }
 
 /** Count the location’s products by their explicit type without hydrating the catalog. */
@@ -1458,7 +1467,7 @@ async function productCacheInvalidations(db: DbClient, organizationId: string, p
  * is per-location visibility. A withheld product is not sold out and a
  * disabled product is not unpublished.
  */
-export async function productBookingReadiness(db: DbClient, organizationId: string, product: Product): Promise<{ ready: boolean; missing: string[]; allocation?: BatchQuery }> {
+export async function productBookingReadiness(db: DbClient, organizationId: string, product: Product, options: { requireAllocation?: boolean } = {}): Promise<{ ready: boolean; missing: string[]; allocation?: BatchQuery }> {
   if (product.order_url) return { ready: true, missing: [] }
   const missing: string[] = []
   if (!product.active) missing.push('active')
@@ -1470,16 +1479,20 @@ export async function productBookingReadiness(db: DbClient, organizationId: stri
     .filter(session => session.location_id === null
       ? Boolean(product.booking?.online_timezone)
       : product.locations.some(location => location.location_id === session.location_id && location.active && location.published))
-  // A sold-out occurrence still proves a configured booking flow. Publication
-  // must not require an unsold seat; guest allocation remains a separate claim.
+  // Scheduled seats prove the booking capability even while full or closed.
+  // Publication additionally guards a real allocation in its atomic write.
   const candidate = sessions.find(session => !session.is_full)
-    ?? sessions.find(session => session.capacity !== null && session.capacity > 0 && session.claimed >= session.capacity)
+    ?? sessions.find(session => session.capacity === null || session.capacity > 0)
   const scopes = [...new Set([
     ...product.locations.filter(location => location.active && location.published).map(location => location.location_id),
     ...(product.booking?.online_timezone ? [null] : []),
   ])]
   const variants = product.variants.filter(variant => variant.active)
   if (!currency || !variants.length || !scopes.length || !scopes.every(locationId => variants.every(variant => selectPrice(variant.prices, { currency, location_id: locationId })?.type === 'one_time'))) missing.push('variants.prices')
+  if (!options.requireAllocation) {
+    if (!candidate) missing.push('booking.schedule')
+    return { ready: missing.length === 0, missing }
+  }
   const allocation = candidate ? await sessionAllocationPredicate(db, { organizationId, productId: product.id, sessionId: candidate.id, partySize: 0, now: new Date().toISOString() }) : undefined
   if (allocation) {
     allocation.query = `(${allocation.query}) AND EXISTS (SELECT 1 FROM organization WHERE id=? AND default_currency=?)
@@ -1500,8 +1513,8 @@ export async function setProductPublication(db: DbClient, input: {
   const product = await requireOrganizationProduct(db, input)
   let readiness: Awaited<ReturnType<typeof productBookingReadiness>> | undefined
   if (input.published && product.kind === 'experience') {
-    readiness = await productBookingReadiness(db, input.organizationId, product)
-    if (!readiness.ready) throw new HTTPError({ statusCode: 409, statusMessage: 'This experience needs booking details before it can be published', data: { product_id: product.id, missing: readiness.missing } })
+    readiness = await productBookingReadiness(db, input.organizationId, product, { requireAllocation: true })
+    if (!readiness.ready) throw new HTTPError({ statusCode: 409, statusMessage: 'This experience needs booking details before it can be published', data: { code: 'EXPERIENCE_BOOKING_INCOMPLETE', product_id: product.id, missing: readiness.missing } })
   }
   const now = new Date().toISOString()
   await executeBatch(db, [{

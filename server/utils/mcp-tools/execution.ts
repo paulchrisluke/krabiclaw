@@ -463,6 +463,7 @@ export function toolRequiresArgument(
 }
 
 export function rethrowWorkspaceError(error: unknown): never {
+  if (error && typeof error === 'object' && 'statusCode' in error) throw error;
   if (error instanceof Error && error.message) {
     throw mcpProtocolError(MCP_ERROR.invalidParams, error.message);
   }
@@ -582,6 +583,7 @@ export function objectRecord(value: unknown, key: string) {
 }
 
 export function rethrowAsInvalidParams(error: unknown): never {
+  if (error && typeof error === 'object' && 'statusCode' in error) throw error;
   if (!(error instanceof Error)) throw error;
   const message = error.message;
   if (

@@ -74,6 +74,35 @@ test('Product batches validate and commit atomically for a 100-item catalog', as
       created = mcpData<{ products: CreatedProduct[] }>(await validCreate.json()).products
       expect(created).toHaveLength(100)
 
+      const firstDishPage = mcpData<{ products: Array<{ id: string; kind: string }>; page_info: { has_more: boolean; next_cursor: string } }>(await (await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'list_products', args: { organization_id: organizationId, kind: 'dish', limit: 1 },
+      })).json())
+      expect(firstDishPage.products).toHaveLength(1)
+      expect(firstDishPage.products[0]!.kind).toBe('dish')
+      expect(firstDishPage.page_info.has_more).toBe(true)
+      expect(firstDishPage.page_info.next_cursor).toBeTruthy()
+      const secondDishPage = mcpData<{ products: Array<{ id: string; kind: string }> }>(await (await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'list_products', args: { organization_id: organizationId, kind: 'dish', limit: 1, cursor: firstDishPage.page_info.next_cursor },
+      })).json())
+      expect(secondDishPage.products).toHaveLength(1)
+      expect(secondDishPage.products[0]!.kind).toBe('dish')
+      expect(secondDishPage.products[0]!.id).not.toBe(firstDishPage.products[0]!.id)
+      for (const [toolName, args] of [
+        ['list_products', { kind: 'experience' }],
+        ['list_products', { kind: 'dish', published_only: true }],
+        ['list_location_products', { location_id: locationId, kind: 'dish' }],
+      ] as const) {
+        const wrongScope = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName,
+          args: { organization_id: organizationId, ...args, limit: 1, cursor: firstDishPage.page_info.next_cursor } })
+        expect((await wrongScope.json()).result.isError, 'a cursor cannot skip rows in a different catalogue filter').toBe(true)
+      }
+      const absentProduct = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'get_product',
+        args: { organization_id: organizationId, product_id: crypto.randomUUID() } })
+      const absentResult = (await absentProduct.json()).result
+      expect(absentResult.isError).toBe(true)
+      expect(absentResult.structuredContent).toBeUndefined()
+      expect(JSON.parse(absentResult.content[0].text)).toMatchObject({ status: 404, message: 'Product not found' })
+
       // Membership is explicit and ordered, and one call sets the whole list.
       for (const [index, collectionId] of collectionIds.entries()) {
         const slice = created.slice(index * 50, index * 50 + 50).map(product => product.id)

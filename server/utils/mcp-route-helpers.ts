@@ -42,6 +42,8 @@ export function mcpAuthRequiredResult(options: { challenge: string; message: str
 export function mcpToolErrorResult(message: string, data?: unknown, platformOrigin?: string) {
   const details = data && typeof data === 'object' ? data : {}
   const code = 'code' in details && typeof details.code === 'string' ? details.code : undefined
+  const status = 'status' in details && Number.isInteger(details.status) && Number(details.status) >= 400 && Number(details.status) < 600 ? Number(details.status) : undefined
+  const missing = 'missing' in details && Array.isArray(details.missing) && details.missing.every(field => typeof field === 'string' && /^[a-zA-Z_][a-zA-Z0-9_.]*$/u.test(field)) ? details.missing : undefined
   let dashboardUrl: string | undefined
   if (platformOrigin && 'dashboard_url' in details && typeof details.dashboard_url === 'string' && /^\/dashboard\/(?!\/)/u.test(details.dashboard_url)) {
     try {
@@ -50,7 +52,7 @@ export function mcpToolErrorResult(message: string, data?: unknown, platformOrig
       if (['https:', 'http:'].includes(origin.protocol) && url.origin === origin.origin && url.pathname.startsWith('/dashboard/')) dashboardUrl = url.toString()
     } catch { /* An invalid destination does not turn a rejected tool into another failure. */ }
   }
-  const action = code ? { code, message, ...(dashboardUrl ? { dashboard_url: dashboardUrl } : {}) } : undefined
+  const action = status || code ? { ...(status ? { status } : {}), ...(code ? { code } : {}), message, ...(missing ? { missing } : {}), ...(dashboardUrl ? { dashboard_url: dashboardUrl } : {}) } : undefined
   // Structured content must match the tool's success schema; errors use content.
   return {
     isError: true,

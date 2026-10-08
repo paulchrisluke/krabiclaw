@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:655d33f612e42f6171ceec8d3516b7a6fab6ca4b39777dbf62b8b0d4813c08cc",
+  "fingerprint": "sha256:2c06ab39a76df8f7d0ded90047a04179f2e0c7ec708f59b435c36344dea4c7fc",
   "tools": [
     {
       "name": "append_content_block",
@@ -4120,10 +4120,7 @@
                 "type": "string"
               }
             },
-            "type": [
-              "object",
-              "null"
-            ]
+            "type": "object"
           },
           "request_id": {
             "type": "string"
@@ -4223,10 +4220,7 @@
                 "type": "string"
               }
             },
-            "type": [
-              "object",
-              "null"
-            ]
+            "type": "object"
           },
           "request_id": {
             "type": "string"
@@ -4326,10 +4320,7 @@
                 "type": "string"
               }
             },
-            "type": [
-              "object",
-              "null"
-            ]
+            "type": "object"
           },
           "request_id": {
             "type": "string"
@@ -18658,10 +18649,7 @@
               "time_off",
               "calendar_status"
             ],
-            "type": [
-              "object",
-              "null"
-            ]
+            "type": "object"
           }
         },
         "type": "object"
@@ -22214,10 +22202,7 @@
                 "type": "string"
               }
             },
-            "type": [
-              "object",
-              "null"
-            ]
+            "type": "object"
           },
           "request_id": {
             "type": "string"
@@ -22790,7 +22775,7 @@
     },
     {
       "name": "get_reservation_policy",
-      "description": "Read one location’s table reservation settings and guest-facing policy summary, including capacity, advance notice and cancellation terms. A null policy means this location does not take reservations. Product session bookings use get_product for their separate configuration.",
+      "description": "Read one location’s table reservation settings and guest-facing policy summary. Product session bookings use get_product for their separate configuration.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -22947,10 +22932,7 @@
               "created_at",
               "updated_at"
             ],
-            "type": [
-              "object",
-              "null"
-            ]
+            "type": "object"
           },
           "summary": {
             "properties": {
@@ -22987,10 +22969,7 @@
               "items",
               "additional_notes_html"
             ],
-            "type": [
-              "object",
-              "null"
-            ]
+            "type": "object"
           }
         },
         "required": [
@@ -26666,6 +26645,15 @@
             "description": "Opaque next_cursor from the previous page.",
             "type": "string"
           },
+          "kind": {
+            "enum": [
+              "dish",
+              "experience",
+              "service",
+              "item"
+            ],
+            "type": "string"
+          },
           "limit": {
             "description": "Page size. Defaults to 50; maximum 100.",
             "maximum": 100,
@@ -28861,6 +28849,15 @@
         "properties": {
           "cursor": {
             "description": "Opaque next_cursor from the previous page.",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "dish",
+              "experience",
+              "service",
+              "item"
+            ],
             "type": "string"
           },
           "limit": {
@@ -37785,16 +37782,10 @@
         "$defs": {},
         "properties": {
           "publication": {
-            "type": [
-              "object",
-              "null"
-            ]
+            "type": "object"
           },
           "state": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": "string"
           }
         },
         "required": [
@@ -39148,10 +39139,7 @@
                 "type": "string"
               }
             },
-            "type": [
-              "object",
-              "null"
-            ]
+            "type": "object"
           },
           "request_id": {
             "type": "string"
@@ -42059,10 +42047,7 @@
                 "type": "string"
               }
             },
-            "type": [
-              "object",
-              "null"
-            ]
+            "type": "object"
           },
           "request_id": {
             "type": "string"
@@ -42169,10 +42154,7 @@
                 "type": "string"
               }
             },
-            "type": [
-              "object",
-              "null"
-            ]
+            "type": "object"
           },
           "request_id": {
             "type": "string"
@@ -43514,10 +43496,7 @@
               "time_off",
               "calendar_status"
             ],
-            "type": [
-              "object",
-              "null"
-            ]
+            "type": "object"
           }
         },
         "required": [
@@ -43802,10 +43781,7 @@
               "time_off",
               "calendar_status"
             ],
-            "type": [
-              "object",
-              "null"
-            ]
+            "type": "object"
           }
         },
         "required": [

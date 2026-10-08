@@ -222,12 +222,29 @@ test.describe('stateless MCP server', () => {
       // no site-level default underneath it, so a guest cannot book until the
       // owner has said the branch takes tables.
       const currentPolicy = await mcpRequest(request,baseURL!,{method:'tools/call',toolName:'get_reservation_policy',args:{organization_id:organizationId,location_id:locationId}})
-      const policyVersion = mcpData<{policy:{updated_at:string}|null}>(await currentPolicy.json()).policy?.updated_at ?? null
+      const policyBody = await currentPolicy.json()
+      let policyVersion: string | null = null
+      if (policyBody.result?.isError) {
+        expect(JSON.parse(policyBody.result.content[0].text)).toEqual({ status: 404, code: 'RESERVATION_POLICY_NOT_FOUND', message: 'Reservation policy not found' })
+        expect(policyBody.result.structuredContent).toBeUndefined()
+      } else {
+        policyVersion = mcpData<{policy:{updated_at:string}}>(policyBody).policy.updated_at
+      }
+      const incomplete = await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'update_reservation_policy',
+        args: { organization_id: organizationId, location_id: locationId, duration_minutes: null, expected_updated_at: policyVersion },
+      })
+      const incompleteBody = await incomplete.json()
+      expect(incompleteBody.result?.isError).toBe(true)
+      expect(JSON.parse(incompleteBody.result.content[0].text)).toEqual({ status: 409, code: 'RESERVATION_SETUP_INCOMPLETE', message: 'Reservation setup is incomplete', missing: ['duration_minutes'] })
+      const unchanged = await request.get(`${baseURL}/api/editor/organizations/${organizationId}/locations/${locationId}/reservation-config`)
+      expect(unchanged.status()).toBe(200)
+      expect((await unchanged.json()).config?.updated_at ?? null).toBe(policyVersion)
       const policySetup = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'update_reservation_policy',
         args: { organization_id: organizationId, location_id: locationId, slot_capacity: 20, duration_minutes: 60, expected_updated_at: policyVersion },
       })
-      // Only slot_capacity is sent: every other stored field, the cancellation
+      // Duration and capacity are sent: every other stored field, the cancellation
       // policy included, is kept. The tool result says so, not the HTTP status.
       expect(mcpData<{ ok: boolean }>(await policySetup.json()).ok).toBe(true)
       const policyRead = await mcpRequest(request, baseURL!, {
