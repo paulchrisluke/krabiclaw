@@ -238,7 +238,7 @@ export async function getPublicBlawbyIdentity(db: DbClient, organizationId: stri
 export async function getPublicBlawbyShellData(
   db: DbClient,
   organizationId: string,
-  options: { previewAuthorized?: boolean; locale?: string | null; localizations?: readonly ExactPublicLocalization[] } = {},
+  options: { previewAuthorized?: boolean; locale?: string | null; localizations?: readonly ExactPublicLocalization[]; env?: CloudflareEnv } = {},
 ): Promise<PublicBlawbyShellData> {
   const sourceLocale = await getSourceLocale(db, organizationId)
   const locale = options.locale ?? sourceLocale
@@ -253,7 +253,7 @@ export async function getPublicBlawbyShellData(
       SELECT (SELECT i.verification_token FROM organization_integrations i WHERE i.organization_id = organization.id AND i.provider = 'google_search_console') AS token
         FROM organization WHERE id = ? LIMIT 1
     `, [organizationId]),
-    loadPublicProductCollection(db, organizationId, 'experiences', options.previewAuthorized === true),
+    loadPublicProductCollection(db, organizationId, 'experiences', options.previewAuthorized === true, undefined, options.env),
   ])
   if (!verification) throw new Error(`Organization ${organizationId} was not found for its Blawby shell`)
   const pageLinks = publishedPages.map(page => ({ id: page.id, path: page.path, title: page.title }))
@@ -316,7 +316,7 @@ export async function getPublicBlawbyDocumentData(
     : await loadExactPublicLocalizations(env, db, organizationId, locale)
 
   const [shell, route] = await Promise.all([
-    getPublicBlawbyShellData(db, organizationId, { previewAuthorized: options.previewAuthorized, locale, localizations }),
+    getPublicBlawbyShellData(db, organizationId, { previewAuthorized: options.previewAuthorized, locale, localizations, env }),
     getPublicBlawbyRouteData(db, organizationId, recipe, { ...options, locale, localizations }, env),
   ])
   // Which path each recipe's document lives at is declared once, per template,

@@ -158,6 +158,30 @@ export async function getStripeConnectedAccount(
   return row ? mapConnectedAccount(row) : null
 }
 
+/** Known checkout setup, read once for a catalogue; final checkout still verifies native providers. */
+export async function readStripeCheckoutSetup(db: DbClient, organizationId: string, env?: CloudflareEnv) {
+  const [connected, organization, entitled] = await Promise.all([
+    getStripeConnectedAccount(db, organizationId),
+    queryFirst<{ slug: string; billing_status: string | null; billing_customer: string | null; customer: string | null; contract: string | null; currency: string | null; start: string | null; servicing: number }>(db, `
+      SELECT o.slug, b.status AS billing_status, b.stripe_billing_customer_id AS billing_customer,
+             b.metronome_customer_id AS customer, b.metronome_contract_id AS contract, b.currency, b.contract_start_at AS start,
+             EXISTS(SELECT 1 FROM payment_servicing_tenants WHERE organization_id=o.id) AS servicing
+        FROM organization o LEFT JOIN payment_billing_accounts b ON b.organization_id=o.id WHERE o.id=?
+    `, [organizationId]),
+    env ? hasOrganizationEntitlement(env, organizationId, 'payments') : false,
+  ])
+  if (!organization) throw new HTTPError({ statusCode: 404, statusMessage: 'Organization not found' })
+  const missing: string[] = []
+  if (!entitled) missing.push('payments.entitlement')
+  if (!env?.STRIPE_SECRET_KEY || !env.STRIPE_PAYMENTS_METHOD_CONFIGURATION || !env.NUXT_PUBLIC_PLATFORM_DOMAIN || !env.METRONOME_API_KEY || !env.METRONOME_RATE_CARD_ID) missing.push('payments.configuration')
+  if (organization.billing_status !== 'active' || !organization.billing_customer || !organization.customer || !organization.contract || organization.currency !== 'USD' || !organization.start || !Number.isFinite(Date.parse(organization.start)) || Date.parse(organization.start) > Date.now()) missing.push('payments.billing')
+  if (organization.servicing) missing.push('payments.servicing')
+  if (!connected?.stripeAccountId) missing.push('payments.account')
+  else if (connected.status !== 'ready' || connected.cardPaymentsStatus !== 'active' || !connected.stripeRefreshedAt) missing.push('payments.account_ready')
+  if (connected && env?.STRIPE_SECRET_KEY && connected.livemode !== stripeLivemodeFromKey(env.STRIPE_SECRET_KEY)) missing.push('payments.account_mode')
+  return { connected, slug: organization.slug, missing }
+}
+
 export async function getStripeConnectedAccountByStripeId(
   db: DbClient,
   stripeAccountId: string,
@@ -294,19 +318,19 @@ const STRIPE_CONNECT_ACCOUNT_INCLUDE: Stripe.V2.Core.AccountRetrieveParams.Inclu
 
 /** The configured native Stripe account and methods must accept a paid booking before it is offered. */
 export async function requireStripeCheckoutAcceptance(db: DbClient, stripe: Stripe, env: CloudflareEnv, organizationId: string) {
-  const organization = await queryFirst<{ slug: string }>(db, 'SELECT slug FROM organization WHERE id=?', [organizationId])
-  if (!organization) throw new HTTPError({ statusCode: 404, statusMessage: 'Organization not found' })
-  const handoff = { code: 'financial_action_required', dashboard_url: `/dashboard/${encodeURIComponent(organization.slug)}/payments` }
-  if (!await hasOrganizationEntitlement(env, organizationId, 'payments')) throw new HTTPError({ statusCode: 403, statusMessage: 'Payments entitlement is required for online collection', data: handoff })
+  const setup = await readStripeCheckoutSetup(db, organizationId, env)
+  const handoff = { code: 'financial_action_required', dashboard_url: `/dashboard/${encodeURIComponent(setup.slug)}/payments`, missing: setup.missing }
+  // Native retrieval below can resolve a capability event not yet projected.
+  if (setup.missing.some(field => field !== 'payments.account_ready')) throw new HTTPError({
+    statusCode: setup.missing.includes('payments.configuration') ? 503 : setup.missing.includes('payments.entitlement') ? 403 : 409,
+    statusMessage: 'Complete the business’s Payments setup before accepting online payments', data: handoff,
+  })
   const billing = await paymentsBillingPricing(db, env, organizationId)
-  if (billing.account?.status !== 'active' || !billing.contract || !billing.pricing) throw new HTTPError({ statusCode: 409, statusMessage: 'Complete Payments billing setup before accepting online payments', data: handoff })
-  if (!env.STRIPE_SECRET_KEY || !env.STRIPE_PAYMENTS_METHOD_CONFIGURATION) throw new HTTPError({ statusCode: 503, statusMessage: 'Stripe Payments synchronous-method configuration is required' })
-  if (await queryFirst(db, 'SELECT stripe_account_id FROM payment_servicing_tenants WHERE organization_id=? LIMIT 1', [organizationId])) throw new HTTPError({ statusCode: 409, statusMessage: 'Tenant deletion servicing prevents new payment acceptance' })
-  const saved = await getStripeConnectedAccount(db, organizationId)
-  if (!saved?.stripeAccountId) throw new HTTPError({ statusCode: 409, statusMessage: 'Connect the business’s Stripe account before requiring online collection', data: handoff })
-  const account = await stripe.v2.core.accounts.retrieve(saved.stripeAccountId, { include: STRIPE_CONNECT_ACCOUNT_INCLUDE })
+  if (!billing.contract || !billing.pricing) throw new HTTPError({ statusCode: 409, statusMessage: 'Complete Payments billing setup before accepting online payments', data: handoff })
+  const saved = setup.connected!
+  const account = await stripe.v2.core.accounts.retrieve(saved.stripeAccountId!, { include: STRIPE_CONNECT_ACCOUNT_INCLUDE })
   const connected = await projectStripeConnectedAccount(db, accountProjection(saved, account))
-  if (connected.status !== 'ready' || account.livemode !== stripeLivemodeFromKey(env.STRIPE_SECRET_KEY)) throw new HTTPError({ statusCode: 409, statusMessage: 'Complete the business’s Stripe account setup before requiring online collection', data: handoff })
+  if (connected.status !== 'ready' || account.livemode !== stripeLivemodeFromKey(env.STRIPE_SECRET_KEY!)) throw new HTTPError({ statusCode: 409, statusMessage: 'Complete the business’s Stripe account setup before requiring online collection', data: handoff })
   const configurations = await stripe.paymentMethodConfigurations.list({ limit: 100 }, { stripeAccount: account.id })
   if (configurations.has_more) throw new HTTPError({ statusCode: 409, statusMessage: 'Connected checkout configuration needs bounded operator review', data: handoff })
   const matching = configurations.data.filter(configuration => configuration.parent === env.STRIPE_PAYMENTS_METHOD_CONFIGURATION || configuration.id === env.STRIPE_PAYMENTS_METHOD_CONFIGURATION)

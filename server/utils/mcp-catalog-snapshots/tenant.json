@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:f3f1aab47e0374edcea36511d46a8ba748766ff5855ef827828d42b9435ae6fd",
+  "fingerprint": "sha256:1bad737bab85f8477176c83cf7ce203ca16415e3931b7d83071d40ddb5e66706",
   "tools": [
     {
       "name": "append_content_block",
@@ -26874,7 +26874,7 @@
     },
     {
       "name": "list_location_products",
-      "description": "List product identities offered at one selected location. Results are paginated; published_only narrows to visible items. Use list_products for the whole site.",
+      "description": "List product identities offered at one selected location. Results are paginated; published_only narrows to published offerings. Use list_products for the whole site.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -26918,7 +26918,50 @@
       },
       "outputSchema": {
         "$defs": {},
+        "additionalProperties": false,
         "properties": {
+          "counts": {
+            "additionalProperties": false,
+            "properties": {
+              "by_kind": {
+                "additionalProperties": false,
+                "properties": {
+                  "dish": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "experience": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "item": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "service": {
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "dish",
+                  "experience",
+                  "service",
+                  "item"
+                ],
+                "type": "object"
+              },
+              "total": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "total",
+              "by_kind"
+            ],
+            "type": "object"
+          },
           "page_info": {
             "properties": {
               "has_more": {
@@ -26975,6 +27018,28 @@
                     "item"
                   ],
                   "type": "string"
+                },
+                "locations": {
+                  "items": {
+                    "properties": {
+                      "active": {
+                        "type": "boolean"
+                      },
+                      "location_id": {
+                        "type": "string"
+                      },
+                      "published": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "location_id",
+                      "active",
+                      "published"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
                 },
                 "name": {
                   "type": "string"
@@ -27049,6 +27114,24 @@
                 "pricing_note": {
                   "type": "string"
                 },
+                "publications": {
+                  "items": {
+                    "properties": {
+                      "organization_id": {
+                        "type": "string"
+                      },
+                      "published": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "organization_id",
+                      "published"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
                 "slug": {
                   "type": "string"
                 },
@@ -27065,14 +27148,55 @@
                 "featured",
                 "variant_count",
                 "collections",
+                "publications",
+                "locations",
                 "prices"
               ],
               "type": "object"
             },
             "type": "array"
+          },
+          "scope": {
+            "additionalProperties": false,
+            "properties": {
+              "featured": {
+                "type": "boolean"
+              },
+              "kind": {
+                "enum": [
+                  "dish",
+                  "experience",
+                  "service",
+                  "item",
+                  "all"
+                ],
+                "type": "string"
+              },
+              "location_id": {
+                "type": "string"
+              },
+              "organization_id": {
+                "type": "string"
+              },
+              "published_only": {
+                "type": "boolean"
+              },
+              "view": {
+                "const": "catalog"
+              }
+            },
+            "required": [
+              "view",
+              "organization_id",
+              "kind",
+              "published_only"
+            ],
+            "type": "object"
           }
         },
         "required": [
+          "scope",
+          "counts",
           "products",
           "page_info"
         ],
@@ -28889,7 +29013,50 @@
       },
       "outputSchema": {
         "$defs": {},
+        "additionalProperties": false,
         "properties": {
+          "counts": {
+            "additionalProperties": false,
+            "properties": {
+              "by_kind": {
+                "additionalProperties": false,
+                "properties": {
+                  "dish": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "experience": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "item": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "service": {
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "dish",
+                  "experience",
+                  "service",
+                  "item"
+                ],
+                "type": "object"
+              },
+              "total": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "total",
+              "by_kind"
+            ],
+            "type": "object"
+          },
           "page_info": {
             "properties": {
               "has_more": {
@@ -28946,6 +29113,28 @@
                     "item"
                   ],
                   "type": "string"
+                },
+                "locations": {
+                  "items": {
+                    "properties": {
+                      "active": {
+                        "type": "boolean"
+                      },
+                      "location_id": {
+                        "type": "string"
+                      },
+                      "published": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "location_id",
+                      "active",
+                      "published"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
                 },
                 "name": {
                   "type": "string"
@@ -29020,6 +29209,24 @@
                 "pricing_note": {
                   "type": "string"
                 },
+                "publications": {
+                  "items": {
+                    "properties": {
+                      "organization_id": {
+                        "type": "string"
+                      },
+                      "published": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "organization_id",
+                      "published"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
                 "slug": {
                   "type": "string"
                 },
@@ -29036,14 +29243,55 @@
                 "featured",
                 "variant_count",
                 "collections",
+                "publications",
+                "locations",
                 "prices"
               ],
               "type": "object"
             },
             "type": "array"
+          },
+          "scope": {
+            "additionalProperties": false,
+            "properties": {
+              "featured": {
+                "type": "boolean"
+              },
+              "kind": {
+                "enum": [
+                  "dish",
+                  "experience",
+                  "service",
+                  "item",
+                  "all"
+                ],
+                "type": "string"
+              },
+              "location_id": {
+                "type": "string"
+              },
+              "organization_id": {
+                "type": "string"
+              },
+              "published_only": {
+                "type": "boolean"
+              },
+              "view": {
+                "const": "catalog"
+              }
+            },
+            "required": [
+              "view",
+              "organization_id",
+              "kind",
+              "published_only"
+            ],
+            "type": "object"
           }
         },
         "required": [
+          "scope",
+          "counts",
           "products",
           "page_info"
         ],
@@ -42228,6 +42476,28 @@
                   ],
                   "type": "string"
                 },
+                "locations": {
+                  "items": {
+                    "properties": {
+                      "active": {
+                        "type": "boolean"
+                      },
+                      "location_id": {
+                        "type": "string"
+                      },
+                      "published": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "location_id",
+                      "active",
+                      "published"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
                 "name": {
                   "type": "string"
                 },
@@ -42301,6 +42571,24 @@
                 "pricing_note": {
                   "type": "string"
                 },
+                "publications": {
+                  "items": {
+                    "properties": {
+                      "organization_id": {
+                        "type": "string"
+                      },
+                      "published": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "organization_id",
+                      "published"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
                 "slug": {
                   "type": "string"
                 },
@@ -42317,6 +42605,8 @@
                 "featured",
                 "variant_count",
                 "collections",
+                "publications",
+                "locations",
                 "prices"
               ],
               "type": "object"

@@ -11,6 +11,7 @@ import { creationDedupeKey, creationRequestHash, isUniqueDedupeConflict, organiz
 import { assertTenantPagePathAvailable, isProductPageConflict, prepareTenantPageCreate, prepareTenantPageDelete, refreshTenantPageCard, type TenantPageEditorInput } from '~/server/utils/content/pages'
 import { loadOrganizationTemplate } from '~/server/utils/content/publishing'
 import type { CloudflareEnv } from '~/server/utils/auth'
+import { readStripeCheckoutSetup } from '~/server/utils/stripe-connect'
 import { isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
 import {
   assertNoConflictingPrices,
@@ -23,7 +24,7 @@ import {
   type PriceInput,
   type PriceSelection,
 } from '~/shared/prices'
-import { assertProductKind, validateProductDetails, ProductDetailError, PRICING_NOTE_HANDLE, type ProductDetailValue, type ProductKind } from '~/shared/product-details'
+import { assertProductKind, validateProductDetails, ProductDetailError, PRICING_NOTE_HANDLE, PRODUCT_KINDS, type ProductDetailValue, type ProductKind } from '~/shared/product-details'
 import type { CatalogCounts } from '~/utils/product-presentation'
 import type {
   Collection,
@@ -329,32 +330,51 @@ export async function listProducts(db: DbClient, organizationId: string): Promis
  * catalog renders an empty state that says so.
  */
 /** Public experiences use the same readiness check as publication, including sold-out sessions. */
-async function publicProductWindow(db: DbClient, organizationId: string, products: Product[], window?: { limit: number; offset: number }): Promise<Product[]> {
-  const visible = await Promise.all(products.map(async product => product.kind !== 'experience'
-    || (await productBookingReadiness(db, organizationId, product)).ready))
+async function publicProductWindow(db: DbClient, organizationId: string, products: Product[], window?: { limit: number; offset: number }, env?: CloudflareEnv, sharedPaymentSetup?: () => ReturnType<typeof readStripeCheckoutSetup>): Promise<Product[]> {
+  let setup: ReturnType<typeof readStripeCheckoutSetup> | undefined
+  const paymentSetup = sharedPaymentSetup ?? (() => setup ??= readStripeCheckoutSetup(db, organizationId, env))
+  const visible = await Promise.all(products.map(async product => (product.kind !== 'experience' && !product.booking)
+    || (await productBookingReadiness(db, organizationId, product, { env, paymentSetup })).ready))
   const published = products.filter((_, index) => visible[index])
   return window ? published.slice(window.offset, window.offset + window.limit + 1) : published
 }
 
-/** Editable catalogue pages read one extra row. Public experience readiness precedes pagination. */
-export async function listOrganizationProducts(db: DbClient, input: {
-  organizationId: string; kind?: ProductKind; featured?: boolean; publishedOnly?: boolean; assignedUserId?: string; window?: { limit: number; offset: number }
-}): Promise<Product[]> {
-  const requireReadiness = input.publishedOnly === true && (!input.kind || input.kind === 'experience')
+interface ProductListInput {
+  organizationId: string; kind?: ProductKind; featured?: boolean; publishedOnly?: boolean; assignedUserId?: string; window?: { limit: number; offset: number }; env?: CloudflareEnv; paymentSetup?: () => ReturnType<typeof readStripeCheckoutSetup>
+}
+
+export interface ProductListResult {
+  products: Product[]
+  counts: { total: number; by_kind: Record<ProductKind, number> }
+}
+
+function productListCounts(rows: readonly { kind: ProductKind; count?: number }[]): ProductListResult['counts'] {
+  const by_kind = Object.fromEntries(PRODUCT_KINDS.map(kind => [kind, 0])) as Record<ProductKind, number>
+  for (const row of rows) by_kind[row.kind] += Number(row.count ?? 1)
+  return { total: Object.values(by_kind).reduce((total, count) => total + count, 0), by_kind }
+}
+
+/** Editable catalogue pages read one extra row. Public readiness and counts precede pagination. */
+export function listOrganizationProducts(db: DbClient, input: ProductListInput & { withCounts: true }): Promise<ProductListResult>
+export function listOrganizationProducts(db: DbClient, input: ProductListInput & { withCounts?: false }): Promise<Product[]>
+export async function listOrganizationProducts(db: DbClient, input: ProductListInput & { withCounts?: boolean }): Promise<Product[] | ProductListResult> {
+  const requireReadiness = input.publishedOnly === true && (!input.kind || input.kind === 'experience' || input.kind === 'service')
   const window = requireReadiness ? undefined : input.window
-  const rows = await queryAll<Row>(db, `
-    SELECT ${PRODUCT_COLUMNS} FROM products p
+  const selection = `FROM products p
     JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
-    WHERE p.organization_id = ? AND (? = 0 OR (${PUBLIC_PRODUCT_SQL}))${input.kind ? ' AND p.kind = ?' : ''}${input.featured === undefined ? '' : " AND COALESCE(json_extract(p.details_json, '$.featured'), 0) = ?"}${input.assignedUserId ? ` AND (${ASSIGNED_SERVICE_SQL})` : ''}
-    ORDER BY p.name, p.id
-    ${window ? 'LIMIT ? OFFSET ?' : ''}
-  `, [input.organizationId, input.publishedOnly ? 1 : 0,
+    WHERE p.organization_id = ? AND (? = 0 OR (${PUBLIC_PRODUCT_SQL}))${input.kind ? ' AND p.kind = ?' : ''}${input.featured === undefined ? '' : " AND COALESCE(json_extract(p.details_json, '$.featured'), 0) = ?"}${input.assignedUserId ? ` AND (${ASSIGNED_SERVICE_SQL})` : ''}`
+  const params = [input.organizationId, input.publishedOnly ? 1 : 0,
     ...(input.kind ? [input.kind] : []),
     ...(input.featured === undefined ? [] : [Number(input.featured)]),
-    ...(input.assignedUserId ? [input.assignedUserId, input.assignedUserId] : []),
-    ...(window ? [window.limit + 1, window.offset] : [])])
+    ...(input.assignedUserId ? [input.assignedUserId, input.assignedUserId] : [])]
+  const [rows, counts] = await Promise.all([
+    queryAll<Row>(db, `SELECT ${PRODUCT_COLUMNS} ${selection} ORDER BY p.name, p.id ${window ? 'LIMIT ? OFFSET ?' : ''}`, [...params, ...(window ? [window.limit + 1, window.offset] : [])]),
+    input.withCounts && window ? queryAll<{ kind: ProductKind; count: number }>(db, `SELECT p.kind, count(*) AS count ${selection} GROUP BY p.kind`, params) : undefined,
+  ])
   const products = await hydrate(db, input.organizationId, rows.map(mapProductRow))
-  return requireReadiness ? publicProductWindow(db, input.organizationId, products, input.window) : products
+  if (!input.withCounts) return requireReadiness ? publicProductWindow(db, input.organizationId, products, input.window, input.env, input.paymentSetup) : products
+  const matching = requireReadiness ? await publicProductWindow(db, input.organizationId, products, undefined, input.env, input.paymentSetup) : products
+  return { products: requireReadiness && input.window ? matching.slice(input.window.offset, input.window.offset + input.window.limit + 1) : matching, counts: productListCounts(counts ?? matching) }
 }
 
 /**
@@ -365,27 +385,29 @@ export async function listOrganizationProducts(db: DbClient, input: {
  * location when both the organization and location publish it. Pausing an
  * offering disables ordering or booking while its information stays visible.
  */
-export async function listLocationProducts(db: DbClient, input: {
-  organizationId: string; locationId: string; kind?: ProductKind; featured?: boolean; publishedOnly?: boolean; assignedUserId?: string; window?: { limit: number; offset: number }
-}): Promise<Product[]> {
+export function listLocationProducts(db: DbClient, input: ProductListInput & { locationId: string; withCounts: true }): Promise<ProductListResult>
+export function listLocationProducts(db: DbClient, input: ProductListInput & { locationId: string; withCounts?: false }): Promise<Product[]>
+export async function listLocationProducts(db: DbClient, input: ProductListInput & { locationId: string; withCounts?: boolean }): Promise<Product[] | ProductListResult> {
   const published = input.publishedOnly === true
-  const requireReadiness = published && (!input.kind || input.kind === 'experience')
+  const requireReadiness = published && (!input.kind || input.kind === 'experience' || input.kind === 'service')
   const window = requireReadiness ? undefined : input.window
-  const rows = await queryAll<Row>(db, `
-    SELECT ${PRODUCT_COLUMNS} FROM products p
+  const selection = `FROM products p
     JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id
     ${published ? `JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
       AND (${PUBLIC_PRODUCT_SQL})` : ''}
-    WHERE p.organization_id = ? AND pl.location_id = ?${published ? ' AND pl.published = 1' : ''}${input.kind ? ' AND p.kind = ?' : ''}${input.featured === undefined ? '' : " AND COALESCE(json_extract(p.details_json, '$.featured'), 0) = ?"}${input.assignedUserId ? ` AND (${ASSIGNED_SERVICE_SQL})` : ''}
-    ORDER BY p.name, p.id
-    ${window ? 'LIMIT ? OFFSET ?' : ''}
-  `, [input.organizationId, input.locationId,
+    WHERE p.organization_id = ? AND pl.location_id = ?${published ? ' AND pl.published = 1' : ''}${input.kind ? ' AND p.kind = ?' : ''}${input.featured === undefined ? '' : " AND COALESCE(json_extract(p.details_json, '$.featured'), 0) = ?"}${input.assignedUserId ? ` AND (${ASSIGNED_SERVICE_SQL})` : ''}`
+  const params = [input.organizationId, input.locationId,
     ...(input.kind ? [input.kind] : []),
     ...(input.featured === undefined ? [] : [Number(input.featured)]),
-    ...(input.assignedUserId ? [input.assignedUserId, input.assignedUserId] : []),
-    ...(window ? [window.limit + 1, window.offset] : [])])
+    ...(input.assignedUserId ? [input.assignedUserId, input.assignedUserId] : [])]
+  const [rows, counts] = await Promise.all([
+    queryAll<Row>(db, `SELECT ${PRODUCT_COLUMNS} ${selection} ORDER BY p.name, p.id ${window ? 'LIMIT ? OFFSET ?' : ''}`, [...params, ...(window ? [window.limit + 1, window.offset] : [])]),
+    input.withCounts && window ? queryAll<{ kind: ProductKind; count: number }>(db, `SELECT p.kind, count(*) AS count ${selection} GROUP BY p.kind`, params) : undefined,
+  ])
   const products = await hydrate(db, input.organizationId, rows.map(mapProductRow))
-  return requireReadiness ? publicProductWindow(db, input.organizationId, products, input.window) : products
+  if (!input.withCounts) return requireReadiness ? publicProductWindow(db, input.organizationId, products, input.window, input.env, input.paymentSetup) : products
+  const matching = requireReadiness ? await publicProductWindow(db, input.organizationId, products, undefined, input.env, input.paymentSetup) : products
+  return { products: requireReadiness && input.window ? matching.slice(input.window.offset, input.window.offset + input.window.limit + 1) : matching, counts: productListCounts(counts ?? matching) }
 }
 
 /** Count the location’s products by their explicit type without hydrating the catalog. */
@@ -1499,7 +1521,7 @@ async function productCacheInvalidations(db: DbClient, organizationId: string, p
  * is per-location visibility. A withheld product is not sold out and a
  * disabled product is not unpublished.
  */
-export async function productBookingReadiness(db: DbClient, organizationId: string, product: Product, options: { requireAllocation?: boolean } = {}): Promise<{ ready: boolean; missing: string[]; allocation?: BatchQuery }> {
+export async function productBookingReadiness(db: DbClient, organizationId: string, product: Product, options: { requireAllocation?: boolean; env?: CloudflareEnv; paymentSetup?: () => ReturnType<typeof readStripeCheckoutSetup> } = {}): Promise<{ ready: boolean; missing: string[]; allocation?: BatchQuery }> {
   const missing: string[] = []
   if (options.requireAllocation && !product.active) missing.push('active')
   if (product.order_url) return { ready: missing.length === 0, missing }
@@ -1520,7 +1542,12 @@ export async function productBookingReadiness(db: DbClient, organizationId: stri
     ...(product.booking?.online_timezone ? [null] : []),
   ])]
   const variants = product.variants.filter(variant => variant.active)
-  if (!currency || !variants.length || !scopes.length || !scopes.every(locationId => variants.every(variant => selectPrice(variant.prices, { currency, location_id: locationId })?.type === 'one_time'))) missing.push('variants.prices')
+  const prices = currency ? scopes.flatMap(locationId => variants.map(variant => selectPrice(variant.prices, { currency, location_id: locationId }))) : []
+  if (!currency || !variants.length || !scopes.length || prices.some(price => price?.type !== 'one_time')) missing.push('variants.prices')
+  if (product.booking?.online_payment_required && prices.some(price => price && price.unit_amount > 0)) {
+    const setup = await (options.paymentSetup ? options.paymentSetup() : readStripeCheckoutSetup(db, organizationId, options.env))
+    missing.push(...setup.missing)
+  }
   if (!options.requireAllocation) {
     if (!candidate) missing.push('booking.schedule')
     return { ready: missing.length === 0, missing }
@@ -1528,11 +1555,11 @@ export async function productBookingReadiness(db: DbClient, organizationId: stri
   const allocation = candidate ? await sessionAllocationPredicate(db, { organizationId, productId: product.id, sessionId: candidate.id, partySize: 0, now: new Date().toISOString() }) : undefined
   if (allocation) {
     allocation.query = `(${allocation.query}) AND EXISTS (SELECT 1 FROM organization WHERE id=? AND default_currency=?)
-      AND EXISTS (SELECT 1 FROM product_booking_configs WHERE organization_id=? AND product_id=? AND online_timezone IS ?)
+      AND EXISTS (SELECT 1 FROM product_booking_configs WHERE organization_id=? AND product_id=? AND online_timezone IS ? AND online_payment_required=?)
       AND (SELECT COUNT(*) FROM product_locations WHERE organization_id=? AND product_id=?)=?
       AND NOT EXISTS (SELECT 1 FROM product_locations pl WHERE pl.organization_id=? AND pl.product_id=? AND NOT EXISTS (
         SELECT 1 FROM json_each(?) expected WHERE json_extract(expected.value,'$.location_id')=pl.location_id AND json_extract(expected.value,'$.active')=pl.active AND json_extract(expected.value,'$.published')=pl.published))`
-    allocation.params = [...allocation.params!, organizationId, currency, organizationId, product.id, product.booking?.online_timezone ?? null,
+    allocation.params = [...allocation.params!, organizationId, currency, organizationId, product.id, product.booking?.online_timezone ?? null, product.booking?.online_payment_required ? 1 : 0,
       organizationId, product.id, product.locations.length, organizationId, product.id, JSON.stringify(product.locations)]
   }
   if (!allocation || !(await queryFirst<{ ready: number }>(db, `SELECT (${allocation.query}) AS ready`, allocation.params))?.ready) missing.push('booking.schedule')
@@ -1540,15 +1567,15 @@ export async function productBookingReadiness(db: DbClient, organizationId: stri
 }
 
 export async function setProductPublication(db: DbClient, input: {
-  organizationId: string; productId: string; published: boolean; actor: Actor
+  organizationId: string; productId: string; published: boolean; actor: Actor; env?: CloudflareEnv
 }): Promise<void> {
   const product = await requireOrganizationProduct(db, input)
   let readiness: Awaited<ReturnType<typeof productBookingReadiness>> | undefined
   let alreadyPublished = false
-  if (input.published && product.kind === 'experience') {
+  if (input.published && (product.kind === 'experience' || product.booking)) {
     alreadyPublished = product.publications.some(publication => publication.organization_id === input.organizationId && publication.published)
-    readiness = await productBookingReadiness(db, input.organizationId, product, { requireAllocation: !alreadyPublished })
-    if (!readiness.ready) throw new HTTPError({ statusCode: 409, statusMessage: 'This experience needs booking details before it can be published', data: { code: 'EXPERIENCE_BOOKING_INCOMPLETE', product_id: product.id, missing: readiness.missing } })
+    readiness = await productBookingReadiness(db, input.organizationId, product, { requireAllocation: !alreadyPublished, env: input.env })
+    if (!readiness.ready) throw new HTTPError({ statusCode: 409, statusMessage: 'This offering needs booking and payment setup before it can be published', data: { code: 'EXPERIENCE_BOOKING_INCOMPLETE', product_id: product.id, missing: readiness.missing } })
   }
   const now = new Date().toISOString()
   await executeBatch(db, [{

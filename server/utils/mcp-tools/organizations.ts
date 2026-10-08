@@ -13,10 +13,11 @@ import { loadSettingsPayload, updateOrganizationSettingsFields } from '~/server/
 import { ORGANIZATION_FONT_OPTIONS, ORGANIZATION_FONT_PRESETS } from '~/shared/organization-fonts'
 import { SITE_PALETTE_ROLES, STARTER_PALETTES, paletteContrast, type SitePalette, type SitePalettePatch } from '~/shared/site-palette'
 import { resolveColor } from '~/utils/color-utils'
-import { createAuth } from '~/server/utils/auth'
-import { requireMcpProviderSession } from '~/server/utils/mcp-auth'
+import { requireMcpOrganizationApi } from '~/server/utils/mcp-auth'
 import { organizationRoles } from '~/utils/organization-access'
 import { getOrganizationTeamsData, getInvitationDeliveries } from '~/server/utils/dashboard-members'
+import { assertRoleAllows, organizationAdapter } from '~/server/utils/member-access'
+import { betterAuthTimestampToIso } from '~/server/utils/better-auth-timestamps'
 
 const PALETTE_COLORS_SCHEMA = {
   type: 'object',
@@ -296,19 +297,18 @@ export async function handleOrganizationsTools(ctx: McpExecutorContext): Promise
     case 'update_team':
     case 'set_team_member':
     case 'delete_team': {
-      const headers = await requireMcpProviderSession(ctx.event, organization)
-      const auth = createAuth(organization.env)
+      const { api, headers } = await requireMcpOrganizationApi(ctx.event, organization)
       const organizationId = organization.organizationId
       let teamId: string
-      if (toolName === 'create_team') teamId = (await auth.api.createTeam({ headers, body: { organizationId, name: requiredString(args, 'name') } })).id
+      if (toolName === 'create_team') teamId = (await api.createTeam({ headers, body: { organizationId, name: requiredString(args, 'name') } })).id
       else {
         teamId = requiredString(args, 'team_id')
-        if (toolName === 'update_team') await auth.api.updateTeam({ headers, body: { teamId, data: { organizationId, name: requiredString(args, 'name') } } })
-        else if (toolName === 'delete_team') await auth.api.removeTeam({ headers, body: { teamId, organizationId } })
+        if (toolName === 'update_team') await api.updateTeam({ headers, body: { teamId, data: { organizationId, name: requiredString(args, 'name') } } })
+        else if (toolName === 'delete_team') await api.removeTeam({ headers, body: { teamId, organizationId } })
         else {
           const body = { teamId, organizationId, userId: requiredString(args, 'user_id') }
-          if (args.included === true) await auth.api.addTeamMember({ headers, body })
-          else await auth.api.removeTeamMember({ headers, body })
+          if (args.included === true) await api.addTeamMember({ headers, body })
+          else await api.removeTeamMember({ headers, body })
         }
       }
       const team = (await getOrganizationTeamsData(organization.env, organizationId)).find(team => team.id === teamId)
@@ -320,41 +320,40 @@ export async function handleOrganizationsTools(ctx: McpExecutorContext): Promise
       return { team }
     }
     case 'list_organization_members': {
-      const headers = await requireMcpProviderSession(ctx.event, organization)
-      const auth = createAuth(organization.env)
+      await assertRoleAllows({ ...organization.membership, permissions: { members: ['read'], invitations: ['read'] } })
+      const adapter = await organizationAdapter(organization.env)
       const [result, invitations] = await Promise.all([
-        auth.api.listMembers({ headers, query: { organizationId: organization.organizationId, limit: args.limit as number | undefined, offset: args.offset as number | undefined } }),
-        auth.api.listInvitations({ headers, query: { organizationId: organization.organizationId } }),
+        adapter.listMembers({ organizationId: organization.organizationId, limit: args.limit as number | undefined, offset: args.offset as number | undefined }),
+        adapter.listInvitations({ organizationId: organization.organizationId }),
       ])
-      const facts = invitations.map(invitation => ({ ...invitation, createdAt: invitation.createdAt.toISOString(), expiresAt: invitation.expiresAt.toISOString() }))
+      const facts = invitations.map(invitation => ({ ...invitation, createdAt: betterAuthTimestampToIso(invitation.createdAt, 'invitation.createdAt'), expiresAt: betterAuthTimestampToIso(invitation.expiresAt, 'invitation.expiresAt') }))
       const deliveries = await getInvitationDeliveries(organization.db, organization.organizationId, facts)
-      return { ...result, members: result.members.map(member => ({ ...member, createdAt: member.createdAt.toISOString() })), invitations: facts.map(invitation => ({...invitation,delivery:deliveries.get(invitation.id) ?? null})) }
+      return { ...result, members: result.members.map(member => ({ ...member, createdAt: betterAuthTimestampToIso(member.createdAt, 'member.createdAt'), user: { ...member.user, image: member.user.image ?? null } })), invitations: facts.map(invitation => ({...invitation,delivery:deliveries.get(invitation.id) ?? null})) }
     }
     case 'invite_organization_member': {
-      const headers = await requireMcpProviderSession(ctx.event, organization)
-      const invitation = await createAuth(organization.env).api.createInvitation({ headers, body: { organizationId: organization.organizationId, email: requiredString(args, 'email'), role: requiredString(args, 'role') as keyof typeof organizationRoles, resend: args.resend === true } })
+      const { api, headers } = await requireMcpOrganizationApi(ctx.event, organization)
+      const invitation = await api.createInvitation({ headers, body: { organizationId: organization.organizationId, email: requiredString(args, 'email'), role: requiredString(args, 'role') as keyof typeof organizationRoles, resend: args.resend === true } })
       const fact = { ...invitation, createdAt: invitation.createdAt.toISOString(), expiresAt: invitation.expiresAt.toISOString() }
       const delivery = (await getInvitationDeliveries(organization.db, organization.organizationId, [fact])).get(invitation.id) ?? null
       if (!delivery || ['failed','pending'].includes(delivery.status)) throw new HTTPError({statusCode:502,statusMessage:delivery?.error ?? 'Invitation was saved, but its email delivery is unconfirmed',data:{invitation:{...fact,delivery}}})
       return { invitation: {...fact,delivery} }
     }
     case 'update_organization_member_role': {
-      const headers = await requireMcpProviderSession(ctx.event, organization)
-      const member = await createAuth(organization.env).api.updateMemberRole({ headers, body: { organizationId: organization.organizationId, memberId: requiredString(args, 'member_id'), role: requiredString(args, 'role') } })
+      const { api, headers } = await requireMcpOrganizationApi(ctx.event, organization)
+      const member = await api.updateMemberRole({ headers, body: { organizationId: organization.organizationId, memberId: requiredString(args, 'member_id'), role: requiredString(args, 'role') } })
       return { member: { ...member, createdAt: member.createdAt.toISOString() } }
     }
     case 'remove_organization_member': {
-      const headers = await requireMcpProviderSession(ctx.event, organization)
-      const result = await createAuth(organization.env).api.removeMember({ headers, body: { organizationId: organization.organizationId, memberIdOrEmail: requiredString(args, 'member_id') } })
+      const { api, headers } = await requireMcpOrganizationApi(ctx.event, organization)
+      const result = await api.removeMember({ headers, body: { organizationId: organization.organizationId, memberIdOrEmail: requiredString(args, 'member_id') } })
       return { member: { ...result.member, createdAt: result.member.createdAt.toISOString() } }
     }
     case 'cancel_organization_invitation': {
-      const headers = await requireMcpProviderSession(ctx.event, organization)
-      const auth = createAuth(organization.env)
+      const { api, headers } = await requireMcpOrganizationApi(ctx.event, organization)
       const invitationId = requiredString(args, 'invitation_id')
-      const invitations = await auth.api.listInvitations({ headers, query: { organizationId: organization.organizationId } })
+      const invitations = await api.listInvitations({ headers, query: { organizationId: organization.organizationId } })
       if (!invitations.some(invitation => invitation.id === invitationId)) throw new HTTPError({ statusCode: 404, statusMessage: 'Invitation not found in this business' })
-      const invitation = await auth.api.cancelInvitation({ headers, body: { invitationId } })
+      const invitation = await api.cancelInvitation({ headers, body: { invitationId } })
       if (!invitation) throw new Error('Better Auth did not return the cancelled invitation')
       const fact = { ...invitation, createdAt: invitation.createdAt.toISOString(), expiresAt: invitation.expiresAt.toISOString() }
       return { invitation: {...fact,delivery:(await getInvitationDeliveries(organization.db, organization.organizationId, [fact])).get(invitation.id) ?? null} }

@@ -2,6 +2,7 @@ import { HTTPError } from 'nitro';
 import type { H3Event } from 'nitro';
 import { } from 'nitro/h3';
 import { verifyJwsAccessToken } from 'better-auth/oauth2'
+import { getEndpoints } from 'better-auth/api'
 import type { JSONWebKeySet, JWTPayload } from 'jose'
 import { createAuth, getAuthSession, type CloudflareEnv } from '~/server/utils/auth'
 import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
@@ -39,6 +40,7 @@ export interface McpUserContext {
   scopes: string[]
   oauthClientId?: string | null
   sessionId?: string | null
+  oauthClaims?: Pick<JWTPayload, 'jti' | 'iat' | 'exp'>
   // Only populated for session-based auth (ChowBot/dashboard) — bearer-token
   // auth (e.g. ChatGPT connector) has no browser session to read this from.
   activeOrganizationId?: string
@@ -224,23 +226,37 @@ async function verifyBearerToken(
     userId,
     oauthClientId,
     sessionId: typeof payload.sid === 'string' ? payload.sid : null,
+    oauthClaims: { jti: payload.jti, iat: payload.iat, exp: payload.exp },
     isPlatformAdmin,
     scopes,
   }
 }
 
-/** Organization administration uses the issuing Better Auth session and native organization API. */
-export async function requireMcpProviderSession(event: H3Event | undefined, user: McpUserContext): Promise<Headers> {
+/** Native organization endpoints receive the already-authenticated MCP principal. */
+export async function requireMcpOrganizationApi(event: H3Event | undefined, user: McpOrganizationContext) {
   const auth = createAuth(user.env)
-  if (event && !event.req.headers.get('authorization')) return new Headers(event.req.headers)
-  if (!user.sessionId) throw new HTTPError({ statusCode: 401, statusMessage: 'Reconnect this account to manage organization members', data: { code: 'authentication_required' } })
+  if (!event) throw new HTTPError({ statusCode: 500, statusMessage: 'Authenticated MCP request is required' })
+  const headers = new Headers(event.req.headers)
+  const authorization = headers.get('authorization')
+  if (!authorization) return { api: auth.api, headers }
+  const claims = user.oauthClaims
+  if (!authorization.startsWith('Bearer ') || !claims || typeof claims.jti !== 'string' || !claims.jti
+    || typeof claims.iat !== 'number' || !Number.isFinite(claims.iat) || typeof claims.exp !== 'number' || !Number.isFinite(claims.exp)) {
+    throw new HTTPError({ statusCode: 401, statusMessage: 'The verified OAuth identity is incomplete', data: { code: 'authentication_required' } })
+  }
   const context = await auth.$context
-  const issuingSession = await context.adapter.findOne<{ id: string; token: string; userId: string }>({ model: 'session', where: [{ field: 'id', value: user.sessionId }] })
-  if (!issuingSession || issuingSession.userId !== user.userId) throw new HTTPError({ statusCode: 401, statusMessage: 'Reconnect this account to manage organization members', data: { code: 'authentication_required' } })
-  const headers = new Headers({ authorization: `Bearer ${issuingSession.token}` })
-  const session = await auth.api.getSession({ headers, query: { disableCookieCache: true } })
-  if (!session || session.user.id !== user.userId) throw new HTTPError({ statusCode: 401, statusMessage: 'Reconnect this account to manage organization members', data: { code: 'authentication_required' } })
-  return headers
+  const currentUser = await context.internalAdapter.findUserById(user.userId)
+  if (!currentUser) throw new HTTPError({ statusCode: 401, statusMessage: 'The authenticated user was not found', data: { code: 'authentication_required' } })
+  // This per-call view uses the existing access token's identity and lifetime.
+  // It carries no active browser workspace and creates no stored session.
+  const api = getEndpoints(Promise.resolve({ ...context, session: {
+    user: currentUser,
+    session: { id: claims.jti, token: authorization.slice(7), userId: user.userId,
+      createdAt: new Date(claims.iat * 1000), updatedAt: new Date(claims.iat * 1000), expiresAt: new Date(claims.exp * 1000) },
+  } }), auth.options).api
+  headers.delete('authorization')
+  headers.delete('cookie')
+  return { api, headers }
 }
 
 async function getAuthJwks(event: H3Event, env: CloudflareEnv): Promise<JSONWebKeySet | undefined> {

@@ -466,7 +466,7 @@ async function loadPublicPageSource(
     : [];
   options.signal?.throwIfAborted();
 
-  const sourceShell = await buildPublicShellPayload(db, organization, batchResults, shellIndexes)
+  const sourceShell = await buildPublicShellPayload(db, organization, batchResults, shellIndexes, env)
   sourceShell.platformMessages = language.platform_messages
   const shell = (() => {
     if (!localizedLocale) return sourceShell
@@ -582,7 +582,7 @@ async function loadPublicPageSource(
     // reassemble variants, prices and collections from its own SQL — the
     // catalog has one reader and a projection that disagreed with it is
     // exactly the drift this replaces.
-    const canonical = await listOrganizationProducts(db, { organizationId: orgId, kind: page === 'experiences' ? 'experience' : page === 'menu' ? 'dish' : undefined, publishedOnly: true })
+    const canonical = await listOrganizationProducts(db, { organizationId: orgId, kind: page === 'experiences' ? 'experience' : page === 'menu' ? 'dish' : undefined, publishedOnly: true, env })
     products = canonical.filter(product => product.locations.some(location => location.published
       && activeLocationIds.has(location.location_id) && (!locationSlug || location.location_id === locationId))
       || (!locationSlug && Boolean(product.order_url || product.booking?.online_timezone))).map((product) => {

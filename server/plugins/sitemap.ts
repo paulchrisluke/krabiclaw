@@ -152,7 +152,7 @@ export default definePlugin((nitroApp) => {
 
     const template = resolvePublicTemplate({ themeId: organization.theme_id, vertical: organization.vertical })
     const productPresentation = resolveProductPresentation(organization.vertical)
-    const publicProductIds = JSON.stringify((await listOrganizationProducts(db, { organizationId, publishedOnly: true })).map(product => product.id))
+    const publicProductIds = JSON.stringify((await listOrganizationProducts(db, { organizationId, publishedOnly: true, env })).map(product => product.id))
 
     const localizedLocales = await queryAll<{ locale: string; organization_id: string }>(db, `
       SELECT l.locale, l.organization_id

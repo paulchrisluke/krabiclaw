@@ -21,7 +21,7 @@ export default defineHandler(async (event) => {
     const locale = getQuery(event).locale === undefined ? undefined : assertExactCanonicalLocale(getQuery(event).locale)
     const previewAuthorized = await resolvePreviewAuthorization(event, organizationId, previewSecretOf(env))
     if (getQuery(event).online === 'true') {
-      const result = await listPublicOnlineProducts(db, organizationId, previewAuthorized)
+      const result = await listPublicOnlineProducts(db, organizationId, previewAuthorized, env)
       if (locale && locale !== await getSourceLocale(db, organizationId)) {
         const localizations = await loadExactPublicLocalizations(env, db, organizationId, locale)
         result.products = projectExactLocalizedCollection('product', result.products, localizations)

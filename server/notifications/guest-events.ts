@@ -230,6 +230,7 @@ export function guestThreadReplyMessage(input: {
 }
 
 export function guestThreadStatusMessage(input: {
+  locale?: string
   organizationName: string
   organizationLogoUrl: string | null
   heading: string
@@ -238,6 +239,7 @@ export function guestThreadStatusMessage(input: {
   actionLabel?: string | null
 }): NotificationMessage {
   return {
+    locale: input.locale,
     title: input.heading,
     preheader: input.body.slice(0, 120),
     hero: null,
@@ -251,6 +253,7 @@ export function guestThreadStatusMessage(input: {
 }
 
 export function bookingChangeProposalMessage(input: {
+  locale?: string
   guestName: string
   organizationName: string
   organizationLogoUrl: string | null
@@ -261,6 +264,7 @@ export function bookingChangeProposalMessage(input: {
   actionLabel?: string | null
 }): NotificationMessage {
   return {
+    locale: input.locale,
     title: input.heading,
     preheader: input.intro.slice(0, 120),
     hero: null,

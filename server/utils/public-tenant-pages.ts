@@ -126,10 +126,10 @@ export async function listPublicTenantPageReferenceRows(
  * The grid stores references only, so names and descriptions come from the
  * product every time it renders and cannot go stale.
  */
-async function loadTenantPageProductCatalog(db: DbClient, organizationId: string, locale?: string, localizations: readonly ExactPublicLocalization[] | null = null) {
+async function loadTenantPageProductCatalog(db: DbClient, organizationId: string, locale?: string, localizations: readonly ExactPublicLocalization[] | null = null, env?: CloudflareEnv) {
   locale ??= await getSourceLocale(db, organizationId)
   const [products, collections, locations, pageRepresentations] = await Promise.all([
-    listOrganizationProducts(db, { organizationId, publishedOnly: true }),
+    listOrganizationProducts(db, { organizationId, publishedOnly: true, env }),
     listCollections(db, { organizationId }),
     queryAll<{ id: string; slug: string }>(db, "SELECT id,slug FROM business_locations WHERE organization_id=? AND status='active'", [organizationId]),
     localizations ? queryAll<{ product_id: string; path: string }>(db, `SELECT root.product_id, rep.path
@@ -149,11 +149,12 @@ export async function listPublicTenantPageProductRows(
   selection: { collectionId?: string | null; productIds?: readonly string[] },
   currency: string,
   catalog?: Awaited<ReturnType<typeof loadTenantPageProductCatalog>>,
+  env?: CloudflareEnv,
 ): Promise<PublicTenantPageProductRow[]> {
   const productIds = new Set(selection.productIds ?? [])
   if (!selection.collectionId && !productIds.size) return []
   if (!isCurrencyCode(currency)) throw new Error('The public catalog requires a supported currency')
-  const source = catalog ?? await loadTenantPageProductCatalog(db, organizationId)
+  const source = catalog ?? await loadTenantPageProductCatalog(db, organizationId, undefined, null, env)
   const collection = selection.collectionId ? source.collections.find(item => item.id === selection.collectionId) : null
   if (selection.collectionId && !collection) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page collection reference is unavailable' })
   const locations = new Map(source.locations.map(location => [location.id, location]))
@@ -249,7 +250,7 @@ async function hydrateBlocks(
   const currency = organizationRow.default_currency
   const homepage = pagePath === '/' && template.slug !== 'platform'
   const homepageMenu = homepage && template.slug === 'saya'
-  const productCatalog = collectionIds.size || productIds.size || homepage ? await loadTenantPageProductCatalog(db, organizationId, locale, localizations) : undefined
+  const productCatalog = collectionIds.size || productIds.size || homepage ? await loadTenantPageProductCatalog(db, organizationId, locale, localizations, env) : undefined
   const homepageDishes = homepageMenu ? productCatalog!.products.filter(product => product.kind === 'dish') : []
   const defaultMenuGrid = homepageMenu && blocks.some(block => block.type === 'product_grid'
     && !(Array.isArray(block.data.product_ids) && block.data.product_ids.length) && !block.data.collection_id)

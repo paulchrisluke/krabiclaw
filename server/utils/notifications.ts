@@ -194,7 +194,7 @@ function organizationName(opts: OrganizationContext): string {
   return value
 }
 
-async function guestPresentation(db: DbClient, opts: OrganizationContext & {
+export async function guestPresentation(db: DbClient, opts: OrganizationContext & {
   productId?: string | null
   productTitle?: string | null
   locationId?: string | null

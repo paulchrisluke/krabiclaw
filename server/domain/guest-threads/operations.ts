@@ -16,6 +16,9 @@ import { organizationLogo } from '~/server/notifications/hero'
 import { getPlatformDomain } from '~/server/utils/dashboard-notification-links'
 import { isBookingComplete } from '~/shared/bookings'
 import { creationRequestHash } from '~/server/utils/organization-events'
+import { guestPresentation } from '~/server/utils/notifications'
+import { platformLocale } from '~/shared/platform-locales'
+import { formatTimestamp } from '~/utils/timezone'
 import type {
   GuestThreadDeliveryProvider,
   GuestThreadDeliveryRow,
@@ -324,9 +327,9 @@ async function renderMemberReply(env: ReplyEmailEnv, db: DbClient, organizationI
   }), { platformDomain: getPlatformDomain(env) })
 }
 
-async function renderStatusUpdate(env: ReplyEmailEnv, db: DbClient, organizationId: string, organizationName: string, heading: string, body: string) {
+async function renderStatusUpdate(env: ReplyEmailEnv, db: DbClient, organizationId: string, organizationName: string, heading: string, body: string, locale: string) {
   const organizationLogoUrl = await organizationLogo(db, organizationId)
-  return renderNotificationEmail(guestThreadStatusMessage({ organizationName, organizationLogoUrl, heading, body }), { platformDomain: getPlatformDomain(env) })
+  return renderNotificationEmail(guestThreadStatusMessage({ locale, organizationName, organizationLogoUrl, heading, body }), { platformDomain: getPlatformDomain(env) })
 }
 
 function recordedEmailSubject(entry: GuestThreadEntryRow): string | null {
@@ -355,14 +358,29 @@ async function sendStatusUpdate(
     )) return conflict('Status update was superseded by a booking change')
     const summary = await requestSummary(db, context.thread)
     if (!summary.guestEmail) return { ok: false, status: 400, reason: 'no_guest_email' }
+    if (!context.record) return { ok: false, status: 404, reason: 'source_not_found' }
+    if (!['confirm', 'reject', 'cancel'].includes(payload.action ?? '')) return conflict('Status update has no recorded action')
     const fromName = await getOrganizationBrandName(db, context.thread.organization_id)
+    const guest = await guestPresentation(db, {
+      organizationId: context.thread.organization_id, organizationName: fromName,
+      locale: context.thread.payload.guest.locale,
+      productId: context.record.product_id, productTitle: context.record.product_name,
+      locationId: context.record.location_id, locationName: summary.locationTitle,
+    })
+    const labels = platformLocale(guest.locale)!.messages
+    const titleKey = payload.action === 'reject' ? 'booking.request_declined'
+      : payload.action === 'confirm' ? context.thread.kind === 'reservation' ? 'reservations.confirmed' : 'booking.confirmed'
+        : context.thread.kind === 'reservation' ? 'saya.reservation_cancel.cancelled_title' : 'saya.experience_cancel.cancelled_title'
+    const guestSubject = `${labels[titleKey]} — ${guest.productTitle ?? guest.organizationName}`
+    const guests = labels['saya.experience_detail.guest_count']!.replace('{count}', `${context.record.party_size}${context.thread.kind !== 'contact' && context.thread.payload.party_size_is_minimum ? '+' : ''}`)
+    const guestBody = [guest.locationName, formatTimestamp(context.record.starts_at, guest.locale, context.record.timezone), guests].filter(Boolean).join(' · ')
     outcome = await deliverGuestThreadEmail(db, {
       delivery,
       env: input.env,
       to: summary.guestEmail,
       fromName,
-      subject,
-      email: await renderStatusUpdate(input.env, db, context.thread.organization_id, fromName, subject, entry.body),
+      subject: guestSubject,
+      email: await renderStatusUpdate(input.env, db, context.thread.organization_id, guest.organizationName, guestSubject, guestBody, guest.locale),
       submissionType: context.thread.kind,
       submissionId: context.thread.id,
     })

@@ -35,6 +35,7 @@ import {
   productBookingReadiness,
   PUBLIC_PRODUCT_SQL,
   type MenuSectionInput,
+  type ProductListResult,
 } from '~/server/utils/product-management'
 import { assertResourceAccess, assertProductAccess, roleAllows, memberAccessPrincipal } from '~/server/utils/member-access'
 import { mcpPageInfo, mcpPageWindow } from '~/server/utils/mcp-pagination'
@@ -234,6 +235,8 @@ const productListItemObject = {
     id: { type: 'string' }, kind: { type: 'string', enum: [...PRODUCT_KINDS] }, name: { type: 'string' }, slug: { type: 'string' },
     active: { type: 'boolean' }, featured: { type: 'boolean' }, variant_count: { type: 'integer' },
     collections: { type: 'array', items: collectionMembershipObject },
+    publications: { type: 'array', items: publicationObject },
+    locations: { type: 'array', items: productLocationObject },
     prices: { type: 'array', items: { type: 'object', properties: {
       variant_id: { type: 'string' }, location_id: { type: ['string', 'null'] },
       currency: { type: 'string', enum: SUPPORTED_CURRENCIES }, unit_amount: { type: 'integer', minimum: 0 },
@@ -242,7 +245,25 @@ const productListItemObject = {
     }, required: ['variant_id', 'location_id', 'currency', 'unit_amount', 'type'] } },
     pricing_note: { type: 'string' },
   },
-  required: ['id', 'kind', 'name', 'slug', 'active', 'featured', 'variant_count', 'collections', 'prices'],
+  required: ['id', 'kind', 'name', 'slug', 'active', 'featured', 'variant_count', 'collections', 'publications', 'locations', 'prices'],
+} as const
+
+const productListResultObject = {
+  type: 'object',
+  properties: {
+    scope: { type: 'object', properties: {
+      view: { const: 'catalog' }, organization_id: { type: 'string' }, location_id: { type: 'string' },
+      kind: { type: 'string', enum: [...PRODUCT_KINDS, 'all'] }, featured: { type: 'boolean' }, published_only: { type: 'boolean' },
+    }, required: ['view', 'organization_id', 'kind', 'published_only'], additionalProperties: false },
+    counts: { type: 'object', properties: {
+      total: { type: 'integer', minimum: 0 },
+      by_kind: { type: 'object', properties: Object.fromEntries(PRODUCT_KINDS.map(kind => [kind, { type: 'integer', minimum: 0 }])), required: [...PRODUCT_KINDS], additionalProperties: false },
+    }, required: ['total', 'by_kind'], additionalProperties: false },
+    page_info: pageInfoObject,
+    products: { type: 'array', items: productListItemObject },
+  },
+  required: ['scope', 'counts', 'products', 'page_info'],
+  additionalProperties: false,
 } as const
 
 
@@ -292,8 +313,8 @@ export const PRODUCTS_TOOLS: McpToolDefinition[] = [
   organizationTool({ name: 'set_product_booking_config', description: 'Configure booking duration, capacity and scheduling. New settings default to instant confirmation and no online collection. Omitted fields retain saved settings; existing sessions keep their times and capacity. Read settings with get_product.', domain: 'products', minimumRole: 'member', inputSchema: { product_id: { type: 'string' }, duration_minutes: { type: ['integer', 'null'], minimum: 1, description: 'Minutes each visit occupies its booking slot or seats, independent of the interval between start times. Null clears an existing duration.' }, default_capacity: { type: ['integer', 'null'], minimum: 0, description: 'Places per session; null means unlimited, zero closes seats.' }, ...bookingPolicyFields }, required: ['product_id'], outputSchema: { type: 'object', properties: { config: bookingConfigObject }, required: ['config'] } }),
   organizationTool({ name: 'delete_product_booking_config', description: 'Delete the selected product’s booking configuration to disable its session booking. Returns deleted status. Refused if any booking history exists, including cancelled bookings; the catalog product itself remains.', domain: 'products', minimumRole: 'admin', inputSchema: { product_id: { type: 'string' } }, required: ['product_id'], outputSchema: { type: 'object', properties: { deleted: { type: 'boolean' } }, required: ['deleted'] } }),
   organizationTool({ name: 'replace_product_weekly_schedule', description: 'Replace a product’s weekly time slots when the user wants to change its recurring schedule. Supply a location ID for in-person sessions or null for online sessions. Uses the configured timezone and product duration/capacity. An empty slots array clears that schedule. Sessions with any booking history are preserved; removed future sessions without bookings are cancelled, and re-added unbooked slots can reopen with current defaults.', domain: 'products', minimumRole: 'member', inputSchema: { product_id: { type: 'string' }, location_id: { type: ['string', 'null'], description: 'A saved location ID, or explicit null for online sessions in the Product’s saved online timezone.' }, slots: { type: 'array', items: { type: 'object', properties: { weekday: { type: 'integer', minimum: 0, maximum: 6 }, start_time: { type: 'string', description: 'Local HH:mm time.' } }, required: ['weekday', 'start_time'], additionalProperties: false } } }, required: ['product_id', 'location_id', 'slots'], outputSchema: { type: 'object', properties: { rules: { type: 'array', items: { type: 'object' } }, sessions: { type: 'object', properties: { created: { type: 'integer' }, existing: { type: 'integer' }, skipped: { type: 'array', items: { type: 'object' } } }, required: ['created', 'existing', 'skipped'] }, cancelled: { type: 'integer' } }, required: ['rules', 'sessions', 'cancelled'] } }),
-  organizationTool({ name: 'list_products', description: "List products carried by the selected site, published or withheld. Results include products across the site; list_location_products narrows to one location.", domain: 'products', minimumRole: 'member', inputSchema: { kind: { type: 'string', enum: [...PRODUCT_KINDS] }, featured: { type: 'boolean' }, published_only: { type: 'boolean' }, ...paginationInputSchema }, required: [], outputSchema: { type: 'object', properties: { page_info: pageInfoObject, products: { type: 'array', items: productListItemObject } }, required: ['products', 'page_info'] } }),
-  organizationTool({ name: 'list_location_products', description: 'List product identities offered at one selected location. Results are paginated; published_only narrows to visible items. Use list_products for the whole site.', domain: 'products', minimumRole: 'admin', inputSchema: { location_id: { type: 'string' }, kind: { type: 'string', enum: [...PRODUCT_KINDS] }, featured: { type: 'boolean' }, published_only: { type: 'boolean' }, ...paginationInputSchema }, required: ['location_id'], outputSchema: { type: 'object', properties: { page_info: pageInfoObject, products: { type: 'array', items: productListItemObject } }, required: ['products', 'page_info'] } }),
+  organizationTool({ name: 'list_products', description: "List products carried by the selected site, published or withheld. Results include products across the site; list_location_products narrows to one location.", domain: 'products', minimumRole: 'member', inputSchema: { kind: { type: 'string', enum: [...PRODUCT_KINDS] }, featured: { type: 'boolean' }, published_only: { type: 'boolean' }, ...paginationInputSchema }, required: [], outputSchema: productListResultObject }),
+  organizationTool({ name: 'list_location_products', description: 'List product identities offered at one selected location. Results are paginated; published_only narrows to published offerings. Use list_products for the whole site.', domain: 'products', minimumRole: 'admin', inputSchema: { location_id: { type: 'string' }, kind: { type: 'string', enum: [...PRODUCT_KINDS] }, featured: { type: 'boolean' }, published_only: { type: 'boolean' }, ...paginationInputSchema }, required: ['location_id'], outputSchema: productListResultObject }),
   organizationTool({ name: 'get_product', description: "Read one site product before reviewing or editing its options, variants, prices, media, publication, locations, collections, named product facts or booking defaults. Prices belong to variants; booking defaults apply to new sessions.", domain: 'products', minimumRole: 'member', inputSchema: { product_id: { type: 'string' } }, required: ['product_id'], outputSchema: productResult }),
   organizationTool({ name: 'create_product', description: 'Add a catalog item, experience or service. Experiences need booking duration, capacity, location and actual times, or an external booking URL. Supplying booking creates its configuration, offering, schedule and public page together, using instant confirmation and no online collection by default. Repeat the same idempotency key on retry.' , domain: 'products', minimumRole: 'admin', inputSchema: { ...productWrite, booking: bookingSetup, anyOf: [{ properties: { kind: { enum: ['dish', 'service', 'item'] } } }, { required: ['booking'] }, { properties: { order_url: { type: 'string', minLength: 1 } }, required: ['order_url'] }], page: { type: 'object', description: 'A source page created with this product and bound to it, in the same write. Omit for a product without a page of its own.', properties: { ...TENANT_PAGE_METADATA_SCHEMA, path: { type: 'string', description: "The page's public path. A service may omit it to get the first free /services/<slug>." }, blocks: TENANT_PAGE_BLOCKS_SCHEMA }, required: ['title', 'blocks'], additionalProperties: false }, idempotency_key: { type: 'string', minLength: 1, maxLength: 200, description: 'Repeat the same key with the same request to get the product it created instead of a second one.' } }, required: ['name', 'kind', 'idempotency_key'], outputSchema: productResult }),
   organizationTool({ name: 'update_product', description: "Edit the selected product and return its updated catalog record. Only supplied fields change. Variants and their prices merge by ID by default: omitted sibling variants, prices, fields and option selections stay unchanged. A price-only edit supplies variant id, price id and unit_amount. Use variants_mode replace or a variant’s prices_mode replace only for explicit removal of omitted entries; booking history protects variant removal. Supplied options and text details are complete replacements, so retain values outside the requested change. Publication and location offerings use separate tools.", domain: 'products', minimumRole: 'member', inputSchema: { product_id: { type: 'string' }, ...productPatch, booking: bookingSetup, idempotency_key: { type: 'string', minLength: 1, maxLength: 200 }, anyOf: [{ not: { required: ['booking'] } }, { required: ['idempotency_key'] }] }, required: ['product_id'], outputSchema: productResult }),
@@ -332,22 +353,25 @@ async function productResponse(ctx: McpExecutorContext, product: Product) {
   const slug = ctx.organization.organizationSlug
   const value = hydrated!
   const path = value.kind === 'experience' ? `/experiences/${encodeURIComponent(value.slug)}` : value.page?.path ?? null
-  const readiness = value.kind === 'experience' || value.booking ? await productBookingReadiness(ctx.organization.db, ctx.organization.organizationId, value) : null
+  const readiness = value.kind === 'experience' || value.booking ? await productBookingReadiness(ctx.organization.db, ctx.organization.organizationId, value, { env: ctx.organization.env }) : null
   const published = path && await queryFirst(ctx.organization.db, `SELECT p.id FROM products p
     JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
     WHERE p.organization_id = ? AND p.id = ? AND ${PUBLIC_PRODUCT_SQL}`, [ctx.organization.organizationId, value.id])
-  const publicUrl = path && published && (value.kind !== 'experience' || readiness?.ready) && ctx.organization.publicUrl
+  const publicUrl = path && published && (!readiness || readiness.ready) && ctx.organization.publicUrl
     ? new URL(path, ctx.organization.publicUrl).toString() : null
   return { product: { ...value, booking_readiness: readiness ? {ready:readiness.ready,missing:readiness.missing} : null, public_url: publicUrl, admin_edit_url: slug ? productEditorPath(slug, value.id) : null } }
 }
 
 /** One page of products, with the extra row the query asked for removed. */
-function productPage(products: Product[], window: { limit: number; offset: number }, pageScope: { resource: string; revision: string }, locationId?: string) {
+function productPage(result: ProductListResult, window: { limit: number; offset: number }, pageScope: { resource: string; revision: string }, scope: { organization_id: string; location_id?: string; kind: Product['kind'] | 'all'; featured?: boolean; published_only: boolean }) {
+  const { products, counts } = result
   const page = products.slice(0, window.limit)
   const at = new Date().toISOString()
   return {
+    scope: { view: 'catalog', ...scope },
+    counts,
     page_info: mcpPageInfo(window, page.length, products.length > window.limit, pageScope),
-    products: page.map(product => productListItem(product, locationId, at)),
+    products: page.map(product => productListItem(product, scope.location_id, at)),
   }
 }
 
@@ -379,6 +403,8 @@ function productListItem(product: Product, locationId?: string, at = new Date().
     featured: product.details.featured === true,
     variant_count: product.variants.length,
     collections: product.collections,
+    publications: product.publications,
+    locations: product.locations,
     prices,
     ...(typeof product.details.pricing_note === 'string' ? { pricing_note: product.details.pricing_note } : {}),
   }
@@ -428,8 +454,8 @@ export async function handleProductsTools(ctx: McpExecutorContext) {
       const publishedOnly = args.published_only === true
       const pageScope = { resource: 'products', revision: JSON.stringify([organization.organizationId, kind ?? null, featured ?? null, publishedOnly, managesCatalog ? null : organization.userId]) }
       const window = mcpPageWindow(args, pageScope)
-      const products = await listOrganizationProducts(organization.db, { ...scope, kind, featured, publishedOnly, window, assignedUserId: managesCatalog ? undefined : organization.userId })
-      return productPage(products, window, pageScope)
+      const products = await listOrganizationProducts(organization.db, { ...scope, kind, featured, publishedOnly, window, withCounts: true, env: organization.env, assignedUserId: managesCatalog ? undefined : organization.userId })
+      return productPage(products, window, pageScope, { organization_id: organization.organizationId, kind: kind ?? 'all', ...(featured === undefined ? {} : { featured }), published_only: publishedOnly })
     }
     case 'list_location_products': {
       const locationId = requiredString(args, 'location_id')
@@ -441,9 +467,9 @@ export async function handleProductsTools(ctx: McpExecutorContext) {
       const window = mcpPageWindow(args, pageScope)
       const products = await listLocationProducts(organization.db, {
         organizationId: organization.organizationId, locationId, window,
-        kind, featured, publishedOnly,
+        kind, featured, publishedOnly, withCounts: true, env: organization.env,
       })
-      return productPage(products, window, pageScope, locationId)
+      return productPage(products, window, pageScope, { organization_id: organization.organizationId, location_id: locationId, kind: kind ?? 'all', ...(featured === undefined ? {} : { featured }), published_only: publishedOnly })
     }
     case 'get_product': {
       return await productResponse(ctx, await requireOrganizationProduct(organization.db, { ...scope, productId: requiredString(args, 'product_id') }))
@@ -499,7 +525,7 @@ export async function handleProductsTools(ctx: McpExecutorContext) {
         }
       }
       if (typeof args.published !== 'boolean') throw mcpProtocolError(MCP_ERROR.invalidParams, 'published must be a boolean')
-      await setProductPublication(organization.db, { ...scope, productId, published: args.published, actor })
+      await setProductPublication(organization.db, { ...scope, productId, published: args.published, actor, env: organization.env })
       return await productResponse(ctx, await getProduct(organization.db, organization.organizationId, productId))
     }
     case 'set_product_location': {

@@ -4,6 +4,7 @@ import type { PublicBase } from '~/server/utils/public-base'
 import { calculateMapEmbedUrl } from '~/server/utils/google-places'
 import type { PublicShellPayload } from '~/utils/public-resource-contracts'
 import { listOrganizationProducts } from '~/server/utils/product-management'
+import type { CloudflareEnv } from '~/server/utils/auth'
 import { isCurrencyCode } from '~/shared/currencies'
 import { parsePostalAddress } from '~/utils/postal-address'
 import type { PublicMediaPlacement } from '~/server/utils/public-social-image'
@@ -76,6 +77,7 @@ export async function buildPublicShellPayload(
   organization: PublicBase['organization'],
   results: BatchResult[],
   indexes: PublicShellQueryIndexes,
+  env?: CloudflareEnv,
 ): Promise<PublicShellPayload> {
   const rawLocations = (results[indexes.locations]?.results ?? []) as Record<string, unknown>[]
   const placements = (results[indexes.media]?.results ?? []) as Array<PublicMediaPlacement & { owner_type: string; owner_id: string }>
@@ -138,7 +140,7 @@ export async function buildPublicShellPayload(
 
   const activeLocationIds = new Set(rawLocations.map(location => String(location.id)))
   const productLocationRows = (results[indexes.productLocations]?.results ?? []) as Array<{ location_id: string }>
-  const experiences = await listOrganizationProducts(db, { organizationId: organization.id, kind: 'experience', publishedOnly: true })
+  const experiences = await listOrganizationProducts(db, { organizationId: organization.id, kind: 'experience', publishedOnly: true, env })
 
   return {
     platformMessages: null,
