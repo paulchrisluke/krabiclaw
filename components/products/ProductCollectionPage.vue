@@ -143,6 +143,13 @@
                 <p v-if="product.description" class="mt-1.5 max-w-xl text-sm leading-relaxed text-muted">
                   {{ product.description }}
                 </p>
+                <ProductVariantPrices
+                  v-if="product.variants.filter(variant => variant.active).length > 1 || new Set(product.variants.filter(variant => variant.active).flatMap(variant => variant.prices.filter(price => price.active).map(price => price.currency))).size > 1"
+                  :product="product"
+                  :location-ids="priceScopes(product, group.location_id)"
+                  :currency="currency"
+                  class="mt-2 text-sm"
+                />
               </div>
             </article>
           </div>
@@ -236,6 +243,7 @@ import { groupProductsByCollection, productLocationCollectionPath } from '~/util
 import { extractDietarySchemaUrls } from '~/utils/product-seo'
 import { getVerticalCopy } from '~/utils/vertical-copy'
 import { resolveSeoUrl } from '~/composables/useSeoUrls'
+import ProductVariantPrices from '~/components/products/ProductVariantPrices.vue'
 
 interface LocationSummary { id: string; slug: string; title: string }
 
@@ -343,14 +351,16 @@ const productHref = (product: Product, collectionLocationId: string | null = nul
  *
  * A product with several applicable prices shows their actual range.
  */
-const pricesFor = (product: Product, collectionLocationId: string | null = null) => {
+const priceScopes = (product: Product, collectionLocationId: string | null = null) => {
   const locationId = productLocationId(product, collectionLocationId)
-  const scopes = locationId ? [locationId] : [
+  return locationId ? [locationId] : [
     ...product.locations.filter(location => location.published && locationMap.value.has(location.location_id)).map(location => location.location_id),
     ...(product.booking?.online_timezone || product.order_url ? [null] : []),
   ]
+}
+const pricesFor = (product: Product, collectionLocationId: string | null = null) => {
   const at = new Date().toISOString()
-  return summarizeProductPrices(product.variants, scopes.map(location_id => ({ currency: props.currency, location_id, at })))
+  return summarizeProductPrices(product.variants, priceScopes(product, collectionLocationId).map(location_id => ({ currency: props.currency, location_id, at })))
 }
 const priceFor = (product: Product, collectionLocationId: string | null = null): Price | null => pricesFor(product, collectionLocationId).lowest
 /**

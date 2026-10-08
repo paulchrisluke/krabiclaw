@@ -18,7 +18,7 @@ const nullableString = { type: ['string', 'null'] }
 const integer = { type: 'integer' }
 const amount = { type: 'object', properties: { currency: string, amount: integer }, required: ['currency', 'amount'] }
 const payment = { type: 'object', properties: { id: string, created_at: string, currency: string, amount: integer, captured_amount: integer, refunded_amount: integer, state: string, title: string, image_url: nullableString, buyer_name: nullableString, starts_at: nullableString, ends_at: nullableString, timezone: nullableString, to: string }, required: ['id', 'currency', 'amount', 'captured_amount', 'refunded_amount', 'state', 'title', 'to'], additionalProperties: false }
-const readInfo = { organization_id: string, source: string, refreshed_at: string, dashboard_url: string }
+const readInfo = { organization_id: string, source: string, refreshed_at: nullableString, dashboard_url: string }
 const summaryResult = { type: 'object', properties: { ...readInfo, timezone: { const: 'UTC' }, from: string, to: string, usage_status: string,
   amounts: { type: 'array', items: { type: 'object', properties: { currency: string, captured_amount: integer, refunded_amount: integer, disputed_amount: integer }, required: ['currency', 'captured_amount', 'refunded_amount', 'disputed_amount'] } },
   usage: { type: 'array', items: { type: 'object', properties: { currency: string, kind: string, amount: integer, pending_delivery: integer }, required: ['currency', 'kind', 'amount', 'pending_delivery'] } },
@@ -30,15 +30,15 @@ const paymentResult = { type: 'object', properties: { organization_id: string, p
   disputes: { type: 'array', items: { type: 'object', properties: { id: string, amount: integer, currency: string, reason: string, status: string, evidence_due_at: nullableString, updated_at: string } } },
 }, required: ['organization_id', 'payment', 'purchase', 'refunds', 'disputes', 'dashboard_url'], additionalProperties: false }
 const payoutsResult = { type: 'object', properties: { ...readInfo, configured: { type: 'boolean' }, next_cursor: nullableString,
-  balance: { type: 'object', properties: { available: { type: 'array', items: amount }, pending: { type: 'array', items: amount } }, required: ['available', 'pending'] },
+  balance: { type: ['object', 'null'], properties: { available: { type: 'array', items: amount }, pending: { type: 'array', items: amount } }, required: ['available', 'pending'] },
   payouts: { type: 'array', items: { type: 'object', properties: { id: string, amount: integer, currency: string, status: string, arrival_date: integer, created: integer, automatic: { type: 'boolean' }, dashboard_url: string }, required: ['id', 'amount', 'currency', 'status', 'dashboard_url'] } },
 }, required: ['organization_id', 'configured', 'source', 'next_cursor', 'payouts', 'dashboard_url'], additionalProperties: false }
 const usageResult = { type: 'object', properties: { ...readInfo, configured: { type: 'boolean' },
-  account: { type: 'object', properties: { currency: string, status: string, contract_start_at: nullableString } },
+  account: { type: ['object', 'null'], properties: { currency: string, status: string, contract_start_at: nullableString } },
   pricing: { type: ['object', 'null'], properties: { currency: { const: 'USD' }, units: { const: 'cents' }, captured_volume_rate: { type: 'number' }, captured_volume_rate_percent: string, validated_at: string }, required: ['currency', 'units', 'captured_volume_rate', 'captured_volume_rate_percent', 'validated_at'] },
   pending: { type: 'array', items: { type: 'object', properties: { currency: string, kind: string, event_count: integer, amount: integer, billing_currency: { const: 'USD' }, billing_amount: integer, action_required: { type: 'boolean' } }, required: ['currency', 'kind', 'event_count', 'amount', 'billing_currency', 'billing_amount', 'action_required'] } },
   credits: { type: 'array', items: { type: 'object', properties: { id: string, kind: string, currency: { const: 'USD' }, amount: integer, source_currency: string, source_amount: integer, fx_quote_id: nullableString, provider_occurred_at: string, action_required: { type: 'boolean' } }, required: ['id', 'kind', 'currency', 'amount', 'source_currency', 'source_amount', 'fx_quote_id', 'provider_occurred_at', 'action_required'] } },
-  invoices: { type: 'array', items: { type: 'object', properties: { id: string, type: string, status: string, start_timestamp: string, end_timestamp: string, total: { type: 'number' }, credit_type: { type: 'object', properties: { name: { const: 'USD (cents)' } }, required: ['name'] },
+  invoices: { type: 'array', items: { type: 'object', properties: { id: string, type: nullableString, status: nullableString, start_timestamp: nullableString, end_timestamp: nullableString, total: { type: 'number' }, credit_type: { type: 'object', properties: { name: { const: 'USD (cents)' } }, required: ['name'] },
     collection_invoice: { type: ['object', 'null'], properties: { id: string, status: nullableString, currency: string, total: integer, amount_due: integer, amount_paid: integer, amount_remaining: integer, hosted_invoice_url: nullableString, invoice_pdf: nullableString }, required: ['id', 'status', 'currency', 'total', 'amount_due', 'amount_paid', 'amount_remaining', 'hosted_invoice_url', 'invoice_pdf'] },
   }, required: ['id', 'total', 'credit_type', 'collection_invoice'] } },
 }, required: ['organization_id', 'configured', 'source', 'pricing', 'pending', 'credits', 'invoices', 'dashboard_url'], additionalProperties: false }
@@ -79,7 +79,7 @@ export async function handlePaymentsTools(ctx: McpExecutorContext): Promise<unkn
       if (!isRecord(snapshot) || (snapshot.price !== undefined && !isRecord(snapshot.price))) throw new Error('Payment purchase details are invalid')
       return {
         organization_id: organizationId, payment: { ...transaction, to: url }, dashboard_url: url,
-        purchase: { title: snapshot.title, quantity: snapshot.quantity, product_id: snapshot.product_id, variant_id: snapshot.variant_id, session_id: snapshot.session_id,
+        purchase: { title: snapshot.title, quantity: snapshot.quantity, product_id: snapshot.product_id ?? null, variant_id: snapshot.variant_id ?? null, session_id: snapshot.session_id ?? null,
           ...(isRecord(snapshot.price) ? { price: { currency: snapshot.price.currency, unit_amount: snapshot.price.unit_amount, type: snapshot.price.type, tax_behavior: snapshot.price.tax_behavior } } : {}),
         },
         refunds: detail.refunds.map(refund => ({ id: refund.id, amount: refund.amount, status: refund.status })),
@@ -95,7 +95,7 @@ export async function handlePaymentsTools(ctx: McpExecutorContext): Promise<unkn
       const result = await paymentsUsageStatus(db, env, organizationId)
       return {
         organization_id: organizationId, configured: result.configured, source: result.source, refreshed_at: result.refreshed_at, dashboard_url: dashboard('/payments/invoices'),
-        account: result.account ? { currency: result.account.currency, status: result.account.status, contract_start_at: result.account.contract_start_at } : undefined,
+        account: result.account ? { currency: result.account.currency, status: result.account.status, contract_start_at: result.account.contract_start_at } : null,
         pricing: result.pricing ? { currency: result.pricing.currency, units: result.pricing.units, captured_volume_rate: result.pricing.captured_volume_rate, captured_volume_rate_percent: result.pricing.captured_volume_rate_percent, validated_at: result.pricing.validated_at } : null,
         pending: result.pending.map(row => {
           if (!isRecord(row)) throw new Error('Payments usage details are invalid')
@@ -103,9 +103,9 @@ export async function handlePaymentsTools(ctx: McpExecutorContext): Promise<unkn
         }),
         credits: result.credits.map(credit => ({ id: credit.id, kind: credit.kind, currency: credit.currency, amount: credit.amount, source_currency: credit.source_currency, source_amount: credit.source_amount, fx_quote_id: credit.fx_quote_id, provider_occurred_at: credit.provider_occurred_at, action_required: Boolean(credit.error) })),
         invoices: result.invoices.map((invoice: unknown) => {
-          if (!isRecord(invoice)) throw new Error('Payments invoice details are invalid')
-          return { id: invoice.id, type: invoice.type, status: invoice.status, start_timestamp: invoice.start_timestamp, end_timestamp: invoice.end_timestamp, total: invoice.total,
-            credit_type: isRecord(invoice.credit_type) ? { name: invoice.credit_type.name } : undefined,
+          if (!isRecord(invoice) || !isRecord(invoice.credit_type)) throw new Error('Payments invoice details are invalid')
+          return { id: invoice.id, type: invoice.type ?? null, status: invoice.status ?? null, start_timestamp: invoice.start_timestamp ?? null, end_timestamp: invoice.end_timestamp ?? null, total: invoice.total,
+            credit_type: { name: invoice.credit_type.name },
             collection_invoice: invoice.collection_invoice,
           }
         }),
@@ -116,7 +116,7 @@ export async function handlePaymentsTools(ctx: McpExecutorContext): Promise<unkn
       return {
         organization_id: organizationId, configured: result.configured, source: result.source, refreshed_at: result.refreshed_at, next_cursor: result.next_cursor,
         dashboard_url: dashboard('/earnings/payouts'),
-        balance: result.balance ? { available: result.balance.available.map(row => ({ currency: row.currency.toUpperCase(), amount: row.amount })), pending: result.balance.pending.map(row => ({ currency: row.currency.toUpperCase(), amount: row.amount })) } : undefined,
+        balance: result.balance ? { available: result.balance.available.map(row => ({ currency: row.currency.toUpperCase(), amount: row.amount })), pending: result.balance.pending.map(row => ({ currency: row.currency.toUpperCase(), amount: row.amount })) } : null,
         payouts: result.payouts.map(payout => ({ id: payout.id, amount: payout.amount, currency: payout.currency.toUpperCase(), status: payout.status, arrival_date: payout.arrival_date, created: payout.created, automatic: payout.automatic, dashboard_url: dashboard(`/earnings/payouts/${encodeURIComponent(payout.id)}`) })),
       }
     }

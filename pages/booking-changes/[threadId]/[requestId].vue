@@ -2,7 +2,7 @@
   <main class="platform-theme min-h-screen bg-default px-5 py-12 text-default">
     <div class="mx-auto max-w-xl space-y-6">
       <h1 class="text-2xl font-semibold text-highlighted">Review your {{ noun }} changes</h1>
-      <USkeleton v-if="pending" class="h-64 w-full" />
+      <USkeleton v-if="status === 'idle' || status === 'pending'" class="h-64 w-full" />
       <UAlert v-else-if="error" color="error" title="Change request unavailable" :description="getErrorMessage(error, 'Check your link or contact your host.')" />
       <template v-else-if="proposal">
         <p class="text-muted">Hi {{ proposal.guestName }}. Your host has requested the following changes.</p>
@@ -34,6 +34,7 @@ import { getErrorMessage } from '~/utils/errors'
 import type { respondToBookingChange } from '~/server/domain/guest-threads/booking-changes'
 
 definePageMeta({ layout: false })
+const route = useRoute()
 useSocialMetadata(() => ({
   path: `/booking-changes/${encodeURIComponent(String(route.params.threadId))}/${encodeURIComponent(String(route.params.requestId))}`,
   title: 'Review reservation changes',
@@ -43,10 +44,9 @@ useSocialMetadata(() => ({
 }))
 useHead({ meta: [{ name: 'referrer', content: 'no-referrer' }] })
 type Proposal = Awaited<ReturnType<typeof respondToBookingChange>>
-const route = useRoute()
 const endpoint = `/api/public/booking-changes/${encodeURIComponent(String(route.params.threadId))}/${encodeURIComponent(String(route.params.requestId))}`
 const token = computed(() => route.hash.slice(1))
-const { data: proposal, pending, error } = await useAsyncData(endpoint, () => $fetch<Proposal>(endpoint, { headers: { authorization: `Bearer ${token.value}` } }), { server: false })
+const { data: proposal, status, error } = await useAsyncData(endpoint, () => $fetch<Proposal>(endpoint, { headers: { authorization: `Bearer ${token.value}` } }), { server: false })
 // The server resolves the noun from the tenant's vertical and sends it with the
 // proposal, so this page and the email that linked here agree.
 const noun = computed(() => proposal.value?.noun ?? 'booking')

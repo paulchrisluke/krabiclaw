@@ -14,7 +14,11 @@
       <h2 class="text-2xl font-semibold text-highlighted">How you get paid</h2>
       <p class="mt-2 text-base text-muted">Your money goes to the bank account on file with Stripe. To change it, use Edit next to the account.</p>
 
-      <UButton v-if="!account && !connectError" class="mt-6" size="xl" :loading="starting" label="Add payout method" @click="startOnboarding" />
+      <UFormField v-if="needsCountry && !connectError" class="mt-6" label="Business country" description="Where your business is legally established.">
+        <USelectMenu v-model="country" :items="countries" value-key="value" class="w-full sm:w-80" placeholder="Choose a country" />
+      </UFormField>
+
+      <UButton v-if="!account && !connectError" class="mt-6" size="xl" :loading="starting" :disabled="needsCountry && !country" label="Add payout method" @click="startOnboarding" />
 
       <template v-else-if="account">
         <div v-if="payout" class="mt-6 flex items-center gap-4 py-4">
@@ -42,6 +46,7 @@
           class="mt-6"
           size="xl"
           :loading="starting"
+          :disabled="needsCountry && !country"
           :label="account.status === 'creation_failed' ? 'Retry Stripe setup' : 'Continue Stripe setup'"
           @click="startOnboarding"
         />
@@ -114,8 +119,9 @@ function isConnectedAccount(value: unknown): value is ConnectedAccount {
 }
 
 const isPayoutMethod = (value: unknown): value is PayoutMethod | null => value === null || (isRecord(value) && (value.bankName === null || typeof value.bankName === 'string') && typeof value.last4 === 'string' && typeof value.currency === 'string' && isRecord(value.schedule) && typeof value.schedule.interval === 'string' && Number.isSafeInteger(value.schedule.delayDays))
-const isAccountResponse = (value: unknown): value is { success: true; account: ConnectedAccount | null; payout: PayoutMethod | null } =>
-  isRecord(value) && value.success === true && (value.account === null || isConnectedAccount(value.account)) && isPayoutMethod(value.payout)
+interface AccountResponse { success: true; account: ConnectedAccount | null; payout: PayoutMethod | null; countries: string[] }
+const isAccountResponse = (value: unknown): value is AccountResponse =>
+  isRecord(value) && value.success === true && (value.account === null || isConnectedAccount(value.account)) && isPayoutMethod(value.payout) && Array.isArray(value.countries) && value.countries.every(country => typeof country === 'string')
 const isOnboardingResponse = (value: unknown): value is { success: true; account: ConnectedAccount; onboardingUrl: string } =>
   isRecord(value) && value.success === true && isConnectedAccount(value.account) && typeof value.onboardingUrl === 'string'
 
@@ -124,13 +130,19 @@ const route = useRoute()
 const router = useRouter()
 const { data: connect, error: connectError } = await useAsyncData(
   `dashboard-connect:${String(route.params.orgSlug)}`,
-  () => dashboardApi<{ success: true; account: ConnectedAccount | null; payout: PayoutMethod | null }>('/api/dashboard/connect', { validate: isAccountResponse }),
+  () => dashboardApi<AccountResponse>('/api/dashboard/connect', { validate: isAccountResponse }),
 )
 const account = computed(() => connect.value?.account ?? null)
 const payout = computed(() => connect.value?.payout ?? null)
+const country = ref<string>()
+const needsCountry = computed(() => !account.value?.stripeAccountId)
+const countries = computed(() => {
+  const names = new Intl.DisplayNames(['en'], { type: 'region' })
+  return (connect.value?.countries ?? []).map(value => ({ value, label: names.of(value) ?? value })).sort((a, b) => a.label.localeCompare(b.label))
+})
 /** Keeps the payout row and replaces the account Stripe just reported. */
 function setAccount(next: ConnectedAccount) {
-  connect.value = { success: true, account: next, payout: payout.value }
+  connect.value = { success: true, account: next, payout: payout.value, countries: connect.value?.countries ?? [] }
 }
 const scheduleLabel = computed(() => {
   const schedule = payout.value?.schedule
@@ -170,6 +182,7 @@ async function startOnboarding() {
   try {
     const response = await dashboardApi<{ success: true; account: ConnectedAccount; onboardingUrl: string }>('/api/dashboard/connect', {
       method: 'POST',
+      body: { country: country.value },
       validate: isOnboardingResponse,
     })
     setAccount(response.account)

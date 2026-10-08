@@ -72,7 +72,7 @@ export async function listPayments(db: DbClient, principal: FinancialPrincipal, 
 export async function paymentPayouts(db: DbClient, env: CloudflareEnv, principal: FinancialPrincipal, after?: string) {
   await authorizePayments(principal, 'payouts')
   const account = await getStripeConnectedAccount(db, principal.organizationId)
-  if (!account?.stripeAccountId) return { organization_id: principal.organizationId, configured: false, available: [], pending: [], payouts: [], next_cursor: null, source: 'Stripe account not connected' }
+  if (!account?.stripeAccountId) return { organization_id: principal.organizationId, configured: false, balance: null, payouts: [], next_cursor: null, source: 'Stripe account not connected', refreshed_at: null }
   if (!env.STRIPE_SECRET_KEY) throw new HTTPError({ statusCode: 503, statusMessage: 'Stripe is not configured' })
   if (account.livemode !== stripeLivemodeFromKey(env.STRIPE_SECRET_KEY)) throw new HTTPError({ statusCode: 409, statusMessage: 'Connected Stripe account mode does not match configuration' })
   const stripe = createStripeClient(env.STRIPE_SECRET_KEY, 'payments'), options = { stripeAccount: account.stripeAccountId }

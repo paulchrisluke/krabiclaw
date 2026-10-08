@@ -1,4 +1,5 @@
 import { defineHandler, HTTPError } from 'nitro'
+import { readBody } from 'nitro/h3'
 import { requireFinancialBrowserOrigin } from '~/server/utils/financial-browser'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { assertRoleAllows } from '~/server/utils/member-access'
@@ -26,12 +27,15 @@ export default defineHandler(async (event) => {
   }
 
   const stripe = createStripeClient(env.STRIPE_SECRET_KEY, 'payments')
+  const body = await readBody(event) as { country?: unknown } | undefined
+  const country = typeof body?.country === 'string' && /^[A-Z]{2}$/.test(body.country) ? body.country : null
   try {
     const account = await ensureStripeConnectedAccount(db, stripe, {
       organizationId: organization.id,
       organizationName: organization.name,
       contactEmail: userEmail,
       livemode: stripeLivemodeFromKey(env.STRIPE_SECRET_KEY),
+      country,
     })
     if (!account.stripeAccountId) throw new Error('Stripe connected account ID is missing after creation')
     const urls = buildStripeConnectOnboardingUrls(env.NUXT_PUBLIC_PLATFORM_DOMAIN, organization.slug)
