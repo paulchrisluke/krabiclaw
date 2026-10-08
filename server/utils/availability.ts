@@ -726,7 +726,7 @@ export async function listSessions(db: DbClient, input: {
 }): Promise<SessionAvailability[]> {
   const statuses = input.statuses ?? ['scheduled']
   const sessions = await queryAll<SessionAvailability>(db, `
-    SELECT s.id, s.organization_id, s.product_id, s.location_id, s.availability_rule_id, s.assigned_member_id,
+    SELECT s.id, s.organization_id, s.product_id, s.location_id, s.availability_rule_id, ${sessionMemberSql('s')} AS assigned_member_id,
            s.source_occurrence_key, s.timezone, s.starts_at, s.ends_at, s.capacity, s.status, s.created_at, s.updated_at,
            COALESCE((
              SELECT SUM(b.party_size) FROM bookings b

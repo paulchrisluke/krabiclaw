@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:1bad737bab85f8477176c83cf7ce203ca16415e3931b7d83071d40ddb5e66706",
+  "fingerprint": "sha256:0d9520fc74e11ec3374f37c2e6521c0f895abeeaaf362998a6c5742edd95a078",
   "tools": [
     {
       "name": "append_content_block",
@@ -17860,7 +17860,10 @@
                       ]
                     },
                     "channel": {
-                      "type": "string"
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "deliveries": {
                       "items": {
@@ -41867,7 +41870,10 @@
                       ]
                     },
                     "channel": {
-                      "type": "string"
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "deliveries": {
                       "items": {
@@ -42775,7 +42781,10 @@
                       ]
                     },
                     "channel": {
-                      "type": "string"
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "deliveries": {
                       "items": {
