@@ -19,11 +19,12 @@ export async function seedNewOrganization(
     organizationId: string;
     name: string;
     vertical: OrganizationVertical;
+    writeGuard?: BatchQuery;
   },
 ): Promise<string> {
   if (!db) throw new Error("Database not configured");
 
-  const { env, organizationId, name, vertical } = params;
+  const { env, organizationId, name, vertical, writeGuard } = params;
   const source = await getPersistedSourceLocale(db, organizationId)
   const catalog = platformLocale(source.locale)
   if (!catalog) throw new Error('Website language catalog is unavailable')
@@ -55,7 +56,7 @@ export async function seedNewOrganization(
 
 
   // ── Canonical tenant pages (structural records only) ──────────────────────
-  if (statements.length) await executeBatch(db, statements);
+  if (statements.length) await executeBatch(db, [...(writeGuard ? [writeGuard] : []), ...statements]);
 
   // `title` is the page's name as a person reads it — its document title and,
   // for every page but the home page, its heading. The key beside it is an
@@ -114,7 +115,7 @@ export async function seedNewOrganization(
       },
     })
   }
-  if (pagesToCreate.length) await createTenantPagesBatch(db, { env, organizationId, pages: pagesToCreate })
+  if (pagesToCreate.length) await createTenantPagesBatch(db, { env, organizationId, pages: pagesToCreate, writeGuard })
 
   // ── Consultation settings (professional services only) ────────────────────
   // Service sites start with native booking. Initialization preserves any
@@ -129,7 +130,7 @@ export async function seedNewOrganization(
       confirmation_path: '/contact/confirmed',
       tracking_enabled: false,
       metadata_json: { contact_form_enabled: true },
-    })
+    }, writeGuard)
   }
 
   return locationId

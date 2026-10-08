@@ -543,6 +543,7 @@ export async function createTenantPagesBatch(
     env: CloudflareEnv
     organizationId: string
     userId?: string | null
+    writeGuard?: BatchQuery
     pages: Array<{
       data: TenantPageEditorInput
       trustedSystemPage?: boolean
@@ -615,7 +616,7 @@ export async function createTenantPagesBatch(
 
   if (created > 0) {
     queries.push(publicResourceCacheInvalidationQuery(input.organizationId, 'tenant-page-seed'))
-    await executeBatch(db, queries)
+    await executeBatch(db, [...(input.writeGuard ? [input.writeGuard] : []), ...queries])
   }
   return { created }
 }
@@ -644,6 +645,7 @@ export async function applyOnboardingTenantPages(
     organizationId: string
     userId: string | null
     pages: OnboardingTenantPageInput[]
+    writeGuard?: BatchQuery
   },
 ) {
   if (!input.pages.length) return { updated: 0, created: 0 }
@@ -716,13 +718,14 @@ export async function applyOnboardingTenantPages(
 
   if (replacementQueries.length) {
     replacementQueries.push(publicResourceCacheInvalidationQuery(input.organizationId, 'tenant-page-onboarding-import'))
-    await executeBatch(db, replacementQueries)
+    await executeBatch(db, [...(input.writeGuard ? [input.writeGuard] : []), ...replacementQueries])
   }
 
   let created = 0
   if (missingPages.length) {
     const result = await createTenantPagesBatch(db, {
       env: input.env,
+      writeGuard: input.writeGuard,
       organizationId: input.organizationId,
       userId: input.userId,
       pages: missingPages.map(page => ({

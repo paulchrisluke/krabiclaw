@@ -201,6 +201,7 @@ export async function createSystemSubdomain(
   subdomain: string,
   options: {
     organizationUpdate?: { sql: string; values: unknown[] }
+    writeGuard?: BatchQuery
   } = {},
 ): Promise<DomainRecord> {
   const now = new Date().toISOString()
@@ -256,7 +257,7 @@ export async function createSystemSubdomain(
     stmts.push(options.organizationUpdate)
   }
 
-  await db.batch(stmts.map(s => db.prepare(s.sql).bind(...s.values)))
+  await executeBatch(db, [...(options.writeGuard ? [options.writeGuard] : []), ...stmts.map(s => ({ query: s.sql, params: s.values }))])
 
   return (await queryFirst<DomainRecord>(db, `SELECT * FROM organization_domains WHERE id = ?`, [id])) as DomainRecord
 }

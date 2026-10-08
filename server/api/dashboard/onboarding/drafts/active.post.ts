@@ -3,9 +3,8 @@ import { parseOpeningHours, parseSpecialHours } from '~/shared/reservation-hours
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getPlaceDetails } from '~/server/utils/google-places'
-import { queryFirst } from '~/server/db'
 import {
-  buildOnboardingDraftPayload, getDraftMedia, type DraftProductInput, parseOnboardingDraftPayload, upsertActiveOnboardingDraft, type DraftBrandInput, type DraftDetailsInput, type DraftUploadedImage, type OnboardingDraftPayload, type PlaceDetailsSnapshot, } from '~/server/utils/onboarding-drafts'
+  buildOnboardingDraftPayload, getDraftMedia, type DraftProductInput, parseOnboardingDraftPayload, readActiveOnboardingDraft, upsertActiveOnboardingDraft, type DraftBrandInput, type DraftDetailsInput, type DraftUploadedImage, type OnboardingDraftPayload, type PlaceDetailsSnapshot, } from '~/server/utils/onboarding-drafts'
 import { createPreviewToken, PREVIEW_TOKEN_TTL_MS, previewSecretOf } from '~/server/utils/preview-token'
 import { VALID_VERTICALS } from '~/server/utils/organization-provisioning'
 import { applyOnboardingDraft, ensureOnboardingTarget } from '~/server/utils/onboarding-apply'
@@ -13,8 +12,6 @@ import { isValidTimezone } from '~/utils/timezone'
 import { isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
 import { getPhoneCountry } from '~/utils/phone'
 import type { OrganizationVertical } from '~/utils/vertical-copy'
-
-type DraftSourceType = 'manual' | 'google_places'
 
 function stringOrNull(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null
@@ -127,12 +124,7 @@ export default defineHandler(async (event) => {
   const sourceType = body?.sourceType === 'google_places' ? 'google_places' : body?.sourceType === 'manual' ? 'manual' : null
   if (!sourceType) return jsonResponse({ error: 'sourceType must be manual or google_places' }, { status: 400 })
 
-  const existingRow = await queryFirst<{ id: string; payload_json: string; source_type: DraftSourceType }>(db, `
-    SELECT id, payload_json, source_type
-    FROM onboarding_drafts
-    WHERE user_id = ? AND status = 'active'
-    LIMIT 1
-  `, [session.user.id])
+  const existingRow = await readActiveOnboardingDraft(db, session.user.id)
 
   const existingPayload = existingRow ? parseOnboardingDraftPayload(existingRow.payload_json) : null
 
@@ -202,7 +194,7 @@ export default defineHandler(async (event) => {
     // /dashboard/onboarding is the "New Organization" entry point, so a draft
     // never carries the session's active organization: the first save creates a
     // new one and records it here.
-    userId: session.user.id, organizationId: null, name: payload.preview.brandName, vertical, sourceType, payload, })
+    userId: session.user.id, organizationId: null, name: payload.preview.brandName, vertical, sourceType, payload, expectedUpdatedAt: existingRow?.updated_at ?? null, })
 
   // The tenant is real from this first save: pending, on its own reserved
   // subdomain, previewable with its preview token and invisible to the public
@@ -210,6 +202,7 @@ export default defineHandler(async (event) => {
   // renderer — the preview is the real tenant.
   const target = await ensureOnboardingTarget(env, db, session.user.id, {
     id: draft.id,
+    updated_at: draft.updatedAt,
     organization_id: draft.organizationId,
     name: payload.preview.brandName,
     vertical,
@@ -228,6 +221,7 @@ export default defineHandler(async (event) => {
     payload,
     defaultCurrency: payload.source.details.currency,
     timezone: isValidTimezone(answeredTimezone) ? answeredTimezone : null,
+    draft: { id: draft.id, user_id: session.user.id, updated_at: draft.updatedAt },
   })
   if ('error' in applied) return jsonResponse({ error: applied.error }, { status: applied.status })
 

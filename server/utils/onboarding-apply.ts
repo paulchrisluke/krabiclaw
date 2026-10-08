@@ -17,11 +17,11 @@ import { execute, executeBatch, queryAll, queryFirst, type BatchQuery } from '~/
 import { resourceLocalizationDeletionQueries } from '~/server/utils/localization'
 import { planProductCreateWrites, slugCandidate } from '~/server/utils/product-management'
 import { updateLocation } from '~/server/utils/location-management'
-import { getDraftMedia, onboardingPageBlocks, onboardingPagePath, onboardingPageType, parseOnboardingDraftPayload, type OnboardingDraftPayload } from '~/server/utils/onboarding-drafts'
+import { getDraftMedia, onboardingDraftWriteGuard, onboardingPageBlocks, onboardingPagePath, onboardingPageType, parseOnboardingDraftPayload, readActiveOnboardingDraft, type OnboardingDraftPayload, type SavedOnboardingDraft } from '~/server/utils/onboarding-drafts'
 import { createMediaAsset, insertInitialMediaPlacements, type CreateInput } from '~/server/utils/media-asset-manager'
 import { applyOnboardingTenantPages, getPublishedTenantPage, prepareTenantPageDelete, refreshTenantPageCard } from '~/server/utils/content/pages'
-import { activateOrganization, completeOnboarding, createOrganization, provisionOrganization } from '~/server/utils/organization-provisioning'
-import { isOrganizationWideRole, organizationAdapter, resolveUserOrganization } from '~/server/utils/member-access'
+import { activateOrganization, completeOnboarding, createOrganization, provisionOrganization, type OrganizationProvisioningResult } from '~/server/utils/organization-provisioning'
+import { isOrganizationWideRole, resolveUserOrganization } from '~/server/utils/member-access'
 import { organizationPublicUrl } from '~/server/utils/domains'
 import { refreshSocialCard } from '~/server/utils/social-card'
 import { purgePublicResourceCacheNow } from '~/server/utils/public-resource-cache'
@@ -46,6 +46,7 @@ export interface OnboardingTarget {
 /** A draft's answers, as they are stored while the owner is still answering. */
 export interface OnboardingDraftRow {
   id: string
+  updated_at: string
   organization_id: string | null
   name: string
   vertical: OrganizationVertical
@@ -60,9 +61,11 @@ export async function activateOnboardingDraft(env: CloudflareEnv, db: D1Database
   origin: { headers: Headers } | null
   activateSession?: (_organizationId: string) => Promise<void>
 }) {
-  const draft = await queryFirst<OnboardingDraftRow & { user_id: string; status: string; payload_json: string }>(db,
+  let draft = await queryFirst<SavedOnboardingDraft>(db,
     'SELECT * FROM onboarding_drafts WHERE id = ? AND user_id = ? LIMIT 1', [input.draftId, input.userId])
   if (!draft) throw new HTTPError({ statusCode: 404, statusMessage: 'Draft not found' })
+  if (draft.status === 'committing') draft = await readActiveOnboardingDraft(db, input.userId)
+  if (!draft || draft.id !== input.draftId || !['active', 'committed'].includes(draft.status)) throw new HTTPError({ statusCode: 409, statusMessage: 'Website draft is no longer available', data: { code: 'ONBOARDING_DRAFT_UNAVAILABLE', draft_id: input.draftId } })
   const payload = parseOnboardingDraftPayload(draft.payload_json)
   const { currency, timezone, sourceLocale } = payload.source.details
   if (!currency || !isValidTimezone(timezone) || !sourceLocale || !draft.subdomain_candidate) {
@@ -77,22 +80,22 @@ export async function activateOnboardingDraft(env: CloudflareEnv, db: D1Database
     'SELECT onboarding_status FROM organization WHERE id = ?', [organizationId]) : null
   const live = existing?.onboarding_status === 'active'
   if (!live) {
-    if (draft.status !== 'active') throw new HTTPError({ statusCode: 409, statusMessage: 'Website creation is already in progress', data: { code: 'WEBSITE_CREATION_IN_PROGRESS', draft_id: draft.id, organization_id: organizationId } })
-    const claim = await execute(db, "UPDATE onboarding_drafts SET status = 'committing', updated_at = ? WHERE id = ? AND status = 'active'", [new Date().toISOString(), draft.id])
-    if (!claim.meta.changes) throw new HTTPError({ statusCode: 409, statusMessage: 'Website creation is already in progress', data: { code: 'WEBSITE_CREATION_IN_PROGRESS', draft_id: draft.id, organization_id: organizationId } })
+    const revision = new Date(Math.max(Date.now(), Date.parse(draft.updated_at) + 1)).toISOString()
+    const claim = await execute(db, "UPDATE onboarding_drafts SET updated_at = ? WHERE id = ? AND user_id = ? AND status = 'active' AND updated_at = ?", [revision, draft.id, input.userId, draft.updated_at])
+    if (!claim.meta.changes) throw new HTTPError({ statusCode: 409, statusMessage: 'Website draft changed; retry the same request', data: { code: 'ONBOARDING_DRAFT_CHANGED', draft_id: draft.id, organization_id: organizationId } })
+    draft.updated_at = revision
   }
   try {
     if (!live) {
       const target = await ensureOnboardingTarget(env, db, input.userId, { ...draft, source_locale: sourceLocale, default_currency: currency })
       if ('error' in target) throw new HTTPError({ statusCode: target.status, statusMessage: target.error })
       organizationId = target.target.organizationId
-      const applied = await applyOnboardingDraft(env, db, { userId: input.userId, target: target.target, payload, defaultCurrency: currency, timezone })
+      const applied = await applyOnboardingDraft(env, db, { userId: input.userId, target: target.target, payload, defaultCurrency: currency, timezone, draft, activate: true })
       if ('error' in applied) throw new HTTPError({ statusCode: applied.status, statusMessage: applied.error })
-      await activateOrganization(db, organizationId)
     }
     if (!organizationId) throw new Error('Activated website has no organization')
     const now = new Date().toISOString()
-    await execute(db, "UPDATE onboarding_drafts SET status = 'committed', committed_at = COALESCE(committed_at, ?), updated_at = ? WHERE id = ?", [now, now, draft.id])
+    if (live) await execute(db, "UPDATE onboarding_drafts SET status = 'committed', committed_at = COALESCE(committed_at, ?), updated_at = ? WHERE id = ? AND user_id = ? AND organization_id = ? AND EXISTS (SELECT 1 FROM organization WHERE id = ? AND onboarding_status = 'active')", [now, now, draft.id, input.userId, organizationId, organizationId])
     const completion = await completeOnboarding(env, db, organizationId, input.origin)
     try {
       if (input.activateSession) await input.activateSession(organizationId)
@@ -113,7 +116,8 @@ export async function activateOnboardingDraft(env: CloudflareEnv, db: D1Database
   } catch (error) {
     const recorded = await queryFirst<{ organization_id: string | null; onboarding_status: string | null }>(db,
       'SELECT d.organization_id, o.onboarding_status FROM onboarding_drafts d LEFT JOIN organization o ON o.id = d.organization_id WHERE d.id = ?', [draft.id])
-    if (recorded?.onboarding_status !== 'active') await execute(db, "UPDATE onboarding_drafts SET status = 'active', updated_at = ? WHERE id = ? AND status = 'committing'", [new Date().toISOString(), draft.id])
+    const current = await queryFirst<{ updated_at: string; status: string }>(db, 'SELECT updated_at, status FROM onboarding_drafts WHERE id = ? AND user_id = ?', [draft.id, input.userId])
+    if (!live && current && (current.updated_at !== draft.updated_at || current.status !== 'active') && recorded?.onboarding_status !== 'active') throw new HTTPError({ statusCode: 409, statusMessage: 'Website draft changed; retry the same request', data: { code: 'ONBOARDING_DRAFT_CHANGED', draft_id: draft.id, organization_id: recorded?.organization_id ?? null }, cause: error })
     const statusCode = error && typeof error === 'object' && 'statusCode' in error ? Number(error.statusCode) : 500
     const details = error && typeof error === 'object' && 'data' in error && error.data && typeof error.data === 'object' ? error.data : {}
     const message = error && typeof error === 'object' && 'statusMessage' in error && typeof error.statusMessage === 'string' ? error.statusMessage : error instanceof Error ? error.message : String(error)
@@ -130,10 +134,10 @@ function summarizeBatchQueries(batchQueries: BatchQuery[]) {
  * Media assets carry the draft's own asset id, so re-applying a draft must not
  * insert the same asset twice.
  */
-async function ensureMediaAsset(db: D1Database, data: CreateInput & { category?: string; status?: string; created_by_user_id?: string }) {
+async function ensureMediaAsset(db: D1Database, data: CreateInput & { category?: string; status?: string; created_by_user_id?: string }, writeGuard: BatchQuery) {
   const existing = await queryFirst<{ id: string }>(db, 'SELECT id FROM media_assets WHERE id = ? LIMIT 1', [data.id])
   if (existing) return
-  await createMediaAsset(db, data)
+  await createMediaAsset(db, data, undefined, writeGuard)
 }
 
 /**
@@ -148,32 +152,34 @@ export async function ensureOnboardingTarget(
   draft: OnboardingDraftRow,
 ): Promise<{ target: OnboardingTarget } | { error: string; status: number }> {
   if (!draft.source_locale) return { status: 400, error: 'Choose a supported website language' }
+  const revision = { id: draft.id, user_id: userId, updated_at: draft.updated_at }
+  const writeGuard = onboardingDraftWriteGuard(revision)
+  await executeBatch(db, [writeGuard])
   let organizationId = draft.organization_id
   if (!organizationId) {
-    const created = await createOrganization(env, userId, draft.name)
-    // Two saves can race here. The claim only lands while the draft still has
-    // no organization, and the re-read decides which one won, so overlapping
-    // saves converge on one organization instead of the later one silently
-    // replacing the earlier.
-    await execute(db, `
-      UPDATE onboarding_drafts SET organization_id = ?, updated_at = ?
-      WHERE id = ? AND organization_id IS NULL
-    `, [created.organizationId, new Date().toISOString(), draft.id])
+    const created = await createOrganization(env, userId, draft.name, { draftId: draft.id, slug: draft.subdomain_candidate })
+    await executeBatch(db, [writeGuard, {
+      query: 'UPDATE onboarding_drafts SET organization_id = ? WHERE id = ? AND user_id = ? AND organization_id IS NULL',
+      params: [created.organizationId, draft.id, userId],
+    }])
     const claimed = await queryFirst<{ organization_id: string | null }>(db, `
       SELECT organization_id FROM onboarding_drafts WHERE id = ? LIMIT 1
     `, [draft.id])
-    if (claimed?.organization_id !== created.organizationId) {
-      const unclaimed = await queryFirst<{ id: string }>(db, `
-        SELECT id FROM organization WHERE id = ? AND subdomain IS NULL AND onboarding_status <> 'active'
-          AND NOT EXISTS (SELECT 1 FROM onboarding_drafts WHERE organization_id = organization.id)
-      `, [created.organizationId])
-      if (unclaimed) await (await organizationAdapter(env)).deleteOrganization(unclaimed.id)
-    }
     if (!claimed?.organization_id) return { status: 500, error: 'Could not record the new organization.' }
+    if (claimed.organization_id !== created.organizationId) return { status: 409, error: 'Website draft organization changed; retry the same request.' }
     organizationId = claimed.organization_id
   }
 
-  const result = await provisionOrganization(env as ProvisioningEnv, db, userId, {
+  const membership = await resolveUserOrganization(env, { userId, organizationId })
+  if (!membership || !isOrganizationWideRole(membership.role)) return { status: 403, error: 'Organization-level access required.' }
+  const existing = await queryFirst<{ subdomain: string | null; vertical: string; onboarding_status: string; locale: string | null; has_domain: number }>(db, `
+    SELECT o.subdomain, o.vertical, o.onboarding_status, l.locale,
+      EXISTS(SELECT 1 FROM organization_domains WHERE organization_id = o.id AND type = 'subdomain' AND status = 'active') AS has_domain
+    FROM organization o LEFT JOIN organization_locales l ON l.organization_id = o.id AND l.is_source = 1 WHERE o.id = ?
+  `, [organizationId])
+  if (existing?.locale && existing.locale !== draft.source_locale) return { status: 409, error: 'Existing website content cannot be relabelled into another language.' }
+  const complete = existing?.onboarding_status === 'pending' && existing.subdomain === draft.subdomain_candidate && existing.vertical === draft.vertical && existing.locale === draft.source_locale && existing.has_domain
+  const result: OrganizationProvisioningResult = complete ? { status: 200, data: { subdomain: existing!.subdomain } } : await provisionOrganization(env as ProvisioningEnv, db, userId, {
     organizationId,
     name: draft.name,
     subdomain: draft.subdomain_candidate,
@@ -182,8 +188,10 @@ export async function ensureOnboardingTarget(
     sourceLocale: draft.source_locale,
     activate: false,
     origin: null,
+    writeGuard: onboardingDraftWriteGuard(revision, organizationId),
   })
   if (result.status !== 200) {
+    await executeBatch(db, [onboardingDraftWriteGuard(revision, organizationId)])
     return {
       status: result.status || 500,
       error: typeof result.data.error === 'string' ? result.data.error : 'Could not provision this organization. Please try again.',
@@ -232,10 +240,13 @@ export async function applyOnboardingDraft(
     // yet" looks like — never a currency or a zone nobody chose.
     defaultCurrency: CurrencyCode | null
     timezone: string | null
+    draft: Pick<SavedOnboardingDraft, 'id' | 'user_id' | 'updated_at'>
+    activate?: boolean
   },
 ): Promise<{ locationSlug: string | null } | { error: string; status: number }> {
   const { userId, payload, defaultCurrency, timezone } = input
   const { organizationId } = input.target
+  const writeGuard = onboardingDraftWriteGuard(input.draft, organizationId)
   const locationRow = { id: input.target.locationId }
   const organization = await queryFirst<{ onboarding_status: string | null; has_bookings: number }>(db, `
     SELECT onboarding_status, EXISTS(SELECT 1 FROM bookings WHERE organization_id = organization.id) AS has_bookings
@@ -246,32 +257,30 @@ export async function applyOnboardingDraft(
     throw new HTTPError({ statusCode: 409, statusMessage: 'Onboarding can only replace a pending site with no bookings', data: { code: 'ONBOARDING_REBUILD_NOT_ALLOWED' } })
   }
 
-  if (defaultCurrency) {
-    await execute(db, `
+  const settingsQueries: BatchQuery[] = []
+  if (defaultCurrency) settingsQueries.push({ query: `
       UPDATE organization
       SET default_currency = ?, updated_at = ?
       WHERE id = ?
-    `, [defaultCurrency, new Date().toISOString(), organizationId])
-  }
+    `, params: [defaultCurrency, new Date().toISOString(), organizationId] })
 
-  if (timezone) {
-    await execute(db, `
+  if (timezone) settingsQueries.push({ query: `
       UPDATE organization SET settings_json = json_set(settings_json, '$.config.default_timezone', ?)
       WHERE id = ?
-    `, [timezone, organizationId])
-  }
+    `, params: [timezone, organizationId] })
 
   // The look the owner chose in the brand step: a starter palette and a font,
   // written to the site so the preview and the launched site both wear them.
   const draftConfig = payload.preview.config
   if (typeof draftConfig.palette_starter === 'string') {
-    await execute(db, `UPDATE organization SET settings_json = json_set(settings_json, '$.config.palette', json(?)) WHERE id = ?`,
-      [JSON.stringify(starterPalette(draftConfig.palette_starter)), organizationId])
+    settingsQueries.push({ query: 'UPDATE organization SET settings_json = json_set(settings_json, \'$.config.palette\', json(?)) WHERE id = ?',
+      params: [JSON.stringify(starterPalette(draftConfig.palette_starter)), organizationId] })
   }
   if (typeof draftConfig.font_preset === 'string') {
-    await execute(db, `UPDATE organization SET settings_json = json_set(settings_json, '$.config.font_preset', ?) WHERE id = ?`,
-      [resolveOrganizationFontPreset(draftConfig.font_preset), organizationId])
+    settingsQueries.push({ query: 'UPDATE organization SET settings_json = json_set(settings_json, \'$.config.font_preset\', ?) WHERE id = ?',
+      params: [resolveOrganizationFontPreset(draftConfig.font_preset), organizationId] })
   }
+  if (settingsQueries.length) await executeBatch(db, [writeGuard, ...settingsQueries])
   const logoPresentation = typeof draftConfig.logo_shape === 'string'
     ? parseLogoPresentation({ shape: draftConfig.logo_shape, focus: { x: 0.5, y: 0.5 } })
     : null
@@ -282,17 +291,17 @@ export async function applyOnboardingDraft(
 
   if (logoDraftImage) {
     await ensureMediaAsset(db, {
-      id: logoDraftImage.draftAssetId, organization_id: organizationId, kind: 'image', provider: 'cloudflare_images', source: 'uploaded', cloudflare_image_id: logoDraftImage.cloudflareImageId, public_url: logoDraftImage.publicUrl, thumbnail_url: logoDraftImage.thumbnailUrl, mime_type: logoDraftImage.mimeType, file_name: logoDraftImage.fileName, file_size: logoDraftImage.fileSize, status: 'active', created_by_user_id: userId, })
-    await executeBatch(db, insertInitialMediaPlacements({ organizationId, placement: { owner_type: 'organization', owner_id: organizationId, slot: 'logo' }, media: [{ asset_id: logoDraftImage.draftAssetId, presentation: logoPresentation }] }))
+      id: logoDraftImage.draftAssetId, organization_id: organizationId, kind: 'image', provider: 'cloudflare_images', source: 'uploaded', cloudflare_image_id: logoDraftImage.cloudflareImageId, public_url: logoDraftImage.publicUrl, thumbnail_url: logoDraftImage.thumbnailUrl, mime_type: logoDraftImage.mimeType, file_name: logoDraftImage.fileName, file_size: logoDraftImage.fileSize, status: 'active', created_by_user_id: userId, }, writeGuard)
+    await executeBatch(db, [writeGuard, ...insertInitialMediaPlacements({ organizationId, placement: { owner_type: 'organization', owner_id: organizationId, slot: 'logo' }, media: [{ asset_id: logoDraftImage.draftAssetId, presentation: logoPresentation }] })])
   }
 
   if (heroDraftImage) {
     await ensureMediaAsset(db, {
-      id: heroDraftImage.draftAssetId, organization_id: organizationId, kind: 'image', provider: 'cloudflare_images', source: 'uploaded', cloudflare_image_id: heroDraftImage.cloudflareImageId, public_url: heroDraftImage.publicUrl, thumbnail_url: heroDraftImage.thumbnailUrl, mime_type: heroDraftImage.mimeType, file_name: heroDraftImage.fileName, file_size: heroDraftImage.fileSize, category: 'other', status: 'active', created_by_user_id: userId, })
+      id: heroDraftImage.draftAssetId, organization_id: organizationId, kind: 'image', provider: 'cloudflare_images', source: 'uploaded', cloudflare_image_id: heroDraftImage.cloudflareImageId, public_url: heroDraftImage.publicUrl, thumbnail_url: heroDraftImage.thumbnailUrl, mime_type: heroDraftImage.mimeType, file_name: heroDraftImage.fileName, file_size: heroDraftImage.fileSize, category: 'other', status: 'active', created_by_user_id: userId, }, writeGuard)
     // The photo is the home page's hero and the business's sharing image. It
     // is not also the location's hero: the location, its card and its email
     // resolve to the sharing image until the owner gives the location its own.
-    await executeBatch(db, insertInitialMediaPlacements({ organizationId, placement: { owner_type: 'organization', owner_id: organizationId, slot: 'social_share' }, media: [{ asset_id: heroDraftImage.draftAssetId }] }))
+    await executeBatch(db, [writeGuard, ...insertInitialMediaPlacements({ organizationId, placement: { owner_type: 'organization', owner_id: organizationId, slot: 'social_share' }, media: [{ asset_id: heroDraftImage.draftAssetId }] })])
   }
 
   const draftLocation = payload.preview.locations.find(location => location.id === 'draft-location-main')
@@ -301,7 +310,7 @@ export async function applyOnboardingDraft(
     // buildOnboardingDraftPayload always derives the location slug from the brand name.
     updatedSlug = draftLocation.slug
     const updateResult = await updateLocation(db, organizationId, locationRow.id, {
-      title: draftLocation.title, slug: updatedSlug, address: draftLocation.address, description: draftLocation.description, phone: draftLocation.phone, website_url: draftLocation.website_url, opening_hours: parseOpeningHours(draftLocation.opening_hours), special_hours: parseSpecialHours(draftLocation.special_hours), rating: draftLocation.rating, review_count: draftLocation.review_count, timezone: payload.source.details.timezone, status: 'active', maps_url: payload.source.place?.mapsUrl, google_place_id: payload.source.placeId, }, userId, env)
+      title: draftLocation.title, slug: updatedSlug, address: draftLocation.address, description: draftLocation.description, phone: draftLocation.phone, website_url: draftLocation.website_url, opening_hours: parseOpeningHours(draftLocation.opening_hours), special_hours: parseSpecialHours(draftLocation.special_hours), rating: draftLocation.rating, review_count: draftLocation.review_count, timezone: payload.source.details.timezone, status: 'active', maps_url: payload.source.place?.mapsUrl, google_place_id: payload.source.placeId, }, userId, env, writeGuard)
 
     // updateLocation answers with a status and a message naming the field it
     // refused — a 400 for an unusable timezone or notification phone, a 409 for
@@ -309,6 +318,7 @@ export async function applyOnboardingDraft(
     // them into a 500 that told the owner nothing about what to change, so the
     // status and the message travel back to the caller intact.
     if (updateResult.status !== 200) {
+      await executeBatch(db, [writeGuard])
       return {
         status: updateResult.status,
         error: typeof updateResult.data?.error === 'string'
@@ -326,6 +336,7 @@ export async function applyOnboardingDraft(
   }
   await applyOnboardingTenantPages(db, {
     env,
+    writeGuard,
     organizationId, userId: userId, pages: [...contentByPage].map(([pageName, rows]) => {
       const pageType = onboardingPageType(pageName)
       // The draft is the whole document. Onboarding does not collect SEO
@@ -349,13 +360,13 @@ export async function applyOnboardingDraft(
       `, [organizationId, onboardingPagePath(pageName), row.field, row.field])
       if (block) {
         const slot = row.field === 'hero' ? 'media' : row.field.endsWith('.image') ? row.field : 'gallery'
-        await executeBatch(db, insertInitialMediaPlacements({ organizationId, placement: { owner_type: 'content_block', owner_id: block.id, slot }, media: [{ asset_id: assetId }] }))
+        await executeBatch(db, [writeGuard, ...insertInitialMediaPlacements({ organizationId, placement: { owner_type: 'content_block', owner_id: block.id, slot }, media: [{ asset_id: assetId }] })])
       }
     }
   }
 
-  // The full rebuild (Products/qa/reviews delete+insert) plus the final
-  // draft status flip runs as a single atomic D1 batch, so a failure partway through
+  // The catalogue rebuild (Products/qa/reviews delete+insert) runs as a
+  // guarded atomic D1 batch, so a failure partway through
   // never leaves the tenant with half-cleared content — see incident notes for why
   // sequential execute() calls here are unsafe.
   const now = new Date().toISOString()
@@ -498,7 +509,7 @@ export async function applyOnboardingDraft(
   try {
     // A draft with nothing in it yet — the owner has answered only the name —
     // writes nothing, and D1 rejects an empty batch outright.
-    if (batchQueries.length) await executeBatch(db, batchQueries)
+    if (batchQueries.length) await executeBatch(db, [writeGuard, ...batchQueries])
   } catch (batchError) {
     console.error('onboarding_apply_batch_failed', {
       organizationId, batchSize: batchQueries.length, contentRows: payload.preview.content.length, products: payload.preview.products.length, qaRows: payload.preview.qa.length, reviews: payload.preview.reviews.length, queries: summarizeBatchQueries(batchQueries), error: batchError instanceof Error ? {
@@ -506,5 +517,6 @@ export async function applyOnboardingDraft(
     throw batchError
   }
   for (const page of productPages) await refreshTenantPageCard(db, env, page, userId)
+  if (input.activate) await activateOrganization(db, organizationId, writeGuard, input.draft)
   return { locationSlug: updatedSlug }
 }

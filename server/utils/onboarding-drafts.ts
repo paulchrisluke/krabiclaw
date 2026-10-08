@@ -1,7 +1,7 @@
 import { platformLocale } from '~/shared/platform-locales'
 import { parseOpeningHours, parseSpecialHours, type OpeningHours, type SpecialHours } from '~/shared/reservation-hours'
 import type { OrganizationVertical } from '~/utils/vertical-copy'
-import { execute, queryFirst } from '~/server/db'
+import { execute, queryAll, queryFirst, type BatchQuery } from '~/server/db'
 import { creationRequestHash } from '~/server/utils/organization-events'
 import { isCurrencyCode } from '~/shared/currencies'
 import { isValidTimezone } from '~/utils/timezone'
@@ -18,6 +18,46 @@ import { isOrganizationFontPreset } from '~/shared/organization-fonts'
 import { LOGO_SHAPES } from '~/shared/media-placement-contract'
 
 type DraftSourceType = 'google_places' | 'manual'
+export const ONBOARDING_ORGANIZATION_MARKER = '__krabiclaw_organization_creation_marker'
+
+export interface SavedOnboardingDraft {
+  id: string
+  user_id: string
+  organization_id: string | null
+  name: string
+  vertical: OrganizationVertical
+  subdomain_candidate: string
+  source_type: DraftSourceType
+  status: string
+  payload_json: string
+  updated_at: string
+}
+
+export async function readActiveOnboardingDraft(db: D1Database, userId: string, includeAbandoned = false) {
+  const rows = await queryAll<SavedOnboardingDraft>(db,
+    "SELECT * FROM onboarding_drafts d WHERE user_id = ? AND (status IN ('active', 'committing') OR (status = 'abandoned' AND EXISTS (SELECT 1 FROM organization WHERE (id = d.organization_id OR json_extract(metadata, ?) = d.id) AND onboarding_status <> 'active'))) ORDER BY created_at, id LIMIT 2", [userId, `$.${ONBOARDING_ORGANIZATION_MARKER}`])
+  if (rows.length > 1) throw new HTTPError({ statusCode: 409, statusMessage: 'More than one unfinished website draft needs recovery', data: { code: 'ONBOARDING_DRAFT_CONFLICT', draft_ids: rows.map(row => row.id) } })
+  const row = rows[0]
+  if (row?.status === 'abandoned' && !includeAbandoned) throw new HTTPError({ statusCode: 409, statusMessage: 'Website draft cleanup is incomplete. Retry discarding this draft.', data: { code: 'ONBOARDING_DRAFT_DISCARD_INCOMPLETE', draft_id: row.id, organization_id: row.organization_id } })
+  if (row?.status === 'committing') {
+    const updatedAt = new Date(Math.max(Date.now(), Date.parse(row.updated_at) + 1)).toISOString()
+    const restored = await execute(db, "UPDATE onboarding_drafts SET status = 'active', updated_at = ? WHERE id = ? AND user_id = ? AND status = 'committing' AND updated_at = ?", [updatedAt, row.id, userId, row.updated_at])
+    if (!restored.meta.changes) throw new HTTPError({ statusCode: 409, statusMessage: 'Website draft changed; retry the same request', data: { code: 'ONBOARDING_DRAFT_CHANGED', draft_id: row.id } })
+    return { ...row, status: 'active', updated_at: updatedAt }
+  }
+  return row ?? null
+}
+
+/** The batch must still belong to this unfinished draft revision. */
+export function onboardingDraftWriteGuard(draft: Pick<SavedOnboardingDraft, 'id' | 'user_id' | 'updated_at'>, organizationId?: string): BatchQuery {
+  return {
+    query: `SELECT CASE WHEN EXISTS (
+      SELECT 1 FROM onboarding_drafts d WHERE d.id = ? AND d.user_id = ? AND d.status = 'active' AND d.updated_at = ?
+        ${organizationId ? "AND d.organization_id = ? AND EXISTS (SELECT 1 FROM organization o WHERE o.id = d.organization_id AND o.onboarding_status IN ('pending', 'failed') AND NOT EXISTS (SELECT 1 FROM bookings WHERE organization_id = o.id))" : ''}
+    ) THEN NULL ELSE json('Onboarding draft revision changed') END`,
+    params: [draft.id, draft.user_id, draft.updated_at, ...(organizationId ? [organizationId] : [])],
+  }
+}
 
 export async function createManualOnboardingDraft(db: D1Database, userId: string, input: {
   idempotency_key: string
@@ -58,6 +98,10 @@ export async function createManualOnboardingDraft(db: D1Database, userId: string
   }
   const now = new Date().toISOString()
   let stored = await queryFirst<{ payload_json: string; status: string }>(db, 'SELECT payload_json, status FROM onboarding_drafts WHERE id = ? AND user_id = ?', [id, userId])
+  if (!stored || ['active', 'committing', 'abandoned'].includes(stored.status)) {
+    const active = await readActiveOnboardingDraft(db, userId)
+    if (active && active.id !== id) throw new HTTPError({ statusCode: 409, statusMessage: 'Finish or discard your existing website draft before creating another website', data: { code: 'ONBOARDING_DRAFT_EXISTS', draft_id: active.id } })
+  }
   if (!stored) {
     try {
       await execute(db, `INSERT INTO onboarding_drafts (id, user_id, name, vertical, subdomain_candidate, source_type, status, payload_json, created_at, updated_at)
@@ -247,6 +291,7 @@ export function getDraftMedia(payload: OnboardingDraftPayload, slot: 'logo' | 'h
 }
 
 export interface OnboardingDraftUpsertResult {
+  updatedAt: string
   id: string
   subdomainCandidate: string
   organizationId: string | null
@@ -503,29 +548,30 @@ export async function upsertActiveOnboardingDraft(db: D1Database, input: {
   vertical: OrganizationVertical
   sourceType: DraftSourceType
   payload: OnboardingDraftPayload
+  expectedUpdatedAt: string | null
 }): Promise<OnboardingDraftUpsertResult> {
   const payloadJson = JSON.stringify(input.payload)
-  const now = nowIso()
+  const existing = await readActiveOnboardingDraft(db, input.userId)
+  if ((existing?.updated_at ?? null) !== input.expectedUpdatedAt) throw new HTTPError({ statusCode: 409, statusMessage: 'Website draft changed; reload before saving', data: { code: 'ONBOARDING_DRAFT_CHANGED', draft_id: existing?.id } })
+  const now = new Date(Math.max(Date.now(), existing ? Date.parse(existing.updated_at) + 1 : 0)).toISOString()
 
   const id = crypto.randomUUID()
   // The address is claimed at the first save, when the pending site is created,
   // so a later change of brand name renames the brand and not the site's host —
   // and every following save keeps writing to the same site. organization_id is
   // set once for the same reason.
-  const draft = await queryFirst<{ id: string; subdomain_candidate: string; organization_id: string | null }>(db, `
-    INSERT INTO onboarding_drafts
+  const draft = await queryFirst<{ id: string; subdomain_candidate: string; organization_id: string | null; updated_at: string }>(db, existing ? `
+    UPDATE onboarding_drafts SET
+      organization_id = COALESCE(organization_id, ?), name = ?, vertical = ?, source_type = ?, payload_json = ?, updated_at = ?
+    WHERE id = ? AND user_id = ? AND status = 'active' AND updated_at = ?
+    RETURNING id, subdomain_candidate, organization_id, updated_at
+  ` : `INSERT INTO onboarding_drafts
       (id, user_id, organization_id, name, vertical, subdomain_candidate, source_type, status, payload_json, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
     ON CONFLICT(user_id) WHERE status = 'active'
-    DO UPDATE SET
-      organization_id = COALESCE(onboarding_drafts.organization_id, excluded.organization_id),
-      name = excluded.name,
-      vertical = excluded.vertical,
-      source_type = excluded.source_type,
-      payload_json = excluded.payload_json,
-      updated_at = excluded.updated_at
-    RETURNING id, subdomain_candidate, organization_id
-  `, [
+    DO NOTHING
+    RETURNING id, subdomain_candidate, organization_id, updated_at
+  `, existing ? [input.organizationId ?? null, input.name, input.vertical, input.sourceType, payloadJson, now, existing.id, input.userId, existing.updated_at] : [
     id,
     input.userId,
     input.organizationId ?? null,
@@ -538,12 +584,13 @@ export async function upsertActiveOnboardingDraft(db: D1Database, input: {
     now,
   ])
   if (!draft?.id) {
-    throw new Error('Failed to save active onboarding draft')
+    throw new HTTPError({ statusCode: 409, statusMessage: 'Website draft changed; retry the same request', data: { code: 'ONBOARDING_DRAFT_CHANGED', draft_id: existing?.id } })
   }
 
   return {
     id: draft.id,
     subdomainCandidate: draft.subdomain_candidate,
+    updatedAt: draft.updated_at,
     organizationId: draft.organization_id,
     payload: input.payload,
   }

@@ -344,6 +344,7 @@ export async function updateLocation(
   input: UpdateLocationInput,
   userId: string,
   env?: CloudflareEnv,
+  writeGuard?: BatchQuery,
 ) {
   const existing = await loadLocation(db, organizationId, locationIdOrSlug);
   if (!existing) {
@@ -526,8 +527,8 @@ export async function updateLocation(
       onlyIfPreviousChangedOneRow: true,
     }));
 
-    const results = await executeBatch(db, statements);
-    return (results[0]?.meta?.changes ?? 0) === 1;
+    const results = await executeBatch(db, [...(writeGuard ? [writeGuard] : []), ...statements]);
+    return (results[writeGuard ? 1 : 0]?.meta?.changes ?? 0) === 1;
   };
   const stale = {
     status: 409,

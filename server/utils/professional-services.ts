@@ -3,7 +3,7 @@ import { platformLocale } from '~/shared/platform-locales'
 import { loadPublicProductCollection } from '~/server/utils/public-products'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 import { parseGoogleReviewMetadata } from '~/shared/google-review'
-import { executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { HTTPError } from 'nitro';
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { listOrganizationReviews } from '~/server/utils/organization-reviews'
@@ -91,8 +91,8 @@ export async function listPublicTenantPages(env: CloudflareEnv, db: DbClient, or
 }
 
 /** Initialize the canonical consultation settings through the shared adapter. */
-export async function initializePublicConsultationSettings(db: DbClient, organizationId: string, settings: Omit<NonNullable<import('~/shared/organization-settings').OrganizationSettings['consultation']>, 'created_at' | 'updated_at' | 'updated_by'>) {
-  await executeBatch(db, [{
+export async function initializePublicConsultationSettings(db: DbClient, organizationId: string, settings: Omit<NonNullable<import('~/shared/organization-settings').OrganizationSettings['consultation']>, 'created_at' | 'updated_at' | 'updated_by'>, writeGuard?: BatchQuery) {
+  await executeBatch(db, [...(writeGuard ? [writeGuard] : []), {
     query: `UPDATE organization SET consultation_settings_json = json(?), updated_at = ? WHERE id = ? AND consultation_settings_json IS NULL`,
     params: [JSON.stringify({ ...settings, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), updated_by: null }), new Date().toISOString(), organizationId],
   }, publicResourceCacheInvalidationQuery(organizationId, 'consultation_settings_initialized')], { operation: 'Initialize consultation settings' })
