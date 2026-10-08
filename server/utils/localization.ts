@@ -137,7 +137,7 @@ export async function listOrganizationLocaleRecords(
 
 function billingUrl(organizationSlug: string | null): string | null {
   if (!organizationSlug) return null
-  return `/dashboard/${encodeURIComponent(organizationSlug)}/website/localization`
+  return `/dashboard/${encodeURIComponent(organizationSlug)}/payments?tab=plan`
 }
 
 export async function assertOrganizationLanguageEntitlement(
@@ -147,7 +147,7 @@ export async function assertOrganizationLanguageEntitlement(
   localeInput: unknown,
   // Authoring needs the language to exist; the public site needs it published.
   // One question, one query, and the caller says which answer it needs.
-  requires: 'exists' | 'published' = 'exists',
+  requires: 'plan' | 'exists' | 'published' = 'exists',
 ): Promise<{ locale: string; source: boolean; platform_messages: Record<string, string> | null }> {
   const locale = assertExactCanonicalLocale(localeInput)
   const catalog = platformLocale(locale)
@@ -167,12 +167,20 @@ export async function assertOrganizationLanguageEntitlement(
   // `published` here made translate-before-publish impossible, which is why a
   // language went public with nothing in it. The public gate below is what
   // still insists on `published`.
-  const satisfied = requires === 'published' ? row.locale_status === 'published' : Boolean(row.locale_status)
-  if (entitlements.additional_languages !== true || !satisfied) {
-    localizationError(402, 'LANGUAGE_ENTITLEMENT_REQUIRED', `A ${requires === 'published' ? 'published ' : ''}language and an eligible paid plan are required`, {
+  const satisfied = requires === 'plan' || (requires === 'published' ? row.locale_status === 'published' : Boolean(row.locale_status))
+  if (entitlements.additional_languages !== true) {
+    localizationError(402, 'LANGUAGE_ENTITLEMENT_REQUIRED', 'Publishing additional languages requires Growth or Commerce.', {
       organization_id: organizationId,
       locale,
-      billing_url: billingUrl(row.organization_slug),
+      dashboard_url: billingUrl(row.organization_slug),
+    })
+  }
+  if (!satisfied) {
+    localizationError(409, requires === 'published' ? 'LANGUAGE_NOT_PUBLISHED' : 'LANGUAGE_NOT_ENABLED',
+      requires === 'published' ? 'This website language is not published.' : 'Add this website language before authoring its translations.', {
+      organization_id: organizationId,
+      locale,
+      dashboard_url: row.organization_slug ? `/dashboard/${encodeURIComponent(row.organization_slug)}/website/localization` : null,
     })
   }
   return { locale, source: false, platform_messages: { ...catalog.messages } }
@@ -203,6 +211,8 @@ export async function assertPublicOrganizationLanguageEntitlement(
       isSubscriptionStateInvalid(error)
       || status === 402
       || code === 'LANGUAGE_ENTITLEMENT_REQUIRED'
+      || code === 'LANGUAGE_NOT_ENABLED'
+      || code === 'LANGUAGE_NOT_PUBLISHED'
       || code === 'PLATFORM_LOCALE_UNAVAILABLE'
     ) {
       throw new HTTPError({ statusCode: 404, statusMessage: 'Localized route was not found' })

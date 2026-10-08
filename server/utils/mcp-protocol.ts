@@ -59,16 +59,22 @@ export function asMcpError(error: unknown): McpErrorShape {
     return { code: shape.code, message: shape.message, data: shape.data, kind: shape.kind }
   }
 
-  // Business-logic validation shared between REST dashboard routes and MCP
-  // tool executors (e.g. server/utils/experiences.ts) throws h3's HTTPError
-  // with statusCode 400/404 rather than mcpProtocolError, since it has no MCP
-  // awareness. Treat those as tool execution failures so tools/call converts
-  // them to isError:true results instead of leaking raw HTTP errors.
-  if (error && typeof error === 'object' && [400, 404].includes(Number((error as { statusCode?: unknown }).statusCode))) {
+  // REST and MCP share business guards. A rejected operation is a tool result,
+  // including plan limits and conflicts; it is not a broken transport.
+  const status = error && typeof error === 'object' && 'statusCode' in error ? Number(error.statusCode) : NaN
+  if (error && typeof error === 'object' && status >= 400 && status < 500) {
     const message = typeof (error as { statusMessage?: unknown }).statusMessage === 'string'
       ? (error as { statusMessage: string }).statusMessage
       : error instanceof Error ? error.message : 'Invalid request.'
-    return { code: MCP_ERROR.invalidParams, message, kind: 'tool_execution' }
+    const details = 'data' in error && error.data && typeof error.data === 'object' ? error.data : {}
+    const data = {
+      ...('code' in details && typeof details.code === 'string' ? { code: details.code } : {}),
+      ...('dashboard_url' in details && typeof details.dashboard_url === 'string' ? { dashboard_url: details.dashboard_url } : {}),
+    }
+    return { code: [400, 404].includes(status) ? MCP_ERROR.invalidParams : MCP_ERROR.internal, message,
+      kind: status === 401 ? 'auth' : status === 403 ? 'forbidden' : 'tool_execution',
+      ...(Object.keys(data).length ? { data } : {}),
+    }
   }
 
   if (error instanceof Error) {

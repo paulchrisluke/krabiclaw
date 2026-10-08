@@ -41,6 +41,16 @@ test('asMcpError falls back to internal for a plain Error', () => {
   assert.equal(mapped.message, 'boom')
 })
 
+test('a business guard preserves its action and excludes unrelated error details', () => {
+  const error = Object.assign(new Error('Upgrade required'), { statusCode: 402, data: {
+    code: 'LANGUAGE_ENTITLEMENT_REQUIRED', dashboard_url: '/dashboard/kanpai/payments?tab=plan',
+    credential: 'private-value', customer_email: 'private@example.com',
+  } })
+  const mapped = asMcpError(error)
+  assert.equal(mapped.kind, 'tool_execution')
+  assert.deepEqual(mapped.data, { code: 'LANGUAGE_ENTITLEMENT_REQUIRED', dashboard_url: '/dashboard/kanpai/payments?tab=plan' })
+})
+
 test('asMcpError maps statusCode 403 to forbidden rather than auth', () => {
   const forbidden = Object.assign(new Error('Forbidden'), { statusCode: 403 })
   const mapped = asMcpError(forbidden)
