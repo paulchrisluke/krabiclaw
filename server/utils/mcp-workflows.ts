@@ -5,6 +5,7 @@ import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { reorderQa, updateQa } from "~/server/utils/location-qa";
 import { listUserOrganizations, resolveOrganizationMembership } from '~/server/utils/member-access'
 import { localPartsAt } from '~/utils/timezone'
+import { publicTenantVisibilitySql } from '~/server/utils/public-base'
 
 export async function listOrganizationsForUser(
   db: D1Database,
@@ -16,7 +17,7 @@ export async function listOrganizationsForUser(
 
   return await queryAll<Record<string, unknown>>(db, `
     SELECT s.id, s.theme_id, s.name, s.slug, s.subdomain,
-           (SELECT domain FROM organization_domains WHERE organization_id = s.id AND role = 'canonical' AND status = 'active' AND type = 'custom') AS custom_domain, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = s.id AND role = 'canonical' AND status = 'active') AS public_url, s.status, s."createdAt" AS created_at, s.updated_at, s.onboarding_status
+           (SELECT domain FROM organization_domains WHERE organization_id = s.id AND role = 'canonical' AND status = 'active' AND type = 'custom') AS custom_domain, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = s.id AND role = 'canonical' AND status = 'active' AND ${publicTenantVisibilitySql('s', false)}) AS public_url, s.status, s."createdAt" AS created_at, s.updated_at, s.onboarding_status
     FROM organization s
     WHERE s.id IN (SELECT value FROM json_each(?))
     ORDER BY s."createdAt" DESC
@@ -31,7 +32,7 @@ export async function getOrganizationForMcp(
 ) {
   const organization = await queryFirst<Record<string, unknown>>(db, `
       SELECT s.id, s.name, s.theme_id, s.slug, s.subdomain,
-             (SELECT domain FROM organization_domains WHERE organization_id = s.id AND role = 'canonical' AND status = 'active' AND type = 'custom') AS custom_domain, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = s.id AND role = 'canonical' AND status = 'active') AS public_url, s.status, s.updated_at, s.onboarding_status
+             (SELECT domain FROM organization_domains WHERE organization_id = s.id AND role = 'canonical' AND status = 'active' AND type = 'custom') AS custom_domain, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = s.id AND role = 'canonical' AND status = 'active' AND ${publicTenantVisibilitySql('s', false)}) AS public_url, s.status, s.updated_at, s.onboarding_status
       FROM organization s
       WHERE s.id = ?
       LIMIT 1

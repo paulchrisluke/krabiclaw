@@ -162,7 +162,6 @@ import BookingTimeStep, { type RawDateAvailability, type TimeSlotSelection } fro
 import { getTodayHoursLabel, isOpenNow, schemaOpeningHours } from '~/shared/reservation-hours'
 import { formatTime, localDateAt, isValidInstant, isValidTimezone } from '~/utils/timezone'
 import { setBookingConfirmation } from '~/composables/useBookingHandoff'
-import { requireProductPresentation } from '~/utils/product-presentation'
 import { addressPlaceName, formatPostalAddress, schemaPostalAddress, type PostalAddress } from '~/utils/postal-address'
 import { mediaStillUrl, type MediaPresentation } from '~/shared/media-placement-contract'
 
@@ -176,7 +175,6 @@ definePageMeta({ layout: 'saya' })
 // The tenant is the organization; `site` is only the shape this composable
 // still returns it under.
 const { organization: organization, organizationId } = useTenantOrganization()
-const route = useRoute()
 const { locale, t } = useI18n()
 const resCopy = computed(() => getVerticalCopy((organization as ApiValue)?.vertical, locale.value))
 const { locations, config, getField, reservationPolicyByLocation } = await usePublicPageData()
@@ -186,19 +184,6 @@ useHeroLcpPreload(computed(() => {
   const first = locations.value[0]
   return first ? getLocationPoster(first) : null
 }))
-
-const isExperienceOrganization = computed(() => (organization as { vertical?: string | null } | null)?.vertical === 'experience')
-
-// Experience-vertical sites book each Product on its own page. The
-// /reservations page has no meaning for them. Redirect as soon as the site
-// vertical is known — do NOT gate on having products, because a freshly seeded
-// site with vertical='experience' and no products yet should still not show
-// this page.
-watch(isExperienceOrganization, (isExp) => {
-  if (isExp) {
-    navigateTo({ path: requireProductPresentation(String((organization as { vertical?: string | null } | null)?.vertical)).collectionPath, query: route.query }, { replace: true, redirectCode: 302 })
-  }
-}, { immediate: true })
 
 const activeReservationPolicySummary = computed(() => {
   const locationId = selectedLocation.value?.id ? String(selectedLocation.value.id) : null
@@ -478,10 +463,7 @@ useSocialMetadata(() => ({
     { name: 'Home', url: '/' },
     { name: 'Reservations', url: '/reservations' },
   ],
-  // An experience site has no reservations page: the server redirects to
-  // /experiences, but a client-side navigation can render this briefly during
-  // hydration, so the intent says unlisted rather than relying on the redirect.
-  discoverability: isExperienceOrganization.value ? 'unlisted' : 'listed',
+  discoverability: 'listed',
 }))
 
 /**

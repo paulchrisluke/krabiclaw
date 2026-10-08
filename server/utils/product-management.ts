@@ -1547,11 +1547,11 @@ export async function setProductLocation(db: DbClient, input: {
   const now = new Date().toISOString()
   await executeBatch(db, [{
     query: `INSERT INTO product_locations (organization_id, product_id, location_id, active, published, created_at, updated_at, created_by, updated_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT (product_id, location_id) DO UPDATE SET active = excluded.active, published = excluded.published,
+            VALUES (?, ?, ?, COALESCE(?, 1), COALESCE(?, 1), ?, ?, ?, ?)
+            ON CONFLICT (product_id, location_id) DO UPDATE SET active = COALESCE(?, product_locations.active), published = COALESCE(?, product_locations.published),
               updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
-    params: [input.organizationId, input.productId, input.locationId, (input.active ?? true) ? 1 : 0, (input.published ?? false) ? 1 : 0,
-      now, now, input.actor.actorId, input.actor.actorId],
+    params: [input.organizationId, input.productId, input.locationId, input.active === undefined ? null : Number(input.active), input.published === undefined ? null : Number(input.published),
+      now, now, input.actor.actorId, input.actor.actorId, input.active === undefined ? null : Number(input.active), input.published === undefined ? null : Number(input.published)],
   }, publicResourceCacheInvalidationQuery(input.organizationId, 'product_location_changed')], { operation: 'Set product location' })
 }
 

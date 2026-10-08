@@ -7,6 +7,7 @@ import { HTTPError } from 'nitro';
 import { CANCELLATION_TIER_IDS, cancellationPatch, cancellationTierOf, type CancellationTierId } from "~/shared/availability-settings";
 import type { McpExecutorContext } from './execution'
 import {
+  DEFAULT_RESERVATION_DURATION_MINUTES,
   requireLocationReservationConfig,
   renderBookingPolicySummary,
   reservationPolicySummarySource,
@@ -239,7 +240,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'update_reservation_policy',
-      description: 'Set one location’s reservation duration, capacity, notice, deposit and cancellation terms. Use the current updated_at when amending it. A deposit needs its amount, currency, tax treatment and ready Payments. Omitted fields keep their value; null clears an optional rule.',
+      description: 'Enable or update table reservations using the location’s saved hours. New setup defaults to two hours, unlimited capacity, no advance notice and no deposit. Use the current updated_at when amending it; omitted fields keep their value. Deposits need an amount, currency, tax treatment and ready Payments.',
       domain: 'content',
       minimumRole: 'admin',
       inputSchema: {
@@ -247,6 +248,10 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
         location_id: { type: 'string' },
         locale: { type: 'string' },
         ...locationReservationConfigWriteSchema,
+        duration_minutes: { ...locationReservationConfigWriteSchema.duration_minutes, default: DEFAULT_RESERVATION_DURATION_MINUTES, description: 'Minutes per reservation. Defaults to 120 on setup; null restores that default. Omit to keep the current duration.' },
+        slot_capacity: { ...locationReservationConfigWriteSchema.slot_capacity, description: 'Guests per start time. Defaults to unlimited on setup; null removes the limit.' },
+        advance_notice_minutes: { ...locationReservationConfigWriteSchema.advance_notice_minutes, description: 'Required notice before the start. Defaults to zero on setup; null removes the rule.' },
+        deposit_required: { ...locationReservationConfigWriteSchema.deposit_required, description: 'Defaults to false on setup. Omit to keep the current requirement.' },
         cancellation_policy: { type: 'string', enum: CANCELLATION_TIER_IDS, description: 'Flexible: 2 hours. Moderate: 1 day. Firm: 2 days. Sets the deposit-refund and reschedule cutoffs together; do not also pass those fields.' },
       },
       required: ['location_id', 'expected_updated_at'],

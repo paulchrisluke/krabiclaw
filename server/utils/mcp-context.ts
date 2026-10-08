@@ -2,6 +2,7 @@ import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { listUserOrganizations, resolveOrganizationMembership } from '~/server/utils/member-access'
+import { publicTenantVisibilitySql } from '~/server/utils/public-base'
 
 export interface McpWorkspacePreferenceRow {
   user_id: string
@@ -87,7 +88,7 @@ export async function listAccessibleOrganizationsForMcp(
   const rows = await queryAll<Omit<McpOrganizationSummary, 'role'>>(db, `
     SELECT id, name, slug, subdomain,
            (SELECT domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active' AND type = 'custom') AS custom_domain,
-           (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active') AS public_url,
+           (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active' AND ${publicTenantVisibilitySql('organization', false)}) AS public_url,
            status, onboarding_status
     FROM organization
     WHERE id IN (SELECT value FROM json_each(?))

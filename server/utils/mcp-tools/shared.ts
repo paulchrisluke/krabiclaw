@@ -532,7 +532,7 @@ export const locationReservationConfigObject = {
   type: 'object',
   properties: {
     location_id: { type: 'string' },
-    duration_minutes: { type: ['integer', 'null'], minimum: 1 },
+    duration_minutes: { type: 'integer', minimum: 1 },
     slot_capacity: { type: ['number', 'null'], description: 'Guests seatable at one start time. Null means unlimited.' },
     advance_notice_minutes: { type: ['number', 'null'] },
     free_cancellation_until_minutes: { type: ['number', 'null'] },
@@ -549,7 +549,7 @@ export const locationReservationConfigObject = {
     created_at: { type: 'string' },
     updated_at: { type: 'string' },
   },
-  required: ['location_id', 'reschedule_allowed', 'deposit_required', 'accessibility_contact_required', 'created_at', 'updated_at'],
+  required: ['location_id', 'duration_minutes', 'reschedule_allowed', 'deposit_required', 'accessibility_contact_required', 'created_at', 'updated_at'],
 } as const
 
 export const locationReservationConfigWriteSchema = {

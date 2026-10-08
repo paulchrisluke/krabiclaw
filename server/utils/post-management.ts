@@ -17,6 +17,7 @@ import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-reso
 import { createPreviewToken, PREVIEW_TOKEN_QUERY, PREVIEW_TOKEN_TTL_MS, previewSecretOf } from '~/server/utils/preview-token'
 import { mcpPageInfo, type McpPageInfo } from '~/server/utils/mcp-pagination'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
+import { publicTenantVisibilitySql } from '~/server/utils/public-base'
 
 /**
  * A short post: the website document every surface reads and writes.
@@ -115,10 +116,13 @@ function absoluteUrl(origin: string | null, path: string) {
   return new URL(path, origin.endsWith('/') ? origin : `${origin}/`).toString()
 }
 
-async function resolveOrganizationPublicOrigin(db: DbClient, organizationId: string) {
-  const domain = await queryFirst<{ domain: string }>(db,
-    "SELECT domain FROM organization_domains WHERE organization_id = ? AND role = 'canonical' AND status = 'active'", [organizationId])
-  return domain ? `https://${domain.domain}` : null
+async function resolveOrganizationPostOrigins(db: DbClient, organizationId: string) {
+  const domain = await queryFirst<{ domain: string; is_public: number }>(db,
+    `SELECT d.domain, (${publicTenantVisibilitySql('o', false)}) AS is_public
+     FROM organization_domains d JOIN organization o ON o.id = d.organization_id
+     WHERE d.organization_id = ? AND d.role = 'canonical' AND d.status = 'active' AND ${publicTenantVisibilitySql('o', true)}`, [organizationId])
+  const origin = domain ? `https://${domain.domain}` : null
+  return { publicOrigin: domain?.is_public ? origin : null, previewOrigin: origin }
 }
 
 async function validatePostLocation(db: DbClient, organizationId: string, locationId: string | null) {
@@ -204,8 +208,8 @@ async function attachPostFields(db: DbClient, env: CloudflareEnv | null, rows: P
   if (!rows.length) return []
   const organizationId = rows[0]!.organization_id
   const ids = rows.map(row => row.id)
-  const [origin, media, social, publications] = await Promise.all([
-    resolveOrganizationPublicOrigin(db, organizationId),
+  const [origins, media, social, publications] = await Promise.all([
+    resolveOrganizationPostOrigins(db, organizationId),
     loadPostMedia(db, organizationId, ids),
     loadPublicSocialMedia(db, organizationId, 'content_document', ids),
     loadPublicationRows(db, organizationId, ids),
@@ -222,8 +226,8 @@ async function attachPostFields(db: DbClient, env: CloudflareEnv | null, rows: P
       ...row,
       ...post,
       public_path: publicPath,
-      canonical_url: row.status === 'published' ? absoluteUrl(origin, publicPath) : null,
-      preview_url: row.status === 'draft' && previewToken ? absoluteUrl(origin, `${publicPath}?${PREVIEW_TOKEN_QUERY}=${encodeURIComponent(previewToken)}`) : null,
+      canonical_url: row.status === 'published' ? absoluteUrl(origins.publicOrigin, publicPath) : null,
+      preview_url: row.status === 'draft' && previewToken ? absoluteUrl(origins.previewOrigin, `${publicPath}?${PREVIEW_TOKEN_QUERY}=${encodeURIComponent(previewToken)}`) : null,
       social_image: social.get(row.id)?.social_image ?? null,
       publications: await Promise.all((publications.get(row.id) ?? []).map(async publication => ({
         id: publication.id, channel: publication.channel, target_id: publication.provider_target_id,
@@ -510,8 +514,8 @@ async function projectPublicPosts(env: CloudflareEnv, db: DbClient, organization
   if (!rows.length) return []
   const sourceLocale = await getSourceLocale(db, organizationId)
   const rootIds = rows.map(row => row.id)
-  const [origin, media, social, publications, localizations, facebook, instagram] = await Promise.all([
-    resolveOrganizationPublicOrigin(db, organizationId),
+  const [origins, media, social, publications, localizations, facebook, instagram] = await Promise.all([
+    resolveOrganizationPostOrigins(db, organizationId),
     loadPostMedia(db, organizationId, rootIds),
     loadPublicSocialMedia(db, organizationId, 'content_document', rows.map(row => row.representation_id)),
     // A Discord channel's messages are readable only by its members, so the public page names only Meta's public posts.
@@ -530,7 +534,7 @@ async function projectPublicPosts(env: CloudflareEnv, db: DbClient, organization
       id: row.id,
       slug: row.slug,
       path,
-      url: absoluteUrl(origin, path),
+      url: absoluteUrl(origins.publicOrigin, path),
       title: row.title?.trim() ? row.title : null,
       body: row.body?.trim() ? row.body : null,
       call_to_action: rootAction ? { label: localizedLabel ?? rootAction.label, url: rootAction.url } : null,

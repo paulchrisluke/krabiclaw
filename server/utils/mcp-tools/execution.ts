@@ -16,6 +16,7 @@ import { sniffMediaMimeType, VIDEO_MIME_TYPES, MAX_VIDEO_BYTES, MAX_IMAGE_BYTES,
 import { assertMarkdownSize, decodeMarkdownText, resolveMarkdownMimeType } from "~/server/utils/markdown-document";
 import { assertCloudflareImagesConfigured } from "~/server/utils/cloudflare-images";
 import { findOrganizationById } from '~/server/utils/member-access'
+import { publicTenantVisibilitySql } from '~/server/utils/public-base'
 
 /**
  * Resolves the upload provider for an image based on content type and Cloudflare Images config.
@@ -426,7 +427,7 @@ export async function mutationContextPayload(
            o.name,
            o.subdomain,
            (SELECT domain FROM organization_domains WHERE organization_id = o.id AND role = 'canonical' AND status = 'active' AND type = 'custom') AS custom_domain,
-           (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = o.id AND role = 'canonical' AND status = 'active') AS public_url,
+           (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = o.id AND role = 'canonical' AND status = 'active' AND ${publicTenantVisibilitySql('o', false)}) AS public_url,
            location.id AS location_id,
            location.slug AS location_slug,
            location.title AS location_title

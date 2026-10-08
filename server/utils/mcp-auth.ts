@@ -9,6 +9,7 @@ import { queryFirst } from '~/server/db'
 import { assertOrganizationWideAccess, isOrganizationWideRole, resolveOrganizationMembership, memberAccessPrincipal, type ResolvedMembership, roleAllows, type OrganizationPermissions } from '~/server/utils/member-access'
 import { getOrganizationEntitlements } from '~/server/utils/billing-access'
 import { cloudflareEnv } from '~/server/utils/api-response'
+import { publicTenantVisibilitySql } from '~/server/utils/public-base'
 
 export type McpToolRole = 'owner' | 'admin' | 'member'
 
@@ -361,7 +362,7 @@ export async function requireMcpOrganization(
   const organization = await queryFirst<{ id: string; subdomain: string | null; custom_domain: string | null; public_url: string | null }>(
     user.db,
     `
-      SELECT o.id, o.subdomain, (SELECT domain FROM organization_domains WHERE organization_id = o.id AND role = 'canonical' AND status = 'active' AND type = 'custom') AS custom_domain, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = o.id AND role = 'canonical' AND status = 'active') AS public_url
+      SELECT o.id, o.subdomain, (SELECT domain FROM organization_domains WHERE organization_id = o.id AND role = 'canonical' AND status = 'active' AND type = 'custom') AS custom_domain, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = o.id AND role = 'canonical' AND status = 'active' AND ${publicTenantVisibilitySql('o', false)}) AS public_url
       FROM organization o
       WHERE o.id = ?
       LIMIT 1

@@ -851,7 +851,9 @@ export async function publishPost(
 
   for (const target of input.targets) {
     if (target.channel === 'organization') {
-      if (post.status === 'published') outcomes.push({ channel: 'organization', target_id: organizationId, status: 'already_published', public_url: post.canonical_url })
+      if (post.status === 'published') outcomes.push(post.canonical_url
+        ? { channel: 'organization', target_id: organizationId, status: 'already_published', public_url: post.canonical_url }
+        : { channel: 'organization', target_id: organizationId, status: 'failed', code: 'website_publication_incomplete', message: 'The post has no published website URL' })
       else if (stale) outcomes.push(staleOutcome('organization', organizationId))
       else if (!publishable(post)) outcomes.push({ channel: 'organization', target_id: organizationId, status: 'failed', code: 'empty_post', message: 'A post needs words, media or a call to action before it can be published' })
       else publishWebsite = true

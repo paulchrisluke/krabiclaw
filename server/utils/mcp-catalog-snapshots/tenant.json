@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:9e606fb3423937169e7417163b6ae4958f033c5bfc6799a135ceccbd20168949",
+  "fingerprint": "sha256:10a0e842b093a38f20f92cfdf9b2fa97ea4ac02f7fddaa5b20edc84614a66d17",
   "tools": [
     {
       "name": "append_content_block",
@@ -2964,6 +2964,8 @@
                       ]
                     },
                     "confirmation_mode": {
+                      "default": "instant",
+                      "description": "instant confirms immediately (default); review waits for staff approval.",
                       "enum": [
                         "instant",
                         "review"
@@ -2985,7 +2987,8 @@
                       ]
                     },
                     "online_payment_required": {
-                      "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+                      "default": false,
+                      "description": "True requires online payment when booking; false is the default and does not collect online.",
                       "type": "boolean"
                     },
                     "online_timezone": {
@@ -7827,7 +7830,7 @@
     },
     {
       "name": "create_product",
-      "description": "Add a catalog item, experience or service. Experiences require real booking details or an external booking URL. Supplying booking creates its configuration, location offering, schedule and public detail page together. Ask the owner for missing times, duration, places, prices and policies before calling. Repeat the same idempotency key on retry.",
+      "description": "Add a catalog item, experience or service. Experiences need booking duration, capacity, location and actual times, or an external booking URL. Supplying booking creates its configuration, offering, schedule and public page together, using instant confirmation and no online collection by default. Repeat the same idempotency key on retry.",
       "inputSchema": {
         "$defs": {
           "content_ai_assistance": {
@@ -9356,6 +9359,8 @@
                 ]
               },
               "confirmation_mode": {
+                "default": "instant",
+                "description": "instant confirms immediately (default); review waits for staff approval.",
                 "enum": [
                   "instant",
                   "review"
@@ -9363,6 +9368,7 @@
                 "type": "string"
               },
               "default_capacity": {
+                "description": "Places per session; null means unlimited.",
                 "minimum": 1,
                 "type": [
                   "integer",
@@ -9370,6 +9376,7 @@
                 ]
               },
               "duration_minutes": {
+                "description": "Minutes each visit occupies its booking slot or seats, independent of the interval between start times.",
                 "minimum": 1,
                 "type": "integer"
               },
@@ -9380,7 +9387,8 @@
                 ]
               },
               "online_payment_required": {
-                "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+                "default": false,
+                "description": "True requires online payment when booking; false is the default and does not collect online.",
                 "type": "boolean"
               },
               "online_timezone": {
@@ -9432,6 +9440,7 @@
                   "additionalProperties": false,
                   "properties": {
                     "start_time": {
+                      "description": "Local HH:mm start time; visit duration is configured separately.",
                       "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
                       "type": "string"
                     },
@@ -9455,9 +9464,7 @@
             "required": [
               "location_id",
               "duration_minutes",
-              "default_capacity",
-              "confirmation_mode",
-              "online_payment_required"
+              "default_capacity"
             ],
             "type": "object"
           },
@@ -10783,6 +10790,8 @@
                     ]
                   },
                   "confirmation_mode": {
+                    "default": "instant",
+                    "description": "instant confirms immediately (default); review waits for staff approval.",
                     "enum": [
                       "instant",
                       "review"
@@ -10804,7 +10813,8 @@
                     ]
                   },
                   "online_payment_required": {
-                    "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+                    "default": false,
+                    "description": "True requires online payment when booking; false is the default and does not collect online.",
                     "type": "boolean"
                   },
                   "online_timezone": {
@@ -21336,6 +21346,8 @@
                     ]
                   },
                   "confirmation_mode": {
+                    "default": "instant",
+                    "description": "instant confirms immediately (default); review waits for staff approval.",
                     "enum": [
                       "instant",
                       "review"
@@ -21357,7 +21369,8 @@
                     ]
                   },
                   "online_payment_required": {
-                    "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+                    "default": false,
+                    "description": "True requires online payment when booking; false is the default and does not collect online.",
                     "type": "boolean"
                   },
                   "online_timezone": {
@@ -22884,10 +22897,7 @@
               },
               "duration_minutes": {
                 "minimum": 1,
-                "type": [
-                  "integer",
-                  "null"
-                ]
+                "type": "integer"
               },
               "free_cancellation_until_minutes": {
                 "type": [
@@ -22926,6 +22936,7 @@
             },
             "required": [
               "location_id",
+              "duration_minutes",
               "reschedule_allowed",
               "deposit_required",
               "accessibility_contact_required",
@@ -37654,6 +37665,8 @@
                       ]
                     },
                     "confirmation_mode": {
+                      "default": "instant",
+                      "description": "instant confirms immediately (default); review waits for staff approval.",
                       "enum": [
                         "instant",
                         "review"
@@ -37675,7 +37688,8 @@
                       ]
                     },
                     "online_payment_required": {
-                      "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+                      "default": false,
+                      "description": "True requires online payment when booking; false is the default and does not collect online.",
                       "type": "boolean"
                     },
                     "online_timezone": {
@@ -38826,6 +38840,8 @@
                     ]
                   },
                   "confirmation_mode": {
+                    "default": "instant",
+                    "description": "instant confirms immediately (default); review waits for staff approval.",
                     "enum": [
                       "instant",
                       "review"
@@ -38847,7 +38863,8 @@
                     ]
                   },
                   "online_payment_required": {
-                    "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+                    "default": false,
+                    "description": "True requires online payment when booking; false is the default and does not collect online.",
                     "type": "boolean"
                   },
                   "online_timezone": {
@@ -42906,7 +42923,7 @@
     },
     {
       "name": "set_product_booking_config",
-      "description": "Configure a product’s duration, capacity, staff review, payment requirement and online calendar when the user wants to set up bookable sessions. Existing sessions keep their saved times, capacity and state. Omitted fields stay unchanged; null clears a nullable default and zero capacity means no places. Read the settings with get_product.",
+      "description": "Configure booking duration, capacity and scheduling. New settings default to instant confirmation and no online collection. Omitted fields retain saved settings; existing sessions keep their times and capacity. Read settings with get_product.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -42934,6 +42951,8 @@
             ]
           },
           "confirmation_mode": {
+            "default": "instant",
+            "description": "instant confirms immediately (default); review waits for staff approval.",
             "enum": [
               "instant",
               "review"
@@ -42941,6 +42960,7 @@
             "type": "string"
           },
           "default_capacity": {
+            "description": "Places per session; null means unlimited, zero closes seats.",
             "minimum": 0,
             "type": [
               "integer",
@@ -42948,6 +42968,7 @@
             ]
           },
           "duration_minutes": {
+            "description": "Minutes each visit occupies its booking slot or seats, independent of the interval between start times. Null clears an existing duration.",
             "minimum": 1,
             "type": [
               "integer",
@@ -42955,7 +42976,8 @@
             ]
           },
           "online_payment_required": {
-            "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+            "default": false,
+            "description": "True requires online payment when booking; false is the default and does not collect online.",
             "type": "boolean"
           },
           "online_timezone": {
@@ -43014,6 +43036,8 @@
                 ]
               },
               "confirmation_mode": {
+                "default": "instant",
+                "description": "instant confirms immediately (default); review waits for staff approval.",
                 "enum": [
                   "instant",
                   "review"
@@ -43035,7 +43059,8 @@
                 ]
               },
               "online_payment_required": {
-                "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+                "default": false,
+                "description": "True requires online payment when booking; false is the default and does not collect online.",
                 "type": "boolean"
               },
               "online_timezone": {
@@ -43150,6 +43175,8 @@
                     ]
                   },
                   "confirmation_mode": {
+                    "default": "instant",
+                    "description": "instant confirms immediately (default); review waits for staff approval.",
                     "enum": [
                       "instant",
                       "review"
@@ -43171,7 +43198,8 @@
                     ]
                   },
                   "online_payment_required": {
-                    "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+                    "default": false,
+                    "description": "True requires online payment when booking; false is the default and does not collect online.",
                     "type": "boolean"
                   },
                   "online_timezone": {
@@ -43975,6 +44003,8 @@
                     ]
                   },
                   "confirmation_mode": {
+                    "default": "instant",
+                    "description": "instant confirms immediately (default); review waits for staff approval.",
                     "enum": [
                       "instant",
                       "review"
@@ -43996,7 +44026,8 @@
                     ]
                   },
                   "online_payment_required": {
-                    "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+                    "default": false,
+                    "description": "True requires online payment when booking; false is the default and does not collect online.",
                     "type": "boolean"
                   },
                   "online_timezone": {
@@ -49030,6 +49061,8 @@
                             ]
                           },
                           "confirmation_mode": {
+                            "default": "instant",
+                            "description": "instant confirms immediately (default); review waits for staff approval.",
                             "enum": [
                               "instant",
                               "review"
@@ -49051,7 +49084,8 @@
                             ]
                           },
                           "online_payment_required": {
-                            "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+                            "default": false,
+                            "description": "True requires online payment when booking; false is the default and does not collect online.",
                             "type": "boolean"
                           },
                           "online_timezone": {
@@ -50639,6 +50673,8 @@
                 ]
               },
               "confirmation_mode": {
+                "default": "instant",
+                "description": "instant confirms immediately (default); review waits for staff approval.",
                 "enum": [
                   "instant",
                   "review"
@@ -50646,6 +50682,7 @@
                 "type": "string"
               },
               "default_capacity": {
+                "description": "Places per session; null means unlimited.",
                 "minimum": 1,
                 "type": [
                   "integer",
@@ -50653,6 +50690,7 @@
                 ]
               },
               "duration_minutes": {
+                "description": "Minutes each visit occupies its booking slot or seats, independent of the interval between start times.",
                 "minimum": 1,
                 "type": "integer"
               },
@@ -50663,7 +50701,8 @@
                 ]
               },
               "online_payment_required": {
-                "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+                "default": false,
+                "description": "True requires online payment when booking; false is the default and does not collect online.",
                 "type": "boolean"
               },
               "online_timezone": {
@@ -50715,6 +50754,7 @@
                   "additionalProperties": false,
                   "properties": {
                     "start_time": {
+                      "description": "Local HH:mm start time; visit duration is configured separately.",
                       "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
                       "type": "string"
                     },
@@ -50738,9 +50778,7 @@
             "required": [
               "location_id",
               "duration_minutes",
-              "default_capacity",
-              "confirmation_mode",
-              "online_payment_required"
+              "default_capacity"
             ],
             "type": "object"
           },
@@ -51243,6 +51281,8 @@
                     ]
                   },
                   "confirmation_mode": {
+                    "default": "instant",
+                    "description": "instant confirms immediately (default); review waits for staff approval.",
                     "enum": [
                       "instant",
                       "review"
@@ -51264,7 +51304,8 @@
                     ]
                   },
                   "online_payment_required": {
-                    "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+                    "default": false,
+                    "description": "True requires online payment when booking; false is the default and does not collect online.",
                     "type": "boolean"
                   },
                   "online_timezone": {
@@ -52217,7 +52258,7 @@
     },
     {
       "name": "update_reservation_policy",
-      "description": "Set one location’s reservation duration, capacity, notice, deposit and cancellation terms. Use the current updated_at when amending it. A deposit needs its amount, currency, tax treatment and ready Payments. Omitted fields keep their value; null clears an optional rule.",
+      "description": "Enable or update table reservations using the location’s saved hours. New setup defaults to two hours, unlimited capacity, no advance notice and no deposit. Use the current updated_at when amending it; omitted fields keep their value. Deposits need an amount, currency, tax treatment and ready Payments.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -52232,6 +52273,7 @@
             ]
           },
           "advance_notice_minutes": {
+            "description": "Required notice before the start. Defaults to zero on setup; null removes the rule.",
             "minimum": 0,
             "type": [
               "number",
@@ -52279,6 +52321,7 @@
             ]
           },
           "deposit_required": {
+            "description": "Defaults to false on setup. Omit to keep the current requirement.",
             "type": "boolean"
           },
           "deposit_tax_behavior": {
@@ -52300,6 +52343,8 @@
             ]
           },
           "duration_minutes": {
+            "default": 120,
+            "description": "Minutes per reservation. Defaults to 120 on setup; null restores that default. Omit to keep the current duration.",
             "minimum": 1,
             "type": [
               "integer",
@@ -52348,6 +52393,7 @@
             ]
           },
           "slot_capacity": {
+            "description": "Guests per start time. Defaults to unlimited on setup; null removes the limit.",
             "minimum": 0,
             "type": [
               "number",
