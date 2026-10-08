@@ -1,3 +1,4 @@
+import { HTTPError } from 'nitro'
 import type { McpToolDefinition } from './shared'
 import { chatgptFileInput, mediaAssetObject, pageInfoObject, paginationInputSchema, resolvedMediaAssetObject, organizationTool } from './shared'
 import { EDITABLE_MEDIA_PLACEMENT_OWNERS, WRITABLE_MEDIA_CATEGORIES,
@@ -392,7 +393,7 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         },
       );
       if (!updated) {
-        throw mcpProtocolError(MCP_ERROR.invalidParams, "Media asset not found.");
+        throw new HTTPError({ statusCode: 404, statusMessage: 'Media asset not found' });
       }
       return {
         updated,

@@ -134,6 +134,13 @@ test('member self-service uses Better Auth permissions, public approval is admin
   const occupiedRevision=await db.prepare('SELECT updated_at FROM bookings WHERE id=?').bind(healthy.bookingId).first<string>('updated_at')
   await assert.rejects(()=>reassignBookingProvider(owner,{booking_id:healthy.bookingId,member_id:'member-one',expected_updated_at:occupiedRevision!,idempotency_key:'overlap-refused'}),/isn’t free at this time/)
   assert.equal(await db.prepare('SELECT assigned_member_id FROM bookings WHERE id=?').bind(healthy.bookingId).first('assigned_member_id'),'member-two')
+  const movedRevision=await db.prepare('SELECT updated_at FROM bookings WHERE id=?').bind(group[0].bookingId).first<string>('updated_at')
+  assert.deepEqual(await reassignBookingProvider(owner,{...move,member_id:'member-two',expected_updated_at:movedRevision!,idempotency_key:'later-reassignment'}),{session_id:'group',assigned_member_id:'member-two'})
+  await assert.rejects(()=>reassignBookingProvider(owner,move),error=>error instanceof Error && 'statusCode' in error && error.statusCode===409 && /superseded/.test(error.message))
+  const currentAssignments=await db.prepare("SELECT id,assigned_member_id FROM bookings WHERE product_session_id='group' ORDER BY id").all<{id:string;assigned_member_id:string}>()
+  assert.deepEqual(currentAssignments.results.map(row=>row.id).sort(),group.map(row=>row.bookingId).sort())
+  assert(currentAssignments.results.every(row=>row.assigned_member_id==='member-two'),'an older replay does not restore its superseded assignment')
+  assert.equal(await db.prepare("SELECT count(*) n FROM activity_entries WHERE event_name='booking.reassign' AND scope_kind='organization'").first('n'),2)
 
  }finally{await runtime.dispose()}
 })

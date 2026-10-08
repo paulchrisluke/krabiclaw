@@ -21,7 +21,7 @@
           </fieldset>
           <!-- A guest is choosing a time, so the empty state says what they
                asked: nothing in the window they can book. -->
-          <p v-if="!sessionsPending && availabilityDates.length === 0" class="py-10 text-center text-sm text-muted">
+          <p v-if="!bookingError && !sessionsPending && availabilityDates.length === 0" class="py-10 text-center text-sm text-muted">
             {{ t('saya.experience_detail.no_availability', { count: PUBLIC_BOOKING_WINDOW_DAYS }) }}
           </p>
           <template v-else>

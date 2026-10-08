@@ -73,7 +73,7 @@
 
     <!-- Day-grouped scrollable slot list -->
     <div v-else ref="scrollRef" class="min-h-0 flex-1 overflow-y-auto px-1 py-2">
-      <p v-if="days.length === 0" class="py-6 text-sm text-muted">{{ t('saya.experience_detail.no_availability', { count: dates.length }) }}</p>
+      <p v-if="dates.length > 0 && days.length === 0" class="py-6 text-sm text-muted">{{ t('saya.experience_detail.no_availability', { count: dates.length }) }}</p>
       <section v-for="day in days" :key="day.key" :ref="(el) => setDayRef(el, day.key)" class="pt-4 first:pt-0">
         <h3 class="saya-display mb-3 text-lg">{{ day.label }}</h3>
         <div class="flex flex-col gap-2">

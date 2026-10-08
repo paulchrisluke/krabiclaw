@@ -71,7 +71,8 @@ test('MCP Product booking uses public capacity, durable replay, guest identity a
       expect(conflictResponse.status()).toBe(200)
       const conflictResult = (await conflictResponse.json()).result
       expect(conflictResult.isError).toBe(true)
-      const conflicting = conflictResult.structuredContent as Created
+      expect(conflictResult.structuredContent).toBeUndefined()
+      const conflicting = JSON.parse(conflictResult.content[0].text) as Created
       expect(conflicting.success).toBe(false)
       expect(conflicting.code).toBe('idempotency_conflict')
       const afterClaim = await call<{ sessions: Array<{ id: string; remaining: number | null }> }>('list_product_booking_sessions', { product_id: product, from, to })
@@ -218,7 +219,8 @@ test('MCP online collection returns the real Payments setup handoff without chan
       expect(response.status(), await response.text()).toBe(200)
       const result = (await response.json()).result
       expect(result.isError).toBe(true)
-      expect(result.structuredContent).toEqual({ success: false, operation_completed: false, action_required: true, code: 'financial_action_required', dashboard_url: dashboardUrl })
+      expect(result.structuredContent).toBeUndefined()
+      expect(JSON.parse(result.content[0].text)).toMatchObject({ status: 409, success: false, operation_completed: false, action_required: true, code: 'financial_action_required', dashboard_url: dashboardUrl })
       expect(result.content[0].text).toContain(dashboardUrl)
     }
     const stored = await request.get(editor)

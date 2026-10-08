@@ -173,6 +173,7 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
 
     recordRequestPhase(event, "mcp_execute", executionStartedAt);
     const isRender = isMcpRenderResponse(result);
+    const failed = isRender && result.isError === true;
     const structuredContent = isRender ? result.structuredContent : result;
     const modelText = isRender && result.modelText ? result.modelText : JSON.stringify(structuredContent, null, 2);
 
@@ -188,9 +189,8 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
     if (isMcpMutatingTool(toolDef) && resolvedOrganizationId) {
       const env = cloudflareEnv(event);
       const cacheStartedAt = performance.now();
-      // A purge that failed is the edit not reaching the site. The write has
-      // landed, so this is neither success nor a transport failure: the tool
-      // result says both halves, and the client can act on it.
+      // A refresh failure turns a successful write into a failed tool result.
+      // An already failed operation keeps its original actionable error.
       try {
         await purgePublicResourceCacheNow({
           DB: env.db,
@@ -198,13 +198,15 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
           NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN: env.NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN,
         }, resolvedOrganizationId);
       } catch (purgeError) {
-        purgeFailure = `${toolName} wrote its change to organization ${resolvedOrganizationId}, but the public cache was not purged, so the site may keep serving what the write replaced: ${describeErrorForTelemetry(purgeError)}`;
+        console.error({ event: "mcp_public_cache_purge_failed", tool: toolName, organization_id: resolvedOrganizationId, request_id: requestId, error: describeErrorForTelemetry(purgeError) });
+        purgeFailure = "Change saved; public website refresh failed";
       } finally {
         recordRequestPhase(event, "mcp_cache_purge", cacheStartedAt);
       }
     }
+    if (purgeFailure && !failed) return mcpToolErrorResult(purgeFailure, { status: 502, code: "PUBLIC_SITE_REFRESH_FAILED" });
     const response = {
-      isError: purgeFailure !== null || (isRender && result.isError === true), structuredContent, content: [{ type: "text" as const, text: purgeFailure ? `${purgeFailure}\n\n${modelText}` : modelText }],
+      isError: failed, ...(failed ? {} : { structuredContent }), content: [{ type: "text" as const, text: failed ? JSON.stringify(structuredContent) : modelText }],
       ...(isRender && result.privateMeta ? { _meta: result.privateMeta } : {}),
     };
     return response;

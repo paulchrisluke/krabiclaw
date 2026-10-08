@@ -1,3 +1,4 @@
+import { HTTPError } from 'nitro'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { deleteConfig, getConfig, setConfig } from '~/server/utils/organization-config'
 import { createSystemSubdomain, isSystemSubdomainSpent } from '~/server/utils/domains'
@@ -19,13 +20,6 @@ import type { CloudflareEnv } from '~/server/utils/auth'
 type SetupEnv = Parameters<typeof createSystemSubdomain>[0]
 
 const MAX_SLUG_ATTEMPTS = 10
-
-export class OrganizationSettingsNotFoundError extends Error {
-  constructor() {
-    super('Organization not found')
-    this.name = 'OrganizationSettingsNotFoundError'
-  }
-}
 
 interface OrganizationSettingsRow {
   id: string
@@ -121,7 +115,7 @@ export async function loadSettingsPayload(
   `, [organizationId])
 
   if (!updatedOrganization) {
-    throw new OrganizationSettingsNotFoundError()
+    throw new HTTPError({ statusCode: 404, statusMessage: 'Organization not found' })
   }
 
   const siteConfig = await getConfig(db, organizationId)

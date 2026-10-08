@@ -7,7 +7,7 @@ import { threadPayloadForGuest, requestInsertQueries, cancelBookingRequest, getG
 import { executeGuestThreadOperation } from '../../server/domain/guest-threads/operations.ts'
 import { getGuestThreadOperationSummary, listGuestThreads } from '../../server/domain/guest-threads/repository.ts'
 import { resolveGuestThreadMailbox } from '../../server/domain/guest-threads/mailbox.ts'
-import { claimReservation, upsertLocationReservationConfig } from '../../server/utils/reservations.ts'
+import { claimReservation, requireLocationReservationConfig, upsertLocationReservationConfig } from '../../server/utils/reservations.ts'
 import { CapacityUnavailableError, claimSessionCapacity, setBookingStatus } from '../../server/utils/availability.ts'
 import { buildCanonicalNotificationInsert } from '../../server/utils/notification-center.ts'
 import { acknowledgeNotification } from '../../server/utils/notification-acknowledgement.ts'
@@ -103,6 +103,9 @@ test('a thread and the record it refers to commit and cancel as one', { timeout:
 
     // A reservation is the other half of the same split: a location policy is
     // what opens reservations, and the claim commits the thread with the row.
+    await assert.rejects(requireLocationReservationConfig(db, { organizationId: ORG, locationId: LOCATION }), { statusCode: 404, data: { code: 'RESERVATION_POLICY_NOT_FOUND' } })
+    await assert.rejects(upsertLocationReservationConfig(db, { organizationId: ORG, locationId: LOCATION, patch: { slot_capacity: 1 }, actorId: ACTOR }), { statusCode: 409, data: { code: 'RESERVATION_SETUP_INCOMPLETE', missing: ['duration_minutes'] } })
+    assert.equal(await db.prepare('SELECT count(*) FROM location_reservation_configs').first('count(*)'), 0, 'an incomplete setup does not create a policy that claims to enable reservations')
     await upsertLocationReservationConfig(db, { organizationId: ORG, locationId: LOCATION, patch: { slot_capacity: 1, duration_minutes: 120 }, actorId: ACTOR })
     const reservationThread = 'reservation-proof'
     await db.batch(requestInsertQueries({

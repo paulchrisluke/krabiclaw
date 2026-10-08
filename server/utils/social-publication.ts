@@ -859,6 +859,7 @@ export async function publishPost(
     }
     const existing = post.publications.find(publication => publication.channel === target.channel)
     let record = existing ? await readPublication(db, organizationId, { id: existing.id }) : null
+    if (existing && !record) throw new HTTPError({ statusCode: 404, statusMessage: 'Publication not found' })
     // An invocation that died after its final call began left `publishing`
     // behind; once its claim is stale that is an unconfirmed final call, and
     // only reconciliation may say what became of it.
@@ -867,6 +868,7 @@ export async function publishPost(
           error_message = 'The call that was publishing this stopped before it confirmed the result', updated_at = ?
         WHERE id = ? AND state = 'publishing' AND updated_at = ?`, [nowIso(), record.id, record.updated_at])
       record = await readPublication(db, organizationId, { id: record.id })
+      if (!record) throw new HTTPError({ statusCode: 404, statusMessage: 'Publication not found' })
     }
     if (record && record.provider_target_id !== target.target_id) {
       outcomes.push({ channel: target.channel, target_id: target.target_id, status: 'failed', publication_id: record.id, code: 'target_conflict',
@@ -905,7 +907,10 @@ export async function publishPost(
     publicResourceCacheInvalidationQuery(organizationId, 'post-publish')])
     if (Number(result?.meta.changes ?? 0) === 1) {
       const published = await getPost(db, env, organizationId, postId)
-      outcomes.push({ channel: 'organization', target_id: organizationId, status: 'published', public_url: published?.canonical_url ?? null })
+      if (!published) throw new HTTPError({ statusCode: 404, statusMessage: 'Post not found' })
+      outcomes.push(published.status === 'published' && published.canonical_url
+        ? { channel: 'organization', target_id: organizationId, status: 'published', public_url: published.canonical_url }
+        : { channel: 'organization', target_id: organizationId, status: 'failed', code: 'website_publication_incomplete', message: 'The post has no published website URL' })
     } else {
       outcomes.push(staleOutcome('organization', organizationId))
     }
@@ -915,10 +920,11 @@ export async function publishPost(
   const order = input.targets.map(target => target.channel)
   outcomes.sort((a, b) => order.indexOf(a.channel) - order.indexOf(b.channel))
   const current = await queryFirst<{ updated_at: string }>(db, 'SELECT updated_at FROM content_documents WHERE id = ?', [postId])
+  if (!current) throw new HTTPError({ statusCode: 404, statusMessage: 'Post not found' })
   return {
     ok: outcomes.length === input.targets.length && outcomes.every(item => item.status === 'published' || item.status === 'already_published'),
     post_id: postId,
-    updated_at: current?.updated_at ?? post.updated_at,
+    updated_at: current.updated_at,
     outcomes,
   }
 }
@@ -987,7 +993,8 @@ export async function reconcilePostPublication(env: CloudflareEnv, organizationI
     }
   }
   const updated = await readPublication(db, organizationId, { id: publicationId })
-  return { publication: updated ? receipt(updated) : null, state: updated?.state ?? null }
+  if (!updated) throw new HTTPError({ statusCode: 404, statusMessage: 'Publication not found' })
+  return { publication: receipt(updated), state: updated.state }
 }
 
 /**
@@ -1040,7 +1047,8 @@ async function reconcileDiscordPublication(env: CloudflareEnv, organizationId: s
   [message.id, discordMessageLink(target.guildId, message.channel_id, message.id), instantOf(message.timestamp), nowIso(), publication.id, publication.updated_at])
   if (Number(result.meta?.changes ?? 0) !== 1) throw new HTTPError({ statusCode: 409, statusMessage: 'The publication changed while it was being reconciled; read it again' })
   const updated = await readPublication(db, organizationId, { id: publication.id })
-  return { publication: updated ? receipt(updated) : null, state: updated?.state ?? null }
+  if (!updated) throw new HTTPError({ statusCode: 404, statusMessage: 'Publication not found' })
+  return { publication: receipt(updated), state: updated.state }
 }
 
 /** One message the KrabiClaw bot sent to the connected channel; anything else is refused. */

@@ -153,11 +153,7 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
       {
         const locationId = requiredString(args, "location_id");
         return {
-          location: await getLocation(
-          organization.db,
-          organization.organizationId,
-            locationId,
-          ),
+          location: await requireLocation(organization, locationId),
           context: await mutationContextPayload(organization, { locationId }),
         };
       }

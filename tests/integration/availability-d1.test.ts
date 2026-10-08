@@ -515,6 +515,12 @@ test('one configured online calendar excludes overlapping pending requests and r
     assert.equal((await executeGuestThreadOperation(db, cancel)).ok, true)
     assert.equal(await db.prepare("SELECT COUNT(*) n FROM activity_entries WHERE event_name = 'booking.cancel'").first('n'), 1)
     const loser = inputs[1 - index]!
+    // Checkout conversations exist before capture creates their operational
+    // booking. They remain replyable, but cannot report a booking transition.
+    assert.deepEqual(await executeGuestThreadOperation(db, { ...confirm, threadId: loser.requestId }), { ok: false, status: 404, reason: 'source_not_found' })
+    const reply = { ...confirm, threadId: loser.requestId, action: 'reply', body: 'We can help with your booking.', idempotencyKey: 'before-allocation' }
+    assert.equal((await executeGuestThreadOperation(db, reply)).ok, true)
+    assert.equal(await db.prepare('SELECT status FROM guest_thread_deliveries WHERE id = ?').bind(`guest-thread-email:${loser.requestId}:before-allocation`).first('status'), 'sent')
     await claimSessionCapacity(db, loser)
     const reject = { ...confirm, threadId: loser.requestId, action: 'reject', idempotencyKey: 'reject-once' }
     assert.equal((await executeGuestThreadOperation(db, reject)).ok, true)
@@ -525,6 +531,10 @@ test('one configured online calendar excludes overlapping pending requests and r
     assert.equal(after.find(session => session.id === 'session-two')?.remaining, 1)
     assert.equal(await db.prepare("SELECT COUNT(*) n FROM activity_entries WHERE event_name = 'booking.confirm'").first('n'), 1)
     assert.equal(await db.prepare("SELECT COUNT(*) n FROM activity_entries WHERE event_name = 'booking.reject'").first('n'), 1)
+    // A delivered receipt proves that an earlier operation finished, not that
+    // its required booking still exists when that operation is replayed.
+    await db.prepare('DELETE FROM bookings WHERE id = ?').bind(record!.id).run()
+    assert.deepEqual(await executeGuestThreadOperation(db, cancel), { ok: false, status: 404, reason: 'source_not_found' })
   } finally { await runtime.dispose() }
 })
 

@@ -185,7 +185,7 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
     required: ['publication_id'],
     outputSchema: {
       type: 'object',
-      properties: { state: { type: ['string', 'null'] }, publication: { type: ['object', 'null'] } },
+      properties: { state: { type: 'string' }, publication: { type: 'object' } },
       required: ['state', 'publication'],
     },
   }),
@@ -280,7 +280,9 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
       return renderStructuredResponse(result as unknown as Record<string, unknown>, `${result.ok ? 'Published' : 'Not every target is published'} — ${summary}.`, undefined, !result.ok)
     }
     case 'reconcile_post_publication': {
-      return await reconcilePostPublication(env, organization.organizationId, requiredString(args, 'publication_id'), optionalString(args, 'provider_post_id') ?? null)
+      const result = await reconcilePostPublication(env, organization.organizationId, requiredString(args, 'publication_id'), optionalString(args, 'provider_post_id') ?? null)
+      if (result.state !== 'published') throw new HTTPError({ statusCode: 409, statusMessage: ('message' in result ? result.message : undefined) ?? result.publication.message ?? `Publication is ${result.state}`, data: { code: 'POST_PUBLICATION_INCOMPLETE' } })
+      return result
     }
     case 'list_channel_posts':
     case 'get_channel_post':
@@ -312,7 +314,9 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
     }
     case 'delete_post': {
       const postId = requiredString(args, 'post_id')
-      return { post_id: postId, deleted: await deletePost(organization.db, organization.organizationId, postId, organization.userId) }
+      const deleted = await deletePost(organization.db, organization.organizationId, postId, organization.userId)
+      if (!deleted) throw new HTTPError({ statusCode: 404, statusMessage: 'Post not found' })
+      return { post_id: postId, deleted: true }
     }
     default:
       return NOT_HANDLED

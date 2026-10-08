@@ -86,9 +86,8 @@ function mapRow(row: Record<string, unknown>): LocationReservationConfig {
 /**
  * Read a location's reservation policy.
  *
- * `null` means this location does not take reservations. That is the absence
- * of the capability, not a location whose policy happens to be empty, and
- * callers must say so rather than showing a default policy nobody wrote.
+ * Editors use a missing row to offer setup. Operations that need the policy
+ * use requireLocationReservationConfig so its absence is an explicit error.
  */
 export async function getLocationReservationConfig(
   db: DbClient,
@@ -105,7 +104,7 @@ export async function requireLocationReservationConfig(
   input: { organizationId: string; locationId: string },
 ): Promise<LocationReservationConfig> {
   const config = await getLocationReservationConfig(db, input)
-  if (!config) throw new HTTPError({ statusCode: 409, statusMessage: 'This location does not take reservations' })
+  if (!config) throw new HTTPError({ statusCode: 404, statusMessage: 'Reservation policy not found', data: { code: 'RESERVATION_POLICY_NOT_FOUND' } })
   return config
 }
 
@@ -214,7 +213,13 @@ export async function upsertLocationReservationConfig(db: DbClient, input: {
   const existing = await getLocationReservationConfig(db, input)
   if (existing && existing.updated_at !== input.expectedUpdatedAt) throw new HTTPError({ statusCode: 409, message: 'The reservation policy changed. Read its current updated_at before saving.' })
   const merged: LocationReservationConfigPatch = { ...(existing ?? {}), ...input.patch }
-  if (merged.deposit_required && (!merged.deposit_amount || !merged.deposit_currency || !merged.deposit_tax_behavior)) throw new HTTPError({ statusCode: 409, message: 'Set the deposit amount, currency and whether it includes tax before requiring a deposit', data: { missing: [...(!merged.deposit_amount ? ['deposit_amount'] : []), ...(!merged.deposit_currency ? ['deposit_currency'] : []), ...(!merged.deposit_tax_behavior ? ['deposit_tax_behavior'] : [])] } })
+  const missing = [
+    ...(!merged.duration_minutes ? ['duration_minutes'] : []),
+    ...(merged.deposit_required && !merged.deposit_amount ? ['deposit_amount'] : []),
+    ...(merged.deposit_required && !merged.deposit_currency ? ['deposit_currency'] : []),
+    ...(merged.deposit_required && !merged.deposit_tax_behavior ? ['deposit_tax_behavior'] : []),
+  ]
+  if (missing.length) throw new HTTPError({ statusCode: 409, message: 'Reservation setup is incomplete', data: { code: 'RESERVATION_SETUP_INCOMPLETE', missing } })
   if (merged.deposit_required) {
     if (!input.env.STRIPE_SECRET_KEY) throw new HTTPError({ statusCode: 503, message: 'Payments provider configuration is incomplete' })
     await requireStripeCheckoutAcceptance(db, createStripeClient(input.env.STRIPE_SECRET_KEY, 'payments'), input.env, input.organizationId)
@@ -347,11 +352,11 @@ export async function listReservationSlots(db: DbClient, input: {
   `, [input.organizationId, input.locationId])
   if (!location) throw new HTTPError({ statusCode: 404, statusMessage: 'Location not found' })
   if (!isValidTimezone(location.timezone)) {
-    throw new HTTPError({ statusCode: 409, statusMessage: 'Set the location timezone before taking reservations' })
+    throw new HTTPError({ statusCode: 409, statusMessage: 'Reservation setup is incomplete', data: { code: 'RESERVATION_SETUP_INCOMPLETE', missing: ['location.timezone'] } })
   }
   const timezone = location.timezone
   const config = await requireLocationReservationConfig(db, input)
-  if (!config.duration_minutes) throw new HTTPError({ statusCode: 409, message: 'Set the reservation duration before offering times', data: { missing: ['duration_minutes'] } })
+  if (!config.duration_minutes) throw new HTTPError({ statusCode: 409, message: 'Reservation setup is incomplete', data: { code: 'RESERVATION_SETUP_INCOMPLETE', missing: ['duration_minutes'] } })
 
   const hours = parseOpeningHours(location.opening_hours ? JSON.parse(location.opening_hours) : null)
   const special = parseSpecialHours(location.special_hours ? JSON.parse(location.special_hours) : null)

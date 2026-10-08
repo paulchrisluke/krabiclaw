@@ -7,7 +7,7 @@ import { HTTPError } from 'nitro';
 import { CANCELLATION_TIER_IDS, cancellationPatch, cancellationTierOf, type CancellationTierId } from "~/shared/availability-settings";
 import type { McpExecutorContext } from './execution'
 import {
-  getLocationReservationConfig,
+  requireLocationReservationConfig,
   renderBookingPolicySummary,
   reservationPolicySummarySource,
   upsertLocationReservationConfig,
@@ -219,7 +219,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'get_reservation_policy',
-      description: 'Read one location’s table reservation settings and guest-facing policy summary, including capacity, advance notice and cancellation terms. A null policy means this location does not take reservations. Product session bookings use get_product for their separate configuration.',
+      description: 'Read one location’s table reservation settings and guest-facing policy summary. Product session bookings use get_product for their separate configuration.',
       domain: 'content',
       minimumRole: 'admin',
       inputSchema: {
@@ -230,9 +230,9 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
       outputSchema: {
         type: 'object',
         properties: {
-          policy: { ...locationReservationConfigObject, type: ['object', 'null'] },
+          policy: locationReservationConfigObject,
           cancellation_policy: { type: ['string', 'null'], enum: [...CANCELLATION_TIER_IDS, null], description: 'The named cancellation policy the dashboard shows, or null when the stored cutoffs match none of them.' },
-          summary: { ...renderedBookingPolicySummaryObject, type: ['object', 'null'] },
+          summary: renderedBookingPolicySummaryObject,
         },
         required: ['policy', 'cancellation_policy', 'summary'],
       },
@@ -476,16 +476,14 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
     case "get_reservation_policy": {
       const locationId = requiredString(args, "location_id");
       const locale = optionalString(args, "locale") ?? await getSourceLocale(organization.db, organization.organizationId);
-      const config = await getLocationReservationConfig(organization.db, {
+      const config = await requireLocationReservationConfig(organization.db, {
         organizationId: organization.organizationId,
         locationId,
       });
-      // No row means this location does not take reservations. That is the
-      // answer; there is no site-level policy underneath it to merge in.
       return {
         policy: config,
-        cancellation_policy: config ? cancellationTierOf(config) : null,
-        summary: config ? renderBookingPolicySummary(reservationPolicySummarySource(config), locale) : null,
+        cancellation_policy: cancellationTierOf(config),
+        summary: renderBookingPolicySummary(reservationPolicySummarySource(config), locale),
       };
     }
     case "update_reservation_policy": {

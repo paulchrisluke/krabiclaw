@@ -1,14 +1,12 @@
 import { getPublicConsultationSettings } from '~/server/utils/professional-services'
-import { boundedOccurrence } from '~/server/utils/pageview-tracking'
-import { getRouterParam, readBody } from 'nitro/h3'
+import { boundedOccurrence, isCanonicalEventId, isKnownBot } from '~/server/utils/pageview-tracking'
+import { readBody } from 'nitro/h3'
 import { queryAll, queryFirst } from '~/server/db'
 import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { HOUR_MS, getClientIp, hashClientIp, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 import { recordOrganizationConversionEvent, type ConversionEntityType, type ConversionStage } from '~/server/utils/organization-conversions'
 import { BROWSER_INTERACTION_EVENT_NAMES, CONVERSION_EVENT_CATALOG, type OrganizationConversionEventName } from '~/utils/organization-conversion-events'
-import { isCanonicalEventId, isKnownBot } from '~/server/utils/pageview-tracking'
 import { normalizeVertical } from '~/utils/vertical-copy'
-import { getLocationReservationConfig } from '~/server/utils/reservations'
 import { defineHandler } from 'nitro'
 
 // Only public interactions arrive here; every outcome is produced by the server, and signed-in
@@ -103,7 +101,8 @@ export default defineHandler(async (event) => {
   } else if (eventName === 'checkout_start' && !body.product_id) {
     stage = 'started'
     locationId = cleanString(body.location_id, 120) || null
-    const location = locationId ? await getLocationReservationConfig(db, { organizationId, locationId }) : null
+    const location = locationId ? await queryFirst<{ id: string }>(db,
+      "SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND status = 'active' LIMIT 1", [locationId, organizationId]) : null
     if (!location) return jsonResponse({ error: 'Reservation location not found' }, { status: 404 })
     pageType = 'reservations'
   } else if (eventName === 'product_view' || eventName === 'checkout_start') {
