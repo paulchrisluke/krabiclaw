@@ -109,13 +109,13 @@ test.describe('tenant guest journeys (disposable local/preview data only)', () =
     const email = `kikuzuki-reservation-${Date.now()}@playwright.example`
     const unlock = await acquireTenantMutationLock(testInfo, E2E_KIKUZUKI_ORGANIZATION_ID)
     const policyUrl = `${testBaseUrl()}/api/editor/organizations/${E2E_KIKUZUKI_ORGANIZATION_ID}/locations/loc-kikuzuki/reservation-config`
-    let original: { duration_minutes: number | null; updated_at: string | null } | undefined
+    let original: { duration_minutes: number | null; updated_at: string | null } | null | undefined
     try {
       await loginAs(request, testBaseUrl(), 'user-e2e-kikuzuki-owner')
       const read = await request.get(policyUrl)
       expect(read.status(), await read.text()).toBe(200)
       original = (await read.json()).config
-      const configured = await request.put(policyUrl, { data: { duration_minutes: 60, expected_updated_at: original!.updated_at } })
+      const configured = await request.put(policyUrl, { data: { duration_minutes: 60, expected_updated_at: original?.updated_at ?? null } })
       expect(configured.status(), await configured.text()).toBe(200)
       await openTenantPage(page, `${baseURL}/reservations`, kikuzukiTestExtraHeaders())
       await waitForNuxtHydration(page)
@@ -155,12 +155,12 @@ test.describe('tenant guest journeys (disposable local/preview data only)', () =
       expectOwnerDispatch(state)
     } finally {
       try {
-        if (original) {
+        if (original !== undefined) {
           const current = await request.get(policyUrl)
           expect(current.status(), await current.text()).toBe(200)
           // A location that had no usable reservation policy is returned to
           // disabled reservations, rather than writing an incomplete policy.
-          const restored = original.duration_minutes === null
+          const restored = !original || original.duration_minutes === null
             ? await request.delete(policyUrl)
             : await request.put(policyUrl, { data: { duration_minutes: original.duration_minutes, expected_updated_at: (await current.json()).config.updated_at } })
           expect(restored.status(), await restored.text()).toBe(200)
