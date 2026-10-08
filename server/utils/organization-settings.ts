@@ -301,7 +301,10 @@ async function attemptOrganizationUpdate(
     }
   }
   if (Object.keys(settingsPatch).length > 0) {
-    setParts.push('settings_json = json_patch(settings_json, json(?))')
+    // A newly created compliance object requires its two collection containers.
+    const settingsJson = updates.address_visibility === undefined ? 'settings_json'
+      : `CASE WHEN json_type(settings_json, '$.compliance') IS NULL THEN json_set(settings_json, '$.compliance', json('{"same_as":[],"contact_points":[]}')) ELSE settings_json END`
+    setParts.push(`settings_json = json_patch(${settingsJson}, json(?))`)
     params.push(JSON.stringify(settingsPatch))
   }
   if (updates.contact_email !== undefined) {
