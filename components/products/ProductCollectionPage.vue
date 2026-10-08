@@ -88,6 +88,7 @@
         >
           <div class="mb-8 border-b border-default pb-6">
             <h2 class="saya-display saya-italic text-5xl text-default">{{ group.category }}</h2>
+            <p v-if="group.description" class="mt-4 text-sm leading-relaxed text-muted">{{ group.description }}</p>
           </div>
 
           <div class="flex flex-col gap-7">
@@ -169,6 +170,7 @@
         <div class="mb-8 border-b border-default pb-6">
           <p v-if="showLocations && group.location_id" class="saya-kicker mb-2">{{ locationTitle(group.location_id) }}</p>
           <h2 class="saya-display saya-italic text-5xl">{{ group.category }}</h2>
+          <p v-if="group.description" class="mt-4 text-sm leading-relaxed text-muted">{{ group.description }}</p>
         </div>
         <div class="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
           <article v-for="product in group.products" :key="product.id">
@@ -380,10 +382,10 @@ const priceLabel = (product: Product, collectionLocationId: string | null = null
 // groupProductsByCollection for what membership does and does not imply.
 const groups = computed(() => {
   const grouped = groupProductsByCollection(props.products, props.collections)
-    .map(group => ({ id: group.id, category: group.name, sort_order: group.sort_order, location_id: group.location_id, products: group.products }))
+    .map(group => ({ id: group.id, category: group.name, description: group.description, sort_order: group.sort_order, location_id: group.location_id, products: group.products }))
   const included = new Set(grouped.flatMap(group => group.products.map(product => product.id)))
   const ungrouped = props.products.filter(product => !included.has(product.id))
-  if (ungrouped.length) grouped.push({ id: 'catalog', category: props.presentation.collectionLabel, sort_order: grouped.length, location_id: null, products: ungrouped })
+  if (ungrouped.length) grouped.push({ id: 'catalog', category: props.presentation.collectionLabel, description: null, sort_order: grouped.length, location_id: null, products: ungrouped })
   return grouped
 })
 const categoryTabs = computed(() => groups.value.map(group => ({

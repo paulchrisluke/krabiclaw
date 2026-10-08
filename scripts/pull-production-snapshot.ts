@@ -165,8 +165,8 @@ function copyProductionRows(path: string) {
   // One SELECT gives all tables the same SQLite read snapshot. Include the
   // catalog in that read and reject schema changes since column discovery.
   // The existing buffer limit rejects oversized copies before target writes.
-  // workerd limits each compound SELECT to five terms. Materialized CTEs
-  // keep each group within that limit without splitting the read snapshot.
+  // workerd limits each compound SELECT to five terms. CTEs keep each group
+  // within that limit without forcing multiple full copies of the snapshot.
   // https://github.com/cloudflare/workerd/blob/main/src/workerd/util/sqlite.c++
   const ctes: string[] = []
   let groups = queries
@@ -174,7 +174,7 @@ function copyProductionRows(path: string) {
     const next: string[] = []
     for (let index = 0; index < groups.length; index += 5) {
       const name = `snapshot_group_${ctes.length}`
-      ctes.push(`${name} AS MATERIALIZED (${groups.slice(index, index + 5).join(' UNION ALL ')})`)
+      ctes.push(`${name} AS (${groups.slice(index, index + 5).join(' UNION ALL ')})`)
       next.push(`SELECT * FROM ${name}`)
     }
     groups = next

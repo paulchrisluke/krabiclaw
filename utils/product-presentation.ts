@@ -204,6 +204,7 @@ export function collectionsOnSurface<
 export interface ProductCollectionGroup {
   id: string
   name: string
+  description: string | null
   sort_order: number
   /** The location whose collection this is, or null for a site-wide one. */
   location_id: string | null
@@ -240,6 +241,7 @@ export function groupProductsByCollection(
       return {
         id: collection.id,
         name: collection.name,
+        description: collection.description,
         sort_order: collection.sort_order,
         location_id: collection.location_id,
         products: positions
