@@ -3,7 +3,7 @@ import { prepareContentDocumentDeletion } from '~/server/utils/content/documents
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { getOrganizationBillingStatus } from '~/server/utils/billing'
 import type { CloudflareEnv } from '~/server/utils/auth'
-import { canonicalizeLocale, getPersistedSourceLocale } from '~/server/utils/localization'
+import { assertOrganizationLanguageEntitlement, canonicalizeLocale, getPersistedSourceLocale } from '~/server/utils/localization'
 import { localizationError } from '~/server/utils/localization-errors'
 
 interface OrganizationLanguageRow {
@@ -27,14 +27,10 @@ export async function addOrganizationLanguage(
   db: DbClient, env: CloudflareEnv,
   input: { organizationId: string; locale: unknown },
 ) {
-  const locale = canonicalizeLocale(input.locale)
-  if (locale === (await getPersistedSourceLocale(db, input.organizationId)).locale) return loadLanguage(db, input.organizationId, locale)
-  const catalog = platformLocale(locale)
-  if (!catalog) localizationError(403, 'PLATFORM_LOCALE_UNAVAILABLE', 'The platform locale is unavailable', { locale })
-  const projection = await getOrganizationBillingStatus(env, db, input.organizationId)
-  if (projection.entitlements.additional_languages !== true || !projection.stripeSubscriptionId) {
-    localizationError(402, 'LANGUAGE_ENTITLEMENT_REQUIRED', 'An active subscription with additional website languages is required to add a language')
-  }
+  const language = await assertOrganizationLanguageEntitlement(env, db, input.organizationId, canonicalizeLocale(input.locale), 'plan')
+  const { locale } = language
+  if (language.source) return loadLanguage(db, input.organizationId, locale)
+  const catalog = platformLocale(locale)!
   const now = new Date().toISOString()
   await execute(db, `
     INSERT INTO organization_locales (id, organization_id, locale, label, is_source, status, created_at, updated_at)
@@ -49,16 +45,9 @@ export async function publishOrganizationLanguage(
   db: DbClient, env: CloudflareEnv,
   input: { organizationId: string; locale: unknown },
 ) {
-  const locale = canonicalizeLocale(input.locale)
-  if (locale === (await getPersistedSourceLocale(db, input.organizationId)).locale) return loadLanguage(db, input.organizationId, locale)
-  const catalog = platformLocale(locale)
-  if (!catalog) localizationError(403, 'PLATFORM_LOCALE_UNAVAILABLE', 'The platform locale is unavailable', { locale })
-  const projection = await getOrganizationBillingStatus(env, db, input.organizationId)
-  if (projection.entitlements.additional_languages !== true || !projection.stripeSubscriptionId) {
-    localizationError(402, 'LANGUAGE_ENTITLEMENT_REQUIRED', 'An active subscription with additional website languages is required to publish a language')
-  }
-  const existing = await loadLanguage(db, input.organizationId, locale)
-  if (!existing) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Add the language before publishing it', { locale })
+  const language = await assertOrganizationLanguageEntitlement(env, db, input.organizationId, canonicalizeLocale(input.locale))
+  const { locale } = language
+  if (language.source) return loadLanguage(db, input.organizationId, locale)
 
   const now = new Date().toISOString()
   await execute(db, `

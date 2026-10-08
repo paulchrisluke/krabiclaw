@@ -163,7 +163,7 @@ export default definePlugin((nitroApp) => {
       try {
         await assertOrganizationLanguageEntitlement(env, db, candidate.organization_id, candidate.locale)
       } catch (error) {
-        if (error instanceof HTTPError && (error.data?.code === 'LANGUAGE_ENTITLEMENT_REQUIRED' || error.data?.code === 'PLATFORM_LOCALE_UNAVAILABLE')) continue
+        if (error instanceof HTTPError && ['LANGUAGE_ENTITLEMENT_REQUIRED', 'LANGUAGE_NOT_ENABLED', 'LANGUAGE_NOT_PUBLISHED', 'PLATFORM_LOCALE_UNAVAILABLE'].includes(error.data?.code)) continue
         if (isSubscriptionStateInvalid(error)) {
           console.error('organization_subscription_state_invalid', { organizationId: candidate.organization_id, locale: candidate.locale })
           continue

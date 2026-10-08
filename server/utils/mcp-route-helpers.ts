@@ -39,13 +39,25 @@ export function mcpAuthRequiredResult(options: { challenge: string; message: str
   }
 }
 
-export function mcpToolErrorResult(message: string) {
+export function mcpToolErrorResult(message: string, data?: unknown, platformOrigin?: string) {
+  const details = data && typeof data === 'object' ? data : {}
+  const code = 'code' in details && typeof details.code === 'string' ? details.code : undefined
+  let dashboardUrl: string | undefined
+  if (platformOrigin && 'dashboard_url' in details && typeof details.dashboard_url === 'string' && /^\/dashboard\/(?!\/)/u.test(details.dashboard_url)) {
+    try {
+      const origin = new URL(platformOrigin)
+      const url = new URL(details.dashboard_url, origin.origin)
+      if (['https:', 'http:'].includes(origin.protocol) && url.origin === origin.origin && url.pathname.startsWith('/dashboard/')) dashboardUrl = url.toString()
+    } catch { /* An invalid destination does not turn a rejected tool into another failure. */ }
+  }
+  const action = code ? { code, message, ...(dashboardUrl ? { dashboard_url: dashboardUrl } : {}) } : undefined
+  // Structured content must match the tool's success schema; errors use content.
   return {
     isError: true,
     content: [
       {
-        type: 'text',
-        text: message,
+        type: 'text' as const,
+        text: action ? JSON.stringify(action) : message,
       },
     ],
   }

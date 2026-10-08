@@ -67,6 +67,8 @@ function isUnavailableRepresentation(error: unknown): boolean {
     ? error.data.code
     : null
   return code === 'LANGUAGE_ENTITLEMENT_REQUIRED'
+    || code === 'LANGUAGE_NOT_ENABLED'
+    || code === 'LANGUAGE_NOT_PUBLISHED'
     || code === 'PLATFORM_LOCALE_UNAVAILABLE'
     || code === SUBSCRIPTION_STATE_INVALID
 }
