@@ -18,7 +18,7 @@ import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-reso
  * A contact thread has neither and is not forced into the booking model.
  */
 
-const guest = z.object({ name: z.string(), email: z.string(), phone: z.string().nullable() })
+const guest = z.object({ name: z.string(), email: z.string(), phone: z.string().nullable(), locale: z.string().optional() })
 
 /**
  * What the thread itself owns.
@@ -155,12 +155,12 @@ export function requestInsertQueries(request: Omit<GuestRequest, 'archived_at' |
   }, publicResourceCacheInvalidationQuery(request.organization_id, 'guest-thread-create')]
 }
 
-interface GuestThreadInput { name: string; email: string; phone?: string | null; notes?: string | null; ipHash?: string | null; partySizeIsMinimum?: boolean }
+interface GuestThreadInput { name: string; email: string; phone?: string | null; locale?: string; notes?: string | null; ipHash?: string | null; partySizeIsMinimum?: boolean }
 export function threadPayloadForGuest(input: GuestThreadInput & { phone: string }): ThreadPayload & { guest: { phone: string } }
 export function threadPayloadForGuest(input: GuestThreadInput): ThreadPayload
 export function threadPayloadForGuest(input: GuestThreadInput): ThreadPayload {
   return {
-    guest: { name: input.name, email: input.email, phone: input.phone ?? null },
+    guest: { name: input.name, email: input.email, phone: input.phone ?? null, ...(input.locale === undefined ? {} : { locale: input.locale }) },
     notes: input.notes ?? null, ip_hash: input.ipHash ?? null,
     party_size_is_minimum: input.partySizeIsMinimum ?? false,
     cancellation: { token_hash: null, expires_at: null, used_at: null },

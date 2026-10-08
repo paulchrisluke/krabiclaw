@@ -47,7 +47,7 @@ export const BOOKINGS_TOOLS: McpToolDefinition[] = [
     inputSchema: { assigned_member_id: {type: 'string'}, location_id: { type: ['string', 'null'] }, product_id: { type: 'string' }, status: { type: 'string', enum: ['pending', 'confirmed', 'completed', 'cancelled'] }, from: { type: 'string', description: 'Inclusive session start instant.' }, to: { type: 'string', description: 'Exclusive session start instant.' }, ...paginationInputSchema },
   }),
   organizationTool({ name: 'create_table_reservation', domain: 'bookings', minimumRole: 'admin', description: 'Reserve a table for a named guest at an explicit location and local date/time. Uses the location’s hours, capacity and reservation policy. Requires the reservation duration to be configured. Deposits return a financial handoff before a reservation is confirmed. Reuse the same key for an identical retry.',
-    inputSchema: { location_id: { type: 'string' }, date: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' }, time: { type: 'string', pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' }, party_size: { type: 'integer', minimum: 1, maximum: 99 }, guest_name: { type: 'string', minLength: 1 }, guest_email: { type: 'string' }, guest_phone: { type: 'string', description: 'International phone number with calling code.' }, notes: { type: 'string', maxLength: 1000 }, idempotency_key: key, source: { type: 'string', minLength: 1 }, external_reference: { type: 'string' }, guest_acknowledgement: { type: 'boolean' } },
+    inputSchema: { location_id: { type: 'string' }, date: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' }, time: { type: 'string', pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' }, party_size: { type: 'integer', minimum: 1, maximum: 99 }, guest_name: { type: 'string', minLength: 1 }, guest_email: { type: 'string' }, guest_phone: { type: 'string', description: 'International phone number with calling code.' }, locale: { type: 'string', description: 'Guest confirmation language code; defaults to the website language.' }, notes: { type: 'string', maxLength: 1000 }, idempotency_key: key, source: { type: 'string', minLength: 1 }, external_reference: { type: 'string' }, guest_acknowledgement: { type: 'boolean' } },
     required: ['location_id', 'date', 'time', 'party_size', 'guest_name', 'guest_email', 'guest_phone', 'idempotency_key', 'source', 'guest_acknowledgement'],
     outputSchema: { type: 'object', properties: { success: { const: true }, request_id: text, operational_reservation_id: text, status: { type: 'string' }, replayed: { type: 'boolean' }, http_status: { type: 'integer' } }, required: ['success', 'request_id', 'operational_reservation_id', 'status', 'http_status'] },
   }),
@@ -56,6 +56,7 @@ export const BOOKINGS_TOOLS: McpToolDefinition[] = [
       product_slug: { type: 'string' }, session_id: { type: 'string' }, variant_id: { type: 'string' },
       party_size: { type: 'integer', minimum: 1, maximum: 99 }, guest_name: { type: 'string', minLength: 1 },
       guest_email: { type: 'string' }, guest_phone: { type: 'string', description: 'Optional guest phone in international format.' }, notes: { type: 'string', maxLength: 1000 },
+      locale: { type: 'string', description: 'Guest confirmation language code; defaults to the website language.' },
       idempotency_key: key, source: { type: 'string', minLength: 1, maxLength: 100, description: 'Explicit provenance, such as operator or external scheduler.' },
       external_reference: { type: 'string', maxLength: 200 },
       guest_acknowledgement: { type: 'boolean', description: 'Explicit choice to send the guest creation email. Owner alerts, inbox, and audit always remain.' },
@@ -146,7 +147,7 @@ export async function handleBookingsTools(ctx: McpExecutorContext): Promise<unkn
     const locationId = requiredString(args, 'location_id')
     await assertResourceAccess(db, { ...memberAccessPrincipal(organization.membership, { env }), resourceLocationId: locationId })
     const result = await createTableReservation(event, { financialWritesAllowed: false, organizationId,
-      body: { name: args.guest_name, email: args.guest_email, phone: args.guest_phone, date: args.date, time: args.time, guests: String(args.party_size), requests: args.notes, location_id: locationId },
+      body: { name: args.guest_name, email: args.guest_email, phone: args.guest_phone, locale: args.locale, date: args.date, time: args.time, guests: String(args.party_size), requests: args.notes, location_id: locationId },
       operator: { userId: organization.userId, idempotencyKey: requiredString(args, 'idempotency_key'), source: requiredString(args, 'source'), externalReference: optionalString(args, 'external_reference') ?? null, guestAcknowledgement: args.guest_acknowledgement === true },
     })
     return renderStructuredResponse({ success: result.status < 400, ...result.body, http_status: result.status }, undefined, undefined, result.status >= 400)

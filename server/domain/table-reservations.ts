@@ -16,6 +16,8 @@ import {
   ReservationUnavailableError,
 } from '~/server/utils/reservations'
 import { getSourceLocale } from '~/server/utils/organization-locales'
+import { assertExactCanonicalLocale, assertPublicOrganizationLanguageEntitlement } from '~/server/utils/localization'
+import { formatTenantLocalePath } from '~/utils/tenant-locale-path'
 import { createPaymentCheckout } from '~/server/domain/payments/checkout'
 import { createStripeClient } from '~/server/utils/stripe-client'
 import { isRecord } from '~/server/utils/type-guards'
@@ -40,9 +42,11 @@ export async function notifyTableReservationCreated(env: CloudflareEnv, db: DbCl
   if (!request || request.kind !== 'reservation' || !record || record.kind !== 'reservation' || record.organization_id !== organizationId || !record.location_id || !organization) throw new Error('Reservation delivery requires its saved guest, location and tenant')
   const creation = await queryFirst(db, "SELECT id FROM activity_entries WHERE request_id = ? AND event_name = 'reservation.created' AND dedupe_key = ?", [requestId, `reservation:${record.id}:created`])
   if (!creation) throw new Error('Reservation delivery has no confirmed creation receipt')
+  const sourceLocale = await getSourceLocale(db, organizationId)
+  const locale = request.payload.guest.locale ?? sourceLocale
   const cancellation = await createReplayableReservationCancelToken(env.EMAIL_REPLY_SECRET ?? '', requestId)
   const matches = await hashReservationCancelToken(cancellation.token) === request.payload.cancellation.token_hash
-  const cancelUrl = matches && organization.public_url ? `${organization.public_url.replace(/\/$/, '')}/reservations/cancel?id=${requestId}#${cancellation.token}` : env.NUXT_PUBLIC_PLATFORM_DOMAIN ? new URL('/account', env.NUXT_PUBLIC_PLATFORM_DOMAIN).toString() : null
+  const cancelUrl = matches && organization.public_url ? `${organization.public_url.replace(/\/$/, '')}${formatTenantLocalePath('/reservations/cancel', locale, sourceLocale)}?id=${requestId}#${cancellation.token}` : env.NUXT_PUBLIC_PLATFORM_DOMAIN ? new URL('/account', env.NUXT_PUBLIC_PLATFORM_DOMAIN).toString() : null
   const [location, { contactPhone, contactEmail }, ownerInboxUrl] = await Promise.all([
     queryFirst<{ title: string }>(db, 'SELECT title FROM business_locations WHERE organization_id = ? AND id = ?', [organizationId, record.location_id]),
     resolveLocationContact(db, organizationId, record.location_id),
@@ -56,7 +60,7 @@ export async function notifyTableReservationCreated(env: CloudflareEnv, db: DbCl
       reservationId: requestId, guestAcknowledgement: request.payload.provenance?.guest_acknowledgement ?? true,
       guestName: request.payload.guest.name, email: request.payload.guest.email, phone: request.payload.guest.phone,
       date: local.date, time: local.time, guests: `${record.party_size}${request.payload.party_size_is_minimum ? '+' : ''}`, requests: request.payload.notes,
-      cancelUrl, contactPhone, contactEmail, ownerInboxUrl }),
+      cancelUrl, contactPhone, contactEmail, ownerInboxUrl, locale }),
   ])
   raiseSettledFailures('Reservation creation delivery', requestId, outcomes)
 }
@@ -101,6 +105,7 @@ export async function createTableReservation(event: H3Event, input: {
   const organization = await queryFirst<{ id: string; slug: string; name?: string | null; public_url?: string | null }>(
     db, `SELECT id, slug, name, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active') AS public_url FROM organization WHERE id = ? AND status = ? LIMIT 1`, [organizationId, 'active'], )
   if (!organization) return creationResult({ error: 'Organization not found' }, { status: 404 })
+  const locale = body.locale === undefined ? await getSourceLocale(db, organizationId) : assertExactCanonicalLocale(body.locale)
   const organizationBaseUrl = organization.public_url?.trim().replace(/\/$/, '')
   if (!organizationBaseUrl) return creationResult({ error: 'Organization public URL is not configured' }, { status: 500 })
 
@@ -151,6 +156,7 @@ export async function createTableReservation(event: H3Event, input: {
     })
     return creationResult({ success: true, status: 'checkout', replayed: true, ...checkout }, { status: 200 })
   }
+  await assertPublicOrganizationLanguageEntitlement(env, db, organizationId, locale)
   const policy = await requireLocationReservationConfig(db, { organizationId, locationId: resolvedLocationId })
   if (!Number.isSafeInteger(policy.duration_minutes) || !policy.duration_minutes || policy.duration_minutes < 1) return creationResult({ error: 'Set this location’s reservation duration before taking reservations', missing: ['duration_minutes'] }, { status: 409 })
   const requiresDeposit = policy.deposit_required && (policy.deposit_trigger_party_size === null || partySize >= policy.deposit_trigger_party_size)
@@ -199,7 +205,7 @@ export async function createTableReservation(event: H3Event, input: {
   const userId = operator ? null : await ensureInteractionUser(event, env)
 
   const now = new Date().toISOString()
-  const payload = threadPayloadForGuest({ name, email, phone, notes: requests, ipHash, partySizeIsMinimum: guests.endsWith('+') })
+  const payload = threadPayloadForGuest({ name, email, phone, locale, notes: requests, ipHash, partySizeIsMinimum: guests.endsWith('+') })
   payload.provenance = { source: operator?.source ?? 'website', external_reference: operator?.externalReference ?? null, actor_user_id: operator?.userId ?? null,
     idempotency_key: idempotencyKey, fingerprint, guest_acknowledgement: operator?.guestAcknowledgement ?? true, creation_kind: requiresDeposit ? 'checkout' : 'ordinary', creation_status: 'confirmed', followups_completed: false }
   payload.cancellation = { token_hash: cancellationTokenHash, expires_at: cancellation.expiresAt, used_at: null }
@@ -248,26 +254,20 @@ export async function createTableReservation(event: H3Event, input: {
   }
   // Telling the owner and recording the conversion are independent, so both are
   // attempted before either failure is raised.
-  const requestedLocale = cleanString(body.locale, 10)
-  const [locale, ...followUps] = await Promise.all([
-    requestedLocale && /^[a-z]{2}(-[A-Z]{2})?$/.test(requestedLocale)
-      ? requestedLocale
-      : getSourceLocale(db, organization.id),
-    ...await Promise.allSettled([
-      notifyTableReservationCreated(env, db, organizationId, id),
-      operator ? Promise.resolve({ recorded: false, reason: 'operator_creation' }) : recordOrganizationConversionEvent(db, event.req, {
-        organizationId: organization.id,
-        eventName: 'reservation_submit',
-        stage: 'submitted',
-        surface: 'website',
-        locationId: resolvedLocationId,
-        entityType: 'request',
-        entityId: id,
-        pageType: 'reservations',
-        routePath: '/reservations',
-        originEventId: readPageEventId(body.page_event_id),
-      }),
-    ]),
+  const followUps = await Promise.allSettled([
+    notifyTableReservationCreated(env, db, organizationId, id),
+    operator ? Promise.resolve({ recorded: false, reason: 'operator_creation' }) : recordOrganizationConversionEvent(db, event.req, {
+      organizationId: organization.id,
+      eventName: 'reservation_submit',
+      stage: 'submitted',
+      surface: 'website',
+      locationId: resolvedLocationId,
+      entityType: 'request',
+      entityId: id,
+      pageType: 'reservations',
+      routePath: '/reservations',
+      originEventId: readPageEventId(body.page_event_id),
+    }),
   ])
   // Only the owner notification can fail the request. Measurement is reported beside the
   // committed result: a guest told a confirmed submission failed would submit again.

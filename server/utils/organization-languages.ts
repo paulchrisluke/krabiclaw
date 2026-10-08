@@ -1,5 +1,6 @@
 import { PLATFORM_LOCALES, platformLocale } from '~/shared/platform-locales'
 import { prepareContentDocumentDeletion } from '~/server/utils/content/documents'
+import { getPublishedTenantPage } from '~/server/utils/content/pages'
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { getOrganizationBillingStatus } from '~/server/utils/billing'
 import type { CloudflareEnv } from '~/server/utils/auth'
@@ -48,6 +49,10 @@ export async function publishOrganizationLanguage(
   const language = await assertOrganizationLanguageEntitlement(env, db, input.organizationId, canonicalizeLocale(input.locale))
   const { locale } = language
   if (language.source) return loadLanguage(db, input.organizationId, locale)
+
+  if (!await getPublishedTenantPage(db, input.organizationId, '/', locale)) {
+    localizationError(409, 'LOCALIZATION_VALIDATION_FAILED', 'Translate the homepage before publishing this language', { missing: ['homepage'] })
+  }
 
   const now = new Date().toISOString()
   await execute(db, `

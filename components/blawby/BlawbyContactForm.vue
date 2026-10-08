@@ -27,7 +27,7 @@ import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
 defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
 
 const { organizationId } = useTenantOrganization()
-const { localePath } = useI18n()
+const { locale, localePath } = useI18n()
 // The same keyed request the page already made; the shell carries the firm's
 // consultation settings for the tracking.
 const { shell } = await useBlawbyRoute('contact')
@@ -44,7 +44,7 @@ async function submitContact() {
   try {
     const response = await publicApiMutation<{ success: true; measurement?: SubmissionMeasurement }>(`/api/public/contact`, {
       method: 'POST',
-      body: { ...form, page_event_id: await pageEventId() },
+      body: { ...form, locale: locale.value, page_event_id: await pageEventId() },
       validate: (value): value is { success: true; measurement?: SubmissionMeasurement } => isRecord(value) && value.success === true,
     })
     mirrorSubmission('contact_submit', response.measurement)

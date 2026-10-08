@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:9bb1b675513400846769aa33a6c533bc67827b81ad1989ebd39ef08801a7252e",
+  "fingerprint": "sha256:c2467747b0953730c402c8770ebc5960f836f46b833813e3c9b3303caed651a1",
   "tools": [
     {
       "name": "append_content_block",
@@ -11600,6 +11600,10 @@
             "minLength": 1,
             "type": "string"
           },
+          "locale": {
+            "description": "Guest confirmation language code; defaults to the website language.",
+            "type": "string"
+          },
           "notes": {
             "maxLength": 1000,
             "type": "string"
@@ -14255,6 +14259,10 @@
             "description": "Caller-supplied durable idempotency key. Reuse only for the identical operation.",
             "maxLength": 200,
             "minLength": 1,
+            "type": "string"
+          },
+          "locale": {
+            "description": "Guest confirmation language code; defaults to the website language.",
             "type": "string"
           },
           "location_id": {
