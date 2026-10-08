@@ -28,7 +28,7 @@ export interface StripeConnectedAccount {
   id: string
   organizationId: string
   stripeAccountId: string | null
-  /** The account's country as Stripe reports it; null until the owner chooses it in Stripe's onboarding. */
+  /** The account's country as Stripe reports it; null before account creation. */
   country: string | null
   livemode: boolean
   status: StripeConnectStatus
@@ -277,7 +277,7 @@ function accountProjection(
     reservationId: reservation.id,
     organizationId: reservation.organizationId,
     stripeAccountId: account.id,
-    // Stripe's hosted onboarding sets the country; before the owner chooses it there is none.
+    // Persist only the country Stripe reports for the created account.
     country: country ? country.toUpperCase() : null,
     livemode: account.livemode,
     cardPaymentsStatus: cardPaymentsStatus === undefined ? null : cardPaymentsStatus,
@@ -375,8 +375,12 @@ export async function ensureStripeConnectedAccount(
     organizationName: string
     contactEmail: string
     livemode: boolean
+    country: string | null
   },
 ): Promise<StripeConnectedAccount> {
+  if (!input.country && !(await getStripeConnectedAccount(db, input.organizationId))?.stripeAccountId) {
+    throw new HTTPError({ statusCode: 400, statusMessage: 'Choose the country where your business is established before starting Stripe setup' })
+  }
   const reservation = await reserveStripeConnectedAccount(db, input)
   if (reservation.stripeAccountId) return await refreshStripeConnectedAccount(db, stripe, reservation)
 
@@ -386,12 +390,8 @@ export async function ensureStripeConnectedAccount(
       contact_email: input.contactEmail,
       display_name: input.organizationName,
       dashboard: 'express',
-      // No country and no capability request: Stripe's hosted onboarding lets the
-      // owner choose from the countries the platform's Connect onboarding options
-      // allow, and requests that country's default capabilities. Naming either
-      // here would fix the country before the owner chose it.
-      // https://docs.stripe.com/connect/hosted-onboarding#create-account
-      configuration: { merchant: {} },
+      identity: { country: input.country! },
+      configuration: { merchant: { capabilities: { card_payments: { requested: true } } } },
       defaults: {
         responsibilities: { fees_collector: 'application', losses_collector: 'stripe' },
       },

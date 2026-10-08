@@ -1,4 +1,4 @@
-import { defineHandler } from 'nitro'
+import { defineHandler, HTTPError } from 'nitro'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { assertRoleAllows } from '~/server/utils/member-access'
 import { jsonResponse } from '~/server/utils/api-response'
@@ -19,6 +19,11 @@ export default defineHandler(async (event) => {
   // owner and admin, per utils/organization-access.ts.
   await assertRoleAllows({ organizationId: organization.id, role: organization.role, permissions: { payments: ['integration'] } })
   const account = await getStripeConnectedAccount(db, organization.id)
+  let countries: string[] = []
+  if (!account?.stripeAccountId) {
+    if (!env.STRIPE_SECRET_KEY) throw new HTTPError({ statusCode: 503, statusMessage: 'Stripe Connect is not configured' })
+    countries = (await createStripeClient(env.STRIPE_SECRET_KEY, 'payments').countrySpecs.list({ limit: 100 }).autoPagingToArray({ limit: 250 })).map(country => country.id)
+  }
   let payout: ConnectPayoutMethod | null = null
   if (account?.stripeAccountId && account.status === 'ready' && env.STRIPE_SECRET_KEY) {
     const stripe = createStripeClient(env.STRIPE_SECRET_KEY, 'payments')
@@ -32,5 +37,5 @@ export default defineHandler(async (event) => {
       payout = { bankName: bank.bank_name ?? null, last4: bank.last4, currency: bank.currency.toUpperCase(), schedule: { interval: schedule.interval, delayDays: schedule.delay_days } }
     }
   }
-  return jsonResponse({ success: true, account, payout })
+  return jsonResponse({ success: true, account, payout, countries })
 })
