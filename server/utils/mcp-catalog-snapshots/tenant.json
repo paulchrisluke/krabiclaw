@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:adef3c3b4a6f190b0781ba86a97dc7fd74dc5ce683bd108b9cbc8a4d367feed4",
+  "fingerprint": "sha256:7aeebd25231d7a61de8bb9ad8ef819613f8f493d6ff1a53ab9b5fb491738d7f4",
   "tools": [
     {
       "name": "append_content_block",
@@ -7409,10 +7409,13 @@
           "address": {
             "properties": {
               "addressLines": {
-                "description": "Street lines in order, unbounded.",
+                "description": "Address lines in order, unbounded.",
                 "items": {
+                  "minLength": 1,
+                  "pattern": "\\S",
                   "type": "string"
                 },
+                "minItems": 1,
                 "type": "array"
               },
               "administrativeArea": {
@@ -7432,6 +7435,8 @@
               },
               "regionCode": {
                 "description": "ISO 3166-1 alpha-2 country code, e.g. TH.",
+                "minLength": 1,
+                "pattern": "\\S",
                 "type": "string"
               },
               "sublocality": {
@@ -7730,10 +7735,13 @@
               "address": {
                 "properties": {
                   "addressLines": {
-                    "description": "Street lines in order, unbounded.",
+                    "description": "Address lines in order, unbounded.",
                     "items": {
+                      "minLength": 1,
+                      "pattern": "\\S",
                       "type": "string"
                     },
+                    "minItems": 1,
                     "type": "array"
                   },
                   "administrativeArea": {
@@ -7753,6 +7761,8 @@
                   },
                   "regionCode": {
                     "description": "ISO 3166-1 alpha-2 country code, e.g. TH.",
+                    "minLength": 1,
+                    "pattern": "\\S",
                     "type": "string"
                   },
                   "sublocality": {
@@ -18798,10 +18808,13 @@
               "address": {
                 "properties": {
                   "addressLines": {
-                    "description": "Street lines in order, unbounded.",
+                    "description": "Address lines in order, unbounded.",
                     "items": {
+                      "minLength": 1,
+                      "pattern": "\\S",
                       "type": "string"
                     },
+                    "minItems": 1,
                     "type": "array"
                   },
                   "administrativeArea": {
@@ -18821,6 +18834,8 @@
                   },
                   "regionCode": {
                     "description": "ISO 3166-1 alpha-2 country code, e.g. TH.",
+                    "minLength": 1,
+                    "pattern": "\\S",
                     "type": "string"
                   },
                   "sublocality": {
@@ -49665,10 +49680,13 @@
           "address": {
             "properties": {
               "addressLines": {
-                "description": "Street lines in order, unbounded.",
+                "description": "Address lines in order, unbounded.",
                 "items": {
+                  "minLength": 1,
+                  "pattern": "\\S",
                   "type": "string"
                 },
+                "minItems": 1,
                 "type": "array"
               },
               "administrativeArea": {
@@ -49688,6 +49706,8 @@
               },
               "regionCode": {
                 "description": "ISO 3166-1 alpha-2 country code, e.g. TH.",
+                "minLength": 1,
+                "pattern": "\\S",
                 "type": "string"
               },
               "sublocality": {

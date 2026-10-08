@@ -72,8 +72,8 @@ export const specialHoursInputSchema = { ...specialHoursSchema, description: 'Ex
 export const postalAddressSchema = {
   type: ['object', 'null'],
   properties: {
-    regionCode: { type: 'string', description: 'ISO 3166-1 alpha-2 country code, e.g. TH.' },
-    addressLines: { type: 'array', items: { type: 'string' }, description: 'Street lines in order, unbounded.' },
+    regionCode: { type: 'string', minLength: 1, pattern: '\\S', description: 'ISO 3166-1 alpha-2 country code, e.g. TH.' },
+    addressLines: { type: 'array', minItems: 1, items: { type: 'string', minLength: 1, pattern: '\\S' }, description: 'Address lines in order, unbounded.' },
     languageCode: { type: 'string', description: 'BCP-47 tag when the address is written in a specific language.' },
     locality: { type: 'string', description: 'Town or city.' },
     sublocality: { type: 'string', description: 'Neighbourhood or sub-district.' },
