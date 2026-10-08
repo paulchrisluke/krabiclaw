@@ -179,8 +179,8 @@ const bookingPolicyFields = {
   assigned_team_id: { type: ['string', 'null'], description: 'Better Auth team whose available members can host bookings. Clear assigned_member_id when choosing a team.' },
   confirmation_mode: { type: 'string', enum: ['instant', 'review'], default: 'instant', description: 'instant confirms immediately (default); review waits for staff approval.' },
   online_payment_required: { type: 'boolean', default: false, description: 'True requires online payment when booking; false is the default and does not collect online.' },
-  online_timezone: { type: ['string', 'null'], description: 'IANA timezone for online weekly schedules; in-person sessions use their location timezone.' },
-  calendar_group: { type: ['string', 'null'], minLength: 1, maxLength: 64, description: 'Shared availability: online sessions exclude overlaps; in-person sessions at one location share the lowest finite member default_capacity. Null removes enrollment.' },
+  online_timezone: { type: ['string', 'null'], description: 'IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.' },
+  calendar_group: { type: ['string', 'null'], minLength: 1, maxLength: 64, description: 'Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.' },
 } as const
 const bookingConfigObject = {
   type: ['object', 'null'],

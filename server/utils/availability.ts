@@ -146,6 +146,7 @@ export async function prepareProductBookingConfig(db: DbClient, input: {
   const current = await queryFirst<Omit<ProductBookingConfigRecord, 'online_payment_required'> & { online_payment_required: number; updated_at: string }>(db, 'SELECT product_id,organization_id,duration_minutes,default_capacity,confirmation_mode,online_payment_required,online_timezone,calendar_group,scheduling_mode,assigned_member_id,assigned_team_id,updated_at FROM product_booking_configs WHERE organization_id = ? AND product_id = ?', [input.organizationId, input.productId])
   const timezone = patch.online_timezone === undefined ? current?.online_timezone ?? null : patch.online_timezone
   const group = patch.calendar_group === undefined ? current?.calendar_group ?? null : patch.calendar_group
+  if (group && !timezone) badRequest('Set an online timezone before enrolling a single calendar')
   if (patch.scheduling_mode !== undefined && !['legacy', 'provider'].includes(String(patch.scheduling_mode))) badRequest('Invalid scheduling mode')
   if (patch.assigned_member_id !== undefined && patch.assigned_member_id !== null && typeof patch.assigned_member_id !== 'string') badRequest('Invalid member ID')
   if (patch.assigned_team_id !== undefined && patch.assigned_team_id !== null && typeof patch.assigned_team_id !== 'string') badRequest('Invalid team ID')
@@ -193,10 +194,6 @@ export async function prepareProductBookingConfig(db: DbClient, input: {
           NOT EXISTS (SELECT 1 FROM bookings b JOIN product_sessions s ON s.id=b.product_session_id WHERE b.organization_id=? AND b.product_id=? AND b.assigned_member_id IS NULL AND b.status IN ('pending','confirmed') AND s.ends_at>?)
           AND NOT EXISTS (SELECT 1 FROM payment_checkout_holds h WHERE h.organization_id=? AND h.product_id=? AND h.assigned_member_id IS NULL AND h.status='active' AND h.expires_at>?)
         ))
-        AND (? IS (SELECT calendar_group FROM product_booking_configs WHERE organization_id=? AND product_id=?) OR (
-          NOT EXISTS (SELECT 1 FROM bookings b JOIN product_sessions s ON s.id=b.product_session_id AND s.organization_id=b.organization_id WHERE b.organization_id=? AND b.product_id=? AND b.status IN ('pending','confirmed') AND s.ends_at>?)
-          AND NOT EXISTS (SELECT 1 FROM payment_checkout_holds h WHERE h.organization_id=? AND h.product_id=? AND h.status='active' AND h.expires_at>?)
-        ))
         AND (?='provider' OR ? IS NULL OR NOT EXISTS (
           SELECT 1 FROM product_sessions own_session
           WHERE own_session.organization_id=? AND own_session.product_id=? AND own_session.location_id IS NULL AND own_session.ends_at>?
@@ -222,7 +219,6 @@ export async function prepareProductBookingConfig(db: DbClient, input: {
     params: [input.productId, input.organizationId, config.duration_minutes, config.default_capacity,
       config.confirmation_mode, config.online_payment_required ? 1 : 0, config.online_timezone, config.calendar_group, config.scheduling_mode, config.assigned_member_id, config.assigned_team_id, now,
       ...unchanged.params!, config.duration_minutes, input.productId, input.organizationId, config.assigned_team_id, config.assigned_team_id, input.organizationId, config.scheduling_mode, input.organizationId, input.productId, now, input.organizationId, input.productId, now,
-      config.calendar_group, input.organizationId, input.productId, input.organizationId, input.productId, now, input.organizationId, input.productId, now,
       config.scheduling_mode, config.calendar_group, input.organizationId, input.productId, now, now, config.calendar_group, now, config.calendar_group,
       now, input.actorId, input.actorId],
   } }
@@ -239,7 +235,7 @@ export async function setProductBookingConfig(db: DbClient, input: Omit<Paramete
   const locations = await queryAll<SessionLocation>(db, 'SELECT id,timezone,status,opening_hours,special_hours FROM business_locations WHERE organization_id=? AND id IN (SELECT value FROM json_each(?))', [input.organizationId, JSON.stringify([...new Set(rules.flatMap(rule => rule.location_id ? [rule.location_id] : []))])])
   const throughDate = rules.map(rule => addLocalDays(localNow(rule.timezone).date, PUBLIC_BOOKING_WINDOW_DAYS)).sort().at(-1)
   const materialized = throughDate ? prepareSessionMaterialization({ ...input, throughDate }, config, rules, new Map(locations.map(location => [location.id, location])), await sessionProviders(db, config)).queries : []
-  const queries = [query, ...materialized, physicalGroupCapacityGuardQuery(input.organizationId, input.productId), publicResourceCacheInvalidationQuery(input.organizationId, 'product-booking-config')]
+  const queries = [query, ...materialized, publicResourceCacheInvalidationQuery(input.organizationId, 'product-booking-config')]
   if (queries.length > MAX_D1_BATCH_STATEMENTS) badRequest('This schedule exceeds one atomic update; reduce the requested times or team size')
   await executeBatch(db, queries, { operation: 'Set product booking config' }).catch(error => { throw bookingConfigurationWriteError(error) })
   return requireBookingConfig(db, input.organizationId, input.productId)
@@ -250,13 +246,10 @@ export async function deleteProductBookingConfig(db: DbClient, input: { organiza
   if (product.kind === 'experience' && !product.order_url && product.publications.some(publication => publication.published)) throw new HTTPError({ statusCode: 409, statusMessage: 'Withhold this experience before removing its booking setup' })
   const booked = await queryFirst<{ n: number }>(db, 'SELECT count(*) AS n FROM bookings WHERE organization_id = ? AND product_id = ?', [input.organizationId, input.productId])
   if ((booked?.n ?? 0) > 0) throw new HTTPError({ statusCode: 409, statusMessage: 'This product has bookings. Leave bookings on and turn the product off instead.' })
-  const held = await queryFirst(db, "SELECT 1 FROM payment_checkout_holds WHERE organization_id=? AND product_id=? AND status='active' AND expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now') LIMIT 1", [input.organizationId, input.productId])
-  if (held) throw new HTTPError({ statusCode: 409, statusMessage: 'This product has an active checkout. Leave its booking setup in place.' })
   await executeBatch(db, [{
     query: `DELETE FROM product_booking_configs WHERE organization_id = ? AND product_id = ?
-      AND NOT EXISTS (SELECT 1 FROM bookings WHERE organization_id = ? AND product_id = ?)
-      AND NOT EXISTS (SELECT 1 FROM payment_checkout_holds h WHERE h.organization_id=? AND h.product_id=? AND h.status='active' AND h.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
-    params: [input.organizationId, input.productId, input.organizationId, input.productId, input.organizationId, input.productId],
+      AND NOT EXISTS (SELECT 1 FROM bookings WHERE organization_id = ? AND product_id = ?)`,
+    params: [input.organizationId, input.productId, input.organizationId, input.productId],
   }, publicResourceCacheInvalidationQuery(input.organizationId, 'product-booking-config-delete')], { operation: 'Remove product booking config' })
   const remaining = await queryFirst<{ product_id: string }>(db, 'SELECT product_id FROM product_booking_configs WHERE organization_id = ? AND product_id = ?', [input.organizationId, input.productId])
   if (remaining) throw new HTTPError({ statusCode: 409, statusMessage: 'The booking configuration changed while it was being removed' })
@@ -545,8 +538,7 @@ function prepareWeeklySchedule(input: {
     writes.push({
       query: `UPDATE product_sessions SET status = 'cancelled', updated_at = ?, updated_by = ?
               WHERE organization_id = ? AND availability_rule_id = ? AND status = 'scheduled' AND starts_at > ?
-                AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.organization_id = product_sessions.organization_id AND b.product_session_id = product_sessions.id)
-                AND NOT EXISTS (SELECT 1 FROM payment_checkout_holds h WHERE h.organization_id=product_sessions.organization_id AND h.session_id=product_sessions.id AND h.status='active' AND h.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+                AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.organization_id = product_sessions.organization_id AND b.product_session_id = product_sessions.id)`,
       params: [now, input.actorId, input.organizationId, rule.id, now],
     })
     // The rule is the session's provenance, and the schema refuses to delete a
@@ -673,12 +665,11 @@ export async function prepareProductBookingSetup(db: DbClient, input: {
     query: `UPDATE product_booking_configs SET updated_at=CASE WHEN EXISTS (
       SELECT 1 FROM product_sessions s WHERE s.organization_id=? AND s.product_id=?
         AND s.location_id IS ? AND s.starts_at>? AND s.status='scheduled'
-        AND COALESCE(${sessionRemainingCapacitySql('s')}>0,1)
+        AND (s.capacity IS NULL OR s.capacity>${sessionHeldCapacitySql('s')}+COALESCE((SELECT SUM(b.party_size) FROM bookings b WHERE b.product_session_id=s.id AND ${CAPACITY_CONSUMING_SQL}),0))
         AND (${locationGuard.query}) AND NOT ${providerUnavailableSql('s')} AND NOT ${onlineCalendarConflictSql('s')}
     ) THEN updated_at ELSE NULL END WHERE organization_id=? AND product_id=?`,
     params: [input.organizationId, input.productId, locationId, input.now, ...locationGuard.params!, input.organizationId, input.productId],
   })
-  queries.push(physicalGroupCapacityGuardQuery(input.organizationId, input.productId))
   return queries
 }
 
@@ -699,7 +690,7 @@ export function onlineCalendarConflictSql(sessionAlias: string, replacingBooking
     SELECT 1 FROM payment_checkout_holds h JOIN product_booking_configs own
       ON own.product_id = ${sessionAlias}.product_id AND own.organization_id = ${sessionAlias}.organization_id
     WHERE h.organization_id = ${sessionAlias}.organization_id AND own.calendar_group IS NOT NULL
-      AND h.calendar_group = own.calendar_group AND h.location_id IS NULL AND h.status = 'active'
+      AND h.calendar_group = own.calendar_group AND h.status = 'active'
       AND h.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
       AND h.payment_id IS NOT ${convertingPaymentSql} AND h.session_id IS NOT ${excludingSessionSql}
       AND h.starts_at < ${sessionAlias}.ends_at AND h.ends_at > ${sessionAlias}.starts_at
@@ -711,86 +702,6 @@ export function sessionHeldCapacitySql(sessionAlias: string, convertingPaymentSq
     WHERE h.session_id = ${sessionAlias}.id AND h.organization_id = ${sessionAlias}.organization_id
       AND h.status = 'active' AND h.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
       AND h.payment_id IS NOT ${convertingPaymentSql}), 0)`
-}
-
-function physicalGroupMemberSql(config: string, location: string): string {
-  return `(EXISTS (SELECT 1 FROM product_locations pl WHERE pl.organization_id=${config}.organization_id AND pl.product_id=${config}.product_id AND pl.location_id=${location})
-        OR EXISTS (SELECT 1 FROM product_sessions occupied JOIN bookings b ON b.product_session_id=occupied.id AND b.organization_id=occupied.organization_id
-          WHERE occupied.organization_id=${config}.organization_id AND occupied.product_id=${config}.product_id AND occupied.location_id=${location}
-            AND occupied.ends_at>strftime('%Y-%m-%dT%H:%M:%fZ','now') AND ${CAPACITY_CONSUMING_SQL})
-        OR EXISTS (SELECT 1 FROM payment_checkout_holds h WHERE h.organization_id=${config}.organization_id AND h.product_id=${config}.product_id AND h.location_id=${location}
-          AND h.status='active' AND h.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')))`
-}
-
-/** Physical groups pool seats at one location, including withheld offerings' commitments. */
-function physicalGroupCapacitySql(s: string): string {
-  return `(SELECT MIN(peer.default_capacity) FROM product_booking_configs own
-    JOIN product_booking_configs peer ON peer.organization_id=own.organization_id AND peer.calendar_group=own.calendar_group
-    WHERE own.organization_id=${s}.organization_id AND own.product_id=${s}.product_id
-      AND own.calendar_group IS NOT NULL AND ${s}.location_id IS NOT NULL
-      AND ${physicalGroupMemberSql('peer', `${s}.location_id`)})`
-}
-
-function physicalGroupClaimedSql(s: string, replacingBookingSql = 'NULL', convertingPaymentSql = 'NULL'): string {
-  return `(WITH occupancy(starts_at,ends_at,quantity) AS (
-    SELECT occupied.starts_at,occupied.ends_at,b.party_size
-      FROM product_booking_configs own
-      JOIN product_booking_configs peer ON peer.organization_id=own.organization_id AND peer.calendar_group=own.calendar_group
-      JOIN product_sessions occupied ON occupied.organization_id=peer.organization_id AND occupied.product_id=peer.product_id
-      JOIN bookings b ON b.product_session_id=occupied.id AND b.organization_id=occupied.organization_id
-      WHERE own.organization_id=${s}.organization_id AND own.product_id=${s}.product_id AND own.calendar_group IS NOT NULL
-        AND ${s}.location_id IS NOT NULL AND occupied.location_id=${s}.location_id
-        AND occupied.starts_at<${s}.ends_at AND occupied.ends_at>${s}.starts_at
-        AND b.id IS NOT ${replacingBookingSql} AND ${CAPACITY_CONSUMING_SQL}
-    UNION ALL
-    SELECT h.starts_at,h.ends_at,h.quantity FROM payment_checkout_holds h JOIN product_booking_configs own
-      ON own.organization_id=h.organization_id AND own.calendar_group=h.calendar_group
-      WHERE own.organization_id=${s}.organization_id AND own.product_id=${s}.product_id
-        AND ${s}.location_id IS NOT NULL AND h.location_id=${s}.location_id
-        AND h.status='active' AND h.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')
-        AND h.payment_id IS NOT ${convertingPaymentSql} AND h.starts_at<${s}.ends_at AND h.ends_at>${s}.starts_at
-  ), boundaries(at) AS (
-    SELECT ${s}.starts_at UNION SELECT starts_at FROM occupancy WHERE starts_at>${s}.starts_at AND starts_at<${s}.ends_at
-  ) SELECT COALESCE(MAX((SELECT SUM(quantity) FROM occupancy WHERE starts_at<=boundaries.at AND ends_at>boundaries.at)),0) FROM boundaries)`
-}
-
-/** One capacity calculation for availability, admission and session edits. */
-function sessionRemainingCapacitySql(s: string, replacingBookingSql = 'NULL', convertingPaymentSql = 'NULL'): string {
-  return `(WITH limits AS (SELECT ${s}.capacity-${sessionHeldCapacitySql(s, convertingPaymentSql)}-COALESCE((
-    SELECT SUM(b.party_size) FROM bookings b WHERE b.organization_id=${s}.organization_id AND b.product_session_id=${s}.id
-      AND b.id IS NOT ${replacingBookingSql} AND ${CAPACITY_CONSUMING_SQL}),0) AS session_remaining,
-    ${physicalGroupCapacitySql(s)} AS shared_capacity)
-    SELECT CASE WHEN shared_capacity IS NULL THEN session_remaining
-      WHEN session_remaining IS NULL THEN shared_capacity-${physicalGroupClaimedSql(s, replacingBookingSql, convertingPaymentSql)}
-      ELSE MIN(session_remaining,shared_capacity-${physicalGroupClaimedSql(s, replacingBookingSql, convertingPaymentSql)}) END FROM limits)`
-}
-
-/** Abort the enclosing batch if enrollment or a budget edit oversells an occupied physical pool. */
-export function physicalGroupCapacityGuardQuery(organizationId: string, productId: string): BatchQuery {
-  return {
-    query: `UPDATE product_booking_configs SET updated_at=CASE WHEN NOT EXISTS (
-      SELECT 1 FROM (
-        SELECT own.organization_id,own.product_id,occupied.location_id,
-          MAX(occupied.starts_at,strftime('%Y-%m-%dT%H:%M:%fZ','now')) AS starts_at,occupied.ends_at
-        FROM product_booking_configs own JOIN product_booking_configs peer
-          ON peer.organization_id=own.organization_id AND peer.calendar_group=own.calendar_group
-        JOIN product_sessions occupied ON occupied.organization_id=peer.organization_id AND occupied.product_id=peer.product_id
-        WHERE own.organization_id=? AND own.product_id=? AND occupied.location_id IS NOT NULL
-          AND occupied.ends_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')
-          AND EXISTS (SELECT 1 FROM bookings b WHERE b.organization_id=occupied.organization_id AND b.product_session_id=occupied.id AND ${CAPACITY_CONSUMING_SQL})
-        UNION
-        SELECT own.organization_id,own.product_id,h.location_id,
-          MAX(h.starts_at,strftime('%Y-%m-%dT%H:%M:%fZ','now')),h.ends_at
-        FROM product_booking_configs own JOIN payment_checkout_holds h
-          ON h.organization_id=own.organization_id AND h.calendar_group=own.calendar_group
-        WHERE own.organization_id=? AND own.product_id=? AND h.location_id IS NOT NULL
-          AND h.status='active' AND h.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now') AND h.ends_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')
-      ) probe WHERE EXISTS (SELECT 1 FROM product_booking_configs changed WHERE changed.organization_id=probe.organization_id AND changed.product_id=probe.product_id
-        AND ${physicalGroupMemberSql('changed', 'probe.location_id')})
-        AND ${physicalGroupCapacitySql('probe')}<${physicalGroupClaimedSql('probe')}
-    ) THEN updated_at ELSE NULL END WHERE organization_id=? AND product_id=?`,
-    params: [organizationId, productId, organizationId, productId, organizationId, productId],
-  }
 }
 
 type SessionLocation = { id: string; timezone: string | null; status: string; opening_hours: string | null; special_hours: string | null }
@@ -815,20 +726,27 @@ export async function listSessions(db: DbClient, input: {
 }): Promise<SessionAvailability[]> {
   const statuses = input.statuses ?? ['scheduled']
   const sessions = await queryAll<SessionAvailability>(db, `
-    WITH availability AS (SELECT s.id, s.organization_id, s.product_id, s.location_id, s.availability_rule_id, ${sessionMemberSql('s')} AS assigned_member_id,
+    SELECT s.id, s.organization_id, s.product_id, s.location_id, s.availability_rule_id, ${sessionMemberSql('s')} AS assigned_member_id,
            s.source_occurrence_key, s.timezone, s.starts_at, s.ends_at, s.capacity, s.status, s.created_at, s.updated_at,
            COALESCE((
              SELECT SUM(b.party_size) FROM bookings b
              WHERE b.product_session_id = s.id AND ${CAPACITY_CONSUMING_SQL}
            ), 0) + ${sessionHeldCapacitySql('s')} AS claimed,
-           CASE WHEN (${onlineCalendarConflictSql('s')} OR ${providerUnavailableSql('s')}) THEN 0 ELSE ${sessionRemainingCapacitySql('s')} END AS remaining
+           CASE WHEN (${onlineCalendarConflictSql('s')} OR ${providerUnavailableSql('s')}) THEN 0 WHEN s.capacity IS NULL THEN NULL ELSE s.capacity - ${sessionHeldCapacitySql('s')} - COALESCE((
+             SELECT SUM(b.party_size) FROM bookings b
+             WHERE b.product_session_id = s.id AND ${CAPACITY_CONSUMING_SQL}
+           ), 0) END AS remaining,
+           CASE WHEN (${onlineCalendarConflictSql('s')} OR ${providerUnavailableSql('s')}) THEN 1 WHEN s.capacity IS NULL THEN 0 WHEN s.capacity - ${sessionHeldCapacitySql('s')} - COALESCE((
+             SELECT SUM(b.party_size) FROM bookings b
+             WHERE b.product_session_id = s.id AND ${CAPACITY_CONSUMING_SQL}
+           ), 0) <= 0 THEN 1 ELSE 0 END AS is_full
     FROM product_sessions s
     WHERE s.organization_id = ?
       AND (? IS NULL OR s.product_id = ?)
       AND (? IS NULL OR s.location_id = ?)
       AND s.starts_at >= ? AND s.starts_at < ?
-      AND s.status IN (SELECT value FROM json_each(?)))
-    SELECT *, COALESCE(remaining<=0,0) AS is_full FROM availability ORDER BY starts_at,id
+      AND s.status IN (SELECT value FROM json_each(?))
+    ORDER BY s.starts_at, s.id
   `, [
     input.organizationId,
     input.productId ?? null, input.productId ?? null,
@@ -886,9 +804,7 @@ export interface SessionAllocationInput {
 
 export async function sessionAllocationPredicate(db: DbClient, input: SessionAllocationInput): Promise<BatchQuery> {
   const location = await sessionLocationGuard(db, input)
-  const replacing = '(SELECT booking_id FROM allocation_input)', converting = '(SELECT payment_id FROM allocation_input)'
-  return { query: `(WITH allocation_input AS (SELECT ? AS booking_id, ? AS payment_id, ? AS party_size)
-    SELECT ${input.capturedPaymentId ? `EXISTS (SELECT 1 FROM payment_checkout_holds h JOIN payments p ON p.id=h.payment_id WHERE p.id=? AND p.organization_id=? AND p.state='captured' AND p.refunded_amount=0 AND h.status IN ('active','released') AND h.expires_at>? AND h.session_id=? AND h.quantity=? AND h.organization_id=p.organization_id AND h.amount=p.amount AND h.currency=p.currency) AND ` : ''}${input.requireUndecided
+  return { query: `${input.capturedPaymentId ? `EXISTS (SELECT 1 FROM payment_checkout_holds h JOIN payments p ON p.id=h.payment_id WHERE p.id=? AND p.organization_id=? AND p.state='captured' AND p.refunded_amount=0 AND h.status IN ('active','released') AND h.expires_at>? AND h.session_id=? AND h.quantity=? AND h.organization_id=p.organization_id AND h.amount=p.amount AND h.currency=p.currency) AND ` : ''}${input.requireUndecided
         ? `EXISTS (SELECT 1 FROM requests WHERE id = ? AND organization_id = ? AND updated_at = ?)
            AND NOT EXISTS (SELECT 1 FROM activity_entries WHERE dedupe_key = ?) AND `
         : ''}EXISTS (
@@ -907,20 +823,19 @@ export async function sessionAllocationPredicate(db: DbClient, input: SessionAll
                AND pl.active = 1 AND pl.published = 1
           ))
           AND s.starts_at > ?
-          AND NOT ${onlineCalendarConflictSql('s', replacing, 'NULL', converting)}
-          AND NOT ${providerUnavailableSql('s', replacing, converting)}
-          ${input.capturedPaymentId ? `AND EXISTS(SELECT 1 FROM payment_checkout_holds held WHERE held.payment_id=${converting}
-            AND held.product_id=s.product_id AND held.location_id IS s.location_id AND held.timezone IS s.timezone
-            AND held.starts_at=s.starts_at AND held.ends_at=s.ends_at AND held.assigned_member_id IS ${sessionMemberSql('s')}
-            AND held.calendar_group IS (SELECT c.calendar_group FROM product_booking_configs c WHERE c.organization_id=s.organization_id AND c.product_id=s.product_id))` : ''}
-          AND COALESCE(${sessionRemainingCapacitySql('s', replacing, converting)}>=(SELECT party_size FROM allocation_input),1)
-      ))`, params: [
-      input.replacingBookingId ?? null, input.capturedPaymentId ?? null, input.partySize,
+          AND NOT ${onlineCalendarConflictSql('s', '?', 'NULL', '?')}
+          AND NOT ${providerUnavailableSql('s', '?', '?')}
+          ${input.capturedPaymentId ? 'AND EXISTS(SELECT 1 FROM payment_checkout_holds held WHERE held.payment_id=? AND held.assigned_member_id IS ' + sessionMemberSql('s') + ')' : ''}
+          AND (s.capacity IS NULL OR s.capacity >= ? + ${sessionHeldCapacitySql('s','?')} + COALESCE((
+            SELECT SUM(b.party_size) FROM bookings b
+            WHERE b.product_session_id = s.id AND b.id IS NOT ? AND ${CAPACITY_CONSUMING_SQL}
+          ), 0))
+      )`, params: [
       ...(input.capturedPaymentId ? [input.capturedPaymentId,input.organizationId,input.capturedAt ?? input.now,input.sessionId,input.partySize] : []),
       ...(input.requireUndecided
         ? [input.requireUndecided.requestId, input.requireUndecided.organizationId, input.requireUndecided.updatedAt, input.requireUndecided.decisionDedupeKey]
         : []),
-      input.sessionId, input.organizationId, input.productId, ...location.params!, input.now,
+      input.sessionId, input.organizationId, input.productId, ...location.params!, input.now, input.replacingBookingId ?? null, input.capturedPaymentId ?? null, input.replacingBookingId ?? null, input.capturedPaymentId ?? null, ...(input.capturedPaymentId ? [input.capturedPaymentId] : []), input.partySize, input.capturedPaymentId ?? null, input.replacingBookingId ?? null,
   ] }
 }
 
@@ -1190,8 +1105,9 @@ export async function updateSession(db: DbClient, input: {
   // seats in the way. The write carries the same predicate, so a booking that
   // lands between the two cannot leave the session oversold.
   const capacity = input.capacity === undefined ? session.capacity : input.capacity
-  const guard = `AND NOT EXISTS (SELECT 1 FROM (SELECT product_sessions.id,product_sessions.organization_id,product_sessions.product_id,product_sessions.location_id,
-    ? AS starts_at,? AS ends_at,? AS capacity) proposed WHERE COALESCE(${sessionRemainingCapacitySql('proposed')}<0,0))`
+  const guard = capacity === null
+    ? ''
+    : `AND ? >= COALESCE((SELECT SUM(b.party_size) FROM bookings b WHERE b.product_session_id = product_sessions.id AND ${CAPACITY_CONSUMING_SQL}), 0) + (SELECT ${sessionHeldCapacitySql('held')} FROM product_sessions held WHERE held.id=product_sessions.id)`
   const written = await executeBatch(db, [{
     query: `
       UPDATE product_sessions
@@ -1208,7 +1124,7 @@ export async function updateSession(db: DbClient, input: {
       startsAt, endsAt, capacity,
       input.status ?? session.status, now, input.actorId,
       input.organizationId, input.sessionId, session.updated_at,
-      startsAt, endsAt, capacity, ...locationGuard.params!, startsAt, endsAt, input.status ?? session.status, startsAt, endsAt,
+      ...(capacity === null ? [] : [capacity]), ...locationGuard.params!, startsAt, endsAt, input.status ?? session.status, startsAt, endsAt,
     ],
   }, organizationEventQuery({ organizationId: input.organizationId, locationId: session.location_id, actorId: input.actorId, eventType: 'product.updated', entityType: 'session', entityId: session.id, onlyIfPreviousChangedOneRow: true,
     beforeState: { starts_at: session.starts_at, ends_at: session.ends_at, capacity: session.capacity, status: session.status }, afterState: { starts_at: startsAt, ends_at: endsAt, capacity, status: input.status ?? session.status } }),

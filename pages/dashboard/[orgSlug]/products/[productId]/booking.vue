@@ -34,7 +34,7 @@ const groups = computed<EditorNavigationGroup[]>(() => {
   if (config) items.push(
     row('enabled', 'Booking calendar', 'Set up'),
     row('payment', 'Payment', config.online_payment_required ? 'Online payment required for paid sessions' : 'No payment collected at booking'),
-    row('calendar', 'Shared availability', config.calendar_group || 'Independent schedule'),
+    ...(!p.locationId.value && config.online_timezone ? [row('calendar', 'Shared availability', config.calendar_group || 'Independent schedule')] : []),
   )
   return [{ id: 'booking', items }]
 })

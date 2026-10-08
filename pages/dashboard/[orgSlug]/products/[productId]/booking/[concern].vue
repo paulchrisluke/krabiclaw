@@ -52,7 +52,7 @@ const settings = {
   assignment: { title: 'Who guests meet', lead: 'Choose whose availability guests can book.' },
   payment: { title: 'Payment', lead: 'Guests pay before their booking is made. Free sessions remain bookable.' },
   location: { title: 'Meeting location', lead: 'Choose a city for your online schedule; times follow its time zone and daylight saving is handled automatically.' },
-  calendar: { title: 'Shared availability', lead: 'Use the same name for offerings that share a table, room, or online calendar.' },
+  calendar: { title: 'Shared availability', lead: 'Use the same calendar name for online services that cannot run at the same time. Leave it empty for an independent schedule.' },
 }
 const dashboard = useDashboardOrganization()
 const paymentEntitled = computed(() => {
@@ -73,7 +73,7 @@ const memberOptions = computed(() => [{ label: 'Use the business schedule', valu
 const setting = computed(() => settings[concern.value as keyof typeof settings] ?? { title: '', lead: '' })
 watchEffect(() => {
   if (level.mode.value === 'yield') return
-  if ((concern.value === 'location' && p.locationId.value) || !(concern.value in settings) || (concern.value !== 'enabled' && p.product.value && !p.loadError.value && !p.product.value.booking)) showError(createError({ statusCode: 404, statusMessage: 'Page not found' }))
+  if ((['location', 'calendar'].includes(concern.value) && p.locationId.value) || (concern.value === 'calendar' && p.product.value && !p.loadError.value && !p.product.value.booking?.online_timezone) || !(concern.value in settings) || (concern.value !== 'enabled' && p.product.value && !p.loadError.value && !p.product.value.booking)) showError(createError({ statusCode: 404, statusMessage: 'Page not found' }))
 })
 const capacityOptions = [{ value: 'one', label: 'One guest' }, { value: 'group', label: 'A group of guests' }, { value: 'unlimited', label: 'No guest limit' }, { value: 'closed', label: 'Closed to new guests' }]
 const capacityChoice = ref('unlimited')

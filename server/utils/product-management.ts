@@ -1613,7 +1613,6 @@ export async function setProductLocation(db: DbClient, input: {
   const organization = await queryFirst<{ organization_id: string }>(db, 'SELECT organization_id FROM business_locations WHERE organization_id = ? AND id = ?', [input.organizationId, input.locationId])
   if (!organization) notFound('Location not found')
   const now = new Date().toISOString()
-  const { physicalGroupCapacityGuardQuery, bookingConfigurationWriteError } = await import('~/server/utils/availability')
   await executeBatch(db, [{
     query: `INSERT INTO product_locations (organization_id, product_id, location_id, active, published, created_at, updated_at, created_by, updated_by)
             VALUES (?, ?, ?, COALESCE(?, 1), COALESCE(?, 1), ?, ?, ?, ?)
@@ -1621,7 +1620,7 @@ export async function setProductLocation(db: DbClient, input: {
               updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
     params: [input.organizationId, input.productId, input.locationId, input.active === undefined ? null : Number(input.active), input.published === undefined ? null : Number(input.published),
       now, now, input.actor.actorId, input.actor.actorId, input.active === undefined ? null : Number(input.active), input.published === undefined ? null : Number(input.published)],
-  }, physicalGroupCapacityGuardQuery(input.organizationId, input.productId), publicResourceCacheInvalidationQuery(input.organizationId, 'product_location_changed')], { operation: 'Set product location' }).catch(error => { throw bookingConfigurationWriteError(error) })
+  }, publicResourceCacheInvalidationQuery(input.organizationId, 'product_location_changed')], { operation: 'Set product location' })
 }
 
 export async function removeProductLocation(db: DbClient, input: {

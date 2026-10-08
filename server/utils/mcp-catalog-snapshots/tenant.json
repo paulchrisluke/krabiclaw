@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:7ab86c4952f0e1d37b91d91dcf8d1fa4ec2d312cbdc0acfd77eaa858ad9b0dbc",
+  "fingerprint": "sha256:360e9e7e1dfe6e80705fc1ea9ed01f75deb4bded03b823e12118b02572a14625",
   "tools": [
     {
       "name": "append_content_block",
@@ -2959,7 +2959,7 @@
                       ]
                     },
                     "calendar_group": {
-                      "description": "Shared availability: online sessions exclude overlaps; in-person sessions at one location share the lowest finite member default_capacity. Null removes enrollment.",
+                      "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
                       "maxLength": 64,
                       "minLength": 1,
                       "type": [
@@ -2996,7 +2996,7 @@
                       "type": "boolean"
                     },
                     "online_timezone": {
-                      "description": "IANA timezone for online weekly schedules; in-person sessions use their location timezone.",
+                      "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
                       "type": [
                         "string",
                         "null"
@@ -10116,7 +10116,7 @@
                 ]
               },
               "calendar_group": {
-                "description": "Shared availability: online sessions exclude overlaps; in-person sessions at one location share the lowest finite member default_capacity. Null removes enrollment.",
+                "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
                 "maxLength": 64,
                 "minLength": 1,
                 "type": [
@@ -10158,7 +10158,7 @@
                 "type": "boolean"
               },
               "online_timezone": {
-                "description": "IANA timezone for online weekly schedules; in-person sessions use their location timezone.",
+                "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
                 "type": [
                   "string",
                   "null"
@@ -11551,7 +11551,7 @@
                     ]
                   },
                   "calendar_group": {
-                    "description": "Shared availability: online sessions exclude overlaps; in-person sessions at one location share the lowest finite member default_capacity. Null removes enrollment.",
+                    "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
                     "maxLength": 64,
                     "minLength": 1,
                     "type": [
@@ -11588,7 +11588,7 @@
                     "type": "boolean"
                   },
                   "online_timezone": {
-                    "description": "IANA timezone for online weekly schedules; in-person sessions use their location timezone.",
+                    "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
                     "type": [
                       "string",
                       "null"
@@ -22331,7 +22331,7 @@
                     ]
                   },
                   "calendar_group": {
-                    "description": "Shared availability: online sessions exclude overlaps; in-person sessions at one location share the lowest finite member default_capacity. Null removes enrollment.",
+                    "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
                     "maxLength": 64,
                     "minLength": 1,
                     "type": [
@@ -22368,7 +22368,7 @@
                     "type": "boolean"
                   },
                   "online_timezone": {
-                    "description": "IANA timezone for online weekly schedules; in-person sessions use their location timezone.",
+                    "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
                     "type": [
                       "string",
                       "null"
@@ -39120,7 +39120,7 @@
                       ]
                     },
                     "calendar_group": {
-                      "description": "Shared availability: online sessions exclude overlaps; in-person sessions at one location share the lowest finite member default_capacity. Null removes enrollment.",
+                      "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
                       "maxLength": 64,
                       "minLength": 1,
                       "type": [
@@ -39157,7 +39157,7 @@
                       "type": "boolean"
                     },
                     "online_timezone": {
-                      "description": "IANA timezone for online weekly schedules; in-person sessions use their location timezone.",
+                      "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
                       "type": [
                         "string",
                         "null"
@@ -40299,7 +40299,7 @@
                     ]
                   },
                   "calendar_group": {
-                    "description": "Shared availability: online sessions exclude overlaps; in-person sessions at one location share the lowest finite member default_capacity. Null removes enrollment.",
+                    "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
                     "maxLength": 64,
                     "minLength": 1,
                     "type": [
@@ -40336,7 +40336,7 @@
                     "type": "boolean"
                   },
                   "online_timezone": {
-                    "description": "IANA timezone for online weekly schedules; in-person sessions use their location timezone.",
+                    "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
                     "type": [
                       "string",
                       "null"
@@ -44566,7 +44566,7 @@
             ]
           },
           "calendar_group": {
-            "description": "Shared availability: online sessions exclude overlaps; in-person sessions at one location share the lowest finite member default_capacity. Null removes enrollment.",
+            "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
             "maxLength": 64,
             "minLength": 1,
             "type": [
@@ -44605,7 +44605,7 @@
             "type": "boolean"
           },
           "online_timezone": {
-            "description": "IANA timezone for online weekly schedules; in-person sessions use their location timezone.",
+            "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
             "type": [
               "string",
               "null"
@@ -44651,7 +44651,7 @@
                 ]
               },
               "calendar_group": {
-                "description": "Shared availability: online sessions exclude overlaps; in-person sessions at one location share the lowest finite member default_capacity. Null removes enrollment.",
+                "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
                 "maxLength": 64,
                 "minLength": 1,
                 "type": [
@@ -44688,7 +44688,7 @@
                 "type": "boolean"
               },
               "online_timezone": {
-                "description": "IANA timezone for online weekly schedules; in-person sessions use their location timezone.",
+                "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
                 "type": [
                   "string",
                   "null"
@@ -44790,7 +44790,7 @@
                     ]
                   },
                   "calendar_group": {
-                    "description": "Shared availability: online sessions exclude overlaps; in-person sessions at one location share the lowest finite member default_capacity. Null removes enrollment.",
+                    "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
                     "maxLength": 64,
                     "minLength": 1,
                     "type": [
@@ -44827,7 +44827,7 @@
                     "type": "boolean"
                   },
                   "online_timezone": {
-                    "description": "IANA timezone for online weekly schedules; in-person sessions use their location timezone.",
+                    "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
                     "type": [
                       "string",
                       "null"
@@ -45622,7 +45622,7 @@
                     ]
                   },
                   "calendar_group": {
-                    "description": "Shared availability: online sessions exclude overlaps; in-person sessions at one location share the lowest finite member default_capacity. Null removes enrollment.",
+                    "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
                     "maxLength": 64,
                     "minLength": 1,
                     "type": [
@@ -45659,7 +45659,7 @@
                     "type": "boolean"
                   },
                   "online_timezone": {
-                    "description": "IANA timezone for online weekly schedules; in-person sessions use their location timezone.",
+                    "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
                     "type": [
                       "string",
                       "null"
@@ -50693,7 +50693,7 @@
                             ]
                           },
                           "calendar_group": {
-                            "description": "Shared availability: online sessions exclude overlaps; in-person sessions at one location share the lowest finite member default_capacity. Null removes enrollment.",
+                            "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
                             "maxLength": 64,
                             "minLength": 1,
                             "type": [
@@ -50730,7 +50730,7 @@
                             "type": "boolean"
                           },
                           "online_timezone": {
-                            "description": "IANA timezone for online weekly schedules; in-person sessions use their location timezone.",
+                            "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
                             "type": [
                               "string",
                               "null"
@@ -52327,7 +52327,7 @@
                 ]
               },
               "calendar_group": {
-                "description": "Shared availability: online sessions exclude overlaps; in-person sessions at one location share the lowest finite member default_capacity. Null removes enrollment.",
+                "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
                 "maxLength": 64,
                 "minLength": 1,
                 "type": [
@@ -52369,7 +52369,7 @@
                 "type": "boolean"
               },
               "online_timezone": {
-                "description": "IANA timezone for online weekly schedules; in-person sessions use their location timezone.",
+                "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
                 "type": [
                   "string",
                   "null"
@@ -52939,7 +52939,7 @@
                     ]
                   },
                   "calendar_group": {
-                    "description": "Shared availability: online sessions exclude overlaps; in-person sessions at one location share the lowest finite member default_capacity. Null removes enrollment.",
+                    "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
                     "maxLength": 64,
                     "minLength": 1,
                     "type": [
@@ -52976,7 +52976,7 @@
                     "type": "boolean"
                   },
                   "online_timezone": {
-                    "description": "IANA timezone for online weekly schedules; in-person sessions use their location timezone.",
+                    "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
                     "type": [
                       "string",
                       "null"
