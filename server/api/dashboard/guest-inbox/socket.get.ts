@@ -1,12 +1,10 @@
 import { HTTPError, defineHandler } from 'nitro'
-import { getDashboardContext } from '~/server/utils/dashboard-context'
-import { isOrganizationWideRole } from '~/server/utils/member-access'
+import { getDashboardMemberContext } from '~/server/utils/dashboard-context'
+import { roleAllows, assertRoleAllows } from '~/server/utils/member-access'
 
 export default defineHandler(async (event) => {
-  const { env, organization, userId } = await getDashboardContext(event, {})
-  if (!isOrganizationWideRole(organization.role)) {
-    throw new HTTPError({ statusCode: 403, message: 'Dashboard realtime access denied' })
-  }
+  const { env, organization, userId } = await getDashboardMemberContext(event, {})
+  if (!await roleAllows({ ...organization, permissions: { operations: ['read'] } })) await assertRoleAllows({ ...organization, permissions: { operations: ['assigned'] } })
 
   const namespace = env.GUEST_INBOX_HUBS
   if (!namespace) throw new HTTPError({ statusCode: 503, message: 'Dashboard realtime binding is not configured' })

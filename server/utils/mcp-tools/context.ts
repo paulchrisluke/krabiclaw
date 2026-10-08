@@ -6,7 +6,7 @@ export const CONTEXT_TOOLS: McpToolDefinition[] = [
       name: 'get_workspace_context',
       description: "Read the active site and location and the sites available to the signed-in user. Use returned internal organization and location IDs to target site tools. URLs, domains and names are not IDs.",
       domain: 'context',
-      minimumRole: 'admin',
+      minimumRole: 'member',
       inputSchema: { type: 'object', properties: {}, additionalProperties: true },
       outputSchema: {
         type: 'object',
@@ -22,7 +22,7 @@ export const CONTEXT_TOOLS: McpToolDefinition[] = [
       name: 'set_workspace_context',
       description: "Save the selected active site and optional location for the signed-in user, shared across their connections. Returns the saved site and location. Use internal IDs returned by site/location reads. Explicit IDs supplied to later tools still determine their targets.",
       domain: 'context',
-      minimumRole: 'admin',
+      minimumRole: 'member',
       inputSchema: {
         type: 'object',
         properties: {

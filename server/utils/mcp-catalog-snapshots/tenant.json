@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:fa03aae69b79923bb1c2d782826b001c28cf43b0a9662e76b9bc6e79922b569f",
+  "fingerprint": "sha256:9bb1b675513400846769aa33a6c533bc67827b81ad1989ebd39ef08801a7252e",
   "tools": [
     {
       "name": "append_content_block",
@@ -14867,7 +14867,7 @@
     },
     {
       "name": "delete_resource_localization",
-      "description": "Permanently remove one resource translation when the user requests deletion of that language representation. Also deletes its owned document and redirects. Authored Q&A is managed with delete_qa.",
+      "description": "Permanently remove one translation and its owned document and redirects. Source content is preserved; imported Q&A remains read-only.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -31678,7 +31678,7 @@
     },
     {
       "name": "put_resource_localization",
-      "description": "Replace the requested resource’s translation in exactly the named language. Resource values replace that translation; document fields and blocks require expected_updated_at. This localization tool does not edit Q&A; authored Q&A uses its dedicated tools.",
+      "description": "Replace an exact translation. Existing documents require expected_updated_at. Documents require route_path; authored Q&A uses title and summary without a route or blocks. Imported Q&A remains read-only.",
       "inputSchema": {
         "$defs": {
           "content_ai_assistance": {
@@ -33561,10 +33561,7 @@
                 },
                 "type": "object"
               }
-            },
-            "required": [
-              "route_path"
-            ]
+            }
           }
         ],
         "properties": {
@@ -34390,6 +34387,7 @@
             "type": "string"
           },
           "route_path": {
+            "description": "Required localized public path for pages, articles and posts; omit for authored Q&A.",
             "type": [
               "string",
               "null"
@@ -40763,7 +40761,7 @@
     },
     {
       "name": "replace_resource_localizations",
-      "description": "Atomically replace 1–250 exact localizations of one resource type for one locale. Omitted resources remain untouched; any invalid item rejects the whole submitted batch. Returns the saved representations; supplied document content replaces its complete representation and can remove blocks. This uses supplied translations, without generating them.",
+      "description": "Atomically replace 1–250 exact resource translations for one language. Omitted resources retain their translations; any invalid item rejects the batch. Uses supplied translations without generating them.",
       "inputSchema": {
         "additionalProperties": false,
         "anyOf": [
@@ -42117,10 +42115,16 @@
     },
     {
       "name": "set_consultation_mode",
-      "description": "Choose the Schedule page: show online services, use an existing external scheduler, or hide the selector. Each service keeps its own booking settings.",
+      "description": "Choose native bookings, an external scheduler, or Contact on the Schedule page. Supply external_url to connect a scheduler.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
+          "external_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "mode": {
             "enum": [
               "native",
@@ -42144,6 +42148,12 @@
         "properties": {
           "settings": {
             "properties": {
+              "external_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "mode": {
                 "enum": [
                   "native",
@@ -42154,7 +42164,8 @@
               }
             },
             "required": [
-              "mode"
+              "mode",
+              "external_url"
             ],
             "type": "object"
           }

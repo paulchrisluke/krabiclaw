@@ -1,3 +1,4 @@
+import { HTTPError } from 'nitro'
 import { getSourceLocale } from '~/server/utils/organization-locales'
 // Writing an onboarding draft's answers onto its real tenant.
 //
@@ -18,7 +19,7 @@ import { planProductCreateWrites, slugCandidate } from '~/server/utils/product-m
 import { updateLocation } from '~/server/utils/location-management'
 import { getDraftMedia, onboardingPageBlocks, onboardingPagePath, onboardingPageType, type OnboardingDraftPayload } from '~/server/utils/onboarding-drafts'
 import { createMediaAsset, insertInitialMediaPlacements, type CreateInput } from '~/server/utils/media-asset-manager'
-import { applyOnboardingTenantPages } from '~/server/utils/content/pages'
+import { applyOnboardingTenantPages, prepareTenantPageDelete, refreshTenantPageCard } from '~/server/utils/content/pages'
 import { createOrganization, provisionOrganization } from '~/server/utils/organization-provisioning'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import type { OrganizationVertical } from '~/utils/vertical-copy'
@@ -127,6 +128,7 @@ export async function ensureOnboardingTarget(
       }
     }
     subdomain = result.data.subdomain as string
+    await execute(db, "UPDATE organization SET onboarding_status = 'pending', updated_at = ? WHERE id = ? AND onboarding_status = 'failed'", [new Date().toISOString(), organizationId])
   }
 
   // An onboarding tenant has exactly one location. More than one means something
@@ -175,6 +177,14 @@ export async function applyOnboardingDraft(
   const { userId, payload, defaultCurrency, timezone } = input
   const { organizationId } = input.target
   const locationRow = { id: input.target.locationId }
+  const organization = await queryFirst<{ onboarding_status: string | null; has_bookings: number }>(db, `
+    SELECT onboarding_status, EXISTS(SELECT 1 FROM bookings WHERE organization_id = organization.id) AS has_bookings
+      FROM organization WHERE id = ? LIMIT 1
+  `, [organizationId])
+  if (!organization) throw new HTTPError({ statusCode: 404, statusMessage: 'Organization not found' })
+  if (organization.onboarding_status !== 'pending' || organization.has_bookings) {
+    throw new HTTPError({ statusCode: 409, statusMessage: 'Onboarding can only replace a pending site with no bookings', data: { code: 'ONBOARDING_REBUILD_NOT_ALLOWED' } })
+  }
 
   if (defaultCurrency) {
     await execute(db, `
@@ -300,17 +310,25 @@ export async function applyOnboardingDraft(
     JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id 
     WHERE p.organization_id = ? AND p.source = 'import'
   `, [ organizationId])
+  const boundPages = previouslyImported.length ? await queryAll<{ id: string; path: string; updated_at: string }>(db, `
+    SELECT id, path, updated_at FROM content_documents
+     WHERE organization_id = ? AND kind = 'page' AND row_role = 'root'
+       AND product_id IN (SELECT value FROM json_each(?))
+  `, [organizationId, JSON.stringify(previouslyImported.map(row => row.id))]) : []
+  const pageDeletions = await Promise.all(boundPages.map(page => prepareTenantPageDelete(db, page.id, { scope: { organizationId }, expectedUpdatedAt: page.updated_at })))
   const batchQueries: BatchQuery[] = previouslyImported.length
     ? [
+        ...pageDeletions.flatMap(page => page.queries),
         ...resourceLocalizationDeletionQueries('product', { query: 'SELECT value FROM json_each(?)', params: [JSON.stringify(previouslyImported.map(row => row.id))] }),
         { query: `DELETE FROM products WHERE organization_id = ? AND id IN (SELECT value FROM json_each(?))`, params: [organizationId, JSON.stringify(previouslyImported.map(row => row.id))] },
       ]
     : []
 
   let productIds: string[] = []
+  let productPages: Array<{ variantId: string; path: string }> = []
   if (orderedProducts.length) {
-    const { ids, queries } = await planProductCreateWrites(db, {
-      organizationId,
+    const { ids, queries, pages } = await planProductCreateWrites(db, {
+      organizationId, env, replacedProductIds: new Set(previouslyImported.map(product => product.id)), replacedPages: new Map(boundPages.map(page => [page.path, page.id])),
       actor: { actorId: userId },
       now,
       products: orderedProducts.map(product => ({
@@ -332,6 +350,7 @@ export async function applyOnboardingDraft(
       })),
     })
     batchQueries.push(...queries)
+    productPages = pages
 
     // Publication and location membership are separate rows, and onboarding
     // states both explicitly.
@@ -426,5 +445,6 @@ export async function applyOnboardingDraft(
         name: batchError.name, message: batchError.message, stack: batchError.stack, } : String(batchError), })
     throw batchError
   }
+  for (const page of productPages) await refreshTenantPageCard(db, env, page, userId)
   return { locationSlug: updatedSlug }
 }

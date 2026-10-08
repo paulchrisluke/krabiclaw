@@ -89,7 +89,7 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
   }),
   organizationTool({
     name: 'put_resource_localization',
-    description: "Replace the requested resource’s translation in exactly the named language. Resource values replace that translation; document fields and blocks require expected_updated_at. This localization tool does not edit Q&A; authored Q&A uses its dedicated tools.",
+    description: "Replace an exact translation. Existing documents require expected_updated_at. Documents require route_path; authored Q&A uses title and summary without a route or blocks. Imported Q&A remains read-only.",
     domain: 'locales',
     minimumRole: 'admin',
     inputSchema: {
@@ -97,17 +97,17 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
       resource_id: { type: 'string' },
       locale: { type: 'string' },
       values: { type: 'object' },
-      route_path: { type: ['string', 'null'] },
+      route_path: { type: ['string', 'null'], description: 'Required localized public path for pages, articles and posts; omit for authored Q&A.' },
       content_blocks: TENANT_PAGE_BLOCKS_SCHEMA,
       expected_updated_at: { type: ['string', 'null'] },
-      anyOf: [...resourceValueBranches, { properties: { resource_type: { const: 'content_document' }, values: localizedDocumentValues }, required: ['route_path'] }],
+      anyOf: [...resourceValueBranches, { properties: { resource_type: { const: 'content_document' }, values: localizedDocumentValues } }],
     },
     required: ['resource_type', 'resource_id', 'locale', 'values'],
     outputSchema: { type: 'object', properties: { localization: localizationObject, context: { type: 'object' } }, required: ['localization'], additionalProperties: false },
   }),
   organizationTool({
     name: 'delete_resource_localization',
-    description: "Permanently remove one resource translation when the user requests deletion of that language representation. Also deletes its owned document and redirects. Authored Q&A is managed with delete_qa.",
+    description: "Permanently remove one translation and its owned document and redirects. Source content is preserved; imported Q&A remains read-only.",
     domain: 'locales',
     minimumRole: 'admin',
     inputSchema: {
@@ -134,7 +134,7 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
   }),
   organizationTool({
     name: 'replace_resource_localizations',
-    description: 'Atomically replace 1–250 exact localizations of one resource type for one locale. Omitted resources remain untouched; any invalid item rejects the whole submitted batch. Returns the saved representations; supplied document content replaces its complete representation and can remove blocks. This uses supplied translations, without generating them.',
+    description: 'Atomically replace 1–250 exact resource translations for one language. Omitted resources retain their translations; any invalid item rejects the batch. Uses supplied translations without generating them.',
     domain: 'locales',
     minimumRole: 'admin',
     inputSchema: {

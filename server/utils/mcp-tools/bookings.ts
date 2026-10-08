@@ -4,7 +4,7 @@ import { refreshProductBusy } from '~/server/domain/member-scheduling'
 import { HTTPError } from 'nitro'
 import { createTableReservation } from '~/server/domain/table-reservations'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
-import { assertResourceAccess, memberAccessPrincipal } from '~/server/utils/member-access'
+import { assertResourceAccess, assertProductAccess, assertAssignedBookingAccess, assignedBookingSql, roleAllows, memberAccessPrincipal } from '~/server/utils/member-access'
 import { queryAll, queryFirst } from '~/server/db'
 import { createSession, getSessionAvailability, listSessions, updateSession } from '~/server/utils/availability'
 import { mcpPageInfo, mcpPageWindow, paginateMcpCollection } from '~/server/utils/mcp-pagination'
@@ -30,20 +30,20 @@ const session = { type: 'object', properties: { assigned_member_id: nullableText
 const operationResult = { type: 'object', properties: { ok: { const: true }, status: { const: 200 }, request_id: text, record, availableActions: { type: 'array', items: text }, thread: { type: 'object', properties: { id: text, kind: text, conversation_state: text } } }, required: ['ok', 'status', 'record'] }
 const changeResult = { type: 'object', properties: { success: { const: true }, request_id: text, change_status: { const: 'awaiting_guest_acceptance' }, record }, required: ['success', 'request_id', 'change_status', 'record'] }
 export const BOOKINGS_TOOLS: McpToolDefinition[] = [
-  organizationTool({ name: 'create_product_session', domain: 'bookings', minimumRole: 'admin', description: 'Add a dated time for an existing bookable offering. An assigned team gets one session per member. Provide actual start and end times and its location, or null for online. Repeat the same idempotency key on retry.',
+  organizationTool({ name: 'create_product_session', domain: 'bookings', minimumRole: 'member', description: 'Add a dated time for an existing bookable offering. An assigned team gets one session per member. Provide actual start and end times and its location, or null for online. Repeat the same idempotency key on retry.',
     inputSchema: { product_id: text, location_id: nullableText, starts_at: { type: 'string', format: 'date-time' }, ends_at: { type: 'string', format: 'date-time' }, capacity: { type: ['integer', 'null'], minimum: 0 }, idempotency_key: key }, required: ['product_id', 'location_id', 'starts_at', 'ends_at', 'idempotency_key'],
     outputSchema: { type: 'object', properties: { sessions: { type: 'array', items: session, minItems: 1 } }, required: ['sessions'] },
   }),
-  organizationTool({ name: 'update_product_session', domain: 'bookings', minimumRole: 'admin', description: 'Edit one session’s time, capacity or state. Requires its current updated_at. Times and state cannot change while bookings or checkout holds commit guests to this session; use the guest booking-change workflow for those commitments.',
+  organizationTool({ name: 'update_product_session', domain: 'bookings', minimumRole: 'member', description: 'Edit one session’s time, capacity or state. Requires its current updated_at. Times and state cannot change while bookings or checkout holds commit guests to this session; use the guest booking-change workflow for those commitments.',
     inputSchema: { product_id: text, session_id: text, expected_updated_at: text, starts_at: { type: 'string', format: 'date-time' }, ends_at: { type: 'string', format: 'date-time' }, capacity: { type: ['integer', 'null'], minimum: 0 }, status: { type: 'string', enum: ['scheduled', 'cancelled'] } }, required: ['product_id', 'session_id', 'expected_updated_at'],
     outputSchema: { type: 'object', properties: { session }, required: ['session'] },
   }),
 
  organizationTool({name:'reassign_product_booking',outputSchema:{type:'object',properties:{session_id:text,assigned_member_id:text},required:['session_id','assigned_member_id']},domain:'bookings',minimumRole:'admin',description:'Move a provider-led booking to another team member who is free at that time, without changing the service’s provider. The whole Session moves: attendees keep Booking IDs and Session time; active checkout holds refuse the change. Checks the member’s hours, time off, busy calendar and overlapping bookings atomically and audits actor/old/new assignment. The guest is told in their inbox thread; owners and both team members are notified. Retry the same key after a notification failure.',inputSchema:{operational_booking_id:bookingId,member_id:{type:'string'},expected_updated_at:{type:'string'},idempotency_key:key},required:['operational_booking_id','member_id','expected_updated_at','idempotency_key']}),
-  organizationTool({ name: 'list_product_booking_sessions', outputSchema: { type: 'object', properties: { sessions: { type: 'array', items: session }, page_info: pageInfoObject }, required: ['sessions', 'page_info'] }, domain: 'bookings', minimumRole: 'admin', description: 'List scheduled sessions and remaining places for a product when the user wants to find a time for a booking or consultation. Includes conflicts with other appointments in its shared calendar. Use the returned session IDs to create or change a booking. This tool does not create sessions.',
+  organizationTool({ name: 'list_product_booking_sessions', outputSchema: { type: 'object', properties: { sessions: { type: 'array', items: session }, page_info: pageInfoObject }, required: ['sessions', 'page_info'] }, domain: 'bookings', minimumRole: 'member', description: 'List scheduled sessions and remaining places for a product when the user wants to find a time for a booking or consultation. Includes conflicts with other appointments in its shared calendar. Use the returned session IDs to create or change a booking. This tool does not create sessions.',
     inputSchema: { product_id: { type: 'string' }, from: { type: 'string', description: 'Inclusive ISO UTC instant.' }, to: { type: 'string', description: 'Exclusive ISO UTC instant, at most 93 days after from.' }, ...paginationInputSchema }, required: ['product_id', 'from', 'to'],
   }),
-  organizationTool({ name: 'list_product_bookings', outputSchema: { type: 'object', properties: { bookings: { type: 'array', items: booking }, page_info: pageInfoObject }, required: ['bookings', 'page_info'] }, domain: 'bookings', minimumRole: 'admin', description: 'List the selected business’s product bookings and consultations, with guests, session times, assigned members and current status. Results are paginated; use operational_booking_id to read or manage a booking and request_id to identify its inbox thread. Restaurant table reservations use list_reservation_inquiries.',
+  organizationTool({ name: 'list_product_bookings', outputSchema: { type: 'object', properties: { bookings: { type: 'array', items: booking }, page_info: pageInfoObject }, required: ['bookings', 'page_info'] }, domain: 'bookings', minimumRole: 'member', description: 'List the selected business’s product bookings and consultations, with guests, session times, assigned members and current status. Results are paginated; use operational_booking_id to read or manage a booking and request_id to identify its inbox thread. Restaurant table reservations use list_reservation_inquiries.',
     inputSchema: { assigned_member_id: {type: 'string'}, location_id: { type: ['string', 'null'] }, product_id: { type: 'string' }, status: { type: 'string', enum: ['pending', 'confirmed', 'completed', 'cancelled'] }, from: { type: 'string', description: 'Inclusive session start instant.' }, to: { type: 'string', description: 'Exclusive session start instant.' }, ...paginationInputSchema },
   }),
   organizationTool({ name: 'create_table_reservation', domain: 'bookings', minimumRole: 'admin', description: 'Reserve a table for a named guest at an explicit location and local date/time. Uses the location’s hours, capacity and reservation policy. Requires the reservation duration to be configured. Deposits return a financial handoff before a reservation is confirmed. Reuse the same key for an identical retry.',
@@ -61,17 +61,17 @@ export const BOOKINGS_TOOLS: McpToolDefinition[] = [
       guest_acknowledgement: { type: 'boolean', description: 'Explicit choice to send the guest creation email. Owner alerts, inbox, and audit always remain.' },
     }, required: ['product_slug', 'session_id', 'party_size', 'guest_name', 'guest_email', 'idempotency_key', 'source', 'guest_acknowledgement'],
   }),
-  organizationTool({ name: 'get_product_booking', outputSchema: { type: 'object', properties: { operational_booking_id: text, request_id: text, updated_at: text, operational_updated_at: text, guest_user_id: nullableText, guest, provenance: booking.properties.provenance, record }, required: ['operational_booking_id', 'request_id', 'updated_at', 'operational_updated_at', 'guest', 'record'] }, domain: 'bookings', minimumRole: 'admin', description: 'Read one product booking or consultation when the user wants its guest details, status or current session. Use its updated_at when proposing a change.', inputSchema: { operational_booking_id: bookingId }, required: ['operational_booking_id'],
+  organizationTool({ name: 'get_product_booking', outputSchema: { type: 'object', properties: { operational_booking_id: text, request_id: text, updated_at: text, operational_updated_at: text, guest_user_id: nullableText, guest, provenance: booking.properties.provenance, record }, required: ['operational_booking_id', 'request_id', 'updated_at', 'operational_updated_at', 'guest', 'record'] }, domain: 'bookings', minimumRole: 'member', description: 'Read one product booking or consultation when the user wants its guest details, status or current session. Use its updated_at when proposing a change.', inputSchema: { operational_booking_id: bookingId }, required: ['operational_booking_id'],
   }),
   ...([
     ['confirm', 'Confirm a pending product booking or consultation after staff review. Keeps its existing session and capacity allocation, changes its status to confirmed and emails the guest. Does not collect payment.'],
     ['reject', 'Decline a pending product booking or consultation after staff review. Cancels the booking, releases its places and emails the guest the decision. If a refund is required, returns financial_action_required and a dashboard URL before changing status or preparing a refund; the rejection is incomplete. Use cancel_product_booking for a confirmed booking.'],
     ['cancel', 'Cancel a pending or confirmed product booking or consultation when the user requests cancellation. Releases its places and emails the guest. If a refund is required, returns financial_action_required and a dashboard URL before changing status or preparing a refund; the cancellation is incomplete.'],
   ] as const).map(([action, purpose]) => organizationTool({
-    name: `${action}_product_booking`, outputSchema: operationResult, domain: 'bookings', minimumRole: 'admin', description: `${purpose} Reuse the same idempotency_key only for an identical retry; a completed operation does not repeat its capacity change or delivered guest email. ${description}`,
+    name: `${action}_product_booking`, outputSchema: operationResult, domain: 'bookings', minimumRole: 'member', description: `${purpose} Reuse the same idempotency_key only for an identical retry; a completed operation does not repeat its capacity change or delivered guest email. ${description}`,
     inputSchema: { operational_booking_id: bookingId, idempotency_key: key }, required: ['operational_booking_id', 'idempotency_key'],
   })),
-  organizationTool({ name: 'request_product_booking_change', outputSchema: changeResult, domain: 'bookings', minimumRole: 'admin', description: `Request a different session or party size for an existing product booking or consultation. Emails the guest a proposal; the current booking and its places remain unchanged until the guest accepts. Acceptance preserves its review status and requires available capacity. ${description}`,
+  organizationTool({ name: 'request_product_booking_change', outputSchema: changeResult, domain: 'bookings', minimumRole: 'member', description: `Request a different session or party size for an existing product booking or consultation. Emails the guest a proposal; the current booking and its places remain unchanged until the guest accepts. Acceptance preserves its review status and requires available capacity. ${description}`,
     inputSchema: { operational_booking_id: bookingId, session_id: { type: 'string' }, party_size: { type: 'integer', minimum: 1, maximum: 99 }, expected_updated_at: { type: 'string' }, idempotency_key: key }, required: ['operational_booking_id', 'session_id', 'party_size', 'expected_updated_at', 'idempotency_key'],
   }),
   organizationTool({ name: 'cancel_table_reservation', outputSchema: operationResult, domain: 'bookings', minimumRole: 'admin', description: `Cancel an existing restaurant table reservation when the user requests cancellation. Releases its capacity and emails the guest. A paid reservation requires its full refund to be approved in the dashboard before cancellation. ${description}`,
@@ -85,11 +85,14 @@ export const BOOKINGS_TOOLS: McpToolDefinition[] = [
 export async function handleBookingsTools(ctx: McpExecutorContext): Promise<unknown> {
   const { organization, args, toolName, event } = ctx
   const { db, env, organizationId } = organization
+  const principal = memberAccessPrincipal(organization.membership, { env })
+  const managesBookings = await roleAllows({ ...principal, permissions: { operations: ['update'] } })
   if (toolName === 'create_product_session' || toolName === 'update_product_session') {
     const productId = requiredString(args, 'product_id')
+    await assertProductAccess(db, { ...principal, productId })
     const current = toolName === 'update_product_session' ? await getSessionAvailability(db, organizationId, productId, requiredString(args, 'session_id')) : null
     const locationId = current ? current.location_id : args.location_id === null ? null : requiredString(args, 'location_id')
-    await assertResourceAccess(db, { ...memberAccessPrincipal(organization.membership, { env }), resourceLocationId: locationId })
+    if (managesBookings) await assertResourceAccess(db, { ...principal, resourceLocationId: locationId })
     if (current) {
       return { session: await updateSession(db, { organizationId, productId, sessionId: current.id, actorId: organization.userId, expectedUpdatedAt: requiredString(args, 'expected_updated_at'), startsAt: optionalString(args, 'starts_at') ?? undefined, endsAt: optionalString(args, 'ends_at') ?? undefined, capacity: args.capacity as number | null | undefined, status: args.status as 'scheduled' | 'cancelled' | undefined }) }
     }
@@ -102,6 +105,7 @@ export async function handleBookingsTools(ctx: McpExecutorContext): Promise<unkn
     const start = Date.parse(from), end = Date.parse(to)
     if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start || end - start > 93 * 86400000) throw new HTTPError({ statusCode: 400, message: 'A valid date range of at most 93 days is required' })
     const productId = requiredString(args, 'product_id')
+    await assertProductAccess(db, { ...principal, productId })
     const product = await queryFirst(db, 'SELECT id FROM products WHERE id = ? AND organization_id = ?', [productId, organizationId])
     if (!product) throw new HTTPError({ statusCode: 404, message: 'Product not found in this organization' })
     await refreshProductBusy(db,env,organizationId,productId)
@@ -113,6 +117,7 @@ export async function handleBookingsTools(ctx: McpExecutorContext): Promise<unkn
   if (toolName === 'list_product_bookings') {
     const filters: string[] = ['b.organization_id = ?']
     const params: Array<string | number | null> = [organizationId]
+    if (!managesBookings) { filters.push(assignedBookingSql('b')); params.push(organization.userId) }
     for (const [argument, column] of [['assigned_member_id', 'b.assigned_member_id'], ['product_id', 'b.product_id']] as const) {
       if (typeof args[argument] === 'string') { filters.push(`${column} = ?`); params.push(args[argument] as string) }
     }
@@ -157,6 +162,7 @@ export async function handleBookingsTools(ctx: McpExecutorContext): Promise<unkn
   if (!['get_product_booking', 'confirm_product_booking', 'reject_product_booking', 'cancel_product_booking', 'request_product_booking_change', 'cancel_table_reservation', 'request_table_reservation_change'].includes(toolName)) return NOT_HANDLED
   const reservation = toolName.includes('table_reservation')
   const id = requiredString(args, reservation ? 'operational_reservation_id' : 'operational_booking_id')
+  if (!reservation) await assertAssignedBookingAccess(db, { ...principal, bookingId: id })
   const row = await queryFirst<{ request_id: string | null; updated_at: string }>(db, `SELECT request_id, updated_at FROM ${reservation ? 'reservations' : 'bookings'} WHERE id = ? AND organization_id = ?`, [id, organizationId])
   if (!row?.request_id) throw new HTTPError({ statusCode: 404, message: 'Operational booking with an inbox thread not found in this organization' })
   const thread = await getGuestRequest(db, row.request_id, organizationId, reservation ? 'reservation' : 'booking')
@@ -166,6 +172,7 @@ export async function handleBookingsTools(ctx: McpExecutorContext): Promise<unkn
   if (toolName === 'get_product_booking') return { operational_booking_id: id, request_id: thread.id, updated_at: thread.updated_at, operational_updated_at: row.updated_at, guest_user_id: thread.user_id, guest: thread.payload.guest, provenance: thread.kind === 'booking' ? thread.payload.provenance ?? null : null, record: operationalRecord }
   const key = requiredString(args, 'idempotency_key')
   if (toolName.startsWith('request_')) {
+    if (!reservation) await assertAssignedBookingAccess(db, { ...principal, bookingId: id, sessionId: requiredString(args, 'session_id') })
     const fields = reservation ? { kind: 'reservation', overridePolicy: args.override_policy, locationId: requiredString(args, 'location_id'), bookingDate: requiredString(args, 'date'), bookingTime: requiredString(args, 'time'), partySize: args.party_size } : { kind: 'booking', sessionId: requiredString(args, 'session_id'), partySize: args.party_size }
     await requestBookingChange(db, env, thread, organization.userId, { ...fields, expectedUpdatedAt: requiredString(args, 'expected_updated_at') }, key)
     await publishGuestInboxThreadEvent(env, db, { threadId: thread.id, type: 'thread.changed' })

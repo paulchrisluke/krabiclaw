@@ -8,7 +8,7 @@
 
     <BookingConfirmation
       v-else-if="confirmation"
-      :kicker="confirmation.status === 'cancelled' ? 'Reservation cancelled' : 'Reservation confirmed'"
+      :kicker="receiptTitle"
       :cancelled="confirmation.status === 'cancelled'"
       :receipt-kicker="resCopy.reservationWord"
       :receipt-rows="receiptRows"
@@ -33,7 +33,7 @@
       <template #actions>
         <SayaButton v-if="confirmation.status !== 'cancelled'" variant="soft" @click="share">
           <SayaIcon name="share" class="mr-1.5 size-4" />
-          {{ justCopied ? 'Copied!' : 'Share' }}
+          {{ t(justCopied ? 'social_posts.link_copied' : 'social_posts.share') }}
         </SayaButton>
         <SayaButton v-if="confirmation.contactPhone" :href="`tel:${confirmation.contactPhone.replace(/\s/g, '')}`" variant="outline">
           {{ resCopy.callUsLabel(confirmation.contactPhone) }}
@@ -46,9 +46,9 @@
 
     <div v-else class="mx-auto max-w-xl px-4 pt-24 pb-24 text-center sm:px-6 lg:px-8">
       <SayaIcon name="exclamation-triangle" class="mx-auto size-12 text-error" />
-      <h2 class="mt-6 text-xl font-bold">{{ loadError ? 'Reservation could not be loaded' : 'No reservation found' }}</h2>
-      <p class="mt-2 text-muted">{{ loadError ?? 'We couldn\'t find a confirmation to show. Check your email for the details.' }}</p>
-      <SayaButton to="/reservations" variant="soft" class="mt-10">Select a time</SayaButton>
+      <h2 class="mt-6 text-xl font-bold">{{ t(loadError ? 'booking.receipt_failed' : 'booking.receipt_missing') }}</h2>
+      <p class="mt-2 text-muted">{{ loadError ?? t('booking.receipt_missing_description') }}</p>
+      <SayaButton :to="localePath('/reservations')" variant="soft" class="mt-10">{{ resCopy.selectTimeLabel }}</SayaButton>
     </div>
   </div>
 </template>
@@ -63,8 +63,7 @@ import type { RenderedBookingPolicySummaryItem } from '~/server/utils/reservatio
 definePageMeta({ layout: 'saya' })
 
 const { organization, organizationId } = useTenantOrganization()
-const { reservationPolicyByLocation } = await usePublicPageData()
-const { locale, t } = useI18n()
+const { locale, localePath, t } = useI18n()
 const resCopy = computed(() => getVerticalCopy((organization as ApiValue)?.vertical, locale.value))
 const route = useRoute()
 const justCopied = ref(false)
@@ -72,6 +71,7 @@ const justCopied = ref(false)
 const confirmation = ref<BookingConfirmationData | null>(null)
 const pending = ref(true)
 const loadError = ref<string | null>(null)
+const receiptTitle = computed(() => t(confirmation.value?.status === 'cancelled' ? 'saya.reservation_cancel.cancelled_title' : 'reservations.confirmed'))
 
 // One instant plus one zone, read in the location's own zone — the guest sees
 // the hour the table is held, wherever they open the page.
@@ -85,27 +85,19 @@ const readableTime = computed(() => confirmation.value
 const receiptRows = computed(() => {
   if (!confirmation.value) return []
   const rows: Array<{ label: string; value: string }> = []
-  if (confirmation.value.locationName) rows.push({ label: 'Location', value: confirmation.value.locationName })
-  rows.push({ label: 'Date', value: readableDate.value })
-  rows.push({ label: 'Time', value: readableTime.value })
+  if (confirmation.value.locationName) rows.push({ label: resCopy.value.locationLabel, value: confirmation.value.locationName })
+  rows.push({ label: resCopy.value.dateLabel, value: readableDate.value })
+  rows.push({ label: resCopy.value.timeLabel, value: readableTime.value })
   rows.push({
-    label: 'Party',
+    label: resCopy.value.guestsLabel,
     value: `${confirmation.value.guests} ${Number(confirmation.value.guests) === 1 ? resCopy.value.guestLabel : resCopy.value.guestsLabelPlural}`,
   })
-  rows.push({ label: 'Booked by', value: confirmation.value.guestName })
-  if (confirmation.value.requests) rows.push({ label: 'Requests', value: confirmation.value.requests })
+  rows.push({ label: resCopy.value.nameLabel, value: confirmation.value.guestName })
+  if (confirmation.value.requests) rows.push({ label: resCopy.value.specialRequestsLabel, value: confirmation.value.requests })
   return rows
 })
 
-const resolvedPolicySummary = computed(() => {
-  if (confirmation.value?.policySummary) return confirmation.value.policySummary as ApiRecord
-  const locationId = confirmation.value?.locationId
-  if (!locationId) return null
-  if (!Object.prototype.hasOwnProperty.call(reservationPolicyByLocation.value, locationId)) {
-    throw createError({ statusCode: 500, statusMessage: 'Reservation policy contract is missing the booked location' })
-  }
-  return reservationPolicyByLocation.value[locationId]
-})
+const resolvedPolicySummary = computed(() => confirmation.value?.policySummary ?? null)
 
 const policyLines = computed(() => (resolvedPolicySummary.value?.items ?? []).map((item: RenderedBookingPolicySummaryItem) => String(item.text ?? '')))
 
@@ -114,8 +106,8 @@ const policyLines = computed(() => (resolvedPolicySummary.value?.items ?? []).ma
 const presentation = computed(() => resolveProductPresentation((organization as { vertical?: string | null } | null)?.vertical))
 const menuCtaTo = computed(() => {
   const slug = confirmation.value?.locationSlug
-  if (slug && presentation.value) return `/locations/${slug}/${presentation.value.locationCollectionSegment}`
-  return resCopy.value.reservationExploreRoute
+  if (slug && presentation.value) return localePath(`/locations/${slug}/${presentation.value.locationCollectionSegment}`)
+  return localePath(resCopy.value.reservationExploreRoute)
 })
 
 onMounted(async () => {
@@ -127,19 +119,19 @@ onMounted(async () => {
   try {
     confirmation.value = await loadBookingConfirmation(organizationId, 'reservation', String((organization as ApiValue)?.name ?? ''), {
       id: typeof route.query.id === 'string' ? route.query.id : '', token: route.hash.slice(1),
-    })
+    }, { locale: locale.value, localePath, t })
   } catch (cause) {
-    loadError.value = getErrorMessage(cause, 'This reservation could not be loaded.')
+    loadError.value = getErrorMessage(cause, t('booking.receipt_failed'))
   }
   pending.value = false
 })
 
 async function share() {
   if (!confirmation.value || confirmation.value.status === 'cancelled') return
-  const text = `My reservation at ${confirmation.value.organizationName} is confirmed for ${readableDate.value} at ${readableTime.value}.`
+  const text = [receiptTitle.value, confirmation.value.organizationName, readableDate.value, readableTime.value].join(' · ')
   if (import.meta.client && navigator.share) {
     try {
-      await navigator.share({ title: 'Reservation confirmed', text, url: window.location.origin })
+      await navigator.share({ title: receiptTitle.value, text, url: window.location.origin + localePath('/') })
       return
     } catch (error) {
       // Cancelling the native share sheet falls through to the clipboard.
@@ -154,9 +146,9 @@ async function share() {
 }
 
 useSocialMetadata(() => ({
-  path: '/reservations/confirmed',
-  title: confirmation.value?.status === 'cancelled' ? 'Reservation cancelled' : 'Reservation receipt',
-  description: confirmation.value?.status === 'cancelled' ? 'Your reservation has been cancelled.' : 'View your reservation details.',
+  path: localePath('/reservations/confirmed'),
+  title: receiptTitle.value,
+  description: confirmation.value?.status === 'cancelled' ? t('saya.reservation_cancel.cancelled_desc', { date: readableDate.value }) : t('booking.confirmed_message'),
   socialImage: null,
   discoverability: 'private',
 }))

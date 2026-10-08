@@ -26,7 +26,7 @@ export interface SessionBookingContext {
 /** The public Product booking flow, shared by location pages and online consultations. */
 export function useSessionBooking(input: MaybeRefOrGetter<SessionBookingContext>) {
   const context = computed(() => toValue(input))
-  const { locale, t } = useI18n()
+  const { locale, localePath, t } = useI18n()
   const { trackCheckoutStart, mirrorSubmission, pageEventId } = useOrganizationConversionTracking()
   const sellableVariants = computed(() => context.value.product.variants.filter(variant => variant.active))
   const bookingOpen = ref(false)
@@ -41,7 +41,7 @@ export function useSessionBooking(input: MaybeRefOrGetter<SessionBookingContext>
   const selectedVariantId = ref<string | null>(sellableVariants.value.length === 1 ? sellableVariants.value[0]!.id : null)
   function variantPriceLabel(variant: Product['variants'][number]) {
     const price = selectPrice(variant.prices, { currency: context.value.currency, location_id: context.value.location?.id ?? null, at: new Date().toISOString() })
-    return !showPartySize.value && price?.unit_amount === 0 ? 'Free' : formatProductMoney(price)
+    return !showPartySize.value && price?.unit_amount === 0 ? t('booking.free') : formatProductMoney(price)
   }
   const timeSelection = ref<TimeSlotSelection | null>(null)
   const submitting = ref(false)
@@ -279,6 +279,7 @@ export function useSessionBooking(input: MaybeRefOrGetter<SessionBookingContext>
       mirrorSubmission('booking_submit', response.measurement, context.value.location?.id ?? null, response.quoted_value)
       setBookingConfirmation({
         type: 'booking', status: response.status, operationalBookingId: response.operational_booking_id, requestId: response.request_id,
+        locale: locale.value,
         organizationId: context.value.organizationId,
         organizationName: context.value.location?.title ?? context.value.organizationName,
         guestName: contact.name,
@@ -287,17 +288,18 @@ export function useSessionBooking(input: MaybeRefOrGetter<SessionBookingContext>
         timezone: allowTimezoneSelection.value ? bookingTimezone.value! : response.timezone,
         guests: partySize.value,
         productId: context.value.product.id,
+        productKind: context.value.product.kind,
         title: context.value.product.name,
         requests: contact.notes || null,
         message: response.message,
-        cancelUrl: `/bookings/cancel?id=${response.booking_id}#${response.cancellation_token}`,
-        policySummary: response.policy_summary ?? null,
+        cancelUrl: `${localePath('/bookings/cancel')}?id=${encodeURIComponent(response.booking_id)}#${response.cancellation_token}`,
+        policySummary: response.policy_summary ? { ...response.policy_summary, additional_notes_html: context.value.product.details.cancellation_policy ?? null } : null,
         locationId: context.value.location?.id ?? null,
         locationName: context.value.location?.title ?? context.value.organizationName,
         locationSlug: context.value.location?.slug ?? null,
       })
       bookingOpen.value = false
-      await navigateTo({ path: '/bookings/confirmed', query: { id: response.request_id }, hash: `#${response.cancellation_token}` })
+      await navigateTo({ path: localePath('/bookings/confirmed'), query: { id: response.request_id }, hash: `#${response.cancellation_token}` })
       checkoutRequestKey.value = null
       checkoutFingerprint = null
     } catch (error) {

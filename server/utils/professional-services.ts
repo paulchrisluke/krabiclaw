@@ -99,15 +99,28 @@ export async function initializePublicConsultationSettings(db: DbClient, organiz
 }
 
 /** Only this adapter writes consultation settings. */
-export async function setPublicConsultationMode(db: DbClient, organizationId: string, mode: PublicConsultationSettings['mode']): Promise<PublicConsultationSettings> {
+export async function setPublicConsultationMode(db: DbClient, organizationId: string, mode: PublicConsultationSettings['mode'], externalUrl?: unknown): Promise<PublicConsultationSettings> {
   if (mode !== 'native' && mode !== 'external_url' && mode !== 'native_disabled') throw new HTTPError({ statusCode: 400, statusMessage: 'Invalid consultation mode' })
   const settings = await getPublicConsultationSettings(db, organizationId)
-  if (mode === 'external_url' && !settings.external_url) throw new HTTPError({ statusCode: 400, statusMessage: 'Configure an external destination before enabling it' })
+  let external = externalUrl === undefined ? settings.external_url : externalUrl
+  if (external !== null) {
+    let destination: URL
+    try {
+      if (typeof external !== 'string' || !/^https?:\/\//i.test(external.trim())) throw new Error('Invalid URL')
+      destination = new URL(external.trim())
+      if (!destination.hostname || destination.username || destination.password) throw new Error('Invalid URL')
+    } catch {
+      throw new HTTPError({ statusCode: 400, statusMessage: 'external_url must be an absolute HTTP or HTTPS URL without credentials', data: { code: 'INVALID_CONSULTATION_EXTERNAL_URL' } })
+    }
+    external = destination.toString()
+  }
+  if (mode === 'external_url' && !external) throw new HTTPError({ statusCode: 400, statusMessage: 'An external scheduler URL is required', data: { code: 'CONSULTATION_EXTERNAL_URL_REQUIRED', missing: ['external_url'] } })
+  const now = new Date().toISOString()
   await executeBatch(db, [{
-    query: `UPDATE organization SET consultation_settings_json = json_set(consultation_settings_json, '$.mode', ?), updated_at = ? WHERE id = ?`,
-    params: [mode, new Date().toISOString(), organizationId],
+    query: `UPDATE organization SET consultation_settings_json = json_set(consultation_settings_json, '$.mode', ?, '$.external_url', ?, '$.updated_at', ?), updated_at = ? WHERE id = ?`,
+    params: [mode, external, now, now, organizationId],
   }, publicResourceCacheInvalidationQuery(organizationId, 'consultation_mode_changed')], { operation: 'Set consultation mode' })
-  return { ...settings, mode }
+  return { ...settings, mode, external_url: external as string | null }
 }
 
 export async function getPublicConsultationSettings(db: DbClient, organizationId: string): Promise<PublicConsultationSettings> {

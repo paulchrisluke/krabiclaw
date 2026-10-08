@@ -384,8 +384,7 @@ export async function requireMcpOrganization(
     throw new HTTPError({ statusCode: 403, statusMessage: 'Insufficient permissions' })
   }
 
-  // Tenant-wide tools retain owner/admin access. The member floor is reserved
-  // for scheduling tools whose domain writer also checks the target member.
+  // Member tools check their own scheduling, service or appointment target.
   if (!isOrganizationWideRole(role) && minimumRole !== 'member') {
     await assertOrganizationWideAccess(user.db, memberAccessPrincipal(membership, { env: user.env }))
   }

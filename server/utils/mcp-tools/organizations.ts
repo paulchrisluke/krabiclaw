@@ -247,10 +247,10 @@ export const ORGANIZATIONS_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'set_consultation_mode',
-      description: 'Choose the Schedule page: show online services, use an existing external scheduler, or hide the selector. Each service keeps its own booking settings.',
-      domain: 'organizations', minimumRole: 'admin', inputSchema: { mode: { type: 'string', enum: ['native', 'external_url', 'native_disabled'] } },
+      description: 'Choose native bookings, an external scheduler, or Contact on the Schedule page. Supply external_url to connect a scheduler.',
+      domain: 'organizations', minimumRole: 'admin', inputSchema: { mode: { type: 'string', enum: ['native', 'external_url', 'native_disabled'] }, external_url: { type: ['string', 'null'] } },
       required: ['mode'],
-      outputSchema: { type: 'object', properties: { settings: { type: 'object', properties: { mode: { type: 'string', enum: ['native', 'external_url', 'native_disabled'] } }, required: ['mode'] } }, required: ['settings'] },
+      outputSchema: { type: 'object', properties: { settings: { type: 'object', properties: { mode: { type: 'string', enum: ['native', 'external_url', 'native_disabled'] }, external_url: { type: ['string', 'null'] } }, required: ['mode', 'external_url'] } }, required: ['settings'] },
     }),
 ]
 
@@ -393,7 +393,7 @@ export async function handleOrganizationsTools(ctx: McpExecutorContext): Promise
       );
     }
     case "set_consultation_mode":
-      return { settings: await setPublicConsultationMode(organization.db, organization.organizationId, requiredString(args, 'mode') as 'native' | 'external_url' | 'native_disabled') }
+      return { settings: await setPublicConsultationMode(organization.db, organization.organizationId, requiredString(args, 'mode') as 'native' | 'external_url' | 'native_disabled', args.external_url) }
     default:
       return NOT_HANDLED
   }

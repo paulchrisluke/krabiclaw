@@ -175,7 +175,7 @@ definePageMeta({ layout: 'saya' })
 // The tenant is the organization; `site` is only the shape this composable
 // still returns it under.
 const { organization: organization, organizationId } = useTenantOrganization()
-const { locale, t } = useI18n()
+const { locale, localePath, t } = useI18n()
 const resCopy = computed(() => getVerticalCopy((organization as ApiValue)?.vertical, locale.value))
 const { locations, config, getField, reservationPolicyByLocation } = await usePublicPageData()
 
@@ -406,6 +406,7 @@ async function handleReservation() {
     }
     setBookingConfirmation({
       type: 'reservation',
+      locale: locale.value,
       organizationId,
       organizationName: brandName.value,
       guestName: reservationForm.value.name,
@@ -416,17 +417,17 @@ async function handleReservation() {
       timezone: res.timezone,
       guests: reservationForm.value.guests,
       requests: reservationForm.value.requests || null,
-      cancelUrl: res?.id && res?.cancellationToken ? `/reservations/cancel?id=${res.id}#${res.cancellationToken}` : null,
+      cancelUrl: res?.id && res?.cancellationToken ? `${localePath('/reservations/cancel')}?id=${encodeURIComponent(res.id)}#${res.cancellationToken}` : null,
       contactPhone: contactPhone.value || null,
       contactEmail: contactEmail.value || null,
-      policySummary: res.policy_summary ?? null,
+      policySummary: res.policy_summary ? { ...res.policy_summary, additional_notes_html: activeReservationPolicySummary.value?.additional_notes_html ?? null } : null,
       locationId: selectedLocation.value?.id ? String(selectedLocation.value.id) : null,
       locationName: selectedLocation.value?.title ?? null,
       locationAddress: formatPostalAddress((selectedLocation.value?.address ?? null) as PostalAddress | null) || null,
       locationSlug: typeof selectedLocation.value?.slug === 'string' ? selectedLocation.value.slug : null,
     })
     mirrorSubmission('reservation_submit', res.measurement, selectedLocation.value?.id ? String(selectedLocation.value.id) : null)
-    await navigateTo({ path: '/reservations/confirmed', query: { id: res.request_id }, hash: `#${res.cancellationToken}` })
+    await navigateTo({ path: localePath('/reservations/confirmed'), query: { id: res.request_id }, hash: `#${res.cancellationToken}` })
     reservationRequestKey = null
     reservationFingerprint = null
   } catch (err) {

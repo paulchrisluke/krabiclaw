@@ -119,20 +119,12 @@ export async function seedNewOrganization(
   await createTenantPagesBatch(db, { env, organizationId, pages: pagesToCreate })
 
   // ── Consultation settings (professional services only) ────────────────────
-  // The Blawby shell reads canonical consultation settings on every route and
-  // refuses to render without it (getPublicConsultationSettings throws
-  // CONSULTATION_SETTINGS_MISSING), so a professional-service tenant is not
-  // renderable until this exists. Nothing here is customer-facing copy the
-  // owner has to write: the mode is the honest "no external scheduler has been
-  // connected", the two paths are the template's own routes (/schedule is
-  // seeded above; /contact/confirmed is the Blawby confirmation route in
-  // utils/template-registry.ts), and the label is the product's own word for
-  // this button in the professional-service copy registry. The owner changes
-  // any of it from the dashboard or ChatGPT, through the same writer used here.
+  // Service sites start with native booking. Initialization preserves any
+  // consultation settings the organization already chose.
   if (vertical === "service") {
     const { initializePublicConsultationSettings } = await import('~/server/utils/professional-services')
     await initializePublicConsultationSettings(db, organizationId, {
-      mode: 'native_disabled',
+      mode: 'native',
       cta_label: getVerticalCopy(vertical, source.locale).reservationRequestButton,
       external_url: null,
       schedule_path: '/schedule',

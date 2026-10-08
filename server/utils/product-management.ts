@@ -1,4 +1,5 @@
 import { getSourceLocale } from '~/server/utils/organization-locales'
+import { ASSIGNED_SERVICE_SQL } from '~/server/utils/member-access'
 import type { ProductBookingSetupInput } from '~/server/utils/availability'
 import { HTTPError } from 'nitro'
 import { d1JsonArray, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
@@ -337,19 +338,20 @@ async function publicProductWindow(db: DbClient, organizationId: string, product
 
 /** Editable catalogue pages read one extra row. Public experience readiness precedes pagination. */
 export async function listOrganizationProducts(db: DbClient, input: {
-  organizationId: string; kind?: ProductKind; featured?: boolean; publishedOnly?: boolean; window?: { limit: number; offset: number }
+  organizationId: string; kind?: ProductKind; featured?: boolean; publishedOnly?: boolean; assignedUserId?: string; window?: { limit: number; offset: number }
 }): Promise<Product[]> {
   const requireReadiness = input.publishedOnly === true && (!input.kind || input.kind === 'experience')
   const window = requireReadiness ? undefined : input.window
   const rows = await queryAll<Row>(db, `
     SELECT ${PRODUCT_COLUMNS} FROM products p
     JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
-    WHERE p.organization_id = ? AND (? = 0 OR (${PUBLIC_PRODUCT_SQL}))${input.kind ? ' AND p.kind = ?' : ''}${input.featured === undefined ? '' : " AND COALESCE(json_extract(p.details_json, '$.featured'), 0) = ?"}
+    WHERE p.organization_id = ? AND (? = 0 OR (${PUBLIC_PRODUCT_SQL}))${input.kind ? ' AND p.kind = ?' : ''}${input.featured === undefined ? '' : " AND COALESCE(json_extract(p.details_json, '$.featured'), 0) = ?"}${input.assignedUserId ? ` AND (${ASSIGNED_SERVICE_SQL})` : ''}
     ORDER BY p.name, p.id
     ${window ? 'LIMIT ? OFFSET ?' : ''}
   `, [input.organizationId, input.publishedOnly ? 1 : 0,
     ...(input.kind ? [input.kind] : []),
     ...(input.featured === undefined ? [] : [Number(input.featured)]),
+    ...(input.assignedUserId ? [input.assignedUserId, input.assignedUserId] : []),
     ...(window ? [window.limit + 1, window.offset] : [])])
   const products = await hydrate(db, input.organizationId, rows.map(mapProductRow))
   return requireReadiness ? publicProductWindow(db, input.organizationId, products, input.window) : products
@@ -364,7 +366,7 @@ export async function listOrganizationProducts(db: DbClient, input: {
  * offering disables ordering or booking while its information stays visible.
  */
 export async function listLocationProducts(db: DbClient, input: {
-  organizationId: string; locationId: string; kind?: ProductKind; featured?: boolean; publishedOnly?: boolean; window?: { limit: number; offset: number }
+  organizationId: string; locationId: string; kind?: ProductKind; featured?: boolean; publishedOnly?: boolean; assignedUserId?: string; window?: { limit: number; offset: number }
 }): Promise<Product[]> {
   const published = input.publishedOnly === true
   const requireReadiness = published && (!input.kind || input.kind === 'experience')
@@ -374,12 +376,13 @@ export async function listLocationProducts(db: DbClient, input: {
     JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id
     ${published ? `JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
       AND (${PUBLIC_PRODUCT_SQL})` : ''}
-    WHERE p.organization_id = ? AND pl.location_id = ?${published ? ' AND pl.published = 1' : ''}${input.kind ? ' AND p.kind = ?' : ''}${input.featured === undefined ? '' : " AND COALESCE(json_extract(p.details_json, '$.featured'), 0) = ?"}
+    WHERE p.organization_id = ? AND pl.location_id = ?${published ? ' AND pl.published = 1' : ''}${input.kind ? ' AND p.kind = ?' : ''}${input.featured === undefined ? '' : " AND COALESCE(json_extract(p.details_json, '$.featured'), 0) = ?"}${input.assignedUserId ? ` AND (${ASSIGNED_SERVICE_SQL})` : ''}
     ORDER BY p.name, p.id
     ${window ? 'LIMIT ? OFFSET ?' : ''}
   `, [input.organizationId, input.locationId,
     ...(input.kind ? [input.kind] : []),
     ...(input.featured === undefined ? [] : [Number(input.featured)]),
+    ...(input.assignedUserId ? [input.assignedUserId, input.assignedUserId] : []),
     ...(window ? [window.limit + 1, window.offset] : [])])
   const products = await hydrate(db, input.organizationId, rows.map(mapProductRow))
   return requireReadiness ? publicProductWindow(db, input.organizationId, products, input.window) : products
@@ -924,6 +927,14 @@ function assertVariantPricesConsistent(planned: PlannedProduct): void {
   }
 }
 
+type ProductPageInput = { data: Omit<TenantPageEditorInput, 'productId' | 'pageId' | 'locale' | 'path'> & { path?: string }; env: CloudflareEnv }
+
+function productPageInput(product: Pick<CreateProductInput, 'kind' | 'name' | 'description'>, env?: CloudflareEnv, page?: ProductPageInput): ProductPageInput | undefined {
+  return page ?? (product.kind === 'service'
+    ? { data: { title: product.name, summary: product.description ?? null, pageType: 'recipe', recipe: 'services', blocks: [] }, env: env ?? invalid('The service page requires the organization environment') }
+    : undefined)
+}
+
 /**
  * Create one product, and — when the caller asks — the source page it owns,
  * in one batch: the product, its default variant, its publication, the page
@@ -946,19 +957,15 @@ export async function createProduct(db: DbClient, input: {
    * page writer. A service's page may omit its path: it is given the first
    * free `/services/<slug>`, once, and keeps it when the product is renamed.
    */
-  page?: { data: Omit<TenantPageEditorInput, 'productId' | 'pageId' | 'locale' | 'path'> & { path?: string }; env: CloudflareEnv }
+  page?: ProductPageInput
   idempotencyKey?: string
   booking?: { data: ProductBookingSetupInput; env: CloudflareEnv }
 }): Promise<Product> {
   const key = input.idempotencyKey?.trim()
   if (input.idempotencyKey !== undefined && (!key || key.length > 200)) invalid('idempotency_key must be 1 to 200 characters')
-  // A product made with its page starts sale-inactive unless the caller says
-  // otherwise: the page and the offer are drafted before anything is sold.
   const env = input.env ?? input.page?.env ?? input.booking?.env
-  const pageInput = input.page ?? (input.product.kind === 'service'
-    ? { data: { title: input.product.name, summary: input.product.description ?? null, pageType: 'recipe' as const, recipe: 'services', blocks: [] }, env: env ?? invalid('The service page requires the organization environment') }
-    : undefined)
-  const product = pageInput && input.product.active === undefined ? { ...input.product, active: false } : input.product
+  const pageInput = productPageInput(input.product, env, input.page)
+  const product = input.product
   const dedupeKey = key ? creationDedupeKey('product', input.organizationId, key) : null
   const requestHash = dedupeKey ? await creationRequestHash({ product, page: pageInput?.data ?? null, publication: input.publication ?? null, booking: input.booking?.data ?? null }) : null
   const replay = async (): Promise<Product | null> => {
@@ -985,21 +992,7 @@ export async function createProduct(db: DbClient, input: {
     writes.push(...await prepareProductBookingSetup(db, { organizationId: input.organizationId, productId: planned.id, actorId: input.actor.actorId, env: input.booking.env, now, booking: input.booking.data, productInSameBatch: true }))
   }
   if (input.publication?.published && planned.kind === 'experience' && !input.booking && !planned.order_url) invalid('Provide booking details or an external booking destination before publishing an experience')
-  const page = pageInput
-    ? await prepareTenantPageCreate(db, {
-        organizationId: input.organizationId,
-        userId: input.actor.actorId,
-        data: {
-          ...pageInput.data,
-          path: pageInput.data.path ?? (planned.kind === 'service'
-            ? await availableServicePagePath(db, input.organizationId, planned.slug)
-            : invalid('page.path is required for this kind of product')),
-          productId: planned.id,
-        },
-        env: pageInput.env,
-        productInSameBatch: true,
-      })
-    : null
+  const page = await prepareProductPageCreate(db, { organizationId: input.organizationId, product: planned, actor: input.actor, page: pageInput, env })
   if (page) writes.push(...page.queries)
   if (input.publication && input.organizationId) {
     writes.push({
@@ -1040,17 +1033,37 @@ export async function createProduct(db: DbClient, input: {
  * page writer enforces. A taken candidate is the reason to try the next one;
  * running out is a conflict the caller sees.
  */
-async function availableServicePagePath(db: DbClient, organizationId: string, slug: string): Promise<string> {
+async function availableServicePagePath(db: DbClient, organizationId: string, slug: string, options: { takenPaths?: ReadonlySet<string>; replacedPages?: ReadonlyMap<string, string> } = {}): Promise<string> {
   const { template } = await loadOrganizationTemplate(db, organizationId)
   const sourceLocale = await getSourceLocale(db, organizationId)
   for (let attempt = 0; attempt < MAX_SLUG_SUFFIX_ATTEMPTS; attempt += 1) {
+    const path = `/services/${slugCandidate(slug, attempt)}`
+    if (options.takenPaths?.has(path)) continue
     try {
-      return await assertTenantPagePathAvailable(db, { organizationId, locale: sourceLocale, path: `/services/${slugCandidate(slug, attempt)}`, template })
+      return await assertTenantPagePathAvailable(db, { organizationId, locale: sourceLocale, path, template, excludeVariantId: options.replacedPages?.get(path) })
     } catch (error) {
       if ((error as { statusCode?: number }).statusCode !== 409) throw error
     }
   }
   conflict('Could not find a free page path for this service')
+}
+
+async function prepareProductPageCreate(db: DbClient, input: {
+  organizationId: string; product: PlannedProduct; actor: Actor; env?: CloudflareEnv; page?: ProductPageInput
+  takenPaths?: Set<string>; replacedPages?: ReadonlyMap<string, string>
+}) {
+  const pageInput = productPageInput(input.product, input.env, input.page)
+  if (!pageInput) return null
+  const path = pageInput.data.path ?? (input.product.kind === 'service'
+    ? await availableServicePagePath(db, input.organizationId, input.product.slug, input)
+    : invalid('page.path is required for this kind of product'))
+  const page = await prepareTenantPageCreate(db, {
+    organizationId: input.organizationId, userId: input.actor.actorId,
+    data: { ...pageInput.data, path, productId: input.product.id }, env: pageInput.env,
+    productInSameBatch: true, pathOwnerDeletedInSameBatch: input.replacedPages?.get(path),
+  })
+  input.takenPaths?.add(page.path)
+  return page
 }
 
 /**
@@ -1067,6 +1080,9 @@ export async function planProductCreateWrites(db: DbClient, input: {
   products: CreateProductInput[]
   actor: Actor
   now: string
+  env?: CloudflareEnv
+  replacedProductIds?: ReadonlySet<string>
+  replacedPages?: ReadonlyMap<string, string>
   /**
    * Publish the new products on `organizationId` as part of the same batch.
    *
@@ -1075,7 +1091,7 @@ export async function planProductCreateWrites(db: DbClient, input: {
    * following the batch with one round trip per product.
    */
   publication?: { published: boolean }
-}): Promise<{ ids: string[]; queries: BatchQuery[] }> {
+}): Promise<{ ids: string[]; queries: BatchQuery[]; pages: Array<{ variantId: string; path: string }> }> {
   if (input.products.length === 0) invalid('at least one product is required')
   if (input.products.length > PRODUCT_LIMITS.batchCreate) invalid(`at most ${PRODUCT_LIMITS.batchCreate} products may be created at once`)
   // What is the same for every product in the batch is asked once: the
@@ -1090,9 +1106,12 @@ export async function planProductCreateWrites(db: DbClient, input: {
       product_variants: input.products.flatMap(product => (product.variants ?? []).map(variant => variant.id).filter((id): id is string => Boolean(id))),
     }),
   ])
+  for (const [slug, id] of knownSlugs) if (input.replacedProductIds?.has(id)) knownSlugs.delete(slug)
   const defaultCurrency = input.organizationId ? await organizationDefaultCurrency(db, input.organizationId) : null
   const queries: BatchQuery[] = []
   const ids: string[] = []
+  const pages: Array<{ variantId: string; path: string }> = []
+  const takenPaths = new Set<string>()
   // Slugs are derived sequentially and the set carries what this batch has
   // already claimed: deriving them in parallel would let two products in one
   // batch both take the same free slug.
@@ -1102,6 +1121,11 @@ export async function planProductCreateWrites(db: DbClient, input: {
     assertVariantPricesConsistent(planned)
     if (input.publication?.published && planned.kind === 'experience' && !planned.order_url) invalid('Create experiences with booking details before publishing them')
     queries.push(...productWrites(input.organizationId, planned, input.actor, input.now, 'insert'))
+    const page = await prepareProductPageCreate(db, { ...input, product: planned, takenPaths })
+    if (page) {
+      queries.push(...page.queries)
+      pages.push({ variantId: page.variantId, path: page.path })
+    }
     if (input.publication && input.organizationId) {
       queries.push({
         query: `INSERT INTO product_publications (organization_id, product_id, published, created_at, updated_at, created_by, updated_by)
@@ -1115,7 +1139,7 @@ export async function planProductCreateWrites(db: DbClient, input: {
   // One site, one invalidation: a hundred products landing together change
   // that site's public projection once.
   if (input.publication && input.organizationId) queries.push(publicResourceCacheInvalidationQuery(input.organizationId, 'products_created'))
-  return { ids, queries }
+  return { ids, queries, pages }
 }
 
 async function readProductBatch(db: DbClient, organizationId: string, ids: string[]): Promise<Product[]> {
@@ -1137,23 +1161,29 @@ async function replayCatalogWrite(db: DbClient, organizationId: string, dedupeKe
 }
 
 export async function createProductsBatch(db: DbClient, input: {
-  organizationId: string; products: CreateProductInput[]; actor: Actor; publication?: { published: boolean }; idempotencyKey?: string
+  organizationId: string; products: CreateProductInput[]; actor: Actor; env?: CloudflareEnv; publication?: { published: boolean }; idempotencyKey?: string
 }): Promise<Product[]> {
+  const complete = async (products: Product[]): Promise<Product[]> => {
+    for (const product of products) if (product.page) {
+      await refreshTenantPageCard(db, input.env ?? invalid('The service page requires the organization environment'), { variantId: product.page.id, path: product.page.path }, input.actor.actorId)
+    }
+    return products
+  }
   const dedupeKey = input.idempotencyKey ? `catalog-create:${input.organizationId}:${input.idempotencyKey}` : null
   const requestHash = dedupeKey ? await creationRequestHash({ products: input.products, publication: input.publication ?? null }) : null
   const replay = await replayCatalogWrite(db, input.organizationId, dedupeKey, requestHash)
-  if (replay) return replay
+  if (replay) return complete(replay)
   const { ids, queries } = await planProductCreateWrites(db, { ...input, now: new Date().toISOString() })
   queries.push(organizationEventQuery({ organizationId: input.organizationId, actorId: input.actor.actorId, eventType: 'product.created', entityType: 'catalog', entityId: input.organizationId, ...(dedupeKey ? { dedupeKey } : {}), metadata: { request_hash: requestHash, product_ids: ids, product_count: ids.length } }))
   if (queries.length > MAX_D1_BATCH_STATEMENTS) invalid('This catalog exceeds one atomic write; submit smaller batches')
   try { await executeBatch(db, queries, { operation: 'Create products' }) } catch (error) {
     if (isUniqueDedupeConflict(error)) {
       const concurrent = await replayCatalogWrite(db, input.organizationId, dedupeKey, requestHash)
-      if (concurrent) return concurrent
+      if (concurrent) return complete(concurrent)
     }
     throw error
   }
-  return readProductBatch(db, input.organizationId, ids)
+  return complete(await readProductBatch(db, input.organizationId, ids))
 }
 
 /**
@@ -1585,14 +1615,16 @@ function mapCollectionRow(row: Row): Collection {
 }
 
 export async function listCollections(db: DbClient, input: {
-  organizationId: string; locationId?: string | null
+  organizationId: string; locationId?: string | null; assignedUserId?: string
 }): Promise<Collection[]> {
   const rows = await queryAll<Row>(db, `
     SELECT * FROM collections
     WHERE organization_id = ? 
       AND (? = 0 OR location_id IS ?)
+      ${input.assignedUserId ? `AND EXISTS (SELECT 1 FROM collection_products cp JOIN products p ON p.id = cp.product_id AND p.organization_id = cp.organization_id
+        WHERE cp.collection_id = collections.id AND cp.organization_id = collections.organization_id AND (${ASSIGNED_SERVICE_SQL}))` : ''}
     ORDER BY sort_order, name, id
-  `, [input.organizationId, input.locationId === undefined ? 0 : 1, input.locationId ?? null])
+  `, [input.organizationId, input.locationId === undefined ? 0 : 1, input.locationId ?? null, ...(input.assignedUserId ? [input.assignedUserId, input.assignedUserId] : [])])
   return rows.map(mapCollectionRow)
 }
 

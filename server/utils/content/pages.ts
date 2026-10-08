@@ -751,6 +751,7 @@ type TenantPageCreateInput = {
    * the binding's foreign key, not a read here.
    */
   productInSameBatch?: boolean
+  pathOwnerDeletedInSameBatch?: string
 }
 
 /**
@@ -811,6 +812,7 @@ export async function prepareTenantPageCreate(db: DbClient, input: TenantPageCre
     locale,
     path: input.data.path,
     template,
+    excludeVariantId: input.pathOwnerDeletedInSameBatch,
   })
   const metadata = metadataForInput(effectiveData, locale, path)
   const blocks = normalizeTenantPageBlocks(effectiveData.blocks)

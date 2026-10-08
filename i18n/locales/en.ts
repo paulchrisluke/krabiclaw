@@ -1,5 +1,5 @@
 export default {
-  "reservations": { "deposit_label": "Reservation deposit" },
+  "reservations": { "deposit_label": "Reservation deposit", "confirmed": "Reservation confirmed" },
   "site_pages": {
       "home": "Home",
       "about": "About",
@@ -34,6 +34,15 @@ export default {
     "time_unavailable": "Time unavailable"
   },
   "booking": {
+    "confirmed": "Booking confirmed",
+    "request_received": "Request received",
+    "confirmed_message": "Your booking is confirmed.",
+    "pending_message": "Your request is waiting for confirmation from the business.",
+    "receipt": "Booking details",
+    "receipt_failed": "Booking details could not be loaded",
+    "receipt_missing": "No booking found",
+    "receipt_missing_description": "Open the booking link in your confirmation email to view your details.",
+    "free": "Free",
     "choose_location": "Choose a location",
     "online": "Online",
     "phone_country": "Phone country",

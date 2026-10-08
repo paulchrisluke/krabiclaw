@@ -3,7 +3,7 @@ import { getGuestThreadDetail } from '~/server/domain/guest-threads/detail'
 import { listOrganizationGuestThreads } from '~/server/domain/guest-threads/repository'
 import { executeGuestThreadOperation } from '~/server/domain/guest-threads/operations'
 import { getGuestRequest, getThreadOperationalRecord } from '~/server/domain/requests'
-import { assertMemberScope, memberAccessPrincipal } from '~/server/utils/member-access'
+import { assertMemberScope, assertAssignedBookingAccess, roleAllows, assertRoleAllows, memberAccessPrincipal } from '~/server/utils/member-access'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { mcpPageInfo, mcpPageWindow } from '~/server/utils/mcp-pagination'
@@ -36,14 +36,14 @@ async function readConversation(ctx: McpExecutorContext, requestId: string) {
 }
 
 export const SUBMISSIONS_TOOLS: McpToolDefinition[] = [
-  organizationTool({ name: 'list_guest_conversations', domain: 'submissions', minimumRole: 'admin', description: 'Read the business inbox for contacts, table reservations and bookings. Filter by type, current/past and whether a reply is needed. Follow page_info; use request_id to read the whole conversation.',
+  organizationTool({ name: 'list_guest_conversations', domain: 'submissions', minimumRole: 'member', description: 'Read the business inbox for contacts, table reservations and bookings. Filter by type, current/past and whether a reply is needed. Follow page_info; use request_id to read the whole conversation.',
     inputSchema: { type: { type: 'string', enum: ['contact', 'reservation', 'booking'] }, state: { type: 'string', enum: ['needs_attention', 'waiting_on_guest', 'resolved'] }, mailbox: { type: 'string', enum: ['current', 'past'] }, location_id: { type: 'string' }, ...paginationInputSchema },
     outputSchema: { type: 'object', properties: { conversations: { type: 'array', items: { type: 'object', properties: { request_id: { type: 'string' }, guest_name: { type: 'string' }, type: { type: 'string' }, state: { type: 'string' }, operational_status: { type: ['string', 'null'] }, preview: { type: ['string', 'null'] }, updated_at: { type: 'string' } }, required: ['request_id', 'guest_name', 'type', 'state', 'operational_status', 'preview', 'updated_at'] } }, page_info: pageInfoObject }, required: ['conversations', 'page_info'] },
   }),
-  organizationTool({ name: 'get_guest_conversation', domain: 'submissions', minimumRole: 'admin', description: 'Read the entire guest conversation, including messages, booking/reservation, proposals, attachments and delivery receipts. Requires request_id from the inbox or booking read.',
+  organizationTool({ name: 'get_guest_conversation', domain: 'submissions', minimumRole: 'member', description: 'Read the entire guest conversation, including messages, booking/reservation, proposals, attachments and delivery receipts. Requires request_id from the inbox or booking read.',
     inputSchema: { request_id: { type: 'string' } }, required: ['request_id'], outputSchema: conversationResult,
   }),
-  organizationTool({ name: 'reply_to_guest', domain: 'submissions', minimumRole: 'admin', description: 'Email this guest a message, an attached photo, or both, and save the reply in the conversation. Reuse the same key for an identical retry; delivered replies are not sent twice.',
+  organizationTool({ name: 'reply_to_guest', domain: 'submissions', minimumRole: 'member', description: 'Email this guest a message, an attached photo, or both, and save the reply in the conversation. Reuse the same key for an identical retry; delivered replies are not sent twice.',
     inputSchema: { request_id: { type: 'string' }, message: { type: 'string', minLength: 1 }, file: chatgptFileInput, idempotency_key: { type: 'string', minLength: 1, maxLength: 200 }, anyOf: [{ required: ['message'] }, { required: ['file'] }] }, required: ['request_id', 'idempotency_key'], fileParams: ['file'], outputSchema: conversationResult,
   }),
   organizationTool({ name: 'set_guest_conversation_archived', domain: 'submissions', minimumRole: 'admin', description: 'Archive or restore this inbox conversation. Does not cancel a booking or reservation and does not send the guest a message.',
@@ -81,8 +81,9 @@ export async function handleSubmissionsTools(ctx: McpExecutorContext): Promise<u
   switch (toolName) {
     case 'list_guest_conversations': {
       const principal = memberAccessPrincipal(organization.membership, { env: organization.env, event: ctx.event })
-      await assertMemberScope(organization.db, { ...principal, locationId: optionalString(args, 'location_id') })
-      const resource = { resource: `guest-conversations:${JSON.stringify([organization.organizationId, args.type, args.state, args.mailbox, args.location_id])}` }
+      if (await roleAllows({ ...principal, permissions: { operations: ['read'] } })) await assertMemberScope(organization.db, { ...principal, locationId: optionalString(args, 'location_id') })
+      else await assertRoleAllows({ ...principal, permissions: { operations: ['assigned'] } })
+      const resource = { resource: `guest-conversations:${JSON.stringify([organization.organizationId, args.type, args.state, args.mailbox, args.location_id, organization.userId])}` }
       const window = mcpPageWindow(args, resource)
       const rows = await listOrganizationGuestThreads(organization.db, { organizationId: organization.organizationId, principal, userId: organization.userId,
         type: args.type as 'contact' | 'reservation' | 'booking' | undefined, conversationState: args.state as 'needs_attention' | 'waiting_on_guest' | 'resolved' | undefined, mailbox: args.mailbox as 'current' | 'past' | undefined, locationId: optionalString(args, 'location_id'), limit: window.limit + 1, offset: window.offset })
@@ -95,7 +96,7 @@ export async function handleSubmissionsTools(ctx: McpExecutorContext): Promise<u
       const requestId = requiredString(args, 'request_id')
       const thread = await getGuestRequest(organization.db, requestId, organization.organizationId)
       if (!thread) throw new HTTPError({ statusCode: 404, message: 'Guest conversation not found' })
-      await assertMemberScope(organization.db, { ...memberAccessPrincipal(organization.membership, { env: organization.env, event: ctx.event }), locationId: thread.location_id })
+      await assertAssignedBookingAccess(organization.db, { ...memberAccessPrincipal(organization.membership, { env: organization.env, event: ctx.event }), requestId: thread.id })
       if (toolName === 'get_guest_conversation') return { conversation: await readConversation(ctx, requestId) }
       const file = toolName === 'reply_to_guest' && args.file !== undefined ? toolFileReference(args.file, 'file') : null
       const outcome = await executeGuestThreadOperation(organization.db, { threadId: requestId, organizationId: organization.organizationId,

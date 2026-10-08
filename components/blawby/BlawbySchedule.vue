@@ -9,9 +9,9 @@
           </h1>
           <p v-if="scheduleHero?.subtitle" class="mt-6 text-lg leading-8 text-gray-300 sm:text-xl min-[1920px]:text-2xl">{{ scheduleHero.subtitle }}</p>
           <p v-if="priceLine && consultation.mode !== 'native'" class="mt-6 text-lg font-bold text-[var(--blawby-accent)] sm:text-xl min-[1920px]:text-2xl">{{ priceLine }}</p>
-          <BlawbyButton v-if="consultation.mode !== 'native'" :to="scheduleHeroDestination" class="mt-10 w-full px-8 py-4 text-lg min-[1920px]:px-4 min-[1920px]:py-4 min-[1920px]:text-base min-[2560px]:px-5 min-[2560px]:py-5 min-[2560px]:text-lg" @click="trackConsultation('schedule_hero', scheduleHeroDestination)">
+          <BlawbyButton v-if="consultation.mode !== 'native'" :to="scheduleDestination" class="mt-10 w-full px-8 py-4 text-lg min-[1920px]:px-4 min-[1920px]:py-4 min-[1920px]:text-base min-[2560px]:px-5 min-[2560px]:py-5 min-[2560px]:text-lg" @click="trackConsultation('schedule_hero', scheduleDestination)">
             <svg class="-ml-0.5 mr-2 size-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 2v4m8-4v4M3 10h18" /><rect x="3" y="4" width="18" height="18" rx="2" /></svg>
-            {{ scheduleHero?.cta_label || consultation.cta_label }}
+            {{ canSchedule ? scheduleHero?.cta_label || consultation.cta_label : t('site_pages.contact') }}
           </BlawbyButton>
           <p v-if="notice" class="mt-6 text-sm leading-6 text-gray-300">{{ notice }}</p>
         </div>
@@ -37,10 +37,10 @@
       :description="String(scheduleCta.description || '')"
       :price-line="consultation.mode === 'native' ? null : priceLine"
       :notice="notice"
-      :label="String(scheduleCta.label || consultation.cta_label)"
-      :destination="scheduleCtaDestination"
+      :label="canSchedule ? String(scheduleCta.label || consultation.cta_label) : t('site_pages.contact')"
+      :destination="scheduleDestination"
       :background-url="mediaUrl(scheduleCta, 'background')"
-      @click="trackConsultation('schedule_cta', scheduleCtaDestination)"
+      @click="trackConsultation('schedule_cta', scheduleDestination)"
     />
   </div>
 </template>
@@ -57,6 +57,7 @@ const page = computed(() => routeData.value.page!)
 if (!routeData.value.page) throw createError({ statusCode: 404, statusMessage: 'Schedule content not found' })
 const identity = computed(() => shell.value.identity)
 const consultation = computed(() => shell.value.consultation)
+const { localePath, t } = useI18n()
 const compliance = computed(() => shell.value.compliance)
 const org = useBlawbyOrgIdentity(identity, compliance)
 
@@ -70,7 +71,8 @@ function mediaUrl(value: ApiRecord | null | undefined, slot: string) {
 }
 
 const scheduleHero = computed(() => findTenantPageBlock(page.value.blocks, 'hero'))
-const scheduleHeroDestination = computed(() => consultation.value.mode === 'native' ? '#consultations' : consultation.value.external_url || consultation.value.schedule_path)
+const canSchedule = computed(() => consultation.value.mode === 'native' || consultation.value.mode === 'external_url' && Boolean(consultation.value.external_url))
+const scheduleDestination = computed(() => consultation.value.mode === 'native' ? '#consultations' : consultation.value.mode === 'external_url' && consultation.value.external_url ? consultation.value.external_url : localePath('/contact'))
 const scheduleTitle = computed(() => {
   const title = String(scheduleHero.value?.title ?? '')
   const accent = 'Legal Consultation'
@@ -81,7 +83,6 @@ const guidanceBlock = computed(() => findTenantPageBlock(page.value.blocks, 'mar
 const guidanceMarkdown = computed(() => optionalString(guidanceBlock.value?.markdown))
 const guidanceDecoration = computed(() => mediaUrl(guidanceBlock.value, 'decoration'))
 const scheduleCta = computed(() => findTenantPageBlock(page.value.blocks, 'booking_cta'))
-const scheduleCtaDestination = computed(() => consultation.value.mode === 'native' ? '#consultations' : consultation.value.external_url || consultation.value.schedule_path)
 /**
  * What a consultation costs and what booking one does not create. Both belong
  * to the booking prompt, which is the block that declares them; they were read
@@ -119,7 +120,7 @@ useSocialMetadata(() => ({
   professionalService: {
     recipe: 'schedule',
     org: org.value,
-    consultationUrl: consultation.value.mode === 'native' ? consultation.value.schedule_path : scheduleHeroDestination.value,
+    consultationUrl: consultation.value.mode === 'native' ? localePath(consultation.value.schedule_path) : scheduleDestination.value,
   },
 }))
 

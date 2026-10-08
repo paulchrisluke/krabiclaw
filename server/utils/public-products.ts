@@ -387,15 +387,26 @@ export async function publicProductDetailPayload(db: DbClient, env: CloudflareEn
 }
 
 export async function loadPublicProductApiCollection(
+  env: CloudflareEnv,
   db: DbClient,
   organizationId: string,
   previewAuthorized: boolean,
   locationSlug?: string | null,
+  locale?: string,
 ): Promise<PublicProductCollection | null> {
   const organization = await queryFirst<{ vertical: string }>(db, `SELECT vertical FROM organization WHERE id = ? AND ${publicTenantVisibilitySql('organization', previewAuthorized)} LIMIT 1`, [organizationId])
   const presentation = organization ? resolveProductPresentation(organization.vertical) : null
   if (!presentation) return null
-  return loadPublicProductCollection(db, organizationId, presentation.locationCollectionSegment, previewAuthorized, locationSlug)
+  const collection = await loadPublicProductCollection(db, organizationId, presentation.locationCollectionSegment, previewAuthorized, locationSlug)
+  if (!collection) return null
+  if (!locale || locale === await getSourceLocale(db, organizationId)) return collection
+  const localizations = await loadExactPublicLocalizations(env, db, organizationId, locale)
+  return {
+    ...collection,
+    products: projectExactLocalizedCollection('product', collection.products, localizations),
+    locations: projectExactLocalizedCollection('business_location', collection.locations, localizations),
+    collections: projectExactLocalizedCollection('collection', collection.collections, localizations),
+  }
 }
 
 export async function loadPublicProductApiDetail(

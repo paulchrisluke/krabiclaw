@@ -570,10 +570,14 @@ export async function putLocalizationForAuthoring(env: CloudflareEnv, db: D1Data
   if (source) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'Source content is edited through its document')
   const root = await getContentDocumentById(db, input.resourceId)
   if (!root || root.row_role !== 'root' || root.organization_id !== input.organizationId || root.organization_id !== input.organizationId) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Source document was not found')
-  if (root.kind === 'qa') localizationError(403, 'LOCALIZATION_READ_ONLY', 'Q&A is read-only')
+  if (root.kind === 'qa') {
+    const authored = await queryFirst(db, "SELECT id FROM content_documents WHERE id = ? AND organization_id = ? AND row_role = 'root' AND source = 'manual'", [root.id, input.organizationId])
+    if (!authored) localizationError(403, 'LOCALIZATION_READ_ONLY', 'Only authored Q&A can be translated')
+    if (input.routePath != null || (Array.isArray(input.contentBlocks) && input.contentBlocks.length)) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'Q&A translations contain a question and answer, without a route or content blocks')
+  }
   if (!input.values || typeof input.values !== 'object' || Array.isArray(input.values)) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'values must be an object')
   const copy = input.values as Record<string, unknown>
-  const textFields = ['title', 'summary', 'slug', 'seo_keywords'] as const
+  const textFields = root.kind === 'qa' ? ['title', 'summary'] as const : ['title', 'summary', 'slug', 'seo_keywords'] as const
   if (Object.keys(copy).some(key => key !== 'metadata' && !textFields.some(field => field === key))) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'Unknown translated document field')
   // A key a translation leaves out is removed, not stored as JSON null: a
   // social post's translation carries a call to action label or none.
@@ -584,6 +588,7 @@ export async function putLocalizationForAuthoring(env: CloudflareEnv, db: D1Data
     if (typeof copy[field] !== 'string') localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', field + ' must be a string')
     changes[field] = copy[field]
   }
+  if (root.kind === 'qa' && !changes.title?.trim()) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'Translated question is required')
   if (copy.metadata !== undefined) {
     if (!copy.metadata || typeof copy.metadata !== 'object' || Array.isArray(copy.metadata)) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'metadata must be an object')
     const metadata = copy.metadata as Record<string, unknown>
@@ -598,9 +603,11 @@ export async function putLocalizationForAuthoring(env: CloudflareEnv, db: D1Data
   }
   const provided = new Set(Object.keys(changes.metadata ?? {}))
   const removeMetadata = clearedMetadata.filter(key => !provided.has(key))
-  if (typeof input.routePath !== 'string' || !input.routePath.startsWith('/' + locale + '/') || /[?#]/.test(input.routePath) || input.routePath.includes('//')) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'route_path must be a canonical localized path')
-  changes.path = input.routePath.slice(locale.length + 1)
-  if (root.kind !== 'page') changes.slug = input.routePath.split('/').at(-1)!
+  if (root.kind !== 'qa') {
+    if (typeof input.routePath !== 'string' || !input.routePath.startsWith('/' + locale + '/') || /[?#]/.test(input.routePath) || input.routePath.includes('//')) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'route_path must be a canonical localized path')
+    changes.path = input.routePath.slice(locale.length + 1)
+    if (root.kind !== 'page') changes.slug = input.routePath.split('/').at(-1)!
+  }
   const existing = await getContentRepresentation(db, { rootId: root.id, locale })
   const blocks = input.contentBlocks
   if (blocks !== undefined && !Array.isArray(blocks)) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'content_blocks must be an array')
@@ -656,7 +663,10 @@ export async function deleteLocalization(
     if (source) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'English source content cannot be deleted through localization')
     const document = await getContentRepresentation(db, { rootId: input.resourceId, locale })
     if (!document || document.organization_id !== input.organizationId) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Document representation was not found')
-    if (document.kind === 'qa') localizationError(403, 'LOCALIZATION_READ_ONLY', 'Q&A is read-only')
+    if (document.kind === 'qa') {
+      const authored = await queryFirst(db, "SELECT id FROM content_documents WHERE id = ? AND organization_id = ? AND row_role = 'root' AND source = 'manual'", [input.resourceId, input.organizationId])
+      if (!authored) localizationError(403, 'LOCALIZATION_READ_ONLY', 'Only authored Q&A translations can be deleted')
+    }
     await executeBatch(db, [...prepareContentDocumentDeletion({ documentId: document.id, organizationId: input.organizationId }), publicResourceCacheInvalidationQuery(input.organizationId, 'document-localization-delete')])
     return { deleted: true, resource_type: 'content_document', resource_id: input.resourceId, locale }
   }
