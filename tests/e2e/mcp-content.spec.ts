@@ -24,10 +24,11 @@ test.describe('stateless MCP server', () => {
     const body = await response.json()
     expect(body.error).toBeUndefined()
     expect(body.result?.isError).toBe(true)
-    expect(body.result?.structuredContent).toMatchObject({ code: 'LANGUAGE_NOT_ENABLED' })
-    const destination = new URL(body.result.structuredContent.dashboard_url)
+    expect(body.result?.structuredContent).toBeUndefined()
+    const action = mcpData<{ code: string; dashboard_url: string }>(body)
+    expect(action.code).toBe('LANGUAGE_NOT_ENABLED')
+    const destination = new URL(action.dashboard_url)
     expect(destination.pathname).toMatch(/^\/dashboard\/[^/]+\/website\/localization$/)
-    expect(JSON.parse(body.result.content[0].text)).toEqual(body.result.structuredContent)
   })
 
   test('a post rejects fields that are not part of the contract', async ({ request, baseURL }) => {

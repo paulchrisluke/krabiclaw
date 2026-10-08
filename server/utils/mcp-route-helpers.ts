@@ -50,14 +50,14 @@ export function mcpToolErrorResult(message: string, data?: unknown, platformOrig
       if (['https:', 'http:'].includes(origin.protocol) && url.origin === origin.origin && url.pathname.startsWith('/dashboard/')) dashboardUrl = url.toString()
     } catch { /* An invalid destination does not turn a rejected tool into another failure. */ }
   }
-  const structuredContent = code ? { code, message, ...(dashboardUrl ? { dashboard_url: dashboardUrl } : {}) } : undefined
+  const action = code ? { code, message, ...(dashboardUrl ? { dashboard_url: dashboardUrl } : {}) } : undefined
+  // Structured content must match the tool's success schema; errors use content.
   return {
     isError: true,
-    ...(structuredContent ? { structuredContent } : {}),
     content: [
       {
         type: 'text' as const,
-        text: structuredContent ? JSON.stringify(structuredContent) : message,
+        text: action ? JSON.stringify(action) : message,
       },
     ],
   }
