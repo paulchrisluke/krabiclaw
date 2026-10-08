@@ -321,6 +321,10 @@ async function hydrateBlocks(
       media: [],
     }]
   }
+  if (homepageMenu) {
+    const ctaTypes = ['cta', 'booking_cta', 'contact_cta']
+    blocks = [...blocks].sort((left, right) => Number(ctaTypes.includes(left.type)) - Number(ctaTypes.includes(right.type)))
+  }
   // A social_posts block reads the organization's feed through the one public
   // post reader, with its own scope and limit; nothing about a post is stored
   // on the block.

@@ -124,6 +124,8 @@ const PRESENTATIONS: Readonly<Record<string, BlockPresentation>> = {
   'saya:media_text': SayaBrandStory,
   'saya:testimonial_grid': SayaReviewsBlock,
   'saya:cta': SayaCTA,
+  'saya:booking_cta': SayaCTA,
+  'saya:contact_cta': SayaCTA,
   'saya:social_posts': feedOrBlock(SocialPosts),
 }
 
