@@ -33,7 +33,7 @@ import { $fetch } from 'ofetch'
 import { getErrorMessage } from '~/utils/errors'
 import type { respondToBookingChange } from '~/server/domain/guest-threads/booking-changes'
 
-definePageMeta({ layout: false })
+definePageMeta({ layout: 'standalone' })
 const route = useRoute()
 useSocialMetadata(() => ({
   path: `/booking-changes/${encodeURIComponent(String(route.params.threadId))}/${encodeURIComponent(String(route.params.requestId))}`,
