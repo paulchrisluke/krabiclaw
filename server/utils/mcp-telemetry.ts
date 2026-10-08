@@ -51,7 +51,7 @@ export function mcpDiagnosticPayload(value: unknown): string | null {
       const redacted = field
         .replace(/\b[rs]k_(?:test|live)_[A-Za-z0-9_*]+/g, '[key redacted]')
         .replace(/\bBearer\s+[^\s,"']+/gi, 'Bearer [redacted]')
-        .replace(/https?:\/\/[^\s<>"']+/gi, url => url.replace(/\?[^#]*/, '?[redacted]'));
+        .replace(/https?:\/\/[^\s<>"']+/gi, url => url.replace(/\?[^#]*/, '?[redacted]').replace(/#.*/, '#[redacted]'));
       // MCP text often repeats structured JSON. Redact that copy as well.
       if (/^\s*[{[]/.test(field)) {
         try {
