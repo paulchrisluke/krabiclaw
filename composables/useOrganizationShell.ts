@@ -86,6 +86,7 @@ export const useOrganizationShellState = () => {
   const googleMaps = computed(() => data.value?.googleMaps ?? null);
   const hasProducts = computed(() => data.value?.hasProducts ?? false);
   const hasBookableProducts = computed(() => data.value?.hasBookableProducts ?? false);
+  const hasReservations = computed(() => data.value?.hasReservations ?? false);
   const platformMessages = useState<Record<string, string> | null>('platform-locale-messages', () => null)
   watch(
     () => data.value?.platformMessages,
@@ -99,6 +100,7 @@ export const useOrganizationShellState = () => {
     googleMaps,
     hasProducts,
     hasBookableProducts,
+    hasReservations,
     data,
     pending,
     error,

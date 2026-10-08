@@ -34,7 +34,7 @@
           </NuxtLink>
 
           <NuxtLink
-            v-if="!isExperienceOrganization"
+            v-if="hasReservations"
             :to="localePath('/reservations')"
             class="rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default"
           >
@@ -50,7 +50,6 @@
         </nav>
 
         <div class="flex items-center justify-end gap-2 col-start-3">
-          <!-- Primary CTA: Order Now if delivery links exist, otherwise dynamic Reserve/Book -->
           <NuxtLink
             v-if="primaryCtaPath"
             :to="localePath(primaryCtaPath)"
@@ -92,7 +91,7 @@
                   {{ t('saya.header.locations') }}
                 </NuxtLink>
                 <div class="my-1 border-t border-default" />
-                <NuxtLink v-if="!isExperienceOrganization" :to="localePath('/reservations')" class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted" @click="closeMobileNav">
+                <NuxtLink v-if="hasReservations" :to="localePath('/reservations')" class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted" @click="closeMobileNav">
                   {{ t('saya.header.reservations') }}
                 </NuxtLink>
                 <NuxtLink :to="localePath('/contact')" class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted" @click="closeMobileNav">
@@ -139,6 +138,7 @@ const props = defineProps<{
   locations: ApiRecord[]
   hasProducts: boolean
   hasBookableProducts: boolean
+  hasReservations: boolean
 }>()
 
 const i18n = useI18n() as ApiValue as I18nComposable
@@ -179,7 +179,6 @@ onUnmounted(() => {
 })
 
 const restaurantName = computed(() => props.organization?.name?.trim() || '')
-const isExperienceOrganization = computed(() => props.organization?.vertical === 'experience')
 
 const productPresentation = computed(() => resolveProductPresentation(props.organization?.vertical))
 const showProducts = computed(() => props.hasProducts && productPresentation.value !== null)
@@ -189,7 +188,11 @@ const showExperiences = computed(() => props.hasBookableProducts)
 const productCollectionLabel = computed(() => productPresentation.value?.locationCollectionSegment === 'menu'
   ? t('saya.header.menu')
   : t('saya.footer.products'))
-const primaryCtaPath = computed(() => verticalCopy.value.ctaRoute)
+const primaryCtaPath = computed(() => {
+  const path = verticalCopy.value.ctaRoute
+  return path === '/reservations' ? (props.hasReservations ? path : '')
+    : path === '/experiences' ? (props.hasBookableProducts ? path : '') : path
+})
 const primaryCtaLabel = computed(() => verticalCopy.value.reserveCta)
 
 </script>

@@ -800,6 +800,7 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   update_menu: { ...D, idempotentHint: true },
   batch_create_products: { ...W, idempotentHint: true },
   create_blog_post: W,
+  create_location: { ...W, idempotentHint: true },
   create_post: W,
   create_product: { ...W, idempotentHint: true },
   create_site_page: W,

@@ -1,6 +1,7 @@
 import { getSourceLocale } from '~/server/utils/organization-locales'
 import { platformLocale } from '~/shared/platform-locales'
 import { loadPublicProductCollection } from '~/server/utils/public-products'
+import { listOrganizationProducts } from '~/server/utils/product-management'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 import { parseGoogleReviewMetadata } from '~/shared/google-review'
 import { executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
@@ -244,9 +245,10 @@ export async function getPublicBlawbyShellData(
   const locale = options.locale ?? sourceLocale
   const localizations = options.localizations ?? []
   const organizationLocalization = localizations.find(item => item.resourceType === 'organization' && item.resourceId === organizationId) ?? null
-  const [sourceIdentity, sourceConsultation, sourceCompliance, publishedPages, verification, experienceCollection] = await Promise.all([
+  const consultationSettings = getPublicConsultationSettings(db, organizationId)
+  const [sourceIdentity, sourceConsultation, sourceCompliance, publishedPages, verification, experienceCollection, bookableServices] = await Promise.all([
     getPublicBlawbyIdentity(db, organizationId),
-    getPublicConsultationSettings(db, organizationId),
+    consultationSettings,
     getPublicCompliance(db, organizationId),
     listPublishedTenantPagePaths(db, organizationId, locale),
     queryFirst<{ token: string | null }>(db, `
@@ -254,9 +256,15 @@ export async function getPublicBlawbyShellData(
         FROM organization WHERE id = ? LIMIT 1
     `, [organizationId]),
     loadPublicProductCollection(db, organizationId, 'experiences', options.previewAuthorized === true, undefined, options.env),
+    consultationSettings.then(settings => settings.mode === 'native'
+      ? listOrganizationProducts(db, { organizationId, kind: 'service', publishedOnly: true, bookableOnly: true, env: options.env })
+      : []),
   ])
   if (!verification) throw new Error(`Organization ${organizationId} was not found for its Blawby shell`)
-  const pageLinks = publishedPages.map(page => ({ id: page.id, path: page.path, title: page.title }))
+  const canSchedule = sourceConsultation.mode === 'native' ? bookableServices.length > 0
+    : sourceConsultation.mode === 'external_url' && Boolean(sourceConsultation.external_url)
+  const pageLinks = publishedPages.filter(page => page.path !== '/schedule' || canSchedule)
+    .map(page => ({ id: page.id, path: page.path, title: page.title }))
   if (experienceCollection?.products.length && !pageLinks.some(page => page.path === '/experiences')) {
     const title = platformLocale(locale)?.messages['saya.footer.experiences']
     if (!title) throw new Error(`Experience navigation label is unavailable for ${locale}`)
@@ -294,6 +302,7 @@ export async function getPublicBlawbyShellData(
   return {
     identity,
     consultation,
+    canSchedule,
     compliance,
     pageLinks,
     searchConsoleVerification: verification.token,

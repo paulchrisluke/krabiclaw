@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:0d9520fc74e11ec3374f37c2e6521c0f895abeeaaf362998a6c5742edd95a078",
+  "fingerprint": "sha256:adef3c3b4a6f190b0781ba86a97dc7fd74dc5ce683bd108b9cbc8a4d367feed4",
   "tools": [
     {
       "name": "append_content_block",
@@ -7396,6 +7396,754 @@
         },
         "required": [
           "collection"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "create_location",
+      "description": "Add a location to the selected business website. Repeat the same idempotency key with the same details on retry.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "properties": {
+              "addressLines": {
+                "description": "Street lines in order, unbounded.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "administrativeArea": {
+                "description": "State, province or region.",
+                "type": "string"
+              },
+              "languageCode": {
+                "description": "BCP-47 tag when the address is written in a specific language.",
+                "type": "string"
+              },
+              "locality": {
+                "description": "Town or city.",
+                "type": "string"
+              },
+              "postalCode": {
+                "type": "string"
+              },
+              "regionCode": {
+                "description": "ISO 3166-1 alpha-2 country code, e.g. TH.",
+                "type": "string"
+              },
+              "sublocality": {
+                "description": "Neighbourhood or sub-district.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "regionCode",
+              "addressLines"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "description": {
+            "type": "string"
+          },
+          "email": {
+            "format": "email",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "maxLength": 200,
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string"
+          },
+          "opening_hours": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "periods": {
+                    "items": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "close": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "day": {
+                                  "maximum": 6,
+                                  "minimum": 0,
+                                  "type": "integer"
+                                },
+                                "hour": {
+                                  "maximum": 23,
+                                  "minimum": 0,
+                                  "type": "integer"
+                                },
+                                "minute": {
+                                  "maximum": 59,
+                                  "minimum": 0,
+                                  "type": "integer"
+                                }
+                              },
+                              "required": [
+                                "day",
+                                "hour",
+                                "minute"
+                              ],
+                              "type": "object"
+                            },
+                            "open": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "day": {
+                                  "maximum": 6,
+                                  "minimum": 0,
+                                  "type": "integer"
+                                },
+                                "hour": {
+                                  "maximum": 23,
+                                  "minimum": 0,
+                                  "type": "integer"
+                                },
+                                "minute": {
+                                  "maximum": 59,
+                                  "minimum": 0,
+                                  "type": "integer"
+                                }
+                              },
+                              "required": [
+                                "day",
+                                "hour",
+                                "minute"
+                              ],
+                              "type": "object"
+                            }
+                          },
+                          "required": [
+                            "open",
+                            "close"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "open": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "day": {
+                                  "const": 0
+                                },
+                                "hour": {
+                                  "const": 0
+                                },
+                                "minute": {
+                                  "const": 0
+                                }
+                              },
+                              "required": [
+                                "day",
+                                "hour",
+                                "minute"
+                              ],
+                              "type": "object"
+                            }
+                          },
+                          "required": [
+                            "open"
+                          ],
+                          "type": "object"
+                        }
+                      ]
+                    },
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "periods"
+                ],
+                "type": "object"
+              }
+            ],
+            "description": "Canonical weekly endpoint periods. Days use Sunday=0. Null means unknown; periods [] means closed. Sunday 00:00 without a close means always open."
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "special_hours": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "ends_on": {
+                          "anyOf": [
+                            {
+                              "description": "Gregorian calendar date, YYYY-MM-DD. No timezone conversion.",
+                              "format": "date",
+                              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "kind": {
+                          "const": "closure"
+                        },
+                        "note": {
+                          "maxLength": 1000,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "starts_on": {
+                          "description": "Gregorian calendar date, YYYY-MM-DD. No timezone conversion.",
+                          "format": "date",
+                          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "starts_on",
+                        "ends_on",
+                        "note"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "date": {
+                          "description": "Gregorian calendar date, YYYY-MM-DD. No timezone conversion.",
+                          "format": "date",
+                          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                          "type": "string"
+                        },
+                        "kind": {
+                          "const": "hours"
+                        },
+                        "note": {
+                          "maxLength": 1000,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "periods": {
+                          "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "close_day_offset": {
+                                "enum": [
+                                  0,
+                                  1
+                                ]
+                              },
+                              "close_time": {
+                                "description": "Local wall-clock time, HH:mm (24-hour), in the explicitly selected location timezone.",
+                                "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$",
+                                "type": "string"
+                              },
+                              "open_time": {
+                                "description": "Local wall-clock time, HH:mm (24-hour), in the explicitly selected location timezone.",
+                                "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$",
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "open_time",
+                              "close_time",
+                              "close_day_offset"
+                            ],
+                            "type": "object"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "date",
+                        "periods",
+                        "note"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                },
+                "type": "array"
+              }
+            ],
+            "description": "Explicit dated hours or closures. Closure starts_on is required; ends_on is inclusive and null means indefinite. Dated hours replace regular hours; periods [] closes the date."
+          },
+          "timezone": {
+            "description": "Explicit IANA timezone identifier, such as Asia/Bangkok. Missing timezone is an error, never the browser timezone.",
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string"
+          },
+          "website_url": {
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "idempotency_key"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "$defs": {},
+        "properties": {
+          "context": {
+            "type": "object"
+          },
+          "location": {
+            "properties": {
+              "address": {
+                "properties": {
+                  "addressLines": {
+                    "description": "Street lines in order, unbounded.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "administrativeArea": {
+                    "description": "State, province or region.",
+                    "type": "string"
+                  },
+                  "languageCode": {
+                    "description": "BCP-47 tag when the address is written in a specific language.",
+                    "type": "string"
+                  },
+                  "locality": {
+                    "description": "Town or city.",
+                    "type": "string"
+                  },
+                  "postalCode": {
+                    "type": "string"
+                  },
+                  "regionCode": {
+                    "description": "ISO 3166-1 alpha-2 country code, e.g. TH.",
+                    "type": "string"
+                  },
+                  "sublocality": {
+                    "description": "Neighbourhood or sub-district.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "regionCode",
+                  "addressLines"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "canonical_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "email": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "type": "string"
+              },
+              "maps_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "max_capacity": {
+                "description": "Stored location capacity metadata; does not limit reservations. Reservation capacity uses location_reservation_configs.slot_capacity.",
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "media": {
+                "items": {
+                  "properties": {
+                    "alt_text": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "asset_id": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "enum": [
+                        "image",
+                        "video"
+                      ],
+                      "type": "string"
+                    },
+                    "public_url": {
+                      "type": "string"
+                    },
+                    "sort_order": {
+                      "type": "number"
+                    },
+                    "thumbnail_url": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "asset_id",
+                    "kind",
+                    "public_url",
+                    "sort_order"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "opening_hours": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "periods": {
+                        "items": {
+                          "anyOf": [
+                            {
+                              "additionalProperties": false,
+                              "properties": {
+                                "close": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "day": {
+                                      "maximum": 6,
+                                      "minimum": 0,
+                                      "type": "integer"
+                                    },
+                                    "hour": {
+                                      "maximum": 23,
+                                      "minimum": 0,
+                                      "type": "integer"
+                                    },
+                                    "minute": {
+                                      "maximum": 59,
+                                      "minimum": 0,
+                                      "type": "integer"
+                                    }
+                                  },
+                                  "required": [
+                                    "day",
+                                    "hour",
+                                    "minute"
+                                  ],
+                                  "type": "object"
+                                },
+                                "open": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "day": {
+                                      "maximum": 6,
+                                      "minimum": 0,
+                                      "type": "integer"
+                                    },
+                                    "hour": {
+                                      "maximum": 23,
+                                      "minimum": 0,
+                                      "type": "integer"
+                                    },
+                                    "minute": {
+                                      "maximum": 59,
+                                      "minimum": 0,
+                                      "type": "integer"
+                                    }
+                                  },
+                                  "required": [
+                                    "day",
+                                    "hour",
+                                    "minute"
+                                  ],
+                                  "type": "object"
+                                }
+                              },
+                              "required": [
+                                "open",
+                                "close"
+                              ],
+                              "type": "object"
+                            },
+                            {
+                              "additionalProperties": false,
+                              "properties": {
+                                "open": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "day": {
+                                      "const": 0
+                                    },
+                                    "hour": {
+                                      "const": 0
+                                    },
+                                    "minute": {
+                                      "const": 0
+                                    }
+                                  },
+                                  "required": [
+                                    "day",
+                                    "hour",
+                                    "minute"
+                                  ],
+                                  "type": "object"
+                                }
+                              },
+                              "required": [
+                                "open"
+                              ],
+                              "type": "object"
+                            }
+                          ]
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "periods"
+                    ],
+                    "type": "object"
+                  }
+                ]
+              },
+              "phone": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "rating": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "review_count": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "seo_description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "seo_title": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "short_description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "slug": {
+                "type": "string"
+              },
+              "special_hours": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "items": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "ends_on": {
+                              "anyOf": [
+                                {
+                                  "description": "Gregorian calendar date, YYYY-MM-DD. No timezone conversion.",
+                                  "format": "date",
+                                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "kind": {
+                              "const": "closure"
+                            },
+                            "note": {
+                              "maxLength": 1000,
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "starts_on": {
+                              "description": "Gregorian calendar date, YYYY-MM-DD. No timezone conversion.",
+                              "format": "date",
+                              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "starts_on",
+                            "ends_on",
+                            "note"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "date": {
+                              "description": "Gregorian calendar date, YYYY-MM-DD. No timezone conversion.",
+                              "format": "date",
+                              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                              "type": "string"
+                            },
+                            "kind": {
+                              "const": "hours"
+                            },
+                            "note": {
+                              "maxLength": 1000,
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "periods": {
+                              "items": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "close_day_offset": {
+                                    "enum": [
+                                      0,
+                                      1
+                                    ]
+                                  },
+                                  "close_time": {
+                                    "description": "Local wall-clock time, HH:mm (24-hour), in the explicitly selected location timezone.",
+                                    "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$",
+                                    "type": "string"
+                                  },
+                                  "open_time": {
+                                    "description": "Local wall-clock time, HH:mm (24-hour), in the explicitly selected location timezone.",
+                                    "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$",
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "open_time",
+                                  "close_time",
+                                  "close_day_offset"
+                                ],
+                                "type": "object"
+                              },
+                              "type": "array"
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "date",
+                            "periods",
+                            "note"
+                          ],
+                          "type": "object"
+                        }
+                      ]
+                    },
+                    "type": "array"
+                  }
+                ]
+              },
+              "status": {
+                "type": "string"
+              },
+              "timezone": {
+                "description": "Explicit IANA timezone identifier, such as Asia/Bangkok. Missing timezone is an error, never the browser timezone.",
+                "minLength": 1,
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "title": {
+                "type": "string"
+              },
+              "updated_at": {
+                "type": "string"
+              },
+              "website_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "location",
+          "context"
         ],
         "type": "object"
       }

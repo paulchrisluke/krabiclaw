@@ -33,7 +33,7 @@
           </div>
 
           <BlawbyButton
-            v-if="headerCtaLabel"
+            v-if="canSchedule && headerCtaLabel"
             :to="localePath(consultation.schedule_path)"
             @click="trackConsultation"
           >
@@ -92,6 +92,7 @@ import { articleNavKey } from '~/composables/useArticleNav'
 const props = defineProps<{
   organization: PublicBlawbyIdentity
   consultation: PublicConsultationSettings
+  canSchedule: boolean
   pageLinks: PublicBlawbyPageLink[]
 }>()
 

@@ -9,7 +9,7 @@
          source in document order during SSR. -->
     <div id="blawby-portal-root" />
 
-    <BlawbyHeader :organization="identity" :consultation="consultation" :page-links="pageLinks" />
+    <BlawbyHeader :organization="identity" :consultation="consultation" :can-schedule="canSchedule" :page-links="pageLinks" />
     <main>
       <slot />
       <!-- A firm's articles carry its legal disclaimer, under every article and index, wrapped to the full width: the stored text carries line breaks from where it was pasted. -->
@@ -63,9 +63,10 @@ if (target.recipe !== 'links' && target.recipe !== 'experiences') {
 provide('blawby-document', document)
 const identity = computed(() => document.value.shell.identity)
 const consultation = computed(() => document.value.shell.consultation)
+const canSchedule = computed(() => document.value.shell.canSchedule)
 const compliance = computed(() => document.value.shell.compliance)
 const pageLinks = computed(() => document.value.shell.pageLinks)
-provide('blawby-schema-context', { identity, compliance, consultation })
+provide('blawby-schema-context', { identity, compliance, consultation, canSchedule })
 const hydrated = ref(false)
 onMounted(() => { hydrated.value = true })
 

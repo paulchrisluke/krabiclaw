@@ -214,9 +214,9 @@ export interface PublicBlawbyIdentity {
 export interface PublicBlawbyShellData {
   identity: PublicBlawbyIdentity
   consultation: PublicConsultationSettings
+  canSchedule: boolean
   compliance: PublicCompliance | null
   pageLinks: PublicBlawbyPageLink[]
   /** The Search Console META token, served while Google needs to see it. */
   searchConsoleVerification: string | null
 }
-

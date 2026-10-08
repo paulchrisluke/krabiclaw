@@ -330,17 +330,20 @@ export async function listProducts(db: DbClient, organizationId: string): Promis
  * catalog renders an empty state that says so.
  */
 /** Public experiences use the same readiness check as publication, including sold-out sessions. */
-async function publicProductWindow(db: DbClient, organizationId: string, products: Product[], window?: { limit: number; offset: number }, env?: CloudflareEnv, sharedPaymentSetup?: () => ReturnType<typeof readStripeCheckoutSetup>): Promise<Product[]> {
+async function publicProductWindow(db: DbClient, organizationId: string, products: Product[], window?: { limit: number; offset: number }, env?: CloudflareEnv, sharedPaymentSetup?: () => ReturnType<typeof readStripeCheckoutSetup>, bookableOnly = false): Promise<Product[]> {
   let setup: ReturnType<typeof readStripeCheckoutSetup> | undefined
   const paymentSetup = sharedPaymentSetup ?? (() => setup ??= readStripeCheckoutSetup(db, organizationId, env))
-  const visible = await Promise.all(products.map(async product => (product.kind !== 'experience' && !product.booking)
-    || (await productBookingReadiness(db, organizationId, product, { env, paymentSetup })).ready))
+  const activeLocationIds = bookableOnly ? new Set((await queryAll<{ id: string }>(db,
+    "SELECT id FROM business_locations WHERE organization_id = ? AND status = 'active'", [organizationId])).map(location => location.id)) : undefined
+  const visible = await Promise.all(products.map(async product => bookableOnly
+    ? Boolean(product.booking || product.order_url) && (await productBookingReadiness(db, organizationId, product, { env, paymentSetup, requireActive: true, activeLocationIds })).ready
+    : (product.kind !== 'experience' && !product.booking) || (await productBookingReadiness(db, organizationId, product, { env, paymentSetup })).ready))
   const published = products.filter((_, index) => visible[index])
   return window ? published.slice(window.offset, window.offset + window.limit + 1) : published
 }
 
 interface ProductListInput {
-  organizationId: string; kind?: ProductKind; featured?: boolean; publishedOnly?: boolean; assignedUserId?: string; window?: { limit: number; offset: number }; env?: CloudflareEnv; paymentSetup?: () => ReturnType<typeof readStripeCheckoutSetup>
+  organizationId: string; kind?: ProductKind; featured?: boolean; publishedOnly?: boolean; bookableOnly?: boolean; assignedUserId?: string; window?: { limit: number; offset: number }; env?: CloudflareEnv; paymentSetup?: () => ReturnType<typeof readStripeCheckoutSetup>
 }
 
 export interface ProductListResult {
@@ -358,7 +361,7 @@ function productListCounts(rows: readonly { kind: ProductKind; count?: number }[
 export function listOrganizationProducts(db: DbClient, input: ProductListInput & { withCounts: true }): Promise<ProductListResult>
 export function listOrganizationProducts(db: DbClient, input: ProductListInput & { withCounts?: false }): Promise<Product[]>
 export async function listOrganizationProducts(db: DbClient, input: ProductListInput & { withCounts?: boolean }): Promise<Product[] | ProductListResult> {
-  const requireReadiness = input.publishedOnly === true && (!input.kind || input.kind === 'experience' || input.kind === 'service')
+  const requireReadiness = input.publishedOnly === true && (input.bookableOnly || !input.kind || input.kind === 'experience' || input.kind === 'service')
   const window = requireReadiness ? undefined : input.window
   const selection = `FROM products p
     JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
@@ -372,8 +375,8 @@ export async function listOrganizationProducts(db: DbClient, input: ProductListI
     input.withCounts && window ? queryAll<{ kind: ProductKind; count: number }>(db, `SELECT p.kind, count(*) AS count ${selection} GROUP BY p.kind`, params) : undefined,
   ])
   const products = await hydrate(db, input.organizationId, rows.map(mapProductRow))
-  if (!input.withCounts) return requireReadiness ? publicProductWindow(db, input.organizationId, products, input.window, input.env, input.paymentSetup) : products
-  const matching = requireReadiness ? await publicProductWindow(db, input.organizationId, products, undefined, input.env, input.paymentSetup) : products
+  if (!input.withCounts) return requireReadiness ? publicProductWindow(db, input.organizationId, products, input.window, input.env, input.paymentSetup, input.bookableOnly) : products
+  const matching = requireReadiness ? await publicProductWindow(db, input.organizationId, products, undefined, input.env, input.paymentSetup, input.bookableOnly) : products
   return { products: requireReadiness && input.window ? matching.slice(input.window.offset, input.window.offset + input.window.limit + 1) : matching, counts: productListCounts(counts ?? matching) }
 }
 
@@ -389,7 +392,7 @@ export function listLocationProducts(db: DbClient, input: ProductListInput & { l
 export function listLocationProducts(db: DbClient, input: ProductListInput & { locationId: string; withCounts?: false }): Promise<Product[]>
 export async function listLocationProducts(db: DbClient, input: ProductListInput & { locationId: string; withCounts?: boolean }): Promise<Product[] | ProductListResult> {
   const published = input.publishedOnly === true
-  const requireReadiness = published && (!input.kind || input.kind === 'experience' || input.kind === 'service')
+  const requireReadiness = published && (input.bookableOnly || !input.kind || input.kind === 'experience' || input.kind === 'service')
   const window = requireReadiness ? undefined : input.window
   const selection = `FROM products p
     JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id
@@ -405,8 +408,8 @@ export async function listLocationProducts(db: DbClient, input: ProductListInput
     input.withCounts && window ? queryAll<{ kind: ProductKind; count: number }>(db, `SELECT p.kind, count(*) AS count ${selection} GROUP BY p.kind`, params) : undefined,
   ])
   const products = await hydrate(db, input.organizationId, rows.map(mapProductRow))
-  if (!input.withCounts) return requireReadiness ? publicProductWindow(db, input.organizationId, products, input.window, input.env, input.paymentSetup) : products
-  const matching = requireReadiness ? await publicProductWindow(db, input.organizationId, products, undefined, input.env, input.paymentSetup) : products
+  if (!input.withCounts) return requireReadiness ? publicProductWindow(db, input.organizationId, products, input.window, input.env, input.paymentSetup, input.bookableOnly) : products
+  const matching = requireReadiness ? await publicProductWindow(db, input.organizationId, products, undefined, input.env, input.paymentSetup, input.bookableOnly) : products
   return { products: requireReadiness && input.window ? matching.slice(input.window.offset, input.window.offset + input.window.limit + 1) : matching, counts: productListCounts(counts ?? matching) }
 }
 
@@ -1521,9 +1524,11 @@ async function productCacheInvalidations(db: DbClient, organizationId: string, p
  * is per-location visibility. A withheld product is not sold out and a
  * disabled product is not unpublished.
  */
-export async function productBookingReadiness(db: DbClient, organizationId: string, product: Product, options: { requireAllocation?: boolean; env?: CloudflareEnv; paymentSetup?: () => ReturnType<typeof readStripeCheckoutSetup> } = {}): Promise<{ ready: boolean; missing: string[]; allocation?: BatchQuery }> {
+export async function productBookingReadiness(db: DbClient, organizationId: string, product: Product, options: { requireAllocation?: boolean; requireActive?: boolean; activeLocationIds?: ReadonlySet<string>; env?: CloudflareEnv; paymentSetup?: () => ReturnType<typeof readStripeCheckoutSetup> } = {}): Promise<{ ready: boolean; missing: string[]; allocation?: BatchQuery }> {
   const missing: string[] = []
-  if (options.requireAllocation && !product.active) missing.push('active')
+  const requireActive = options.requireAllocation || options.requireActive
+  const locations = options.activeLocationIds ? product.locations.filter(location => options.activeLocationIds!.has(location.location_id)) : product.locations
+  if (requireActive && !product.active) missing.push('active')
   if (product.order_url) return { ready: missing.length === 0, missing }
   if (!product.booking) missing.push('booking')
   else if (!product.booking.duration_minutes) missing.push('booking.duration_minutes')
@@ -1532,13 +1537,13 @@ export async function productBookingReadiness(db: DbClient, organizationId: stri
   const sessions = (await listSessions(db, { organizationId, productId: product.id, fromInstant: new Date().toISOString(), toInstant: new Date(Date.now() + 400 * 86_400_000).toISOString() }))
     .filter(session => session.location_id === null
       ? Boolean(product.booking?.online_timezone)
-      : product.locations.some(location => location.location_id === session.location_id && location.published && (!options.requireAllocation || location.active)))
+      : locations.some(location => location.location_id === session.location_id && location.published && (!requireActive || location.active)))
   // Scheduled seats prove the booking capability even while full or closed.
   // Publication additionally guards a real allocation in its atomic write.
   const candidate = sessions.find(session => !session.is_full)
     ?? sessions.find(session => session.capacity === null || session.capacity > 0)
   const scopes = [...new Set([
-    ...product.locations.filter(location => location.published && (!options.requireAllocation || location.active)).map(location => location.location_id),
+    ...locations.filter(location => location.published && (!requireActive || location.active)).map(location => location.location_id),
     ...(product.booking?.online_timezone ? [null] : []),
   ])]
   const variants = product.variants.filter(variant => variant.active)

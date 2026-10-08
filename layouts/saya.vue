@@ -21,6 +21,7 @@
       :locations="locations"
       :has-products="shell.hasProducts.value"
       :has-bookable-products="shell.hasBookableProducts.value"
+      :has-reservations="shell.hasReservations.value"
     />
     <main class="grow" :data-route-shell="route.path">
       <slot />
@@ -32,6 +33,7 @@
       :error="bootstrapError"
       :has-products="shell.hasProducts.value"
       :has-bookable-products="shell.hasBookableProducts.value"
+      :has-reservations="shell.hasReservations.value"
     />
   </div>
 </template>

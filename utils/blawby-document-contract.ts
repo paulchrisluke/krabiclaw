@@ -55,6 +55,7 @@ export const isBlawbyDocumentPayload = (
   && isRecord(value.route)
   && hasValidIdentity(value.shell.identity)
   && hasValidConsultation(value.shell.consultation)
+  && typeof value.shell.canSchedule === 'boolean'
   && Array.isArray(value.shell.pageLinks)
   && (value.shell.searchConsoleVerification === null || typeof value.shell.searchConsoleVerification === 'string')
   && typeof value.route.recipe === 'string'

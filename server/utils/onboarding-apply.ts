@@ -104,11 +104,11 @@ export async function activateOnboardingDraft(env: CloudflareEnv, db: D1Database
       await purgePublicResourceCacheNow(env, organizationId)
     }
     const organization = await resolveUserOrganization(env, { userId: input.userId, organizationId })
-    const locations = await queryAll<{ id: string; slug: string | null }>(db, "SELECT id, slug FROM business_locations WHERE organization_id = ? AND status = 'active'", [organizationId])
+    const locations = await queryAll<{ id: string; slug: string | null }>(db, "SELECT id, slug FROM business_locations WHERE organization_id = ? AND status = 'active' ORDER BY created_at, id LIMIT 1", [organizationId])
     const publicUrl = await organizationPublicUrl(db, organizationId)
     const site = await queryFirst<{ onboarding_status: string }>(db, 'SELECT onboarding_status FROM organization WHERE id = ?', [organizationId])
     const homepage = await getPublishedTenantPage(db, organizationId, '/', sourceLocale)
-    if (!organization || site?.onboarding_status !== 'active' || !homepage?.blocks.length || locations.length !== 1 || !publicUrl) throw new Error('Activated website could not be read back')
+    if (!organization || site?.onboarding_status !== 'active' || !homepage?.blocks.length || !locations.length || !publicUrl) throw new Error('Activated website could not be read back')
     if (completion.measurement.status === 'failed' || completion.operator_email.status === 'failed') {
       throw new Error([completion.measurement.status === 'failed' ? completion.measurement.reason : null, completion.operator_email.status === 'failed' ? completion.operator_email.reason : null].filter(Boolean).join('; '))
     }

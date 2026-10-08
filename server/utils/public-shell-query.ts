@@ -43,7 +43,9 @@ export function appendPublicShellQueries(
                      bl.review_count, bl.status,
                      bl.description, bl.short_description,
                      bl.last_synced_at, bl.seo_title, bl.seo_description,
-                     bl.canonical_url
+                     bl.canonical_url,
+                     EXISTS (SELECT 1 FROM location_reservation_configs c
+                              WHERE c.organization_id = bl.organization_id AND c.location_id = bl.id) AS has_reservations
                 FROM business_locations bl
                WHERE bl.organization_id = ?  AND bl.status = 'active'
                ORDER BY bl.title ASC`, [organizationId]),
@@ -140,7 +142,7 @@ export async function buildPublicShellPayload(
 
   const activeLocationIds = new Set(rawLocations.map(location => String(location.id)))
   const productLocationRows = (results[indexes.productLocations]?.results ?? []) as Array<{ location_id: string }>
-  const experiences = await listOrganizationProducts(db, { organizationId: organization.id, kind: 'experience', publishedOnly: true, env })
+  const experiences = await listOrganizationProducts(db, { organizationId: organization.id, kind: 'experience', publishedOnly: true, bookableOnly: true, env })
 
   return {
     platformMessages: null,
@@ -161,7 +163,7 @@ export async function buildPublicShellPayload(
       syncedAt: null,
     },
     hasProducts: productLocationRows.some(row => activeLocationIds.has(String(row.location_id))),
-    hasBookableProducts: experiences.some(product => Boolean(product.order_url || product.booking?.online_timezone)
-      || product.locations.some(location => location.published && activeLocationIds.has(location.location_id))),
+    hasBookableProducts: experiences.length > 0,
+    hasReservations: rawLocations.some(location => Number(location.has_reservations) === 1),
   }
 }

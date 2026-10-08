@@ -5,7 +5,7 @@
       <div class="w-full lg:w-1/2 lg:pl-16 lg:pr-8">
         <h2 class="blawby-display text-center text-3xl font-bold text-white sm:text-4xl lg:text-left">{{ title }}</h2>
         <p v-if="description" class="mt-4 text-center text-lg leading-8 text-white lg:text-left">{{ description }}</p>
-        <div class="mt-10 text-center lg:text-left">
+        <div v-if="destination && label" class="mt-10 text-center lg:text-left">
           <BlawbyButton :to="destination" class="gap-2" @click="$emit('click')">
             <svg class="-ml-0.5 mr-2 size-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7.5 4.5h9A4.5 4.5 0 0 1 21 9v3a4.5 4.5 0 0 1-4.5 4.5h-4.86L7.2 20.2a.75.75 0 0 1-1.2-.6v-3.35A4.5 4.5 0 0 1 3 12V9a4.5 4.5 0 0 1 4.5-4.5Z" /></svg>
             {{ label }}
@@ -31,23 +31,16 @@ import { blockText, blockTextOrNull, blockMedia, isInternalRoute } from '~/utils
 const props = defineProps<{
   block: TenantPageBlock
   page: PublicTenantPage
-  /**
-   * Where the button goes when the site, not the page, decides — a firm that
-   * books consultations on an external scheduler. It is a site setting rather
-   * than block content, so it overrides the block's own url.
-   */
-  destinationOverride?: string | null
 }>()
 
 const { localePath } = useI18n()
 const title = computed(() => blockText(props.block.data.title))
 const description = computed(() => blockTextOrNull(props.block.data.description))
 const label = computed(() => blockText(props.block.data.label))
-const consultation = inject<{ consultation?: import('vue').ComputedRef<import('~/types/blawby').PublicConsultationSettings> }>('blawby-schema-context', {})
+const consultation = inject<{ canSchedule?: import('vue').ComputedRef<boolean> }>('blawby-schema-context', {})
 const destination = computed(() => {
-  if (consultation.consultation?.value.mode === 'native') return localePath(consultation.consultation.value.schedule_path)
-  if (props.destinationOverride) return props.destinationOverride
   const url = blockText(props.block.data.url)
+  if (url === '/schedule' && consultation.canSchedule?.value === false) return ''
   return url ? (isInternalRoute(url) ? localePath(url) : url) : ''
 })
 const backgroundUrl = computed(() => blockMedia(props.block, 'background')[0]?.public_url ?? null)
