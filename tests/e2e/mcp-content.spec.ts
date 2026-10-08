@@ -25,7 +25,7 @@ test.describe('stateless MCP server', () => {
     expect(body.error).toBeUndefined()
     expect(body.result?.isError).toBe(true)
     expect(body.result?.structuredContent).toBeUndefined()
-    const action = mcpData<{ code: string; dashboard_url: string }>(body)
+    const action = JSON.parse(body.result.content[0].text) as { code: string; dashboard_url: string }
     expect(action.code).toBe('LANGUAGE_NOT_ENABLED')
     const destination = new URL(action.dashboard_url)
     expect(destination.pathname).toMatch(/^\/dashboard\/[^/]+\/website\/localization$/)
