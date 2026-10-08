@@ -9,6 +9,28 @@ import { MCP_ORGANIZATION_ID, mcpRequest, mcpData } from './helpers/mcp'
 // tools, and the stateless discovery/list/error protocol flow.
 
 test.describe('stateless MCP server', () => {
+  test('a missing site language returns its setup action rather than a plan error', async ({ request, baseURL }) => {
+    await loginAs(request, baseURL!)
+    const localesResponse = await mcpRequest(request, baseURL!, {
+      method: 'tools/call', toolName: 'list_organization_locales', args: { organization_id: MCP_ORGANIZATION_ID },
+    })
+    const { locales } = mcpData<{ locales: Array<{ locale: string }> }>(await localesResponse.json())
+    const locale = ['vi', 'ja', 'fr'].find(candidate => !locales.some(saved => saved.locale === candidate))
+    expect(locale, 'The paid fixture has an available language that has not been added').toBeTruthy()
+    const response = await mcpRequest(request, baseURL!, {
+      method: 'tools/call', toolName: 'get_product_catalog_localization', args: { organization_id: MCP_ORGANIZATION_ID, locale },
+    })
+    expect(response.status()).toBe(200)
+    const body = await response.json()
+    expect(body.error).toBeUndefined()
+    expect(body.result?.isError).toBe(true)
+    expect(body.result?.structuredContent).toBeUndefined()
+    const action = JSON.parse(body.result.content[0].text) as { code: string; dashboard_url: string }
+    expect(action.code).toBe('LANGUAGE_NOT_ENABLED')
+    const destination = new URL(action.dashboard_url)
+    expect(destination.pathname).toMatch(/^\/dashboard\/[^/]+\/website\/localization$/)
+  })
+
   test('a post rejects fields that are not part of the contract', async ({ request, baseURL }) => {
     await loginAs(request, baseURL!)
     const organizationId = MCP_ORGANIZATION_ID

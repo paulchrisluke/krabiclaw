@@ -167,7 +167,7 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
       // graceful isError:true CallToolResult, not a JSON-RPC error — MCP
       // clients can't act on a transport-level error mid-tool-call.
       const failure = mcpFinancialApprovalErrorResult(toolError, cfEnv.NUXT_PUBLIC_PLATFORM_DOMAIN, mcpErr.message)
-        ?? { isError: true, content: [{ type: "text" as const, text: mcpErr.message }] };
+        ?? mcpToolErrorResult(mcpErr.message, mcpErr.data, cfEnv.NUXT_PUBLIC_PLATFORM_DOMAIN);
       return failure;
     }
 
