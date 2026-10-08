@@ -1,4 +1,8 @@
 {
+  "booking.provider_title": "担当者",
+  "booking.provider_loading": "プロフィールを読み込んでいます…",
+  "booking.provider_failed": "プロフィールを読み込めませんでした",
+  "booking.provider_retry": "もう一度試す",
   "booking_policy.deposit_amount": "予約1件の前金：{amount}。",
   "booking_policy.deposit_amount_exclusive": "予約1件の前金：{amount}（税別）。",
   "reservations.deposit_label": "予約の前金",

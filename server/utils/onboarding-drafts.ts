@@ -1,7 +1,12 @@
 import { platformLocale } from '~/shared/platform-locales'
 import { parseOpeningHours, parseSpecialHours, type OpeningHours, type SpecialHours } from '~/shared/reservation-hours'
 import type { OrganizationVertical } from '~/utils/vertical-copy'
-import { queryFirst } from '~/server/db'
+import { execute, queryFirst } from '~/server/db'
+import { creationRequestHash } from '~/server/utils/organization-events'
+import { isCurrencyCode } from '~/shared/currencies'
+import { isValidTimezone } from '~/utils/timezone'
+import { ALL_VERTICALS } from '~/utils/vertical-copy'
+import { getPhoneCountry } from '~/utils/phone'
 import type { PlaceDetails, PlaceReview } from '~/server/utils/google-places'
 import type { CurrencyCode } from '~/shared/currencies'
 import type { PriceInput } from '~/shared/prices'
@@ -13,6 +18,65 @@ import { isOrganizationFontPreset } from '~/shared/organization-fonts'
 import { LOGO_SHAPES } from '~/shared/media-placement-contract'
 
 type DraftSourceType = 'google_places' | 'manual'
+
+export async function createManualOnboardingDraft(db: D1Database, userId: string, input: {
+  idempotency_key: string
+  name: string
+  vertical: OrganizationVertical
+  subdomain: string
+  source_locale: string
+  currency: CurrencyCode
+  timezone: string
+  description?: string
+  location?: { street_address?: string; city?: string; region?: string; postal_code?: string; country?: string; phone?: string; website_url?: string }
+}) {
+  const name = input.name.trim()
+  const subdomain = input.subdomain.trim().toLowerCase()
+  const key = input.idempotency_key.trim()
+  if (!name || !key || !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(subdomain)
+    || !ALL_VERTICALS.includes(input.vertical) || !platformLocale(input.source_locale)
+    || !isCurrencyCode(input.currency) || !isValidTimezone(input.timezone)) {
+    throw new HTTPError({ statusCode: 400, statusMessage: 'Valid business name, address, language, currency, timezone and idempotency key are required' })
+  }
+  const location = input.location
+  const country = location?.country?.trim().toUpperCase() ?? null
+  if (country && !getPhoneCountry(country)) throw new HTTPError({ statusCode: 400, statusMessage: 'Location country must be an ISO 3166-1 alpha-2 code' })
+  const request = { ...input, name, subdomain, idempotency_key: key }
+  const id = `mcp-website-${await creationRequestHash({ userId, key })}`
+  const fingerprint = await creationRequestHash(request)
+  const payload = buildOnboardingDraftPayload({ name, vertical: input.vertical, place: null, details: {
+    name, sourceLocale: input.source_locale, currency: input.currency, timezone: input.timezone,
+    country, streetAddress: location?.street_address?.trim() || null, addressLine2: null, city: location?.city?.trim() || null,
+    region: location?.region?.trim() || null, postalCode: location?.postal_code?.trim() || null,
+    phone: location?.phone?.trim() || null, websiteUrl: location?.website_url?.trim() || null, openingHours: null, specialHours: null,
+  } })
+  payload.request = { key, fingerprint }
+  payload.preview.subdomainCandidate = subdomain
+  if (input.description?.trim()) {
+    payload.preview.locations[0]!.description = input.description.trim()
+    payload.preview.content = buildDraftContent(name, input.vertical, name, input.description.trim())
+  }
+  const now = new Date().toISOString()
+  let stored = await queryFirst<{ payload_json: string; status: string }>(db, 'SELECT payload_json, status FROM onboarding_drafts WHERE id = ? AND user_id = ?', [id, userId])
+  if (!stored) {
+    try {
+      await execute(db, `INSERT INTO onboarding_drafts (id, user_id, name, vertical, subdomain_candidate, source_type, status, payload_json, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, 'manual', 'active', ?, ?, ?) ON CONFLICT(id) DO NOTHING`,
+      [id, userId, name, input.vertical, subdomain, JSON.stringify(payload), now, now])
+    } catch (error) {
+      if (error instanceof Error && /UNIQUE constraint failed: onboarding_drafts.user_id/.test(error.message)) {
+        const retry = await queryFirst<{ id: string }>(db, 'SELECT id FROM onboarding_drafts WHERE id = ? AND user_id = ?', [id, userId])
+        if (!retry) throw new HTTPError({ statusCode: 409, statusMessage: 'Finish or discard your existing website draft before creating another website', data: { code: 'ONBOARDING_DRAFT_EXISTS' } })
+      } else throw error
+    }
+    stored = await queryFirst<{ payload_json: string; status: string }>(db, 'SELECT payload_json, status FROM onboarding_drafts WHERE id = ? AND user_id = ?', [id, userId])
+  }
+  if (!stored) throw new Error(`Website draft ${id} could not be read back`)
+  const saved = parseOnboardingDraftPayload(stored.payload_json)
+  if (saved.request?.key !== key || saved.request.fingerprint !== fingerprint) throw new HTTPError({ statusCode: 409, statusMessage: 'This idempotency key was already used for a different website request', data: { code: 'IDEMPOTENCY_KEY_CONFLICT' } })
+  if (stored.status === 'abandoned') throw new HTTPError({ statusCode: 409, statusMessage: 'This website draft was discarded. Use a new idempotency key.', data: { code: 'ONBOARDING_DRAFT_ABANDONED' } })
+  return { id }
+}
 
 export interface DraftBrandInput {
   /** A starter palette id; the site wears its template's colors until one is chosen. */
@@ -113,6 +177,7 @@ export interface DraftContentRecord {
 
 export interface OnboardingDraftPayload {
   version: 3
+  request?: { key: string; fingerprint: string }
   source: {
     type: DraftSourceType
     /** The Google place the owner picked; null on a manual draft. */

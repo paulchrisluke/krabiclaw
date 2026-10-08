@@ -1,4 +1,8 @@
 {
+  "booking.provider_title": "ผู้ที่คุณจะได้พบ",
+  "booking.provider_loading": "กำลังโหลดโปรไฟล์…",
+  "booking.provider_failed": "ไม่สามารถโหลดโปรไฟล์ได้",
+  "booking.provider_retry": "ลองอีกครั้ง",
   "booking_policy.deposit_amount": "เงินมัดจำ {amount} ต่อการจอง",
   "booking_policy.deposit_amount_exclusive": "เงินมัดจำ {amount} ต่อการจอง ยังไม่รวมภาษีที่เกี่ยวข้อง",
   "reservations.deposit_label": "เงินมัดจำการจอง",

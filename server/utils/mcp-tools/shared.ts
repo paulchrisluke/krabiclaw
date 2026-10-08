@@ -764,6 +764,7 @@ const D: McpToolAnnotations = Object.freeze({ readOnlyHint: false, openWorldHint
 
 /** Submission-review contract. Every real public tool is listed explicitly. */
 export const EXPECTED_TOOL_ANNOTATIONS = {
+  create_website: { ...W, openWorldHint: true },
   create_qa: W,
   update_qa: D,
   delete_qa: D,

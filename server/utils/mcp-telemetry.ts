@@ -2,6 +2,7 @@ import { execute, type DbClient } from "~/server/db";
 import { describeErrorForTelemetry } from "~/server/utils/error-telemetry";
 import { anonymizeId } from "~/server/utils/platform-telemetry";
 import { recordUsageEvent } from "~/server/utils/usage-metering";
+import { isRecord } from "~/server/utils/type-guards";
 
 // Normal telemetry stores typed operational facts. Startup diagnostics are
 // explicitly enabled on the Worker and expire after seven days.
@@ -43,6 +44,7 @@ export function mcpDiagnosticPayload(value: unknown): string | null {
   function replacer() {
     const ancestors: object[] = [];
     return function redact(this: Record<string, unknown>, key: string, field: unknown): unknown {
+    if (key === '_request') return undefined;
     if (DIAGNOSTIC_SECRET_KEY.test(key)) return '[redacted]';
     if (key === 'data' && (this.type === 'image' || this.type === 'audio')) return '[binary omitted]';
     if (typeof field === 'string') {
@@ -106,6 +108,26 @@ export interface LogMcpToolCallEventInput {
   durationMs?: number | null;
 }
 
+function toolErrorFields(result: unknown): Pick<LogMcpToolCallEventInput, 'httpStatus' | 'errorCode' | 'errorMessage'> {
+  if (!isRecord(result)) return {};
+  let details: unknown = result.structuredContent ?? result;
+  let text: string | undefined;
+  if (result.isError === true && Array.isArray(result.content)) {
+    text = result.content.filter(isRecord).filter(entry => entry.type === 'text' && typeof entry.text === 'string').map(entry => entry.text).join('\n');
+    if (!result.structuredContent && text) {
+      try { details = JSON.parse(text); } catch { return { errorMessage: text }; }
+    }
+  }
+  if (!isRecord(details)) return { errorMessage: text };
+  const failure = isRecord(details.data) ? { ...details, ...details.data } : details;
+  const status = failure.http_status ?? failure.status;
+  return {
+    httpStatus: Number.isInteger(status) && Number(status) >= 400 && Number(status) < 600 ? Number(status) : undefined,
+    errorCode: typeof failure.code === 'string' || typeof failure.code === 'number' ? failure.code : undefined,
+    errorMessage: typeof failure.message === 'string' ? failure.message : typeof failure.error === 'string' ? failure.error : text,
+  };
+}
+
 function hashIdentifier(env: ApiRecord | null | undefined, value: string | null | undefined) {
   if (!env || !value) return null;
   try {
@@ -125,10 +147,14 @@ export async function logMcpToolCallEvent(
   const mcpSurface = input.mcpSurface ?? "client";
   const diagnostic = input.env?.MCP_DIAGNOSTICS_ENABLED === 'true'
     && mcpSurface === 'client' && (input.method === 'tools/call' || input.method === 'tools/list');
-  const errorMessage = input.errorMessage
-    ? diagnostic ? describeErrorForTelemetry(input.errorMessage) : "MCP operation failed; see error code and status."
+  const failure = toolErrorFields(input.method === 'tools/call' && input.status === 'error' ? input.result : undefined);
+  const errorCode = failure.errorCode ?? input.errorCode;
+  const failureMessage = failure.errorMessage ?? input.errorMessage;
+  const httpStatus = failure.httpStatus ?? input.httpStatus;
+  const errorMessage = failureMessage
+    ? diagnostic ? describeErrorForTelemetry(failureMessage) : "MCP operation failed; see error code and status."
     : null;
-  const jsonrpcErrorMessage = input.jsonrpcErrorMessage ?? input.errorMessage;
+  const jsonrpcErrorMessage = input.jsonrpcErrorMessage;
   const eventId = crypto.randomUUID();
   await execute(
       db,
@@ -156,10 +182,10 @@ export async function logMcpToolCallEvent(
         diagnostic ? mcpDiagnosticPayload(input.arguments ?? {}) : summarizeForTelemetry(input.arguments),
         diagnostic ? mcpDiagnosticPayload(input.result) : summarizeForTelemetry(input.result),
         input.status,
-        input.errorCode == null ? null : String(input.errorCode),
+        errorCode == null ? null : String(errorCode),
         errorMessage,
-        input.httpStatus ?? null,
-        input.jsonrpcErrorCode ?? (typeof input.errorCode === "number" ? input.errorCode : null),
+        httpStatus ?? null,
+        input.jsonrpcErrorCode ?? null,
         jsonrpcErrorMessage ? diagnostic ? describeErrorForTelemetry(jsonrpcErrorMessage) : "MCP operation failed; see error code and status." : null,
         input.protocolVersion ?? null,
         hashIdentifier(input.env, input.sessionId),
@@ -185,7 +211,7 @@ export async function logMcpToolCallEvent(
           toolName: input.toolName ?? null,
           toolDomain: input.toolDomain ?? null,
           status: input.status,
-          httpStatus: input.httpStatus ?? null,
+          httpStatus: httpStatus ?? null,
         },
         // Hosts may reuse an RPC ID on separate HTTP requests.
         idempotencyKey: `mcp:${mcpSurface}:${eventId}`,

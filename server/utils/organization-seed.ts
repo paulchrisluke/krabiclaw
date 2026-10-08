@@ -5,7 +5,7 @@ import { platformLocale } from '~/shared/platform-locales'
 // All records use source='template' so ChowBot can identify and reference them.
 
 import { getVerticalCopy, type OrganizationVertical } from "~/utils/vertical-copy";
-import { executeBatch, queryFirst, type BatchQuery, type DbClient } from "~/server/db";
+import { executeBatch, queryAll, type BatchQuery, type DbClient } from "~/server/db";
 import { createTenantPagesBatch } from "~/server/utils/content/pages";
 
 function uid(prefix: string) {
@@ -34,16 +34,17 @@ export async function seedNewOrganization(
   }
 
   // Reuse existing location on resume (provisioning may have failed mid-seed)
-  const existing = await queryFirst<{ id: string }>(
+  const locations = await queryAll<{ id: string }>(
     db,
-    "SELECT id FROM business_locations WHERE organization_id = ? AND slug = ? LIMIT 1",
-    [organizationId, "main"],
+    "SELECT id FROM business_locations WHERE organization_id = ? LIMIT 2",
+    [organizationId],
   );
-  const locationId = existing?.id ?? uid("loc");
+  if (locations.length > 1) throw new Error('Onboarding requires exactly one location')
+  const locationId = locations[0]?.id ?? uid("loc");
 
   const statements: BatchQuery[] = [];
 
-  statements.push({
+  if (!locations.length) statements.push({
     query: `
     INSERT OR IGNORE INTO business_locations
       (id, organization_id, slug, title, rating, review_count, status)
@@ -54,7 +55,7 @@ export async function seedNewOrganization(
 
 
   // ── Canonical tenant pages (structural records only) ──────────────────────
-  await executeBatch(db, statements);
+  if (statements.length) await executeBatch(db, statements);
 
   // `title` is the page's name as a person reads it — its document title and,
   // for every page but the home page, its heading. The key beside it is an
@@ -73,8 +74,6 @@ export async function seedNewOrganization(
   if (vertical === 'service') {
     for (const [page, path, title, pageType] of [
       ['services', '/services', pageTitle('services'), 'system'],
-      ['pricing', '/pricing', pageTitle('pricing'), 'system'],
-      ['donate', '/donate', pageTitle('donate'), 'system'],
       ['schedule', '/schedule', pageTitle('schedule'), 'system'],
       ['privacy', '/policies/privacy', pageTitle('privacy'), 'legal'],
       ['terms', '/policies/terms', pageTitle('terms'), 'legal'],
@@ -92,18 +91,17 @@ export async function seedNewOrganization(
     }
     trustedSystemPage: boolean
   }> = []
+  const existingPages = await queryAll<{ path: string }>(db, "SELECT path FROM content_documents WHERE organization_id = ? AND kind = 'page' AND row_role = 'root'", [organizationId])
+  const existingPaths = new Set(existingPages.map(page => page.path))
   for (const definition of templatePages.values()) {
+    if (existingPaths.has(definition.path)) continue
     const blocks: Array<{ id: string; type: string; position: number; data: Record<string, unknown> }> = [
       {
         id: uid('block'),
         type: 'hero',
         position: 0,
-        // The home page's heading is the owner's headline, which onboarding
-        // collects, so it starts empty. Every other page's heading is the page's
-        // own name and is known here — leaving it null made those pages depend
-        // on a reader falling through to the document title.
         data: {
-          title: definition.path === '/' ? null : definition.title,
+          title: definition.path === '/' ? name : definition.title,
           subtitle: null,
         },
       },
@@ -116,7 +114,7 @@ export async function seedNewOrganization(
       },
     })
   }
-  await createTenantPagesBatch(db, { env, organizationId, pages: pagesToCreate })
+  if (pagesToCreate.length) await createTenantPagesBatch(db, { env, organizationId, pages: pagesToCreate })
 
   // ── Consultation settings (professional services only) ────────────────────
   // Service sites start with native booking. Initialization preserves any

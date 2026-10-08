@@ -1,4 +1,8 @@
 {
+  "booking.provider_title": "Người bạn sẽ gặp",
+  "booking.provider_loading": "Đang tải hồ sơ…",
+  "booking.provider_failed": "Không thể tải hồ sơ",
+  "booking.provider_retry": "Thử lại",
   "booking_policy.deposit_amount": "Tiền đặt cọc: {amount} mỗi lượt đặt bàn.",
   "booking_policy.deposit_amount_exclusive": "Tiền đặt cọc: {amount} mỗi lượt đặt bàn, chưa bao gồm thuế áp dụng.",
   "reservations.deposit_label": "Tiền đặt cọc đặt bàn",

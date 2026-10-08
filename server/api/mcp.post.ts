@@ -410,7 +410,7 @@ export default defineHandler(async (event) => {
       logMcpEventDetached(event, cfEnv.DB, {
         userId: mcpUser?.userId, requestId, method: 'tools/call', toolName,
         toolDomain: tool?.domain ?? null, isMutating: isMcpMutatingTool(tool),
-        arguments: { ...((params?.arguments ?? {}) as Record<string, unknown>), _request: { meta: params?._meta, user_agent: event.req.headers.get('user-agent'), request_id: getRequestDataMetrics(event).requestId } },
+        arguments: params?.arguments ?? {},
         result: wire.result ?? wire.error, status: failed ? 'error' : 'success',
         errorMessage: wire.error?.message ?? (failed ? wire.result?.content?.filter(entry => entry.type === 'text').map(entry => entry.text).join('\n') : null),
         httpStatus: response.status, jsonrpcErrorCode: wire.error?.code,

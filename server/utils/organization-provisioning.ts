@@ -113,12 +113,13 @@ export async function provisionOrganization(
       if (!isRetryable) {
         return { status: 409, data: { error: 'This subdomain is already taken' } }
       }
+      await adapter.updateOrganization(organizationId, { name })
       // Retry: the same subdomain in the same explicit organization is still
       // pending/failed from a previous attempt. It may have been left under a
       // stale default (theme_id='saya-theme-v1', vertical='restaurant') —
       // correct both here so a professional-service retry can never be left on Saya.
-      await execute(db, `UPDATE organization SET theme_id = ?, vertical = ?, updated_at = ? WHERE id = ?`,
-        [themeId, vertical, now, organizationId])
+      await execute(db, `UPDATE organization SET theme_id = ?, vertical = ?, default_currency = COALESCE(?, default_currency), onboarding_status = 'pending', updated_at = ? WHERE id = ?`,
+        [themeId, vertical, defaultCurrency, now, organizationId])
       return await performSeeding(env, db, organizationId, name, vertical, normalizedSubdomain, params.activate !== false, params.origin)
     }
     // The guard above answers "is this subdomain taken", which was the only
@@ -138,6 +139,7 @@ export async function provisionOrganization(
     if (await isSystemSubdomainSpent(env, db, normalizedSubdomain)) {
       return { status: 409, data: { error: 'This subdomain is permanently unavailable' } }
     }
+    await adapter.updateOrganization(organizationId, { name })
 
     try {
       await executeBatch(db, [

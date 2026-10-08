@@ -1,6 +1,9 @@
 import type { McpToolDefinition } from './shared'
 import { HTTPError } from 'nitro'
-import { SUPPORTED_CURRENCIES, currentUserObject, globalTool, pageInfoObject, paginationInputSchema, organizationSummaryItem, organizationTool, withToolAnnotations } from './shared'
+import { SUPPORTED_CURRENCIES, currentUserObject, globalTool, pageInfoObject, paginationInputSchema, organizationSummaryItem, organizationTool, withToolAnnotations, workspaceContextObject } from './shared'
+import { ALL_VERTICALS } from '~/utils/vertical-copy'
+import { PLATFORM_LOCALES } from '~/shared/platform-locales'
+import { timezoneSchema } from '~/utils/timezone'
 import { setPublicConsultationMode } from '~/server/utils/professional-services'
 import type { McpExecutorContext } from './execution'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
@@ -63,6 +66,27 @@ const teamObject = { type: 'object', properties: {
 const teamOutput = { type: 'object', properties: { team: teamObject }, required: ['team'] }
 
 export const ORGANIZATIONS_TOOLS: McpToolDefinition[] = [
+  globalTool(withToolAnnotations({
+    name: 'create_website', description: 'Create and publish a new business website owned by the signed-in user, then select it as the workspace. Repeat the same idempotency key and answers when retrying.',
+    domain: 'organizations', minimumRole: 'admin',
+    inputSchema: { type: 'object', properties: {
+      name: { type: 'string', minLength: 1, maxLength: 200, pattern: '\\S' },
+      vertical: { type: 'string', enum: ALL_VERTICALS },
+      source_locale: { type: 'string', enum: PLATFORM_LOCALES.map(locale => locale.locale) },
+      currency: { type: 'string', enum: SUPPORTED_CURRENCIES }, timezone: timezoneSchema,
+      subdomain: { type: 'string', minLength: 1, maxLength: 63, pattern: '^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$', description: 'Chosen website address before .krabiclaw.com.' },
+      idempotency_key: { type: 'string', minLength: 1, maxLength: 200, pattern: '\\S' },
+      description: { type: 'string', maxLength: 2000 },
+      location: { type: 'object', properties: {
+        street_address: { type: 'string' }, city: { type: 'string' }, region: { type: 'string' }, postal_code: { type: 'string' },
+        country: { type: 'string', pattern: '^[A-Z]{2}$' }, phone: { type: 'string' }, website_url: { type: 'string', format: 'uri' },
+      }, additionalProperties: false },
+    }, required: ['name', 'vertical', 'source_locale', 'currency', 'timezone', 'subdomain', 'idempotency_key'], additionalProperties: false },
+    outputSchema: { type: 'object', properties: {
+      organization_id: { type: 'string' }, location_id: { type: 'string' }, draft_id: { type: 'string' },
+      public_url: { type: 'string' }, ready: { const: true }, context: workspaceContextObject,
+    }, required: ['organization_id', 'location_id', 'draft_id', 'public_url', 'ready', 'context'], additionalProperties: false },
+  })),
   organizationTool({
     name: 'list_teams', description: 'Read the business’s Better Auth teams and their members. Choose a team for an offering when any available member can host its bookings.',
     domain: 'organizations', minimumRole: 'admin', outputSchema: { type: 'object', properties: { teams: { type: 'array', items: teamObject } }, required: ['teams'] },

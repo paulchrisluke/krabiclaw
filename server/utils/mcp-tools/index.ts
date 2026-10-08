@@ -21,6 +21,8 @@ import type { H3Event } from 'nitro'
 import { queryFirst } from '~/server/db'
 import { requireMcpOrganization, requireMcpUser, type McpUserContext } from '~/server/utils/mcp-auth'
 import { resolveMcpWorkspace } from '~/server/utils/mcp-context'
+import { createManualOnboardingDraft } from '~/server/utils/onboarding-drafts'
+import { activateOnboardingDraft } from '~/server/utils/onboarding-apply'
 import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { fromJsonSchema, type JsonSchemaType } from '@modelcontextprotocol/server'
@@ -141,6 +143,20 @@ export async function executeMcpToolCall(
   // Called by registered SDK tools after schema validation and workspace resolution.
   const normalizedArguments = rawArguments;
 
+  if (toolName === 'create_website') {
+    const user = authenticatedUser ?? await requireMcpUser(event)
+    const draft = await createManualOnboardingDraft(user.db, user.userId, normalizedArguments as Parameters<typeof createManualOnboardingDraft>[2])
+    const created = await activateOnboardingDraft(user.env, user.db, { userId: user.userId, draftId: draft.id, origin: event.req })
+    event.context.mcpExecutionContext = { organizationId: created.organizationId, locationId: created.locationId }
+    try {
+      await upsertMcpWorkspacePreference(user.db, { userId: user.userId, organizationId: created.organizationId, locationId: created.locationId })
+      const workspace = await resolveMcpWorkspace(user.db, user.env, user.userId, { organizationId: created.organizationId, locationId: created.locationId, requireOrganization: true, requireLocation: true })
+      return { organization_id: created.organizationId, location_id: created.locationId, draft_id: draft.id, public_url: created.publicUrl, ready: true, context: workspaceContextPayload(workspace.organization, workspace.location) }
+    } catch (error) {
+      throw new HTTPError({ statusCode: 500, statusMessage: 'Website is live, but workspace selection failed', data: { code: 'WEBSITE_WORKSPACE_SELECTION_FAILED', organization_id: created.organizationId, draft_id: draft.id }, cause: error })
+    }
+  }
+
   if (toolName === "list_organizations") {
     const user = authenticatedUser ?? await requireMcpUser(event);
     const workspace = await resolveMcpWorkspace(
@@ -165,7 +181,7 @@ export async function executeMcpToolCall(
     return renderStructuredResponse(
       { organizations: page.items, currentUser, page_info: page.page_info },
       organizations.length === 0
-        ? "You have no organizations yet. Create your site and locations in the Krabiclaw CMS, then return here to manage their content."
+        ? "You have no websites yet. Use create_website to create your business website."
         : `You have ${organizations.length} organization${organizations.length > 1 ? "s" : ""}: ${organizations.map((entry) => entry.name).join(", ")}.`,
     );
   }

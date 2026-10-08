@@ -71,6 +71,8 @@ export function asMcpError(error: unknown): McpErrorShape {
       ...('code' in details && typeof details.code === 'string' ? { code: details.code } : {}),
       ...('missing' in details && Array.isArray(details.missing) && details.missing.every(field => typeof field === 'string' && /^[a-zA-Z_][a-zA-Z0-9_.]*$/u.test(field)) ? { missing: details.missing } : {}),
       ...('dashboard_url' in details && typeof details.dashboard_url === 'string' ? { dashboard_url: details.dashboard_url } : {}),
+      ...('draft_id' in details && typeof details.draft_id === 'string' ? { draft_id: details.draft_id } : {}),
+      ...('organization_id' in details && typeof details.organization_id === 'string' ? { organization_id: details.organization_id } : {}),
     }
     return { code: [400, 404].includes(status) ? MCP_ERROR.invalidParams : MCP_ERROR.internal, message,
       kind: status === 401 ? 'auth' : status === 403 ? 'forbidden' : status >= 500 ? 'transport' : 'tool_execution',

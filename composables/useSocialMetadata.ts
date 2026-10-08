@@ -98,8 +98,9 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
     const origin = template === 'platform'
       ? config.public.siteUrl
       : requestURL.origin
-    const exactRepresentation = localeRepresentations.value.find(item => item.locale === publicLocale.value)
-    if (publicLocale.value !== 'en' && !exactRepresentation) {
+    const privatePage = value.discoverability === 'private'
+    const exactRepresentation = privatePage ? undefined : localeRepresentations.value.find(item => item.locale === publicLocale.value)
+    if (!privatePage && publicLocale.value !== 'en' && !exactRepresentation) {
       throw createError({ statusCode: 404, statusMessage: 'Localized route representation was not found' })
     }
     const canonicalUrl = resolveSeoUrl(value.canonicalPath ?? exactRepresentation?.route_path ?? value.path, origin)
@@ -133,7 +134,7 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
   useHead(() => {
     const resolved = normalized.value
     if (!resolved) return {}
-    const alternateLinks: Array<{ rel: 'alternate'; hreflang: string; href: string }> = localeRepresentations.value.map(representation => ({
+    const alternateLinks: Array<{ rel: 'alternate'; hreflang: string; href: string }> = (resolved.value.discoverability === 'private' ? [] : localeRepresentations.value).map(representation => ({
       rel: 'alternate',
       hreflang: representation.locale,
       href: resolveSeoUrl(representation.route_path, resolved.origin),

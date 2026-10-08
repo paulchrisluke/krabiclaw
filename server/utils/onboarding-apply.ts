@@ -17,10 +17,15 @@ import { execute, executeBatch, queryAll, queryFirst, type BatchQuery } from '~/
 import { resourceLocalizationDeletionQueries } from '~/server/utils/localization'
 import { planProductCreateWrites, slugCandidate } from '~/server/utils/product-management'
 import { updateLocation } from '~/server/utils/location-management'
-import { getDraftMedia, onboardingPageBlocks, onboardingPagePath, onboardingPageType, type OnboardingDraftPayload } from '~/server/utils/onboarding-drafts'
+import { getDraftMedia, onboardingPageBlocks, onboardingPagePath, onboardingPageType, parseOnboardingDraftPayload, type OnboardingDraftPayload } from '~/server/utils/onboarding-drafts'
 import { createMediaAsset, insertInitialMediaPlacements, type CreateInput } from '~/server/utils/media-asset-manager'
-import { applyOnboardingTenantPages, prepareTenantPageDelete, refreshTenantPageCard } from '~/server/utils/content/pages'
-import { createOrganization, provisionOrganization } from '~/server/utils/organization-provisioning'
+import { applyOnboardingTenantPages, getPublishedTenantPage, prepareTenantPageDelete, refreshTenantPageCard } from '~/server/utils/content/pages'
+import { activateOrganization, completeOnboarding, createOrganization, provisionOrganization } from '~/server/utils/organization-provisioning'
+import { isOrganizationWideRole, organizationAdapter, resolveUserOrganization } from '~/server/utils/member-access'
+import { organizationPublicUrl } from '~/server/utils/domains'
+import { refreshSocialCard } from '~/server/utils/social-card'
+import { purgePublicResourceCacheNow } from '~/server/utils/public-resource-cache'
+import { isValidTimezone } from '~/utils/timezone'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import type { OrganizationVertical } from '~/utils/vertical-copy'
 import type { CurrencyCode } from '~/shared/currencies'
@@ -46,6 +51,74 @@ export interface OnboardingDraftRow {
   vertical: OrganizationVertical
   subdomain_candidate: string
   source_locale: string | null
+  default_currency?: CurrencyCode | null
+}
+
+export async function activateOnboardingDraft(env: CloudflareEnv, db: D1Database, input: {
+  userId: string
+  draftId: string
+  origin: { headers: Headers } | null
+  activateSession?: (_organizationId: string) => Promise<void>
+}) {
+  const draft = await queryFirst<OnboardingDraftRow & { user_id: string; status: string; payload_json: string }>(db,
+    'SELECT * FROM onboarding_drafts WHERE id = ? AND user_id = ? LIMIT 1', [input.draftId, input.userId])
+  if (!draft) throw new HTTPError({ statusCode: 404, statusMessage: 'Draft not found' })
+  const payload = parseOnboardingDraftPayload(draft.payload_json)
+  const { currency, timezone, sourceLocale } = payload.source.details
+  if (!currency || !isValidTimezone(timezone) || !sourceLocale || !draft.subdomain_candidate) {
+    throw new HTTPError({ statusCode: 400, statusMessage: 'Website language, currency, timezone and address are required' })
+  }
+  let organizationId = draft.organization_id
+  if (organizationId) {
+    const membership = await resolveUserOrganization(env, { userId: input.userId, organizationId })
+    if (!membership || !isOrganizationWideRole(membership.role)) throw new HTTPError({ statusCode: 403, statusMessage: 'Organization-level access required', data: { code: 'WEBSITE_CREATION_ACCESS_DENIED', draft_id: draft.id, organization_id: organizationId } })
+  }
+  const existing = organizationId ? await queryFirst<{ onboarding_status: string }>(db,
+    'SELECT onboarding_status FROM organization WHERE id = ?', [organizationId]) : null
+  const live = existing?.onboarding_status === 'active'
+  if (!live) {
+    if (draft.status !== 'active') throw new HTTPError({ statusCode: 409, statusMessage: 'Website creation is already in progress', data: { code: 'WEBSITE_CREATION_IN_PROGRESS', draft_id: draft.id, organization_id: organizationId } })
+    const claim = await execute(db, "UPDATE onboarding_drafts SET status = 'committing', updated_at = ? WHERE id = ? AND status = 'active'", [new Date().toISOString(), draft.id])
+    if (!claim.meta.changes) throw new HTTPError({ statusCode: 409, statusMessage: 'Website creation is already in progress', data: { code: 'WEBSITE_CREATION_IN_PROGRESS', draft_id: draft.id, organization_id: organizationId } })
+  }
+  try {
+    if (!live) {
+      const target = await ensureOnboardingTarget(env, db, input.userId, { ...draft, source_locale: sourceLocale, default_currency: currency })
+      if ('error' in target) throw new HTTPError({ statusCode: target.status, statusMessage: target.error })
+      organizationId = target.target.organizationId
+      const applied = await applyOnboardingDraft(env, db, { userId: input.userId, target: target.target, payload, defaultCurrency: currency, timezone })
+      if ('error' in applied) throw new HTTPError({ statusCode: applied.status, statusMessage: applied.error })
+      await activateOrganization(db, organizationId)
+    }
+    if (!organizationId) throw new Error('Activated website has no organization')
+    const now = new Date().toISOString()
+    await execute(db, "UPDATE onboarding_drafts SET status = 'committed', committed_at = COALESCE(committed_at, ?), updated_at = ? WHERE id = ?", [now, now, draft.id])
+    const completion = await completeOnboarding(env, db, organizationId, input.origin)
+    try {
+      if (input.activateSession) await input.activateSession(organizationId)
+      await refreshSocialCard({ db, env, owner: { owner_type: 'organization', owner_id: organizationId }, actorId: input.userId })
+    } finally {
+      await purgePublicResourceCacheNow(env, organizationId)
+    }
+    const organization = await resolveUserOrganization(env, { userId: input.userId, organizationId })
+    const locations = await queryAll<{ id: string; slug: string | null }>(db, "SELECT id, slug FROM business_locations WHERE organization_id = ? AND status = 'active'", [organizationId])
+    const publicUrl = await organizationPublicUrl(db, organizationId)
+    const site = await queryFirst<{ onboarding_status: string }>(db, 'SELECT onboarding_status FROM organization WHERE id = ?', [organizationId])
+    const homepage = await getPublishedTenantPage(db, organizationId, '/', sourceLocale)
+    if (!organization || site?.onboarding_status !== 'active' || !homepage?.blocks.length || locations.length !== 1 || !publicUrl) throw new Error('Activated website could not be read back')
+    if (completion.measurement.status === 'failed' || completion.operator_email.status === 'failed') {
+      throw new Error([completion.measurement.status === 'failed' ? completion.measurement.reason : null, completion.operator_email.status === 'failed' ? completion.operator_email.reason : null].filter(Boolean).join('; '))
+    }
+    return { organizationId, orgSlug: organization.slug, subdomain: draft.subdomain_candidate, locationId: locations[0]!.id, locationSlug: locations[0]!.slug, publicUrl, ...completion }
+  } catch (error) {
+    const recorded = await queryFirst<{ organization_id: string | null; onboarding_status: string | null }>(db,
+      'SELECT d.organization_id, o.onboarding_status FROM onboarding_drafts d LEFT JOIN organization o ON o.id = d.organization_id WHERE d.id = ?', [draft.id])
+    if (recorded?.onboarding_status !== 'active') await execute(db, "UPDATE onboarding_drafts SET status = 'active', updated_at = ? WHERE id = ? AND status = 'committing'", [new Date().toISOString(), draft.id])
+    const statusCode = error && typeof error === 'object' && 'statusCode' in error ? Number(error.statusCode) : 500
+    const details = error && typeof error === 'object' && 'data' in error && error.data && typeof error.data === 'object' ? error.data : {}
+    const message = error && typeof error === 'object' && 'statusMessage' in error && typeof error.statusMessage === 'string' ? error.statusMessage : error instanceof Error ? error.message : String(error)
+    throw new HTTPError({ statusCode, statusMessage: message, data: { code: 'WEBSITE_CREATION_FAILED', ...details, draft_id: draft.id, organization_id: recorded?.organization_id ?? null }, cause: error })
+  }
 }
 
 function summarizeBatchQueries(batchQueries: BatchQuery[]) {
@@ -89,47 +162,34 @@ export async function ensureOnboardingTarget(
     const claimed = await queryFirst<{ organization_id: string | null }>(db, `
       SELECT organization_id FROM onboarding_drafts WHERE id = ? LIMIT 1
     `, [draft.id])
+    if (claimed?.organization_id !== created.organizationId) {
+      const unclaimed = await queryFirst<{ id: string }>(db, `
+        SELECT id FROM organization WHERE id = ? AND subdomain IS NULL AND onboarding_status <> 'active'
+          AND NOT EXISTS (SELECT 1 FROM onboarding_drafts WHERE organization_id = organization.id)
+      `, [created.organizationId])
+      if (unclaimed) await (await organizationAdapter(env)).deleteOrganization(unclaimed.id)
+    }
     if (!claimed?.organization_id) return { status: 500, error: 'Could not record the new organization.' }
     organizationId = claimed.organization_id
   }
 
-  // Provisioned once, on the first save. Provisioning seeds a location and the
-  // system pages; running it again after this draft has renamed that location
-  // would seed a second one, so a later save resolves the existing tenant
-  // instead.
-  const existing = await queryFirst<{ subdomain: string | null }>(db, `
-    SELECT subdomain FROM organization
-    WHERE id = ? AND subdomain = ? AND onboarding_status = 'pending'
-    LIMIT 1
-  `, [organizationId, draft.subdomain_candidate])
-
-  let subdomain: string
-  if (existing?.subdomain) {
-    subdomain = existing.subdomain
-  } else {
-    const result = await provisionOrganization(env as ProvisioningEnv, db, userId, {
-      organizationId,
-      name: draft.name,
-      subdomain: draft.subdomain_candidate,
-      vertical: draft.vertical,
-      // The currency step has not been reached on the save that provisions this
-      // tenant. It stays unset until the owner answers, and applyOnboardingDraft
-      // writes it from that answer on the save that carries it.
-      defaultCurrency: null,
-      sourceLocale: draft.source_locale,
-      activate: false,
-      // Provisioned pending; nothing here is an onboarding outcome.
-      origin: null,
-    })
-    if (result.status !== 200) {
-      return {
-        status: result.status || 500,
-        error: typeof result.data.error === 'string' ? result.data.error : 'Could not provision this organization. Please try again.',
-      }
+  const result = await provisionOrganization(env as ProvisioningEnv, db, userId, {
+    organizationId,
+    name: draft.name,
+    subdomain: draft.subdomain_candidate,
+    vertical: draft.vertical,
+    defaultCurrency: draft.default_currency ?? null,
+    sourceLocale: draft.source_locale,
+    activate: false,
+    origin: null,
+  })
+  if (result.status !== 200) {
+    return {
+      status: result.status || 500,
+      error: typeof result.data.error === 'string' ? result.data.error : 'Could not provision this organization. Please try again.',
     }
-    subdomain = result.data.subdomain as string
-    await execute(db, "UPDATE organization SET onboarding_status = 'pending', updated_at = ? WHERE id = ? AND onboarding_status = 'failed'", [new Date().toISOString(), organizationId])
   }
+  const subdomain = result.data.subdomain as string
 
   // An onboarding tenant has exactly one location. More than one means something
   // seeded a second one, which would make every later save ambiguous, so this

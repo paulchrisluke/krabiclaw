@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:c2467747b0953730c402c8770ebc5960f836f46b833813e3c9b3303caed651a1",
+  "fingerprint": "sha256:f3f1aab47e0374edcea36511d46a8ba748766ff5855ef827828d42b9435ae6fd",
   "tools": [
     {
       "name": "append_content_block",
@@ -14403,6 +14403,200 @@
         },
         "required": [
           "team"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "create_website",
+      "description": "Create and publish a new business website owned by the signed-in user, then select it as the workspace. Repeat the same idempotency key and answers when retrying.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "enum": [
+              "THB",
+              "USD",
+              "EUR",
+              "GBP",
+              "JPY",
+              "AUD",
+              "CAD",
+              "SGD",
+              "HKD",
+              "MYR",
+              "IDR",
+              "PHP",
+              "VND",
+              "INR"
+            ],
+            "type": "string"
+          },
+          "description": {
+            "maxLength": 2000,
+            "type": "string"
+          },
+          "idempotency_key": {
+            "maxLength": 200,
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string"
+          },
+          "location": {
+            "additionalProperties": false,
+            "properties": {
+              "city": {
+                "type": "string"
+              },
+              "country": {
+                "pattern": "^[A-Z]{2}$",
+                "type": "string"
+              },
+              "phone": {
+                "type": "string"
+              },
+              "postal_code": {
+                "type": "string"
+              },
+              "region": {
+                "type": "string"
+              },
+              "street_address": {
+                "type": "string"
+              },
+              "website_url": {
+                "format": "uri",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string"
+          },
+          "source_locale": {
+            "enum": [
+              "en",
+              "ja",
+              "th",
+              "vi"
+            ],
+            "type": "string"
+          },
+          "subdomain": {
+            "description": "Chosen website address before .krabiclaw.com.",
+            "maxLength": 63,
+            "minLength": 1,
+            "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$",
+            "type": "string"
+          },
+          "timezone": {
+            "description": "Explicit IANA timezone identifier, such as Asia/Bangkok. Missing timezone is an error, never the browser timezone.",
+            "minLength": 1,
+            "type": "string"
+          },
+          "vertical": {
+            "enum": [
+              "restaurant",
+              "experience",
+              "service"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "vertical",
+          "source_locale",
+          "currency",
+          "timezone",
+          "subdomain",
+          "idempotency_key"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "context": {
+            "properties": {
+              "location_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "location_slug": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "location_title": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "organization_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "organization_name": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "organization_public_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "organization_slug": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "organization_subdomain": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "draft_id": {
+            "type": "string"
+          },
+          "location_id": {
+            "type": "string"
+          },
+          "organization_id": {
+            "type": "string"
+          },
+          "public_url": {
+            "type": "string"
+          },
+          "ready": {
+            "const": true
+          }
+        },
+        "required": [
+          "organization_id",
+          "location_id",
+          "draft_id",
+          "public_url",
+          "ready",
+          "context"
         ],
         "type": "object"
       }
@@ -33148,6 +33342,9 @@
               "resource_type": {
                 "const": "organization"
               },
+              "route_path": {
+                "type": "null"
+              },
               "values": {
                 "additionalProperties": false,
                 "properties": {
@@ -33196,6 +33393,9 @@
             "properties": {
               "resource_type": {
                 "const": "business_location"
+              },
+              "route_path": {
+                "type": "null"
               },
               "values": {
                 "additionalProperties": false,
@@ -33261,6 +33461,9 @@
             "properties": {
               "resource_type": {
                 "const": "product"
+              },
+              "route_path": {
+                "type": "null"
               },
               "values": {
                 "additionalProperties": false,
@@ -33466,6 +33669,9 @@
               "resource_type": {
                 "const": "collection"
               },
+              "route_path": {
+                "type": "null"
+              },
               "values": {
                 "additionalProperties": false,
                 "properties": {
@@ -33485,6 +33691,9 @@
               "resource_type": {
                 "const": "article_category"
               },
+              "route_path": {
+                "type": "null"
+              },
               "values": {
                 "additionalProperties": false,
                 "properties": {
@@ -33503,6 +33712,9 @@
             "properties": {
               "resource_type": {
                 "const": "media_asset"
+              },
+              "route_path": {
+                "type": "null"
               },
               "values": {
                 "additionalProperties": false,
@@ -34395,7 +34607,7 @@
             "type": "string"
           },
           "route_path": {
-            "description": "Required localized public path for pages, articles and posts; omit for authored Q&A.",
+            "description": "Document path including the language prefix. Resource routes are automatic.",
             "type": [
               "string",
               "null"
@@ -41203,10 +41415,7 @@
                   "type": "string"
                 },
                 "route_path": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
+                  "type": "null"
                 },
                 "values": {
                   "type": "object"
