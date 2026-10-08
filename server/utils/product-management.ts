@@ -1478,13 +1478,13 @@ export async function productBookingReadiness(db: DbClient, organizationId: stri
   const sessions = (await listSessions(db, { organizationId, productId: product.id, fromInstant: new Date().toISOString(), toInstant: new Date(Date.now() + 400 * 86_400_000).toISOString() }))
     .filter(session => session.location_id === null
       ? Boolean(product.booking?.online_timezone)
-      : product.locations.some(location => location.location_id === session.location_id && location.active && location.published))
+      : product.locations.some(location => location.location_id === session.location_id && location.published && (!options.requireAllocation || location.active)))
   // Scheduled seats prove the booking capability even while full or closed.
   // Publication additionally guards a real allocation in its atomic write.
   const candidate = sessions.find(session => !session.is_full)
     ?? sessions.find(session => session.capacity === null || session.capacity > 0)
   const scopes = [...new Set([
-    ...product.locations.filter(location => location.active && location.published).map(location => location.location_id),
+    ...product.locations.filter(location => location.published && (!options.requireAllocation || location.active)).map(location => location.location_id),
     ...(product.booking?.online_timezone ? [null] : []),
   ])]
   const variants = product.variants.filter(variant => variant.active)
@@ -1512,16 +1512,18 @@ export async function setProductPublication(db: DbClient, input: {
 }): Promise<void> {
   const product = await requireOrganizationProduct(db, input)
   let readiness: Awaited<ReturnType<typeof productBookingReadiness>> | undefined
+  let alreadyPublished = false
   if (input.published && product.kind === 'experience') {
-    readiness = await productBookingReadiness(db, input.organizationId, product, { requireAllocation: true })
+    alreadyPublished = product.publications.some(publication => publication.organization_id === input.organizationId && publication.published)
+    readiness = await productBookingReadiness(db, input.organizationId, product, { requireAllocation: !alreadyPublished })
     if (!readiness.ready) throw new HTTPError({ statusCode: 409, statusMessage: 'This experience needs booking details before it can be published', data: { code: 'EXPERIENCE_BOOKING_INCOMPLETE', product_id: product.id, missing: readiness.missing } })
   }
   const now = new Date().toISOString()
   await executeBatch(db, [{
     query: `INSERT INTO product_publications (organization_id, product_id, published, created_at, updated_at, created_by, updated_by)
-            VALUES (?, ?, CASE WHEN EXISTS(SELECT 1 FROM products p WHERE p.organization_id=? AND p.id=? AND p.updated_at=?) ${readiness?.allocation ? `AND (${readiness.allocation.query})` : ''} THEN ? ELSE NULL END, ?, ?, ?, ?)
+            VALUES (?, ?, CASE WHEN EXISTS(SELECT 1 FROM products p WHERE p.organization_id=? AND p.id=? AND p.updated_at=?) ${readiness?.allocation ? `AND (${readiness.allocation.query})` : ''} ${alreadyPublished ? 'AND EXISTS(SELECT 1 FROM product_publications WHERE organization_id=? AND product_id=? AND published=1)' : ''} THEN ? ELSE NULL END, ?, ?, ?, ?)
             ON CONFLICT (product_id, organization_id) DO UPDATE SET published = excluded.published, updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
-    params: [input.organizationId, input.productId, input.organizationId, input.productId, product.updated_at, ...(readiness?.allocation?.params ?? []), input.published ? 1 : 0, now, now, input.actor.actorId, input.actor.actorId],
+    params: [input.organizationId, input.productId, input.organizationId, input.productId, product.updated_at, ...(readiness?.allocation?.params ?? []), ...(alreadyPublished ? [input.organizationId, input.productId] : []), input.published ? 1 : 0, now, now, input.actor.actorId, input.actor.actorId],
   }, publicResourceCacheInvalidationQuery(input.organizationId, 'product_publication_changed')], { operation: 'Set product publication' }).catch(error => {
     if (/NOT NULL constraint failed: product_publications\.published/.test(error instanceof Error ? error.message : String(error))) throw new HTTPError({statusCode:409,statusMessage:'The offering or its availability changed before publication. Review it and retry.',cause:error})
     throw error

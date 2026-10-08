@@ -22,7 +22,7 @@ import {
 } from '../../server/utils/product-management.ts'
 import { AmbiguousPriceError } from '../../shared/prices.ts'
 import { claimSessionCapacity, listSessions } from '../../server/utils/availability.ts'
-import { loadPublicProductCollection } from '../../server/utils/public-products.ts'
+import { loadPublicExperienceDetail, loadPublicProductCollection, loadPublicProductDetail, loadPublicProductSessions } from '../../server/utils/public-products.ts'
 import { listPublicBookingSessions } from '../../server/utils/public-session-booking.ts'
 import type { CloudflareEnv } from '../../server/utils/auth.ts'
 
@@ -82,6 +82,7 @@ test('product kind narrows organization and location catalogues before paginatio
 test('public experiences require a configured booking flow and retain full or temporarily closed sessions', { timeout: 120_000 }, async () => {
   const { runtime, db } = await boot()
   try {
+    await db.prepare("INSERT INTO organization_locales (id, organization_id, locale, is_source, status) VALUES ('org-en', ?, 'en', 1, 'published')").bind(ORG).run()
     const legacy = await createProduct(db, { organizationId: ORG, actor: ACTOR, product: {
       kind: 'experience', name: 'Omakase', active: true, variants: [{ name: 'Seat', prices: [{ unit_amount: 130000, currency: 'THB' }] }],
     }, publication: { published: false } })
@@ -117,14 +118,36 @@ test('public experiences require a configured booking flow and retain full or te
       .bind(JSON.stringify([{ kind: 'closure', starts_on: tomorrow, ends_on: tomorrow, note: 'Private event' }])).run()
     assert.deepEqual(await productBookingReadiness(db, ORG, await getProduct(db, ORG, legacy.id)), { ready: true, missing: [] })
     assert.deepEqual((await visible()).sort(), ids, 'a temporary closure changes availability, not the published experience')
+    await db.prepare("UPDATE business_locations SET special_hours = NULL WHERE id = 'loc-a'").run()
+    assert.equal((await productBookingReadiness(db, ORG, await getProduct(db, ORG, legacy.id), { requireAllocation: true })).ready, true)
+    await setProductLocation(db, { organizationId: ORG, productId: legacy.id, locationId: 'loc-a', active: false, published: true, actor: ACTOR })
+    const pausedOffering = await getProduct(db, ORG, legacy.id)
+    assert.deepEqual(await productBookingReadiness(db, ORG, pausedOffering), { ready: true, missing: [] })
+    assert.equal((await productBookingReadiness(db, ORG, pausedOffering, { requireAllocation: true })).ready, false)
+    await setProductPublication(db, { organizationId: ORG, productId: legacy.id, published: true, actor: ACTOR })
+    assert.deepEqual((await visible()).sort(), ids, 'pausing a location offering retains its published information')
+    const experienceDetail = await loadPublicExperienceDetail({} as CloudflareEnv, db, ORG, false, legacy.slug)
+    assert.equal(experienceDetail?.product.id, legacy.id)
+    assert.equal(experienceDetail?.location, null)
+    assert.deepEqual(await loadPublicProductSessions(db, experienceDetail!, {} as CloudflareEnv), [], 'an in-person-only paused offering never requests online sessions')
+    const locationDetail = await loadPublicProductDetail({} as CloudflareEnv, db, ORG, 'experiences', false, 'loc-a', legacy.slug)
+    assert.equal(locationDetail?.product.id, legacy.id)
+    assert.equal(locationDetail?.location.id, 'loc-a')
+    assert.deepEqual(await loadPublicProductSessions(db, locationDetail!, {} as CloudflareEnv), [], 'a paused location does not advertise sessions')
+    await assert.rejects(listPublicBookingSessions(db, ORG, legacy.slug, {} as CloudflareEnv, 'loc-a'), (error: { statusCode?: number }) => error.statusCode === 404)
     for (const product of [legacy, external]) {
       await updateProduct(db, { organizationId: ORG, productId: product.id, actor: ACTOR, patch: { active: false } })
       const paused = await getProduct(db, ORG, product.id)
+      await setProductPublication(db, { organizationId: ORG, productId: product.id, published: true, actor: ACTOR })
       assert.deepEqual(await productBookingReadiness(db, ORG, paused), { ready: true, missing: [] }, 'pausing bookings retains a configured public experience')
       assert.equal((await productBookingReadiness(db, ORG, paused, { requireAllocation: true })).missing.includes('active'), true)
       await assert.rejects(listPublicBookingSessions(db, ORG, product.slug, {} as CloudflareEnv), (error: { statusCode?: number }) => error.statusCode === 404)
       assert.deepEqual((await visible()).sort(), ids, 'Accept bookings controls sale availability rather than deleting the published information')
     }
+    await setProductPublication(db, { organizationId: ORG, productId: external.id, published: false, actor: ACTOR })
+    await assert.rejects(setProductPublication(db, { organizationId: ORG, productId: external.id, published: true, actor: ACTOR }),
+      (error: { statusCode?: number; data?: { missing?: string[] } }) => error.statusCode === 409 && error.data?.missing?.includes('active') === true)
+    assert.deepEqual(await visible(), [legacy.id], 'publishing a withheld experience still requires accepting bookings')
   } finally { await runtime.dispose() }
 })
 

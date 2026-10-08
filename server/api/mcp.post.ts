@@ -173,6 +173,7 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
 
     recordRequestPhase(event, "mcp_execute", executionStartedAt);
     const isRender = isMcpRenderResponse(result);
+    const failed = isRender && result.isError === true;
     const structuredContent = isRender ? result.structuredContent : result;
     const modelText = isRender && result.modelText ? result.modelText : JSON.stringify(structuredContent, null, 2);
 
@@ -188,9 +189,8 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
     if (isMcpMutatingTool(toolDef) && resolvedOrganizationId) {
       const env = cloudflareEnv(event);
       const cacheStartedAt = performance.now();
-      // A purge that failed is the edit not reaching the site. The write has
-      // landed, so this is neither success nor a transport failure: the tool
-      // result says both halves, and the client can act on it.
+      // A refresh failure turns a successful write into a failed tool result.
+      // An already failed operation keeps its original actionable error.
       try {
         await purgePublicResourceCacheNow({
           DB: env.db,
@@ -204,8 +204,7 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
         recordRequestPhase(event, "mcp_cache_purge", cacheStartedAt);
       }
     }
-    if (purgeFailure) return mcpToolErrorResult(purgeFailure, { status: 502, code: "PUBLIC_SITE_REFRESH_FAILED" });
-    const failed = isRender && result.isError === true;
+    if (purgeFailure && !failed) return mcpToolErrorResult(purgeFailure, { status: 502, code: "PUBLIC_SITE_REFRESH_FAILED" });
     const response = {
       isError: failed, ...(failed ? {} : { structuredContent }), content: [{ type: "text" as const, text: failed ? JSON.stringify(structuredContent) : modelText }],
       ...(isRender && result.privateMeta ? { _meta: result.privateMeta } : {}),

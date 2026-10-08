@@ -439,9 +439,11 @@ export async function loadPublicProductSessions(
   // A branch with no zone cannot state when anything starts, so it offers
   // nothing here rather than a time in a zone nobody chose.
   if (!detail.location) {
+    if (!detail.booking.online_timezone) return []
     const { listPublicBookingSessions } = await import('~/server/utils/public-session-booking')
     return (await listPublicBookingSessions(db, detail.organization.id, detail.product.slug, env, 'online')).sessions.filter(session => !session.is_full)
   }
+  if (!detail.product.locations.some(location => location.location_id === detail.location!.id && location.active && location.published)) return []
   if (!detail.location.timezone) return []
   await refreshProductBusy(db,env,detail.organization.id,detail.product.id)
   const window = bookingWindow(detail.location.timezone)

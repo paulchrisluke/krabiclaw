@@ -195,9 +195,9 @@ export default definePlugin((nitroApp) => {
           SELECT ll.route_path AS location_path, p.slug, rl.updated_at,
                  p.kind
             FROM resource_localizations rl
-            JOIN products p ON p.id = rl.resource_id AND p.organization_id = rl.organization_id AND p.active = 1
+            JOIN products p ON p.id = rl.resource_id AND p.organization_id = rl.organization_id
             LEFT JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id
-             AND pl.published = 1 AND pl.active = 1
+             AND pl.published = 1
             LEFT JOIN business_locations bl ON bl.id = pl.location_id AND bl.organization_id = rl.organization_id AND bl.status = 'active'
             LEFT JOIN resource_localizations ll ON ll.resource_type='business_location' AND ll.resource_id=bl.id AND ll.organization_id=rl.organization_id AND ll.locale=rl.locale
            WHERE rl.organization_id = ? AND rl.locale = ? AND rl.resource_type = 'product'
@@ -248,12 +248,12 @@ export default definePlugin((nitroApp) => {
         `SELECT p.id, p.slug, pl.location_id, bl.slug AS location_slug, p.updated_at,
                 p.kind
          FROM products p
-         LEFT JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id AND pl.published = 1 AND pl.active = 1
+         LEFT JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id AND pl.published = 1
          LEFT JOIN business_locations bl
            ON bl.id = pl.location_id
           AND bl.organization_id = p.organization_id
           AND bl.status = 'active'
-         WHERE p.organization_id = ? AND p.active = 1 AND p.id IN (SELECT value FROM json_each(?))
+         WHERE p.organization_id = ? AND p.id IN (SELECT value FROM json_each(?))
            AND (bl.id IS NOT NULL OR EXISTS (SELECT 1 FROM product_booking_configs bc WHERE bc.product_id = p.id AND bc.organization_id = p.organization_id AND bc.online_timezone IS NOT NULL) OR p.order_url IS NOT NULL)
          ORDER BY pl.location_id, p.name, p.id`,
         [organizationId, publicProductIds],

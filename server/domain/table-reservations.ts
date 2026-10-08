@@ -123,12 +123,15 @@ export async function createTableReservation(event: H3Event, input: {
       await notifyTableReservationCreated(env, db, organizationId, id)
       await execute(db, `UPDATE requests SET payload_json=json_set(payload_json,'$.provenance.followups_completed',json('true')) WHERE id=? AND organization_id=?`, [id, organizationId])
     }
-    if (!operator && row.status !== 'confirmed') return creationResult({ error: 'This reservation has already been cancelled', code: 'reservation_cancelled', operational_reservation_id: row.id, request_id: id }, { status: 409 })
     const cancellation = await createReplayableReservationCancelToken(env.EMAIL_REPLY_SECRET ?? '', id)
     const request = await getGuestRequest(db, id, organizationId, 'reservation')
-    if (!request || request.kind !== 'reservation' || await hashReservationCancelToken(cancellation.token) !== request.payload.cancellation.token_hash) throw new Error('Reservation receipt is missing its cancellation capability')
-    return creationResult({ success: true, id, request_id: id, operational_reservation_id: row.id, status: row.status, replayed: true,
-      starts_at: row.starts_at, ends_at: row.ends_at, timezone: row.timezone, ...(operator ? {} : { cancellationToken: cancellation.token }),
+    if (!request || request.kind !== 'reservation') throw new HTTPError({ statusCode: 404, message: 'Reservation thread not found' })
+    if (await hashReservationCancelToken(cancellation.token) !== request.payload.cancellation.token_hash) throw new Error('Reservation receipt is missing its cancellation capability')
+    const record = await getThreadOperationalRecord(db, id)
+    if (!record || record.kind !== 'reservation' || record.organization_id !== organizationId || record.id !== row.id) throw new HTTPError({ statusCode: 404, message: 'Reservation operational receipt not found' })
+    if (!operator && record.status !== 'confirmed') return creationResult({ error: 'This reservation has already been cancelled', code: 'reservation_cancelled', operational_reservation_id: record.id, request_id: id }, { status: 409 })
+    return creationResult({ success: true, id, request_id: id, operational_reservation_id: record.id, status: record.status, replayed: true,
+      starts_at: record.starts_at, ends_at: record.ends_at, timezone: record.timezone, ...(operator ? {} : { cancellationToken: cancellation.token }),
     }, { status: 200 })
   }
   const completed = await replay()
@@ -273,9 +276,9 @@ export async function createTableReservation(event: H3Event, input: {
   await execute(db, `UPDATE requests SET payload_json = json_set(payload_json, '$.provenance.followups_completed', json('true')) WHERE id = ? AND organization_id = ?`, [id, organizationId])
   const measurement = measurementOutcome(followUps[1]!)
   const record = await getThreadOperationalRecord(db, id)
-  if (!record || record.kind !== 'reservation') throw new Error('Committed reservation is missing its operational receipt')
+  if (!record || record.kind !== 'reservation' || record.organization_id !== organizationId || record.id !== reservationId) throw new HTTPError({ statusCode: 404, message: 'Reservation operational receipt not found' })
 
   return creationResult({
     success: true, id, request_id: id, operational_reservation_id: record.id, status: record.status, starts_at: record.starts_at, ends_at: record.ends_at, timezone: record.timezone,
-    replayed: false, ...(operator ? {} : { measurement, cancellationToken: cancellation.token }), message: 'Your reservation is confirmed.', policy_summary: renderBookingPolicySummary(reservationPolicySummarySource(policy), locale), }, { status: 201 })
+    replayed: false, ...(operator ? {} : { measurement, cancellationToken: cancellation.token }), message: record.status === 'cancelled' ? 'This reservation was cancelled.' : 'Your reservation is confirmed.', policy_summary: renderBookingPolicySummary(reservationPolicySummarySource(policy), locale), }, { status: 201 })
 }
