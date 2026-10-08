@@ -1,9 +1,13 @@
 <template>
   <NuxtLayout :name="isBlawby ? 'blawby' : 'saya'">
   <div class="min-h-screen bg-default text-default">
+    <div v-if="pending" class="flex min-h-screen items-center justify-center">
+      <SayaIcon name="arrow-path" class="size-12 animate-spin text-muted" />
+    </div>
     <BookingConfirmation
-      v-if="confirmation"
-      kicker="Request received"
+      v-else-if="confirmation"
+      :kicker="confirmation.status === 'cancelled' ? 'Booking cancelled' : confirmation.status === 'pending' ? 'Request received' : 'Booking confirmed'"
+      :cancelled="confirmation.status === 'cancelled'"
       receipt-kicker="Your booking"
       :receipt-rows="receiptRows"
       :next-steps-kicker="resolvedPolicySummary?.heading ?? 'Booking policies'"
@@ -14,13 +18,13 @@
       :guest-email="confirmation.guestEmail"
     >
       <template #title>
-        {{ confirmation.status === 'pending' ? 'Request received' : "You’re booked" }}, {{ confirmation.guestName }}!
+        {{ confirmation.status === 'cancelled' ? t('saya.experience_cancel.cancelled_title') : confirmation.status === 'pending' ? 'Request received' : "You’re booked" }}, {{ confirmation.guestName }}!
       </template>
       <template #subtitle>
-        {{ confirmation.message }}
+        {{ confirmation.status === 'cancelled' ? t('saya.experience_cancel.cancelled_desc', { date: readableDate }) : confirmation.status === 'pending' ? 'Your request is waiting for confirmation from the business.' : 'Your booking is confirmed.' }}
       </template>
       <template #actions>
-        <SayaButton variant="soft" @click="share">
+        <SayaButton v-if="confirmation.status !== 'cancelled'" variant="soft" @click="share">
           <SayaIcon name="share" class="mr-1.5 size-4" />
           {{ justCopied ? 'Copied!' : 'Share' }}
         </SayaButton>
@@ -35,8 +39,8 @@
 
     <div v-else class="mx-auto max-w-xl px-4 pt-24 pb-24 text-center sm:px-6 lg:px-8">
       <SayaIcon name="exclamation-triangle" class="mx-auto size-12 text-error" />
-      <h2 class="mt-6 text-xl font-bold">No booking found</h2>
-      <p class="mt-2 text-muted">We couldn't find a confirmation to show. Check your email for the details.</p>
+      <h2 class="mt-6 text-xl font-bold">{{ loadError ? 'Booking could not be loaded' : 'No booking found' }}</h2>
+      <p class="mt-2 text-muted">{{ loadError ?? "We couldn't find a confirmation to show. Check your email for the details." }}</p>
       <SayaButton :to="browseHref" variant="soft" class="mt-10">{{ browseLabel }}</SayaButton>
     </div>
   </div>
@@ -44,7 +48,7 @@
 </template>
 
 <script setup lang="ts">
-import { getBookingConfirmation, type BookingConfirmation as BookingConfirmationData } from '~/composables/useBookingHandoff'
+import { loadBookingConfirmation, type BookingConfirmation as BookingConfirmationData } from '~/composables/useBookingHandoff'
 import BookingConfirmation from '~/components/booking/BookingConfirmation.vue'
 import { formatTimestamp } from '~/utils/timezone'
 import { resolveProductPresentation } from '~/utils/product-presentation'
@@ -53,11 +57,14 @@ import type { RenderedBookingPolicySummaryItem } from '~/server/utils/reservatio
 definePageMeta({ layout: false })
 const { isBlawby } = usePublicTemplate()
 
-const { locale } = useI18n()
+const { locale, t } = useI18n()
+const route = useRoute()
 const justCopied = ref(false)
 const { organizationId } = useTenantOrganization()
 
 const confirmation = ref<BookingConfirmationData | null>(null)
+const pending = ref(true)
+const loadError = ref<string | null>(null)
 const { organization } = useTenantOrganization()
 const presentation = computed(() => resolveProductPresentation((organization as { vertical?: string | null } | null)?.vertical))
 // Back to where the guest booked from: this location's own catalogue when the
@@ -74,10 +81,16 @@ const browseLabel = computed(() => isBlawby.value && !confirmation.value?.locati
   ? 'Browse the menu'
   : 'Browse everything on offer')
 
-onMounted(() => {
-  if (!organizationId) return
-  const handoff = getBookingConfirmation(organizationId)
-  confirmation.value = handoff && handoff.type === 'booking' ? handoff : null
+onMounted(async () => {
+  try {
+    if (organizationId) confirmation.value = await loadBookingConfirmation(organizationId, 'booking', String((organization as ApiValue)?.name ?? ''), {
+      id: typeof route.query.id === 'string' ? route.query.id : '', token: route.hash.slice(1),
+    })
+  } catch (cause) {
+    loadError.value = getErrorMessage(cause, 'This booking could not be loaded.')
+  } finally {
+    pending.value = false
+  }
 })
 
 // One instant plus one zone, formatted where the booking happens — the guest
@@ -119,11 +132,11 @@ const resolvedPolicySummary = computed(() =>
 const policyLines = computed(() => (resolvedPolicySummary.value?.items ?? []).map((item: RenderedBookingPolicySummaryItem) => String(item.text ?? '')))
 
 async function share() {
-  if (!confirmation.value) return
+  if (!confirmation.value || confirmation.value.status === 'cancelled') return
   const text = `${confirmation.value.status === 'pending' ? 'I requested' : "I'm booked for"} ${confirmation.value.title ?? confirmation.value.organizationName} on ${readableDate.value} at ${readableTime.value}.`
   if (import.meta.client && navigator.share) {
     try {
-      await navigator.share({ title: 'Booking confirmed', text, url: window.location.origin })
+      await navigator.share({ title: confirmation.value.status === 'pending' ? 'Booking requested' : 'Booking confirmed', text, url: window.location.origin })
       return
     } catch (error) {
       // Cancelling the native share sheet falls through to the clipboard.
@@ -137,11 +150,11 @@ async function share() {
   }
 }
 
-useSocialMetadata({
+useSocialMetadata(() => ({
   path: '/bookings/confirmed',
-  title: 'Booking confirmed',
-  description: 'Your booking has been confirmed.',
+  title: confirmation.value?.status === 'cancelled' ? 'Booking cancelled' : 'Booking receipt',
+  description: confirmation.value?.status === 'cancelled' ? 'Your booking has been cancelled.' : 'View your booking details.',
   socialImage: null,
   discoverability: 'private',
-})
+}))
 </script>

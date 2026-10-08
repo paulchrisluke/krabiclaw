@@ -8,7 +8,8 @@
 
     <BookingConfirmation
       v-else-if="confirmation"
-      kicker="Reservation confirmed"
+      :kicker="confirmation.status === 'cancelled' ? 'Reservation cancelled' : 'Reservation confirmed'"
+      :cancelled="confirmation.status === 'cancelled'"
       :receipt-kicker="resCopy.reservationWord"
       :receipt-rows="receiptRows"
       :next-steps-kicker="resolvedPolicySummary?.heading ?? resCopy.reservationPoliciesHeading"
@@ -19,10 +20,10 @@
       :guest-email="confirmation.guestEmail"
     >
       <template #title>
-        {{ resCopy.thankYouLabel(confirmation.guestName) }}
+        {{ confirmation.status === 'cancelled' ? t('saya.reservation_cancel.cancelled_title') : resCopy.thankYouLabel(confirmation.guestName) }}
       </template>
       <template #subtitle>
-        {{ resCopy.confirmationMessage(
+        {{ confirmation.status === 'cancelled' ? t('saya.reservation_cancel.cancelled_desc', { date: readableDate }) : resCopy.confirmationMessage(
           confirmation.guests,
           Number(confirmation.guests) === 1 ? resCopy.guestLabel : resCopy.guestsLabelPlural,
           readableDate,
@@ -30,7 +31,7 @@
         ) }}
       </template>
       <template #actions>
-        <SayaButton variant="soft" @click="share">
+        <SayaButton v-if="confirmation.status !== 'cancelled'" variant="soft" @click="share">
           <SayaIcon name="share" class="mr-1.5 size-4" />
           {{ justCopied ? 'Copied!' : 'Share' }}
         </SayaButton>
@@ -53,8 +54,7 @@
 </template>
 
 <script setup lang="ts">
-import { $fetch } from 'ofetch'
-import { getBookingConfirmation, type BookingConfirmation as BookingConfirmationData } from '~/composables/useBookingHandoff'
+import { loadBookingConfirmation, type BookingConfirmation as BookingConfirmationData } from '~/composables/useBookingHandoff'
 import BookingConfirmation from '~/components/booking/BookingConfirmation.vue'
 import { formatTimestamp } from '~/utils/timezone'
 import { resolveProductPresentation } from '~/utils/product-presentation'
@@ -64,7 +64,7 @@ definePageMeta({ layout: 'saya' })
 
 const { organization, organizationId } = useTenantOrganization()
 const { reservationPolicyByLocation } = await usePublicPageData()
-const { locale } = useI18n()
+const { locale, t } = useI18n()
 const resCopy = computed(() => getVerticalCopy((organization as ApiValue)?.vertical, locale.value))
 const route = useRoute()
 const justCopied = ref(false)
@@ -124,43 +124,18 @@ onMounted(async () => {
     return
   }
 
-  const handoff = getBookingConfirmation(organizationId)
-  if (handoff && handoff.type === 'reservation') {
-    confirmation.value = handoff
-    pending.value = false
-    return
-  }
-
-  // Refresh / shared-link fallback: recover the essentials from the same
-  // authenticated lookup the cancel page uses (id + token, no special requests).
-  const resId = route.query.id as string | undefined
-  const token = route.hash ? route.hash.substring(1) : ''
-  if (resId && token) {
-    try {
-      const res = await $fetch<{ booking: { name: string; starts_at: string; timezone: string; guests: string; location_id?: string | null } }>(
-        `/api/public/booking-requests/${resId}`,
-        { headers: { Authorization: `Bearer ${token}` } },
-      )
-      confirmation.value = {
-        type: 'reservation',
-        organizationId,
-        organizationName: String((organization as ApiValue)?.name ?? ''),
-        guestName: res.booking.name,
-        startsAt: res.booking.starts_at,
-        timezone: res.booking.timezone,
-        guests: res.booking.guests,
-        locationId: typeof res.booking.location_id === 'string' ? res.booking.location_id : null,
-        cancelUrl: `/reservations/cancel?id=${resId}#${token}`,
-      }
-    } catch (cause) {
-      loadError.value = getErrorMessage(cause, 'This reservation could not be loaded.')
-    }
+  try {
+    confirmation.value = await loadBookingConfirmation(organizationId, 'reservation', String((organization as ApiValue)?.name ?? ''), {
+      id: typeof route.query.id === 'string' ? route.query.id : '', token: route.hash.slice(1),
+    })
+  } catch (cause) {
+    loadError.value = getErrorMessage(cause, 'This reservation could not be loaded.')
   }
   pending.value = false
 })
 
 async function share() {
-  if (!confirmation.value) return
+  if (!confirmation.value || confirmation.value.status === 'cancelled') return
   const text = `My reservation at ${confirmation.value.organizationName} is confirmed for ${readableDate.value} at ${readableTime.value}.`
   if (import.meta.client && navigator.share) {
     try {
@@ -178,11 +153,11 @@ async function share() {
   }
 }
 
-useSocialMetadata({
+useSocialMetadata(() => ({
   path: '/reservations/confirmed',
-  title: 'Reservation confirmed',
-  description: 'Your reservation has been confirmed.',
+  title: confirmation.value?.status === 'cancelled' ? 'Reservation cancelled' : 'Reservation receipt',
+  description: confirmation.value?.status === 'cancelled' ? 'Your reservation has been cancelled.' : 'View your reservation details.',
   socialImage: null,
   discoverability: 'private',
-})
+}))
 </script>

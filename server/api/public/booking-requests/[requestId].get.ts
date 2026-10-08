@@ -27,15 +27,16 @@ export default defineHandler(async (event) => {
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
   const tokenHash = await hashReservationCancelToken(token)
-  const spendable = await queryFirst<{ id: string }>(db, `
+  // Reading the receipt remains valid after spending the cancellation token.
+  // Cancellation writes still enforce the token's single-use boundary.
+  const readable = await queryFirst<{ id: string }>(db, `
     SELECT id FROM requests
      WHERE id = ? AND organization_id = ? AND kind IN ('reservation', 'booking')
        AND json_extract(payload_json, '$.cancellation.token_hash') = ?
-       AND json_extract(payload_json, '$.cancellation.used_at') IS NULL
        AND json_extract(payload_json, '$.cancellation.expires_at') > ?
      LIMIT 1
   `, [requestId, organizationId, tokenHash, new Date().toISOString()])
-  if (!spendable) return jsonResponse({ error: 'Booking not found' }, { status: 404 })
+  if (!readable) return jsonResponse({ error: 'Booking not found' }, { status: 404 })
 
   const request = await getGuestRequest(db, requestId, organizationId)
   const record = request ? await getThreadOperationalRecord(db, request.id) : null
@@ -55,5 +56,5 @@ export default defineHandler(async (event) => {
       product_name: record.product_name,
       location_id: record.location_id,
     },
-  })
+  }, { headers: { 'cache-control': 'private, no-store' } })
 })

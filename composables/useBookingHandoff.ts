@@ -3,9 +3,12 @@
 // same-tab only, never sent to the server, so it can safely hold guest-entered text like
 // special requests that we don't want round-tripping through the URL.
 
+import { $fetch } from 'ofetch'
+import { isValidInstant, isValidTimezone } from '~/utils/timezone'
+
 export interface BookingConfirmation {
   type: 'reservation' | 'booking'
-  status?: 'pending' | 'confirmed'
+  status?: 'pending' | 'confirmed' | 'cancelled'
   operationalBookingId?: string
   requestId?: string
   organizationId: string
@@ -52,5 +55,52 @@ export function getBookingConfirmation(currentOrganizationId: string): BookingCo
     return parsed
   } catch {
     return null
+  }
+}
+
+/** The handoff supplies receipt details; the saved booking supplies its current state. */
+export async function loadBookingConfirmation(
+  organizationId: string,
+  kind: BookingConfirmation['type'],
+  organizationName: string,
+  link: { id: string; token: string },
+): Promise<BookingConfirmation | null> {
+  const stored = getBookingConfirmation(organizationId)
+  const handoff = stored?.type === kind ? stored : null
+  let savedLink: URL | null = null
+  if (handoff?.cancelUrl) {
+    try { savedLink = new URL(handoff.cancelUrl, 'https://receipt.invalid') } catch { /* An explicit receipt link can still be read. */ }
+  }
+  const savedId = handoff?.requestId || savedLink?.searchParams.get('id') || ''
+  const requestId = link.id || savedId
+  const token = link.id ? link.token : savedLink?.hash.slice(1) ?? ''
+  if (!requestId && !handoff) return null
+  if (!requestId || !token) throw new Error('Open the booking link in your confirmation email to view this receipt.')
+
+  const response = await $fetch<{ success: true; booking: {
+    kind: BookingConfirmation['type']; status: 'pending' | 'confirmed' | 'cancelled'; name: string
+    starts_at: string; timezone: string; guests: string; location_id: string | null; product_name: string | null
+  } }>(`/api/public/booking-requests/${encodeURIComponent(requestId)}`, {
+    headers: { Authorization: `Bearer ${token}` }, cache: 'no-store',
+  })
+  const booking = response?.booking
+  if (response?.success !== true || !booking || booking.kind !== kind
+    || !['pending', 'confirmed', 'cancelled'].includes(booking.status)
+    || typeof booking.name !== 'string' || !isValidInstant(booking.starts_at) || !isValidTimezone(booking.timezone)
+    || typeof booking.guests !== 'string' || (booking.location_id !== null && typeof booking.location_id !== 'string')) {
+    throw new Error('This booking receipt could not be loaded.')
+  }
+  const matchingHandoff = requestId === savedId ? handoff : null
+  const sameLocation = matchingHandoff?.locationId === booking.location_id
+  return {
+    ...matchingHandoff,
+    type: kind, organizationId, organizationName: matchingHandoff?.organizationName ?? organizationName,
+    requestId, status: booking.status, guestName: booking.name, startsAt: booking.starts_at,
+    timezone: booking.timezone, guests: booking.guests, locationId: booking.location_id,
+    locationName: sameLocation ? matchingHandoff?.locationName : null,
+    locationSlug: sameLocation ? matchingHandoff?.locationSlug : null,
+    locationAddress: sameLocation ? matchingHandoff?.locationAddress : null,
+    title: booking.product_name ?? matchingHandoff?.title,
+    cancelUrl: booking.status === 'cancelled' ? null : `/${kind === 'reservation' ? 'reservations' : 'bookings'}/cancel?id=${encodeURIComponent(requestId)}#${token}`,
   }
 }

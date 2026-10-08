@@ -124,7 +124,8 @@ const startOverHref = computed(() => props.kind === 'booking'
   ? (presentation.value?.collectionPath ?? '/')
   : '/reservations')
 
-const cancelled = ref(false)
+const cancellationSubmitted = ref(false)
+const cancelled = computed(() => cancellationSubmitted.value || booking.value?.status === 'cancelled')
 const loading = ref(false)
 const cancelError = ref('')
 
@@ -138,7 +139,7 @@ async function handleCancel() {
       headers: { Authorization: `Bearer ${token.value}` },
       validate: (value): value is { success: true } => isRecord(value) && value.success === true,
     })
-    cancelled.value = true
+    cancellationSubmitted.value = true
   } catch (err) {
     const message = (err as { data?: { error?: string } })?.data?.error
     cancelError.value = message || copy('toast_cancel_failed')
