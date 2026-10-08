@@ -1,5 +1,6 @@
 import { HTTPError } from 'nitro'
-import { resolvePublicTemplate } from '~/utils/template-registry'
+import { organizationSupportsBlawbyTemplate, resolvePublicTemplate } from '~/utils/template-registry'
+import { getPublicCompliance, getPublicConsultationSettings } from '~/server/utils/professional-services'
 import { deleteConfig, getConfig, setConfig } from '~/server/utils/organization-config'
 import { createSystemSubdomain, isSystemSubdomainSpent } from '~/server/utils/domains'
 import { reconcileZarazAnalytics } from '~/server/utils/zaraz-analytics'
@@ -120,6 +121,9 @@ export async function loadSettingsPayload(
 
   const siteConfig = await getConfig(db, organizationId)
   const template = resolvePublicTemplate({ themeId: updatedOrganization.theme_id }).slug
+  const [compliance, consultation] = organizationSupportsBlawbyTemplate({ vertical: updatedOrganization.vertical, themeId: updatedOrganization.theme_id })
+    ? await Promise.all([getPublicCompliance(db, organizationId), getPublicConsultationSettings(db, organizationId)])
+    : [null, null]
   // Both logos with their presentation, through the canonical placement reader.
   const logos = (await readMediaPlacements(db, { organizationId, ownerType: 'organization', ownerIds: [organizationId] }))
     .get(organizationId)!.filter(item => (LOGO_SLOTS as readonly string[]).includes(item.slot))
@@ -171,7 +175,8 @@ export async function loadSettingsPayload(
     seo_description: updatedOrganization.seo_description,
     canonical_url: updatedOrganization.canonical_url,
     // The website's booking switch exists only where consultation settings do.
-    consultation_mode: updatedOrganization.consultation_mode,
+    consultation_mode: consultation?.mode ?? updatedOrganization.consultation_mode,
+    ...(consultation ? { address_visibility: compliance?.address_visibility ?? 'hidden', contact_form_enabled: consultation.contact_form_enabled } : {}),
     palette: isPaletteTemplate(template) ? resolveSitePalette(template, siteConfig.palette) : null,
     palette_source: isPaletteTemplate(template) ? (siteConfig.palette ? 'custom' : 'template') : null,
     font_preset: resolveOrganizationFontPreset(siteConfig.font_preset),
@@ -272,6 +277,7 @@ async function attemptOrganizationUpdate(
   // Resolved to a whole palette by updateOrganizationSettingsFields; null removes
   // it (json_patch deletes a key patched with null), returning to the template's.
   if (updates.palette !== undefined) settingsPatch.config = { ...(settingsPatch.config as Record<string, unknown> | undefined), palette: updates.palette }
+  if (updates.address_visibility !== undefined) settingsPatch.compliance = { address_visibility: updates.address_visibility }
   if (updates.name !== undefined) {
     setParts.push('name = ?', 'subdomain = ?')
     params.push(updates.name, subdomain)
@@ -405,7 +411,7 @@ async function attemptOrganizationUpdate(
 
   // A status change adds or removes this site's indexed content. Typography,
   // colors and announcements affect only its public resource and HTML caches.
-  if (updates.status !== undefined) {
+  if (updates.status !== undefined || updates.address_visibility !== undefined) {
     await purgePublicResourceCacheNow(env, organizationId)
   } else if (updates.font_preset !== undefined || updates.palette !== undefined || updates.announcement !== undefined) {
     if (!env.ORGANIZATION_CACHE) throw new Error('ORGANIZATION_CACHE is not bound; site caches cannot be purged')
@@ -475,6 +481,11 @@ export async function updateOrganizationSettingsFields(
       status: 404,
       data: { error: 'Organization not found or access denied' },
     }
+  }
+
+  if (updates.address_visibility !== undefined) {
+    if (updates.address_visibility !== 'visible' && updates.address_visibility !== 'hidden') return { status: 400, data: { error: 'address_visibility must be visible or hidden' } }
+    if (!organizationSupportsBlawbyTemplate({ vertical: organization.vertical, themeId: organization.theme_id })) return { status: 400, data: { error: 'Office address visibility is available for service websites' } }
   }
 
   // Validate before any settings writes. Preset IDs are not CSS or font URLs.

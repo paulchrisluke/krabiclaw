@@ -169,7 +169,7 @@
               <p v-if="item.value" class="text-3xl font-bold text-primary">{{ item.value }}</p>
               <h3 v-if="item.title" class="text-lg font-semibold">{{ item.title }}</h3>
               <span v-if="item.featured" class="mt-2 inline-flex rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">{{ t('saya.posts.featured') }}</span>
-              <p v-if="item.description" class="mt-2 text-sm leading-6 text-muted">{{ item.description }}</p>
+              <p v-if="item.description || item.address" class="mt-2 text-sm leading-6 text-muted">{{ item.description }}<br v-if="item.description && item.address">{{ item.address }}</p>
               <TenantPageButton v-if="item.url && itemLabel(item)" class="mt-4" :label="itemLabel(item)" :url="item.url" />
             </article>
           </div>
@@ -262,7 +262,7 @@ const renderedBlocks = computed(() => {
  */
 const readingColumn = computed(() => template.value === 'saya' && !renderedBlocks.value.some(presentationOf))
 
-type GridItem = { id?: string; title?: string; description?: string; value?: string; featured?: boolean; media?: Array<{ slot?: string; public_url?: string | null; thumbnail_url?: string | null; alt_text?: string | null; kind?: string | null }>; label?: string; labelKey?: string; url?: string; amount?: string }
+type GridItem = { id?: string; title?: string; description?: string; address?: string; value?: string; featured?: boolean; media?: Array<{ slot?: string; public_url?: string | null; thumbnail_url?: string | null; alt_text?: string | null; kind?: string | null }>; label?: string; labelKey?: string; url?: string; amount?: string }
 
 function text(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
@@ -305,6 +305,7 @@ function asItems(value: unknown): GridItem[] {
     id: text(item.id) || undefined,
     title: text(item.title) || undefined,
     description: text(item.description) || undefined,
+    address: text(item.address) || undefined,
     value: text(item.value) || undefined,
     featured: item.featured === true,
     media: Array.isArray(item.media) ? item.media as GridItem['media'] : [],

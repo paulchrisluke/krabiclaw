@@ -28,8 +28,9 @@ import { listCollections, listOrganizationProducts } from '~/server/utils/produc
 import { PRICING_NOTE_HANDLE } from '~/shared/product-details'
 import { summarizeProductPrices } from '~/utils/product-money'
 import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
-import { addressPlaceName, parsePostalAddress } from '~/utils/postal-address'
+import { addressPlaceName, formatPostalAddress, parsePostalAddress } from '~/utils/postal-address'
 import { getVerticalCopy } from '~/utils/vertical-copy'
+import type { PublicBlawbyShellData } from '~/types/blawby'
 
 export interface PublicTenantPage {
   id: string
@@ -86,6 +87,7 @@ export interface PublicTenantPageProductRow {
 
 export interface PublicTenantPageHydrationResources {
   pages?: Promise<PublicTenantPageReferenceRow[]>
+  blawbyShell?: Promise<PublicBlawbyShellData>
 }
 
 /**
@@ -233,11 +235,13 @@ async function hydrateBlocks(
   // The site this page belongs to. Its template decides where an article
   // lives, its vertical decides where a product lives, and its currency
   // decides which offers apply.
-  const organizationRow = await queryFirst<{ theme_id: string | null; vertical: string | null; default_currency: string | null }>(
-    db, 'SELECT theme_id, vertical, default_currency FROM organization WHERE id = ? LIMIT 1', [organizationId])
+  const organizationRow = await queryFirst<{ theme_id: string | null; vertical: string | null; default_currency: string | null; address_visibility: string | null }>(
+    db, "SELECT theme_id, vertical, default_currency, json_extract(settings_json, '$.compliance.address_visibility') AS address_visibility FROM organization WHERE id = ? LIMIT 1", [organizationId])
   if (!organizationRow) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page site is unavailable' })
   const template = resolvePublicTemplate({ themeId: organizationRow.theme_id, vertical: organizationRow.vertical })
-  const defaultLocationGrid = pagePath === '/' && template.slug !== 'platform' && !blocks.some(block => block.type === 'location_grid')
+  const defaultContact = pagePath === '/contact' && template.slug === 'blawby' && blocks.length === 1 && blocks[0]?.type === 'hero'
+  const defaultLocationGrid = (pagePath === '/' && template.slug !== 'platform' || defaultContact) && !blocks.some(block => block.type === 'location_grid')
+  const addressVisible = template.slug !== 'blawby' || organizationRow.address_visibility === 'visible'
   const articlePrefix = template.serviceRoutes.articleDetailPrefix
   const sourcePages = pageIds.size
     ? resources.pages
@@ -316,10 +320,20 @@ async function hydrateBlocks(
   const locationCopy = getVerticalCopy(organizationRow.vertical, locale)
   if (defaultLocationGrid && locations.length) {
     blocks = [...blocks, {
-      id: 'homepage-locations', type: 'location_grid',
+      id: defaultContact ? 'contact-locations' : 'homepage-locations', type: 'location_grid',
       position: Math.max(-1, ...blocks.map(block => block.position)) + 1,
       data: { title: locationCopy.locationGroupLine(locations.length), description: locationCopy.findUsKicker, location_ids: sourceLocations.map(location => location.id) },
       media: [],
+    }]
+  }
+  if (defaultContact) {
+    const consultation = resources.blawbyShell
+      ? (await resources.blawbyShell).consultation
+      : await (await import('~/server/utils/professional-services')).getPublicConsultationSettings(db, organizationId)
+    if (consultation.contact_form_enabled) blocks = [...blocks, {
+      id: 'contact-form', type: 'contact_form',
+      position: Math.max(-1, ...blocks.map(block => block.position)) + 1,
+      data: {}, media: [],
     }]
   }
   if (homepageMenu) {
@@ -461,9 +475,9 @@ async function hydrateBlocks(
           title: location.title,
           // The town the visitor is being sent to. A location card names it
           // above the title, and the item carried everything except that.
-          city: addressPlaceName(location.address) || undefined,
+          ...(addressVisible ? { city: addressPlaceName(location.address) || undefined, address: formatPostalAddress(location.address) || undefined } : {}),
           description: location.short_description || location.description || undefined,
-          url: template.slug === 'blawby' ? '/contact' : 'public_path' in location && typeof location.public_path === 'string' ? location.public_path : `/locations/${location.slug}`,
+          url: template.slug === 'blawby' ? pagePath === '/contact' ? undefined : '/contact' : 'public_path' in location && typeof location.public_path === 'string' ? location.public_path : `/locations/${location.slug}`,
           label: locationCopy.visitLocationCta,
           media: location.asset_id
             ? projectLocalizedMediaAlt([{ asset_id: location.asset_id, slot: 'hero', public_url: location.public_url, thumbnail_url: location.thumbnail_url, kind: location.kind, alt_text: location.alt_text }], localizations ?? [])

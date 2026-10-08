@@ -11,7 +11,7 @@ import { getOrganizationForMcp } from '~/server/utils/mcp-workflows'
 import { resolveMcpWorkspace } from '~/server/utils/mcp-context'
 import { loadSettingsPayload, updateOrganizationSettingsFields } from '~/server/utils/organization-settings'
 import { ORGANIZATION_FONT_OPTIONS, ORGANIZATION_FONT_PRESETS } from '~/shared/organization-fonts'
-import { SITE_PALETTE_ROLES, STARTER_PALETTES, paletteContrast, type SitePalette, type SitePalettePatch } from '~/shared/site-palette'
+import { SITE_PALETTE_ROLES, STARTER_PALETTES, paletteContrast, type SitePalettePatch } from '~/shared/site-palette'
 import { resolveColor } from '~/utils/color-utils'
 import { requireMcpOrganizationApi } from '~/server/utils/mcp-auth'
 import { organizationRoles } from '~/utils/organization-access'
@@ -207,6 +207,8 @@ export const ORGANIZATIONS_TOOLS: McpToolDefinition[] = [
               announcement: ANNOUNCEMENT_SCHEMA,
               media: { type: 'array', items: ORGANIZATION_MEDIA_ITEM_SCHEMA },
               contact_email: { type: ['string', 'null'] },
+              address_visibility: { type: 'string', enum: ['visible', 'hidden'] },
+              contact_form_enabled: { type: 'boolean' },
               default_currency: { type: ['string', 'null'] },
               press_email: { type: ['string', 'null'] },
               partnerships_email: { type: ['string', 'null'] },
@@ -246,6 +248,7 @@ export const ORGANIZATIONS_TOOLS: McpToolDefinition[] = [
         },
         announcement: ANNOUNCEMENT_SCHEMA,
         contact_email: { type: ['string', 'null'], description: 'Public contact email shown to guests. Pass null to clear it.' },
+        address_visibility: { type: 'string', enum: ['visible', 'hidden'], description: 'Show or hide office addresses on service websites.' },
         default_currency: { type: 'string', enum: [...SUPPORTED_CURRENCIES], description: 'ISO 4217 code. Existing prices keep their stored currency and amount; nothing is converted.' },
         status: { type: 'string', enum: ['active', 'inactive'], description: 'Website status: active is Live (public and indexable), inactive is Draft (preview only). A suspended website cannot be changed.' },
         press_email: { type: 'string' },
@@ -263,6 +266,8 @@ export const ORGANIZATIONS_TOOLS: McpToolDefinition[] = [
           entity: { type: 'string', enum: ['organization_settings'] },
           id: { type: 'string' },
           changed_fields: { type: 'array', items: { type: 'string' } },
+          address_visibility: { type: 'string', enum: ['visible', 'hidden'] },
+          contact_form_enabled: { type: 'boolean' },
           contrast_warnings: { type: 'array', items: { type: 'object', properties: { mode: { type: 'string' }, pair: { type: 'string' }, ratio: { type: 'number' }, minimum: { type: 'number' } }, required: ['mode', 'pair', 'ratio', 'minimum'] } },
           updated_at: { type: 'string' },
           context: { type: 'object' },
@@ -399,7 +404,7 @@ export async function handleOrganizationsTools(ctx: McpExecutorContext): Promise
         organization.userId
       );
       assertDomainSuccess(result);
-      const settingsResult = (result.data as { settings: { updated_at: string; palette: SitePalette | null } }).settings;
+      const settingsResult = (result.data as { settings: Awaited<ReturnType<typeof loadSettingsPayload>> }).settings;
       const updateSettingsContext = await mutationContextPayload(organization);
       return renderStructuredResponse(
         {
@@ -407,6 +412,7 @@ export async function handleOrganizationsTools(ctx: McpExecutorContext): Promise
           entity: "organization_settings",
           id: organization.organizationId,
           changed_fields: Object.keys(updates),
+          ...(settingsResult.address_visibility !== undefined ? { address_visibility: settingsResult.address_visibility, contact_form_enabled: settingsResult.contact_form_enabled } : {}),
           contrast_warnings: settingsResult.palette ? paletteContrast(settingsResult.palette).filter(check => check.ratio < check.minimum) : [],
           updated_at: settingsResult.updated_at,
           context: updateSettingsContext,

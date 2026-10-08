@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "c27cd70e-f227-49b7-861e-8398884dcefd",
+  "id": "a92dbdc3-ee89-473b-8b45-fc4c595465c8",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -9526,7 +9526,7 @@
         },
         "product_booking_configs_calendar_check": {
           "name": "product_booking_configs_calendar_check",
-          "value": "calendar_group IS NULL OR length(trim(calendar_group)) > 0"
+          "value": "calendar_group IS NULL OR (length(trim(calendar_group)) > 0 AND online_timezone IS NOT NULL)"
         }
       }
     },

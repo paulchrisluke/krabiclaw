@@ -629,8 +629,12 @@ export async function deleteLocation(
     return { status: 404, data: { error: "Location not found." } };
   }
   const locationId = existing.id;
+  const checkoutConflict = { status: 409, data: { error: "This location has an active checkout. Leave it in place until checkout finishes." } };
+  if (await queryFirst(db, "SELECT 1 FROM payment_checkout_holds WHERE organization_id=? AND location_id=? AND status='active' AND expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now') LIMIT 1", [organizationId, locationId])) return checkoutConflict;
   const now = new Date().toISOString();
   const statements = [
+    { query: `UPDATE business_locations SET updated_at=NULL WHERE id=? AND organization_id=?
+      AND EXISTS (SELECT 1 FROM payment_checkout_holds WHERE organization_id=? AND location_id=? AND status='active' AND expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now'))`, params: [locationId, organizationId, organizationId, locationId] },
     ...prepareContentDocumentDeletion({ locationId, organizationId}),
     ...resourceLocalizationDeletionQueries('business_location', { query: 'SELECT id FROM business_locations WHERE id = ? AND organization_id = ?', params: [locationId, organizationId] }),
     // Deleting a location does NOT delete the products it offered: the
@@ -676,7 +680,12 @@ export async function deleteLocation(
     },
   ];
 
-  const batchResults = await executeBatch(db, statements);
+  let batchResults;
+  try { batchResults = await executeBatch(db, statements); }
+  catch (error) {
+    if (/NOT NULL constraint failed: business_locations\.updated_at/.test(error instanceof Error ? error.message : String(error))) return checkoutConflict;
+    throw error;
+  }
   const deleteResult = batchResults.at(-1);
 
   if (!deleteResult?.meta.changes) {

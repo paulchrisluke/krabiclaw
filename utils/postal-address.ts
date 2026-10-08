@@ -68,8 +68,8 @@ export function formatPostalAddress(address: PostalAddress | null): string {
   if (!address) return ''
   const areaLine = [address.locality, address.administrativeArea].filter(Boolean).join(', ')
   const areaParts = address.addressLines.includes(areaLine) ? [] : [address.locality, address.administrativeArea]
-  return [...address.addressLines, address.sublocality, ...areaParts, address.postalCode]
-    .filter((part): part is string => typeof part === 'string' && part.trim().length > 0)
+  return [...new Set([...address.addressLines, address.sublocality, ...areaParts, address.postalCode]
+    .filter((part): part is string => typeof part === 'string' && part.trim().length > 0))]
     .join(', ')
 }
 
@@ -125,7 +125,8 @@ export function schemaPostalAddress(address: PostalAddress | null): Record<strin
   if (!address) return undefined
   const node: Record<string, string> = { '@type': 'PostalAddress', addressCountry: address.regionCode }
   const areaLine = [address.locality, address.administrativeArea].filter(Boolean).join(', ')
-  const street = address.addressLines.filter(line => line.trim() && line !== areaLine).join(', ')
+  const areaParts = new Set([address.sublocality, address.locality, address.administrativeArea, address.postalCode, areaLine])
+  const street = address.addressLines.filter(line => line.trim() && !areaParts.has(line)).join(', ')
   if (street) node.streetAddress = street
   if (address.locality) node.addressLocality = address.locality
   if (address.administrativeArea) node.addressRegion = address.administrativeArea

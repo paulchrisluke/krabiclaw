@@ -306,6 +306,29 @@ node --experimental-strip-types scripts/pull-production-snapshot.ts --staging --
 node --experimental-strip-types scripts/pull-production-snapshot.ts --production --source krabiclaw-production-v13 --out production-v14-final.sqlite --delta-from production-v14-initial.sqlite
 ```
 
+The v14-to-v15 replacement changes only
+`product_booking_configs_calendar_check`: a nonempty `calendar_group` may
+also group physical sessions. `product_availability_rules` and
+`product_sessions` reference that parent with cascading deletes, so the
+constraint must not be rebuilt in place. The complete applied v14 SQL and
+Drizzle metadata remain unchanged in `migrations-history/v14/`. The schema
+adds no tables or columns, and the transfer copies v14 rows without changing
+customer, identity, OAuth, signing-key, booking or payment values.
+
+Prepared in WNAM on 2026-10-08: production v15
+`9684d350-f15c-41bb-93c6-437651b72459` and staging v15
+`3809d51b-2153-4f5b-bcf3-265329492115`. Preparation does not switch a live
+Worker's binding.
+
+Prepare an empty WNAM database with the generated baseline and native migration
+ledger, then use the same preflight, initial-copy and final-delta procedure
+above with each environment's own v14 source. Review all changed and deleted
+keys before switching: the canonical delta carries new rows only, never
+updates or deletions. Keep the v14 database and its Worker version intact.
+Rebinding to v14 after v15 writes is not a data-preserving rollback; preserve
+and reconcile those writes before any such rebind. Older runtime code also
+must not serve physical calendar groups it cannot enforce.
+
 Before dropping or retiring a legacy table or writer:
 
 - remove every runtime reader and writer;

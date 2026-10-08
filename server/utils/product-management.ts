@@ -1482,16 +1482,20 @@ export async function deleteProduct(db: DbClient, input: {
   if ((booked?.n ?? 0) > 0) {
     conflict('This product has bookings. Cancel them, or turn the product off instead of deleting it.')
   }
+  if (await queryFirst(db, "SELECT 1 FROM payment_checkout_holds WHERE organization_id=? AND product_id=? AND status='active' AND expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now') LIMIT 1", [input.organizationId, input.productId])) {
+    conflict('This product has an active checkout. Turn it off instead of deleting it.')
+  }
   const pages = await Promise.all(bound.map(page => prepareTenantPageDelete(db, page.id, { scope: { organizationId: input.organizationId }, expectedUpdatedAt: page.updated_at })))
   const invalidations = await productCacheInvalidations(db, input.organizationId, input.productId, 'product_deleted')
   await executeBatch(db, [
-    { query: 'UPDATE products SET updated_at=NULL WHERE organization_id=? AND id=? AND EXISTS(SELECT 1 FROM bookings WHERE organization_id=? AND product_id=?)', params: [input.organizationId, input.productId, input.organizationId, input.productId] },
+    { query: `UPDATE products SET updated_at=NULL WHERE organization_id=? AND id=? AND (EXISTS(SELECT 1 FROM bookings WHERE organization_id=? AND product_id=?)
+      OR EXISTS(SELECT 1 FROM payment_checkout_holds WHERE organization_id=? AND product_id=? AND status='active' AND expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')))`, params: [input.organizationId, input.productId, input.organizationId, input.productId, input.organizationId, input.productId] },
     ...pages.flatMap(page => page.queries),
     ...resourceLocalizationDeletionQueries('product', { query: 'SELECT ?', params: [input.productId] }),
     ...invalidations,
     { query: 'DELETE FROM products WHERE organization_id = ? AND id = ?', params: [input.organizationId, input.productId] },
   ], { operation: 'Delete product' }).catch(error => {
-    if (/NOT NULL constraint failed: products\.updated_at/.test(error instanceof Error ? error.message : String(error))) conflict('This product was booked while you were deleting it. Turn it off instead of deleting it.')
+    if (/NOT NULL constraint failed: products\.updated_at/.test(error instanceof Error ? error.message : String(error))) conflict('This product received a booking or checkout while you were deleting it. Turn it off instead of deleting it.')
     throw error
   })
 }
@@ -1609,6 +1613,7 @@ export async function setProductLocation(db: DbClient, input: {
   const organization = await queryFirst<{ organization_id: string }>(db, 'SELECT organization_id FROM business_locations WHERE organization_id = ? AND id = ?', [input.organizationId, input.locationId])
   if (!organization) notFound('Location not found')
   const now = new Date().toISOString()
+  const { physicalGroupCapacityGuardQuery, bookingConfigurationWriteError } = await import('~/server/utils/availability')
   await executeBatch(db, [{
     query: `INSERT INTO product_locations (organization_id, product_id, location_id, active, published, created_at, updated_at, created_by, updated_by)
             VALUES (?, ?, ?, COALESCE(?, 1), COALESCE(?, 1), ?, ?, ?, ?)
@@ -1616,7 +1621,7 @@ export async function setProductLocation(db: DbClient, input: {
               updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
     params: [input.organizationId, input.productId, input.locationId, input.active === undefined ? null : Number(input.active), input.published === undefined ? null : Number(input.published),
       now, now, input.actor.actorId, input.actor.actorId, input.active === undefined ? null : Number(input.active), input.published === undefined ? null : Number(input.published)],
-  }, publicResourceCacheInvalidationQuery(input.organizationId, 'product_location_changed')], { operation: 'Set product location' })
+  }, physicalGroupCapacityGuardQuery(input.organizationId, input.productId), publicResourceCacheInvalidationQuery(input.organizationId, 'product_location_changed')], { operation: 'Set product location' }).catch(error => { throw bookingConfigurationWriteError(error) })
 }
 
 export async function removeProductLocation(db: DbClient, input: {

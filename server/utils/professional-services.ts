@@ -20,6 +20,7 @@ const BLAWBY_TEMPLATE = publicTemplateRegistry.blawby
 import {
   getPublicTenantPageForPath,
   listCanonicalTenantPages,
+  type PublicTenantPageHydrationResources,
 } from '~/server/utils/public-tenant-pages'
 import { listPublishedTenantPagePaths } from '~/server/utils/content/pages'
 import { isBlawbyShellOnlyRouteRecipe } from '~/types/blawby'
@@ -324,9 +325,10 @@ export async function getPublicBlawbyDocumentData(
     ? []
     : await loadExactPublicLocalizations(env, db, organizationId, locale)
 
+  const shellData = getPublicBlawbyShellData(db, organizationId, { previewAuthorized: options.previewAuthorized, locale, localizations, env })
   const [shell, route] = await Promise.all([
-    getPublicBlawbyShellData(db, organizationId, { previewAuthorized: options.previewAuthorized, locale, localizations, env }),
-    getPublicBlawbyRouteData(db, organizationId, recipe, { ...options, locale, localizations }, env),
+    shellData,
+    getPublicBlawbyRouteData(db, organizationId, recipe, { ...options, locale, localizations, hydrationResources: { blawbyShell: shellData } }, env),
   ])
   // Which path each recipe's document lives at is declared once, per template,
   // in utils/template-registry.ts; 'page' names its own path.
@@ -402,7 +404,7 @@ export async function getPublicBlawbyRouteData(
   db: DbClient,
   organizationId: string,
   recipe: PublicBlawbyRouteData['recipe'],
-  options: { previewAuthorized?: boolean; slug?: string | null; locale?: string | null; localizations?: readonly ExactPublicLocalization[] } = {},
+  options: { previewAuthorized?: boolean; slug?: string | null; locale?: string | null; localizations?: readonly ExactPublicLocalization[]; hydrationResources?: PublicTenantPageHydrationResources } = {},
   env: CloudflareEnv,
 ): Promise<PublicBlawbyRouteData> {
   const needsReviews = ['home', 'about', 'contact', 'schedule'].includes(recipe)
@@ -416,6 +418,7 @@ export async function getPublicBlawbyRouteData(
       ? getPublicTenantPageForPath(env, db, organizationId, pagePath, {
           locale: options.locale,
           localizations: localized ? options.localizations ?? [] : null,
+          hydrationResources: options.hydrationResources,
         })
       : Promise.resolve(null),
     needsReviews ? listOrganizationReviews(db, organizationId, { publishedOnly: true }) : Promise.resolve([]),
