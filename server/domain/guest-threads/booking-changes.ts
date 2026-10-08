@@ -257,7 +257,7 @@ async function changePresentation(db: DbClient, thread: GuestThreadRow, proposal
   const labels = platformLocale(guest.locale)!.messages
   const copy = getVerticalCopy(organization.vertical, guest.locale)
   return {
-    ...guest, fromName: organization.name, labels, copy,
+    ...guest, fromName: organization.name, vertical: organization.vertical, labels, copy,
     before: { whenLabel: formatTimestamp(proposal.before.startsAt, guest.locale, proposal.before.timezone), partySize: proposal.before.partySize },
     after: { whenLabel: formatTimestamp(startsAt, guest.locale, timezone), partySize: proposal.after.partySize },
     locationTitle: guest.locationName?.trim() || labels['booking.online']!, originalLocationTitle: original.locationName?.trim() || labels['booking.online']!,
@@ -457,7 +457,7 @@ export async function respondToBookingChange(db: DbClient, env: ChangeEnv, input
   }
   const guest = await changePresentation(db, thread as GuestThreadRow, proposal)
   return {
-    type: thread.kind, noun, guestName: summary.guestName, locale: guest.locale,
+    type: thread.kind, noun, guestName: summary.guestName, locale: guest.locale, vertical: guest.vertical,
     before: guest.before, after: guest.after,
     locationTitle: guest.locationTitle, originalLocationTitle: guest.originalLocationTitle,
     status: result ? result.event_name === 'booking_change.accepted' ? 'accepted' : 'declined' : 'pending',

@@ -35,8 +35,6 @@ import type { respondToBookingChange } from '~/server/domain/guest-threads/booki
 definePageMeta({ layout: 'standalone' })
 const route = useRoute()
 const { locale, t } = useI18n()
-const { organization } = useTenantOrganization()
-const copy = computed(() => getVerticalCopy((organization as { vertical?: string | null } | null)?.vertical, locale.value))
 const app = useNuxtApp() as { $setAppLocale: (value: string, messages: Record<string, string>) => void }
 const publicLocale = useState<string>('public-locale')
 const platformMessages = useState<Record<string, string> | null>('platform-locale-messages')
@@ -66,11 +64,15 @@ const sending = ref(false)
 const decisionError = ref('')
 // One instant, one label: the server formats both sides in the booking's own
 // zone, so this page never re-derives a local time the email disagrees with.
-const fields = computed(() => proposal.value ? [
-  { label: copy.value.locationLabel, before: proposal.value.originalLocationTitle, after: proposal.value.locationTitle },
-  { label: copy.value.dateLabel, before: proposal.value.before.whenLabel, after: proposal.value.after.whenLabel },
-  { label: copy.value.guestsLabel, before: String(proposal.value.before.partySize), after: String(proposal.value.after.partySize) },
-] : [])
+const fields = computed(() => {
+  if (!proposal.value) return []
+  const copy = getVerticalCopy(proposal.value.vertical, locale.value)
+  return [
+    { label: copy.locationLabel, before: proposal.value.originalLocationTitle, after: proposal.value.locationTitle },
+    { label: copy.dateLabel, before: proposal.value.before.whenLabel, after: proposal.value.after.whenLabel },
+    { label: copy.guestsLabel, before: String(proposal.value.before.partySize), after: String(proposal.value.after.partySize) },
+  ]
+})
 async function respond(decision: 'accept' | 'decline') {
   if (sending.value) return
   sending.value = true
