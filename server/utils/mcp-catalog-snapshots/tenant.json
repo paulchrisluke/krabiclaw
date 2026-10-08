@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:10a0e842b093a38f20f92cfdf9b2fa97ea4ac02f7fddaa5b20edc84614a66d17",
+  "fingerprint": "sha256:ab8dd09822ace581f098a77104bbb30a00128897bf05722887444a129ca14b1d",
   "tools": [
     {
       "name": "append_content_block",
@@ -2532,6 +2532,10 @@
                       "pattern": "^(?=[\\s\\S]*\\S)[^\\r\\n]*$",
                       "type": "string"
                     },
+                    "featured": {
+                      "description": "Highlight this item on the menu and homepage.",
+                      "type": "boolean"
+                    },
                     "included_items": {
                       "description": "Items or work included in the stated price, shown in their own public section.",
                       "items": {
@@ -3117,6 +3121,10 @@
                       "minLength": 1,
                       "pattern": "^(?=[\\s\\S]*\\S)[^\\r\\n]*$",
                       "type": "string"
+                    },
+                    "featured": {
+                      "description": "Highlight this item on the menu and homepage.",
+                      "type": "boolean"
                     },
                     "included_items": {
                       "description": "Items or work included in the stated price, shown in their own public section.",
@@ -9520,6 +9528,10 @@
                 "pattern": "^(?=[\\s\\S]*\\S)[^\\r\\n]*$",
                 "type": "string"
               },
+              "featured": {
+                "description": "Highlight this item on the menu and homepage.",
+                "type": "boolean"
+              },
               "included_items": {
                 "description": "Items or work included in the stated price, shown in their own public section.",
                 "items": {
@@ -10943,6 +10955,10 @@
                     "minLength": 1,
                     "pattern": "^(?=[\\s\\S]*\\S)[^\\r\\n]*$",
                     "type": "string"
+                  },
+                  "featured": {
+                    "description": "Highlight this item on the menu and homepage.",
+                    "type": "boolean"
                   },
                   "included_items": {
                     "description": "Items or work included in the stated price, shown in their own public section.",
@@ -21500,6 +21516,10 @@
                     "pattern": "^(?=[\\s\\S]*\\S)[^\\r\\n]*$",
                     "type": "string"
                   },
+                  "featured": {
+                    "description": "Highlight this item on the menu and homepage.",
+                    "type": "boolean"
+                  },
                   "included_items": {
                     "description": "Items or work included in the stated price, shown in their own public section.",
                     "items": {
@@ -22613,6 +22633,10 @@
                           "minLength": 1,
                           "pattern": "^(?=[\\s\\S]*\\S)[^\\r\\n]*$",
                           "type": "string"
+                        },
+                        "featured": {
+                          "description": "Highlight this item on the menu and homepage.",
+                          "type": "boolean"
                         },
                         "included_items": {
                           "description": "Items or work included in the stated price, shown in their own public section.",
@@ -26656,6 +26680,9 @@
             "description": "Opaque next_cursor from the previous page.",
             "type": "string"
           },
+          "featured": {
+            "type": "boolean"
+          },
           "kind": {
             "enum": [
               "dish",
@@ -26714,6 +26741,9 @@
                 "active": {
                   "type": "boolean"
                 },
+                "featured": {
+                  "type": "boolean"
+                },
                 "id": {
                   "type": "string"
                 },
@@ -26742,6 +26772,7 @@
                 "name",
                 "slug",
                 "active",
+                "featured",
                 "variant_count"
               ],
               "type": "object"
@@ -28535,6 +28566,9 @@
             "description": "Opaque next_cursor from the previous page.",
             "type": "string"
           },
+          "featured": {
+            "type": "boolean"
+          },
           "kind": {
             "enum": [
               "dish",
@@ -28588,6 +28622,9 @@
                 "active": {
                   "type": "boolean"
                 },
+                "featured": {
+                  "type": "boolean"
+                },
                 "id": {
                   "type": "string"
                 },
@@ -28616,6 +28653,7 @@
                 "name",
                 "slug",
                 "active",
+                "featured",
                 "variant_count"
               ],
               "type": "object"
@@ -37230,6 +37268,10 @@
                       "pattern": "^(?=[\\s\\S]*\\S)[^\\r\\n]*$",
                       "type": "string"
                     },
+                    "featured": {
+                      "description": "Highlight this item on the menu and homepage.",
+                      "type": "boolean"
+                    },
                     "included_items": {
                       "description": "Items or work included in the stated price, shown in their own public section.",
                       "items": {
@@ -37818,6 +37860,10 @@
                       "minLength": 1,
                       "pattern": "^(?=[\\s\\S]*\\S)[^\\r\\n]*$",
                       "type": "string"
+                    },
+                    "featured": {
+                      "description": "Highlight this item on the menu and homepage.",
+                      "type": "boolean"
                     },
                     "included_items": {
                       "description": "Items or work included in the stated price, shown in their own public section.",
@@ -38993,6 +39039,10 @@
                     "minLength": 1,
                     "pattern": "^(?=[\\s\\S]*\\S)[^\\r\\n]*$",
                     "type": "string"
+                  },
+                  "featured": {
+                    "description": "Highlight this item on the menu and homepage.",
+                    "type": "boolean"
                   },
                   "included_items": {
                     "description": "Items or work included in the stated price, shown in their own public section.",
@@ -41750,6 +41800,9 @@
                 "active": {
                   "type": "boolean"
                 },
+                "featured": {
+                  "type": "boolean"
+                },
                 "id": {
                   "type": "string"
                 },
@@ -41778,6 +41831,7 @@
                 "name",
                 "slug",
                 "active",
+                "featured",
                 "variant_count"
               ],
               "type": "object"
@@ -43329,6 +43383,10 @@
                     "pattern": "^(?=[\\s\\S]*\\S)[^\\r\\n]*$",
                     "type": "string"
                   },
+                  "featured": {
+                    "description": "Highlight this item on the menu and homepage.",
+                    "type": "boolean"
+                  },
                   "included_items": {
                     "description": "Items or work included in the stated price, shown in their own public section.",
                     "items": {
@@ -44156,6 +44214,10 @@
                     "minLength": 1,
                     "pattern": "^(?=[\\s\\S]*\\S)[^\\r\\n]*$",
                     "type": "string"
+                  },
+                  "featured": {
+                    "description": "Highlight this item on the menu and homepage.",
+                    "type": "boolean"
                   },
                   "included_items": {
                     "description": "Items or work included in the stated price, shown in their own public section.",
@@ -48565,6 +48627,10 @@
                             "pattern": "^(?=[\\s\\S]*\\S)[^\\r\\n]*$",
                             "type": "string"
                           },
+                          "featured": {
+                            "description": "Highlight this item on the menu and homepage.",
+                            "type": "boolean"
+                          },
                           "included_items": {
                             "description": "Items or work included in the stated price, shown in their own public section.",
                             "items": {
@@ -49214,6 +49280,10 @@
                             "minLength": 1,
                             "pattern": "^(?=[\\s\\S]*\\S)[^\\r\\n]*$",
                             "type": "string"
+                          },
+                          "featured": {
+                            "description": "Highlight this item on the menu and homepage.",
+                            "type": "boolean"
                           },
                           "included_items": {
                             "description": "Items or work included in the stated price, shown in their own public section.",
@@ -50612,7 +50682,7 @@
     },
     {
       "name": "update_product",
-      "description": "Edit the selected product and return its updated catalog record. Only supplied fields change. Variants and their prices merge by ID by default: omitted sibling variants, prices, fields and option selections stay unchanged. A price-only edit supplies variant id, price id and unit_amount. Use variants_mode replace or a variant’s prices_mode replace only for explicit removal of omitted entries; booking history protects variant removal. Supplied options and details are complete replacements, so retain values outside the requested change. Publication and location offerings use separate tools.",
+      "description": "Edit the selected product and return its updated catalog record. Only supplied fields change. Variants and their prices merge by ID by default: omitted sibling variants, prices, fields and option selections stay unchanged. A price-only edit supplies variant id, price id and unit_amount. Use variants_mode replace or a variant’s prices_mode replace only for explicit removal of omitted entries; booking history protects variant removal. Supplied options and text details are complete replacements, so retain values outside the requested change. Publication and location offerings use separate tools.",
       "inputSchema": {
         "additionalProperties": false,
         "anyOf": [
@@ -50833,6 +50903,10 @@
                 "minLength": 1,
                 "pattern": "^(?=[\\s\\S]*\\S)[^\\r\\n]*$",
                 "type": "string"
+              },
+              "featured": {
+                "description": "Highlight this item on the menu and homepage.",
+                "type": "boolean"
               },
               "included_items": {
                 "description": "Items or work included in the stated price, shown in their own public section.",
@@ -51434,6 +51508,10 @@
                     "minLength": 1,
                     "pattern": "^(?=[\\s\\S]*\\S)[^\\r\\n]*$",
                     "type": "string"
+                  },
+                  "featured": {
+                    "description": "Highlight this item on the menu and homepage.",
+                    "type": "boolean"
                   },
                   "included_items": {
                     "description": "Items or work included in the stated price, shown in their own public section.",

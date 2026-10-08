@@ -83,8 +83,8 @@ export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDe
       articleDetailPrefix: '/article',
     },
     sitemap: {
-      exactPaths: ['/', '/about', '/services', '/pricing', '/donate', '/schedule', '/contact', '/blog', '/docs', '/posts', '/third-party-notices'],
-      dynamicPrefixes: ['/services/', '/article/', '/blog/category/', '/docs/', '/posts/'],
+      exactPaths: ['/', '/about', '/services', '/experiences', '/pricing', '/donate', '/schedule', '/contact', '/blog', '/docs', '/posts', '/third-party-notices'],
+      dynamicPrefixes: ['/services/', '/experiences/', '/article/', '/blog/category/', '/docs/', '/posts/'],
     },
     nonIndexableExactPaths: ['/contact/confirmed', '/bookings/cancel', '/bookings/confirmed'],
     // The Blawby route loader looks a recipe up here. 'links', 'confirmation',

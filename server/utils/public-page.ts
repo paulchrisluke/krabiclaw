@@ -16,7 +16,7 @@ import {
   normalizePublicReviewAggregateRows,
 } from "~/server/utils/public-review-aggregate";
 import { getPublicTenantPageForPath, type PublicTenantPage } from "~/server/utils/public-tenant-pages";
-import { listCollections, listOrganizationProducts, PUBLIC_PRODUCT_SQL } from '~/server/utils/product-management'
+import { listCollections, listOrganizationProducts } from '~/server/utils/product-management'
 import { previewSecretOf, resolvePreviewAuthorization } from "~/server/utils/preview-token";
 import {
   toResolvedMediaAsset,
@@ -24,7 +24,6 @@ import {
 } from "~/server/utils/media-asset-manager";
 import { getMediaPlacements } from '~/server/utils/media-placement'
 import type { Collection, Product } from '~/server/types/products'
-import { resolveOrganizationCmsCapabilities } from '~/server/utils/cms-capabilities'
 import { COVER_SELECT, attachCoverMedia, coverJoinSql } from "~/server/utils/content/cover";
 import { ARTICLE_CATEGORY_SELECT, articleCategoryJoinSql, attachArticleCategory, localizeArticleCategories } from '~/server/utils/content/article-categories'
 import { getContentBlocksForDocument } from '~/server/utils/content/documents'
@@ -354,7 +353,7 @@ async function loadPublicPageSource(
     idxReviewAggregate = -1,
     idxPhotos = -1,
     idxQa = -1;
-  let idxProducts = -1, idxProductMedia = -1;
+  let idxProductMedia = -1;
 
   let idxBlogPost = -1;
 
@@ -368,24 +367,6 @@ async function loadPublicPageSource(
   if (needsLocations) idxLoc = shellIndexes.locations;
 
   if (includeProducts) {
-    // Root rows only, and only what this site publishes at a location that is
-    // still offering them. The relationships hanging off each product are
-    // hydrated by the canonical reader below — this query does not try to
-    // flatten variants, prices and collections into one row set.
-    const productParams: unknown[] = locationSlug
-      ? [organizationId, locationId ?? '__missing-location__', orgId]
-      : [organizationId, orgId]
-    idxProducts = push(
-      `SELECT DISTINCT p.id, pl.location_id
-         FROM products p
-         JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id AND (${PUBLIC_PRODUCT_SQL})
-         JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id AND pl.published = 1
-         JOIN business_locations bl ON bl.id = pl.location_id AND bl.organization_id = pub.organization_id AND bl.status = 'active'
-        WHERE pub.organization_id = ? ${locationSlug ? 'AND pl.location_id = ?' : ''} AND p.organization_id = ? AND p.active = 1
-        ORDER BY pl.location_id, p.name, p.id`,
-      productParams,
-    )
-
     idxProductMedia = push(
       `SELECT ma.*, mp.owner_id AS product_id, mp.slot, mp.sort_order
          FROM media_placements mp
@@ -484,7 +465,7 @@ async function loadPublicPageSource(
     : [];
   options.signal?.throwIfAborted();
 
-  const sourceShell = buildPublicShellPayload(organization, batchResults, shellIndexes)
+  const sourceShell = await buildPublicShellPayload(db, organization, batchResults, shellIndexes)
   sourceShell.platformMessages = language.platform_messages
   const shell = (() => {
     if (!localizedLocale) return sourceShell
@@ -583,12 +564,7 @@ async function loadPublicPageSource(
   let collections: Collection[] = []
   if (includeProducts) {
     const locationCapabilityRows = (batchResults[shellIndexes.locations] as { results: Record<string, unknown>[] })?.results ?? []
-    const { capabilities } = resolveOrganizationCmsCapabilities(String(organization.vertical), organization.theme_id)
-    const offersLocationProducts = capabilities.managers.some(manager => manager.key === 'location.products')
     const activeLocationIds = new Set(locationCapabilityRows.map(location => String(location.id)))
-    const productIdRows = ((batchResults[idxProducts] as { results: Record<string, unknown>[] })?.results ?? [])
-      .filter(row => offersLocationProducts && activeLocationIds.has(String(row.location_id)))
-    const productIds = [...new Set(productIdRows.map(row => String(row.id)))]
     const productMediaRows = (batchResults[idxProductMedia] as { results: ProductMediaRow[] })?.results ?? []
     const mediaByProduct = new Map<string, ProductMediaRow[]>()
     for (const row of productMediaRows) {
@@ -600,11 +576,10 @@ async function loadPublicPageSource(
     // reassemble variants, prices and collections from its own SQL — the
     // catalog has one reader and a projection that disagreed with it is
     // exactly the drift this replaces.
-    const canonical = productIds.length
-      ? await listOrganizationProducts(db, { organizationId: orgId, publishedOnly: true })
-      : []
-    const wanted = new Set(productIds)
-    products = canonical.filter(product => wanted.has(product.id)).map((product) => {
+    const canonical = await listOrganizationProducts(db, { organizationId: orgId, kind: page === 'experiences' ? 'experience' : page === 'menu' ? 'dish' : undefined, publishedOnly: true })
+    products = canonical.filter(product => product.locations.some(location => location.published
+      && activeLocationIds.has(location.location_id) && (!locationSlug || location.location_id === locationId))
+      || (!locationSlug && Boolean(product.order_url || product.booking?.online_timezone))).map((product) => {
       const media = mediaByProduct.get(product.id) ?? []
       const image = media.find(item => item.slot === 'image')
       return {

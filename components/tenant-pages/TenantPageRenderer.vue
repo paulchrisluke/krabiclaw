@@ -162,12 +162,13 @@
 
       <template v-else-if="block.type === 'feature_grid' || block.type === 'testimonial_grid' || block.type === 'product_grid' || block.type === 'location_grid' || block.type === 'page_grid'">
         <section class="my-12">
-          <h2 v-if="text(block.data.title)" class="mb-6 text-2xl font-semibold">{{ text(block.data.title) }}</h2>
+          <h2 v-if="gridTitle(block)" class="mb-6 text-2xl font-semibold">{{ gridTitle(block) }}</h2>
           <div class="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
             <article v-for="(item, index) in gridItems(block)" :key="item.id || item.title || index" class="rounded-2xl border border-default bg-default p-6 shadow-sm">
               <img v-if="gridItemImage(item)" :src="gridItemImage(item)!.url" :alt="gridItemImage(item)!.alt" class="mb-5 aspect-[4/3] w-full rounded-xl object-cover">
               <p v-if="item.value" class="text-3xl font-bold text-primary">{{ item.value }}</p>
               <h3 v-if="item.title" class="text-lg font-semibold">{{ item.title }}</h3>
+              <span v-if="item.featured" class="mt-2 inline-flex rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">{{ t('saya.posts.featured') }}</span>
               <p v-if="item.description" class="mt-2 text-sm leading-6 text-muted">{{ item.description }}</p>
               <TenantPageButton v-if="item.url && itemLabel(item)" class="mt-4" :label="itemLabel(item)" :url="item.url" />
             </article>
@@ -261,7 +262,7 @@ const renderedBlocks = computed(() => {
  */
 const readingColumn = computed(() => template.value === 'saya' && !renderedBlocks.value.some(presentationOf))
 
-type GridItem = { id?: string; title?: string; description?: string; value?: string; media?: Array<{ slot?: string; public_url?: string | null; thumbnail_url?: string | null; alt_text?: string | null; kind?: string | null }>; label?: string; labelKey?: string; url?: string; amount?: string }
+type GridItem = { id?: string; title?: string; description?: string; value?: string; featured?: boolean; media?: Array<{ slot?: string; public_url?: string | null; thumbnail_url?: string | null; alt_text?: string | null; kind?: string | null }>; label?: string; labelKey?: string; url?: string; amount?: string }
 
 function text(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
@@ -305,12 +306,20 @@ function asItems(value: unknown): GridItem[] {
     title: text(item.title) || undefined,
     description: text(item.description) || undefined,
     value: text(item.value) || undefined,
+    featured: item.featured === true,
     media: Array.isArray(item.media) ? item.media as GridItem['media'] : [],
     label: text(item.label) || undefined,
     labelKey: text(item.labelKey) || undefined,
     url: text(item.url) || undefined,
     amount: item.amount == null ? undefined : String(item.amount),
   }))
+}
+
+function gridTitle(block: TenantPageBlock): string {
+  const title = text(block.data.title)
+  if (title || block.type !== 'product_grid') return title
+  const items = asItems(block.data.items)
+  return items.length && items.every(item => item.featured) ? t('saya.posts.featured') : ''
 }
 
 /**

@@ -514,7 +514,7 @@ const visibleDetails = computed(() => productDetailFields(props.product.kind).fl
   const handle = productDetailKey(definition)
   // The pricing note is shown where the price goes, so it is not repeated in
   // the attribute list underneath it.
-  if (handle === PRICING_NOTE_HANDLE) return []
+  if (handle === PRICING_NOTE_HANDLE || definition.value_type === 'boolean') return []
   const value = props.product.details[handle]
   if (value === undefined || value === null) return []
   const values = Array.isArray(value) ? value : [String(value)]

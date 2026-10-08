@@ -1,5 +1,5 @@
 <template>
-  <NuxtLayout :name="isPlatform ? 'platform' : 'saya'">
+  <NuxtLayout :name="isPlatform ? 'platform' : isBlawby ? 'blawby' : 'saya'">
     <TenantPublicPage v-if="isPlatform" :path="documentPath" />
     <LazySayaExperienceCatalog v-else />
   </NuxtLayout>
@@ -13,6 +13,5 @@ definePageMeta({ layout: false })
 // catalog, unchanged, in the Saya markup it has always used.
 const { isPlatform } = useTenantOrganization()
 const { isBlawby } = usePublicTemplate()
-if (isBlawby.value) throw createError({ statusCode: 404 })
 const documentPath = useTenantPageDocumentPath('/experiences', 'path')
 </script>

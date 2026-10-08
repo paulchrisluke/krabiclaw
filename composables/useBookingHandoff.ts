@@ -80,6 +80,7 @@ export async function loadBookingConfirmation(
   const response = await $fetch<{ success: true; booking: {
     kind: BookingConfirmation['type']; status: 'pending' | 'confirmed' | 'cancelled'; name: string
     starts_at: string; timezone: string; guests: string; location_id: string | null; product_name: string | null
+    location_name: string | null; location_slug: string | null
   } }>(`/api/public/booking-requests/${encodeURIComponent(requestId)}`, {
     headers: { Authorization: `Bearer ${token}` }, cache: 'no-store',
   })
@@ -97,8 +98,8 @@ export async function loadBookingConfirmation(
     type: kind, organizationId, organizationName: matchingHandoff?.organizationName ?? organizationName,
     requestId, status: booking.status, guestName: booking.name, startsAt: booking.starts_at,
     timezone: booking.timezone, guests: booking.guests, locationId: booking.location_id,
-    locationName: sameLocation ? matchingHandoff?.locationName : null,
-    locationSlug: sameLocation ? matchingHandoff?.locationSlug : null,
+    locationName: booking.location_name,
+    locationSlug: booking.location_slug,
     locationAddress: sameLocation ? matchingHandoff?.locationAddress : null,
     title: booking.product_name ?? matchingHandoff?.title,
     cancelUrl: booking.status === 'cancelled' ? null : `/${kind === 'reservation' ? 'reservations' : 'bookings'}/cancel?id=${encodeURIComponent(requestId)}#${token}`,

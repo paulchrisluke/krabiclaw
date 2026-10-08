@@ -29,11 +29,12 @@ export default defineHandler(async (event) => {
   const tokenHash = await hashReservationCancelToken(token)
   // Reading the receipt remains valid after spending the cancellation token.
   // Cancellation writes still enforce the token's single-use boundary.
-  const readable = await queryFirst<{ id: string }>(db, `
-    SELECT id FROM requests
-     WHERE id = ? AND organization_id = ? AND kind IN ('reservation', 'booking')
-       AND json_extract(payload_json, '$.cancellation.token_hash') = ?
-       AND json_extract(payload_json, '$.cancellation.expires_at') > ?
+  const readable = await queryFirst<{ id: string; location_name: string | null; location_slug: string | null }>(db, `
+    SELECT r.id, bl.title AS location_name, bl.slug AS location_slug FROM requests r
+      LEFT JOIN business_locations bl ON bl.id = r.location_id AND bl.organization_id = r.organization_id
+     WHERE r.id = ? AND r.organization_id = ? AND r.kind IN ('reservation', 'booking')
+       AND json_extract(r.payload_json, '$.cancellation.token_hash') = ?
+       AND json_extract(r.payload_json, '$.cancellation.expires_at') > ?
      LIMIT 1
   `, [requestId, organizationId, tokenHash, new Date().toISOString()])
   if (!readable) return jsonResponse({ error: 'Booking not found' }, { status: 404 })
@@ -55,6 +56,8 @@ export default defineHandler(async (event) => {
       status: record.status,
       product_name: record.product_name,
       location_id: record.location_id,
+      location_name: readable.location_name,
+      location_slug: readable.location_slug,
     },
   }, { headers: { 'cache-control': 'private, no-store' } })
 })

@@ -2,21 +2,22 @@
 export const PRODUCT_KINDS = ['dish', 'experience', 'service', 'item'] as const
 export const PRODUCT_KIND_LABELS = { dish: 'Food or drink', experience: 'Experience or class', service: 'Service or appointment', item: 'Physical item' } as const
 export type ProductKind = typeof PRODUCT_KINDS[number]
-export type ProductDetailValue = string | string[]
+export type ProductDetailValue = string | string[] | boolean
 export type ProductDetails = Partial<Record<ProductDetailKey, ProductDetailValue>>
 export interface ProductDetailField {
   id: string
   key: ProductDetailKey
   name: string
   description: string
-  value_type: 'single_line_text' | 'multi_line_text' | 'list.single_line_text'
+  value_type: 'single_line_text' | 'multi_line_text' | 'list.single_line_text' | 'boolean'
   validations: { max_length?: number; max_items?: number; choices?: string[] }
   localizable: boolean
   kinds: readonly ProductKind[]
 }
-const TEXT_FIELDS = {
+const DETAIL_FIELDS = {
   pricing_note: { name: 'Price wording', description: 'An explicitly stated price such as Market price; use only when no numeric price is set.', value_type: 'single_line_text', kinds: PRODUCT_KINDS },
   tagline: { name: 'Short introduction', description: 'A short sentence shown below the product title.', value_type: 'single_line_text', kinds: PRODUCT_KINDS },
+  featured: { name: 'Featured', description: 'Highlight this item on the menu and homepage.', value_type: 'boolean', kinds: PRODUCT_KINDS },
   dietary_notes: { name: 'Dietary information', description: 'Merchant-stated dietary facts displayed with a dish.', value_type: 'list.single_line_text', kinds: ['dish'] },
   allergens: { name: 'Allergens', description: 'Allergens the merchant states this dish contains.', value_type: 'list.single_line_text', kinds: ['dish'] },
   ingredients: { name: 'Ingredients', description: 'Ingredients shown in the dish details.', value_type: 'list.single_line_text', kinds: ['dish'] },
@@ -33,8 +34,8 @@ const TEXT_FIELDS = {
   dimensions: { name: 'Dimensions', description: 'Item measurements including their units, shown in its details.', value_type: 'single_line_text', kinds: ['item'] },
   care_instructions: { name: 'Care instructions', description: 'How to care for the item, shown in its details.', value_type: 'multi_line_text', kinds: ['item'] },
 } as const
-export type ProductDetailKey = keyof typeof TEXT_FIELDS
-export const PRODUCT_DETAIL_FIELDS: readonly ProductDetailField[] = Object.entries(TEXT_FIELDS).map(([key, field]) => ({ ...field, id: key, key: key as ProductDetailKey, localizable: true, validations: {} }))
+export type ProductDetailKey = keyof typeof DETAIL_FIELDS
+export const PRODUCT_DETAIL_FIELDS: readonly ProductDetailField[] = Object.entries(DETAIL_FIELDS).map(([key, field]) => ({ ...field, id: key, key: key as ProductDetailKey, localizable: field.value_type !== 'boolean', validations: {} }))
 export const PRICING_NOTE_HANDLE = 'pricing_note'
 export const EXPERIENCE_ATTRIBUTE_HANDLES = { tagline: 'tagline', meetingPoint: 'meeting_point', includedItems: 'included_items', whatToBring: 'what_to_bring' } as const
 export function productDetailFields(kind: ProductKind): ProductDetailField[] {
@@ -46,10 +47,10 @@ export function assertProductKind(value: unknown): ProductKind {
   if (typeof value !== 'string' || !PRODUCT_KINDS.includes(value as ProductKind)) throw new ProductDetailError('kind must be dish, experience, service or item')
   return value as ProductKind
 }
-export function validateProductDetails(kind: ProductKind, value: unknown): ProductDetails {
+export function validateProductDetails(kind: ProductKind, value: unknown, localizableOnly = false): ProductDetails {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new ProductDetailError('details must be an object')
-  const fields = new Map(productDetailFields(kind).map(field => [field.key, field]))
-  const result: ProductDetails = {}
+  const fields = new Map(productDetailFields(kind).filter(field => !localizableOnly || field.localizable).map(field => [field.key, field]))
+  const result: ProductDetails = localizableOnly ? {} : { featured: false }
   for (const [key, entry] of Object.entries(value)) {
     const field = fields.get(key as ProductDetailKey)
     if (!field) throw new ProductDetailError(`details.${key} is not a field for ${kind}`)
@@ -69,9 +70,10 @@ const DEFAULT_TEXT_MAX_LENGTH = 1_000
 const DEFAULT_MULTILINE_MAX_LENGTH = 10_000
 const DEFAULT_LIST_MAX_ITEMS = 100
 
-export function productDetailsSchema(kind?: ProductKind): Record<string, unknown> {
+export function productDetailsSchema(kind?: ProductKind, localizableOnly = false): Record<string, unknown> {
   const fields = kind ? productDetailFields(kind) : PRODUCT_DETAIL_FIELDS
-  return { type: 'object', additionalProperties: false, properties: Object.fromEntries(fields.map(field => {
+  return { type: 'object', additionalProperties: false, properties: Object.fromEntries(fields.filter(field => !localizableOnly || field.localizable).map(field => {
+    if (field.value_type === 'boolean') return [field.key, { type: 'boolean', description: field.description }]
     const multiline = field.value_type === 'multi_line_text'
     const text = { type: 'string', minLength: 1,
       maxLength: field.validations.max_length ?? (multiline ? DEFAULT_MULTILINE_MAX_LENGTH : DEFAULT_TEXT_MAX_LENGTH),
@@ -103,6 +105,9 @@ function assertText(value: unknown, rules: ProductDetailField['validations'], fa
 export function validateProductDetailValue(definition: ProductDetailField, value: unknown): ProductDetailValue {
   const rules = definition.validations
   switch (definition.value_type) {
+    case 'boolean':
+      if (typeof value !== 'boolean') throw new ProductDetailError(`${definition.key} must be a boolean`)
+      return value
     case 'single_line_text': {
       const text = assertText(value, rules, DEFAULT_TEXT_MAX_LENGTH, definition.key)
       if (/[\r\n]/.test(text)) throw new ProductDetailError(`${definition.key} must be a single line`)

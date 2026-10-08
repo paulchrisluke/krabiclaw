@@ -1,4 +1,6 @@
 import { getSourceLocale } from '~/server/utils/organization-locales'
+import { platformLocale } from '~/shared/platform-locales'
+import { loadPublicProductCollection } from '~/server/utils/public-products'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 import { parseGoogleReviewMetadata } from '~/shared/google-review'
 import { executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
@@ -223,15 +225,13 @@ export async function getPublicBlawbyIdentity(db: DbClient, organizationId: stri
 export async function getPublicBlawbyShellData(
   db: DbClient,
   organizationId: string,
-  options: { locale?: string | null; localizations?: readonly ExactPublicLocalization[] } = {},
+  options: { previewAuthorized?: boolean; locale?: string | null; localizations?: readonly ExactPublicLocalization[] } = {},
 ): Promise<PublicBlawbyShellData> {
   const sourceLocale = await getSourceLocale(db, organizationId)
   const locale = options.locale ?? sourceLocale
   const localizations = options.localizations ?? []
   const organizationLocalization = localizations.find(item => item.resourceType === 'organization' && item.resourceId === organizationId) ?? null
-  // Navigation is the site's published pages. A practice area is one of them,
-  // so there is no separate link list to keep in step with the page list.
-  const [sourceIdentity, sourceConsultation, sourceCompliance, pageLinks, verification] = await Promise.all([
+  const [sourceIdentity, sourceConsultation, sourceCompliance, publishedPages, verification, experienceCollection] = await Promise.all([
     getPublicBlawbyIdentity(db, organizationId),
     getPublicConsultationSettings(db, organizationId),
     getPublicCompliance(db, organizationId),
@@ -240,8 +240,15 @@ export async function getPublicBlawbyShellData(
       SELECT (SELECT i.verification_token FROM organization_integrations i WHERE i.organization_id = organization.id AND i.provider = 'google_search_console') AS token
         FROM organization WHERE id = ? LIMIT 1
     `, [organizationId]),
+    loadPublicProductCollection(db, organizationId, 'experiences', options.previewAuthorized === true),
   ])
   if (!verification) throw new Error(`Organization ${organizationId} was not found for its Blawby shell`)
+  const pageLinks = publishedPages.map(page => ({ id: page.id, path: page.path, title: page.title }))
+  if (experienceCollection?.products.length && !pageLinks.some(page => page.path === '/experiences')) {
+    const title = platformLocale(locale)?.messages['saya.footer.experiences']
+    if (!title) throw new Error(`Experience navigation label is unavailable for ${locale}`)
+    pageLinks.push({ id: 'experiences', path: '/experiences', title })
+  }
   const localizedRepresentation = locale !== sourceLocale
   const identity = localizedRepresentation
     ? {
@@ -275,7 +282,7 @@ export async function getPublicBlawbyShellData(
     identity,
     consultation,
     compliance,
-    pageLinks: pageLinks.map(page => ({ id: page.id, path: page.path, title: page.title })),
+    pageLinks,
     searchConsoleVerification: verification.token,
   }
 }
@@ -296,14 +303,14 @@ export async function getPublicBlawbyDocumentData(
     : await loadExactPublicLocalizations(env, db, organizationId, locale)
 
   const [shell, route] = await Promise.all([
-    getPublicBlawbyShellData(db, organizationId, { locale, localizations }),
+    getPublicBlawbyShellData(db, organizationId, { previewAuthorized: options.previewAuthorized, locale, localizations }),
     getPublicBlawbyRouteData(db, organizationId, recipe, { ...options, locale, localizations }, env),
   ])
   // Which path each recipe's document lives at is declared once, per template,
   // in utils/template-registry.ts; 'page' names its own path.
   const pagePath = recipe === 'page' ? options.slug ?? null : BLAWBY_TEMPLATE.pageDocuments.recipes[recipe] ?? null
   // An article and a post carry their own locale representations.
-  if (recipe === 'article' || recipe === 'posts') return { shell, route }
+  if (recipe === 'article' || recipe === 'posts' || recipe === 'experiences') return { shell, route }
   // Every route on this template is a page now, so locale representations
   // come from the document — there is no second resource kind to branch on.
   route.localeRepresentations = await listPublicLocaleRepresentations(env, db, {

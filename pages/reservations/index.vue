@@ -426,7 +426,7 @@ async function handleReservation() {
       locationSlug: typeof selectedLocation.value?.slug === 'string' ? selectedLocation.value.slug : null,
     })
     mirrorSubmission('reservation_submit', res.measurement, selectedLocation.value?.id ? String(selectedLocation.value.id) : null)
-    await navigateTo('/reservations/confirmed')
+    await navigateTo({ path: '/reservations/confirmed', query: { id: res.request_id }, hash: `#${res.cancellationToken}` })
     reservationRequestKey = null
     reservationFingerprint = null
   } catch (err) {

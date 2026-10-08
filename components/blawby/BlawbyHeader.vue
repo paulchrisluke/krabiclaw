@@ -101,7 +101,7 @@ const { trackConsultationClick } = useOrganizationConversionTracking(() => props
 const route = useRoute()
 const brandName = computed(() => props.organization.name || '')
 const headerCtaLabel = computed(() => props.consultation.cta_label)
-const headerOrder = ['/services', '/pricing', '/about', '/contact', '/blog', '/donate']
+const headerOrder = ['/services', '/experiences', '/pricing', '/about', '/contact', '/blog', '/donate']
 const headerItems = computed(() => {
   const byPath = new Map(props.pageLinks.map(item => [item.path, item]))
   return headerOrder.flatMap(path => {

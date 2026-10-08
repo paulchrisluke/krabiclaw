@@ -121,6 +121,9 @@
                       {{ product.name }}
                     </NuxtLink>
                     <span v-else class="text-default opacity-50">{{ product.name }}</span>
+                    <span v-if="product.details.featured === true" class="inline-flex shrink-0 items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                      {{ t('saya.posts.featured') }}
+                    </span>
                     <SayaBadgeUnavailable
                       v-if="!isAvailable(product, group.location_id)"
                       :text="t('saya.menu_page.unavailable')"

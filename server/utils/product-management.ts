@@ -337,18 +337,19 @@ async function publicProductWindow(db: DbClient, organizationId: string, product
 
 /** Editable catalogue pages read one extra row. Public experience readiness precedes pagination. */
 export async function listOrganizationProducts(db: DbClient, input: {
-  organizationId: string; kind?: ProductKind; publishedOnly?: boolean; window?: { limit: number; offset: number }
+  organizationId: string; kind?: ProductKind; featured?: boolean; publishedOnly?: boolean; window?: { limit: number; offset: number }
 }): Promise<Product[]> {
   const requireReadiness = input.publishedOnly === true && (!input.kind || input.kind === 'experience')
   const window = requireReadiness ? undefined : input.window
   const rows = await queryAll<Row>(db, `
     SELECT ${PRODUCT_COLUMNS} FROM products p
     JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
-    WHERE p.organization_id = ? AND (? = 0 OR (${PUBLIC_PRODUCT_SQL}))${input.kind ? ' AND p.kind = ?' : ''}
+    WHERE p.organization_id = ? AND (? = 0 OR (${PUBLIC_PRODUCT_SQL}))${input.kind ? ' AND p.kind = ?' : ''}${input.featured === undefined ? '' : " AND COALESCE(json_extract(p.details_json, '$.featured'), 0) = ?"}
     ORDER BY p.name, p.id
     ${window ? 'LIMIT ? OFFSET ?' : ''}
   `, [input.organizationId, input.publishedOnly ? 1 : 0,
     ...(input.kind ? [input.kind] : []),
+    ...(input.featured === undefined ? [] : [Number(input.featured)]),
     ...(window ? [window.limit + 1, window.offset] : [])])
   const products = await hydrate(db, input.organizationId, rows.map(mapProductRow))
   return requireReadiness ? publicProductWindow(db, input.organizationId, products, input.window) : products
@@ -363,7 +364,7 @@ export async function listOrganizationProducts(db: DbClient, input: {
  * offering disables ordering or booking while its information stays visible.
  */
 export async function listLocationProducts(db: DbClient, input: {
-  organizationId: string; locationId: string; kind?: ProductKind; publishedOnly?: boolean; window?: { limit: number; offset: number }
+  organizationId: string; locationId: string; kind?: ProductKind; featured?: boolean; publishedOnly?: boolean; window?: { limit: number; offset: number }
 }): Promise<Product[]> {
   const published = input.publishedOnly === true
   const requireReadiness = published && (!input.kind || input.kind === 'experience')
@@ -373,11 +374,12 @@ export async function listLocationProducts(db: DbClient, input: {
     JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id
     ${published ? `JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
       AND (${PUBLIC_PRODUCT_SQL})` : ''}
-    WHERE p.organization_id = ? AND pl.location_id = ?${published ? ' AND pl.published = 1' : ''}${input.kind ? ' AND p.kind = ?' : ''}
+    WHERE p.organization_id = ? AND pl.location_id = ?${published ? ' AND pl.published = 1' : ''}${input.kind ? ' AND p.kind = ?' : ''}${input.featured === undefined ? '' : " AND COALESCE(json_extract(p.details_json, '$.featured'), 0) = ?"}
     ORDER BY p.name, p.id
     ${window ? 'LIMIT ? OFFSET ?' : ''}
   `, [input.organizationId, input.locationId,
     ...(input.kind ? [input.kind] : []),
+    ...(input.featured === undefined ? [] : [Number(input.featured)]),
     ...(window ? [window.limit + 1, window.offset] : [])])
   const products = await hydrate(db, input.organizationId, rows.map(mapProductRow))
   return requireReadiness ? publicProductWindow(db, input.organizationId, products, input.window) : products
@@ -1210,7 +1212,7 @@ async function planProductUpdate(db: DbClient, input: {
       values: option.values.map(value => ({ id: value.id, value: value.value, sort_order: value.sort_order })),
     })),
     variants,
-    details: patch.details ?? current.details,
+    details: { featured: current.details.featured ?? false, ...(patch.details ?? current.details) },
   }
   const planned = await planProduct(db, organizationId, merged, {
     organizationId: input.organizationId, existingId: productId, defaultCurrency: input.defaultCurrency,

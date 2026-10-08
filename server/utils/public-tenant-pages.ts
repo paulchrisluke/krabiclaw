@@ -29,6 +29,7 @@ import { PRICING_NOTE_HANDLE } from '~/shared/product-details'
 import { summarizeProductPrices } from '~/utils/product-money'
 import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
 import { addressPlaceName, parsePostalAddress } from '~/utils/postal-address'
+import { getVerticalCopy } from '~/utils/vertical-copy'
 
 export interface PublicTenantPage {
   id: string
@@ -66,6 +67,7 @@ export interface PublicTenantPageProductRow {
   slug: string
   description: string
   kind: ProductKind
+  featured: boolean
   /**
    * The one location publishing this product, or null when several do. A
    * product offered in two places has no single route, so its card links
@@ -179,7 +181,7 @@ export async function listPublicTenantPageProductRows(
       else publicPath = sourcePath ? `/${source.locale}${sourcePath}` : null
     }
     const note = product.details[PRICING_NOTE_HANDLE]
-    return [{ id: product.id, name: product.name, slug: product.slug, description: product.description, kind: product.kind,
+    return [{ id: product.id, name: product.name, slug: product.slug, description: product.description, kind: product.kind, featured: product.details.featured === true,
       location_slug: locationSlug, public_path: publicPath,
       available: product.active && (locationId ? offered.some(location => location.location_id === locationId && location.active) : online || offered.some(location => location.active)),
       pricing_note: typeof note === 'string' ? note : null,
@@ -234,6 +236,7 @@ async function hydrateBlocks(
     db, 'SELECT theme_id, vertical, default_currency FROM organization WHERE id = ? LIMIT 1', [organizationId])
   if (!organizationRow) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page site is unavailable' })
   const template = resolvePublicTemplate({ themeId: organizationRow.theme_id, vertical: organizationRow.vertical })
+  const defaultLocationGrid = pagePath === '/' && template.slug !== 'platform' && !blocks.some(block => block.type === 'location_grid')
   const articlePrefix = template.serviceRoutes.articleDetailPrefix
   const sourcePages = pageIds.size
     ? resources.pages
@@ -244,24 +247,55 @@ async function hydrateBlocks(
   // rather than flattened into one list: two grids on a page name two different
   // collections, and a flat union rendered both collections in both grids.
   const currency = organizationRow.default_currency
+  const homepage = pagePath === '/' && template.slug !== 'platform'
+  const homepageMenu = homepage && template.slug === 'saya'
+  const productCatalog = collectionIds.size || productIds.size || homepage ? await loadTenantPageProductCatalog(db, organizationId, locale, localizations) : undefined
+  const homepageDishes = homepageMenu ? productCatalog!.products.filter(product => product.kind === 'dish') : []
+  const defaultMenuGrid = homepageMenu && blocks.some(block => block.type === 'product_grid'
+    && !(Array.isArray(block.data.product_ids) && block.data.product_ids.length) && !block.data.collection_id)
+  for (const product of homepageDishes) if (defaultMenuGrid || product.details.featured === true) productIds.add(product.id)
+  if (homepage) for (const product of productCatalog!.products) if (product.kind === 'experience' || product.details.featured === true) productIds.add(product.id)
   // Null on a template that sells nothing; its pages carry no product grid.
   if ((collectionIds.size || productIds.size) && !currency) {
     throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page site has no currency' })
   }
-  const productCatalog = collectionIds.size || productIds.size ? await loadTenantPageProductCatalog(db, organizationId, locale, localizations) : undefined
   const productsByCollection = new Map(await Promise.all([...collectionIds].map(async collectionId =>
     [collectionId, await listPublicTenantPageProductRows(db, organizationId, { collectionId }, currency!, productCatalog)] as const)))
   const productById = new Map((productIds.size
     ? await listPublicTenantPageProductRows(db, organizationId, { productIds: [...productIds] }, currency!, productCatalog)
     : []).map(product => [product.id, product]))
-  const sourceLocations = locationIds.size
+  const menuProducts = [...productById.values()].filter(product => product.kind === 'dish')
+  const featuredMenuProducts = menuProducts.filter(product => product.featured)
+  const defaultMenuProducts = featuredMenuProducts.length ? featuredMenuProducts : menuProducts
+  const displayed = new Set(blocks.filter(block => block.type === 'product_grid').flatMap(block =>
+    Array.isArray(block.data.product_ids) && block.data.product_ids.length
+      ? block.data.product_ids.filter((id): id is string => typeof id === 'string' && productById.has(id))
+      : block.data.collection_id
+        ? (productsByCollection.get(String(block.data.collection_id)) ?? []).map(product => product.id)
+        : homepageMenu ? defaultMenuProducts.map(product => product.id) : []))
+  if (homepage) {
+    const missing = [...productById.values()].filter(product => product.featured && product.kind !== 'experience' && !displayed.has(product.id))
+    if (missing.length) blocks = [...blocks, {
+      id: 'homepage-featured-products', type: 'product_grid',
+      position: Math.max(-1, ...blocks.map(block => block.position)) + 1,
+      data: { product_ids: missing.map(product => product.id) }, media: [],
+    }]
+  }
+  const missingExperiences = homepage ? [...productById.values()].filter(product => product.kind === 'experience' && !displayed.has(product.id)) : []
+  if (missingExperiences.length) blocks = [...blocks, {
+    id: 'homepage-experiences', type: 'product_grid',
+    position: Math.max(-1, ...blocks.map(block => block.position)) + 1,
+    data: { title: getVerticalCopy(organizationRow.vertical, locale).experiencesPageTitle, product_ids: missingExperiences.map(product => product.id) }, media: [],
+  }]
+  const sourceLocations = locationIds.size || defaultLocationGrid
     ? await queryAll<{ id: string; title: string; slug: string; address: string | null; description: string | null; short_description: string | null; asset_id: string | null; public_url: string | null; thumbnail_url: string | null; kind: string | null; alt_text: string | null }>(db, `
         SELECT bl.id, bl.title, bl.slug, bl.address, bl.description, bl.short_description, ma.id AS asset_id, ma.public_url, ma.thumbnail_url, ma.kind, ma.alt_text
           FROM business_locations bl
-          LEFT JOIN media_placements mp ON mp.owner_type = 'business_location' AND mp.owner_id = bl.id AND mp.slot = 'hero' AND mp.sort_order = 0 AND mp.status = 'active'
-          LEFT JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
-         WHERE bl.organization_id = ? AND bl.status = 'active' AND bl.id IN (SELECT value FROM json_each(?))
-      `, [organizationId, d1JsonStringSet([...locationIds])])
+          LEFT JOIN media_placements mp ON mp.organization_id = bl.organization_id AND mp.owner_type = 'business_location' AND mp.owner_id = bl.id AND mp.slot = 'hero' AND mp.sort_order = 0 AND mp.status = 'active'
+          LEFT JOIN media_assets ma ON ma.id = mp.asset_id AND ma.organization_id = bl.organization_id AND ma.status = 'active'
+         WHERE bl.organization_id = ? AND bl.status = 'active' AND (? = 1 OR bl.id IN (SELECT value FROM json_each(?)))
+         ORDER BY bl.title, bl.id
+      `, [organizationId, defaultLocationGrid ? 1 : 0, d1JsonStringSet([...locationIds])])
     : []
   // The row stores the address as text and a translation carries only the parts
   // that are words, so the canonical one is read first: the overlay then merges
@@ -278,6 +312,15 @@ async function hydrateBlocks(
         return { ...location, slug, public_path: representation.routePath }
       })
     : parsedLocations
+  const locationCopy = getVerticalCopy(organizationRow.vertical, locale)
+  if (defaultLocationGrid && locations.length) {
+    blocks = [...blocks, {
+      id: 'homepage-locations', type: 'location_grid',
+      position: Math.max(-1, ...blocks.map(block => block.position)) + 1,
+      data: { title: locationCopy.locationGroupLine(locations.length), description: locationCopy.findUsKicker, location_ids: sourceLocations.map(location => location.id) },
+      media: [],
+    }]
+  }
   // A social_posts block reads the organization's feed through the one public
   // post reader, with its own scope and limit; nothing about a post is stored
   // on the block.
@@ -357,8 +400,8 @@ async function hydrateBlocks(
       })
     }
     if (block.type === 'product_grid') {
-      // Either the block names products, or it names a collection. A block that
-      // names neither lists nothing — the same rule a page_grid follows.
+      // Explicit selections stay as authored; an unscoped homepage menu uses
+      // the merchant's featured dishes, or its ordinary menu when none are featured.
       const collectionId = typeof data.collection_id === 'string' && data.collection_id.trim() ? data.collection_id : null
       const selected = Array.isArray(data.product_ids) && data.product_ids.length > 0
         ? data.product_ids.flatMap((id) => {
@@ -367,7 +410,7 @@ async function hydrateBlocks(
           })
         : collectionId
           ? productsByCollection.get(collectionId)
-          : []
+          : homepageMenu ? defaultMenuProducts : []
       if (!selected) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page collection reference is unavailable' })
       data.items = selected.map(product => ({
         id: product.id,
@@ -378,6 +421,7 @@ async function hydrateBlocks(
         // publishes it, and a product published in several places has no
         // single route, so its card carries none.
         kind: product.kind,
+        featured: product.featured,
         url: product.public_path ?? '',
         unavailable: !product.available,
         value: product.unit_amount === null || !product.currency
@@ -414,8 +458,8 @@ async function hydrateBlocks(
           // above the title, and the item carried everything except that.
           city: addressPlaceName(location.address) || undefined,
           description: location.short_description || location.description || undefined,
-          url: 'public_path' in location && typeof location.public_path === 'string' ? location.public_path : `/locations/${location.slug}`,
-          labelKey: 'saya.home.visit_location',
+          url: template.slug === 'blawby' ? '/contact' : 'public_path' in location && typeof location.public_path === 'string' ? location.public_path : `/locations/${location.slug}`,
+          label: locationCopy.visitLocationCta,
           media: location.asset_id
             ? projectLocalizedMediaAlt([{ asset_id: location.asset_id, slot: 'hero', public_url: location.public_url, thumbnail_url: location.thumbnail_url, kind: location.kind, alt_text: location.alt_text }], localizations ?? [])
             : [],

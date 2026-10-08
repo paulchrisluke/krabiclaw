@@ -57,7 +57,7 @@ const blawbyRoutePath = computed(() => resolveTenantLocalePath(
 ).sourcePath)
 const target = resolveBlawbyRouteTarget(blawbyRoutePath.value)
 const { data: document } = await useBlawbyDocument(target.recipe, target.slug)
-if (target.recipe !== 'links') {
+if (target.recipe !== 'links' && target.recipe !== 'experiences') {
   useState<PublicBlawbyRouteData['localeRepresentations']>('public-locale-representations', () => []).value = document.value.route.localeRepresentations
 }
 provide('blawby-document', document)

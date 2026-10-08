@@ -1,9 +1,9 @@
 import { parseOpeningHours, parseSpecialHours } from '~/shared/reservation-hours'
-import type { BatchQuery } from '~/server/db'
+import type { BatchQuery, DbClient } from '~/server/db'
 import type { PublicBase } from '~/server/utils/public-base'
 import { calculateMapEmbedUrl } from '~/server/utils/google-places'
 import type { PublicShellPayload } from '~/utils/public-resource-contracts'
-import { resolveOrganizationCmsCapabilities } from '~/server/utils/cms-capabilities'
+import { listOrganizationProducts } from '~/server/utils/product-management'
 import { isCurrencyCode } from '~/shared/currencies'
 import { parsePostalAddress } from '~/utils/postal-address'
 import type { PublicMediaPlacement } from '~/server/utils/public-social-image'
@@ -51,24 +51,12 @@ export function appendPublicShellQueries(
                WHERE s.id = ?
                  AND setting.key IN ('press_email', 'partnerships_email', 'catering_email', 'careers_email', 'default_timezone')
               `, [organizationId]),
-    // Where this site has something to show: the Product is published to the
-    // site, offered and published at the location, and active itself. All three
-    // are separate states (see product_publications / product_locations in
-    // server/db/schema.ts) and the nav asks for all three at once.
-    // `bookable` is what separates the two surfaces: a Product that takes
-    // bookings is an Experience and is read on /experiences, everything else
-    // on the vertical's own Menu or Products. The nav needs both facts per
-    // location so a surface with nothing on it is not offered.
-    productLocations: push(`SELECT pl.location_id,
-                                   MAX(CASE WHEN bc.product_id IS NULL THEN 0 ELSE 1 END) AS bookable,
-                                   MAX(CASE WHEN bc.product_id IS NULL THEN 1 ELSE 0 END) AS unbookable
+    productLocations: push(`SELECT DISTINCT pl.location_id
                               FROM product_locations pl
                               JOIN products p ON p.id = pl.product_id AND p.organization_id = pl.organization_id
                               JOIN product_publications pp ON pp.product_id = p.id AND pp.organization_id = p.organization_id
-                              LEFT JOIN product_booking_configs bc ON bc.product_id = p.id AND bc.organization_id = p.organization_id
                              WHERE pl.organization_id = ?  AND pp.published = 1
-                               AND pl.published = 1 AND pl.active = 1 AND p.active = 1
-                             GROUP BY pl.location_id
+                               AND pl.published = 1 AND p.kind <> 'experience'
                              ORDER BY pl.location_id`, [organizationId]),
     // The organization's own placements and its locations' heroes and cards,
     // in one read: the shell's logo and favicon, and each location's og:image.
@@ -83,11 +71,12 @@ export function appendPublicShellQueries(
   }
 }
 
-export function buildPublicShellPayload(
+export async function buildPublicShellPayload(
+  db: DbClient,
   organization: PublicBase['organization'],
   results: BatchResult[],
   indexes: PublicShellQueryIndexes,
-): PublicShellPayload {
+): Promise<PublicShellPayload> {
   const rawLocations = (results[indexes.locations]?.results ?? []) as Record<string, unknown>[]
   const placements = (results[indexes.media]?.results ?? []) as Array<PublicMediaPlacement & { owner_type: string; owner_id: string }>
   const organizationMedia = placements.filter(item => item.owner_type === 'organization')
@@ -147,6 +136,10 @@ export function buildPublicShellPayload(
   if (organization.canonical_url) config.canonical_url = organization.canonical_url
   if (organization.search_console_verification) config.search_console_verification = organization.search_console_verification
 
+  const activeLocationIds = new Set(rawLocations.map(location => String(location.id)))
+  const productLocationRows = (results[indexes.productLocations]?.results ?? []) as Array<{ location_id: string }>
+  const experiences = await listOrganizationProducts(db, { organizationId: organization.id, kind: 'experience', publishedOnly: true })
+
   return {
     platformMessages: null,
     organization: {
@@ -165,16 +158,8 @@ export function buildPublicShellPayload(
       media: [],
       syncedAt: null,
     },
-    ...(() => {
-      const rows = (results[indexes.productLocations]?.results ?? []) as Array<{ location_id: string; bookable: number; unbookable: number }>
-      const byLocation = new Map(rows.map(row => [String(row.location_id), row]))
-      const { capabilities } = resolveOrganizationCmsCapabilities(String(organization.vertical), organization.theme_id)
-      const offersLocationProducts = capabilities.managers.some(manager => manager.key === 'location.products')
-      const carries = (pick: (_row: { bookable: number; unbookable: number }) => number) => offersLocationProducts && rawLocations.some((location) => {
-        const row = byLocation.get(String(location.id))
-        return row !== undefined && pick(row) === 1
-      })
-      return { hasProducts: carries(row => row.unbookable), hasBookableProducts: carries(row => row.bookable) }
-    })(),
+    hasProducts: productLocationRows.some(row => activeLocationIds.has(String(row.location_id))),
+    hasBookableProducts: experiences.some(product => Boolean(product.order_url || product.booking?.online_timezone)
+      || product.locations.some(location => location.published && activeLocationIds.has(location.location_id))),
   }
 }

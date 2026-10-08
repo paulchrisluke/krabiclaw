@@ -297,7 +297,7 @@ export function useSessionBooking(input: MaybeRefOrGetter<SessionBookingContext>
         locationSlug: context.value.location?.slug ?? null,
       })
       bookingOpen.value = false
-      await navigateTo('/bookings/confirmed')
+      await navigateTo({ path: '/bookings/confirmed', query: { id: response.request_id }, hash: `#${response.cancellation_token}` })
       checkoutRequestKey.value = null
       checkoutFingerprint = null
     } catch (error) {

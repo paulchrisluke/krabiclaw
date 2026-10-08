@@ -262,7 +262,7 @@ export default definePlugin((nitroApp) => {
       listPublishedTenantSitemapPages(db, organizationId),
     ])
 
-    entries.push(...template.sitemap.exactPaths.map(loc => ({ loc })))
+    entries.push(...template.sitemap.exactPaths.filter(loc => !['/menu', '/products', '/experiences'].includes(loc)).map(loc => ({ loc })))
 
     if (locations.length > 0) {
       entries.push({ loc: '/locations' })

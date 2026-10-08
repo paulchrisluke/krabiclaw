@@ -169,11 +169,12 @@ export async function loadPublicProductCollection(
   if (locationSlug && locationRows.length !== 1) return null
   const locations = locationRows
   if (locationSlug && locations.length !== 1) return null
+  const kind = routeKind === 'experiences' ? 'experience' : routeKind === 'menu' ? 'dish' : undefined
   // Location publication is the public gate here: a product carried by the
   // site but withheld at this branch is absent, not shown greyed out.
   const perLocation = await Promise.all(locations.map(location =>
-    listLocationProducts(db, { organizationId: resolved.organization.id, locationId: location.id, publishedOnly: true })))
-  const onlineProducts = locationSlug ? [] : (await listOrganizationProducts(db, { organizationId, publishedOnly: true }))
+    listLocationProducts(db, { organizationId: resolved.organization.id, locationId: location.id, kind, publishedOnly: true })))
+  const onlineProducts = locationSlug ? [] : (await listOrganizationProducts(db, { organizationId, kind, publishedOnly: true }))
     .filter(product => Boolean(product.booking?.online_timezone || product.order_url))
   const seen = new Set<string>()
   // Collections and detail routes use the same explicit product kind.
