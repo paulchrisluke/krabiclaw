@@ -207,10 +207,25 @@ for (const tenant of tenants) {
   })
 }
 
-test('Pottery House serves its published Thai language and catalog', async ({ page }) => {
+test('Pottery House enforces its published languages and localized catalog', async ({ page }) => {
   const localesResponse = await page.request.get(`${potteryHouseBaseURL}/api/public/locales`, { headers: potteryHouseExtraHeaders })
   expect(localesResponse.status(), await localesResponse.text()).toBe(200)
   const { locales } = await localesResponse.json()
+  // Staging's copied Growth period expired; its Basic site publishes English
+  // only. Production renewed Growth and published Thai. Choose the expected
+  // fixture from the requested environment, never from the response itself.
+  if (new URL(testBaseUrl()).origin === 'https://staging.krabiclaw.com') {
+    expect(locales).toEqual([expect.objectContaining({ code: 'en', is_source: true, status: 'published' })])
+    for (const path of ['/api/public/products?locale=th', '/api/public/experiences/pottery-wheel-class?locale=th']) {
+      const response = await page.request.get(`${potteryHouseBaseURL}${path}`, { headers: potteryHouseExtraHeaders })
+      expect(response.status(), await response.text()).toBe(404)
+      expect(await response.json()).toMatchObject({ status: 404, message: 'Localized route was not found' })
+    }
+    const home = await page.goto(`${potteryHouseBaseURL}/th`, { waitUntil: 'load' })
+    expect(home?.status()).toBe(404)
+    await expect(page.getByRole('heading', { name: 'Page not found', exact: true })).toBeVisible()
+    return
+  }
   expect(locales).toContainEqual(expect.objectContaining({ code: 'th', is_source: false, status: 'published' }))
 
   const catalogResponse = await page.request.get(`${potteryHouseBaseURL}/api/public/products?locale=th`, { headers: potteryHouseExtraHeaders })
