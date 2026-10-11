@@ -27,7 +27,7 @@ import { cloudflareEnv } from "~/server/utils/api-response";
 import { purgePublicResourceCacheNow } from "~/server/utils/public-resource-cache";
 import { resolveMissingMcpCredential, type McpToolMeta } from "~/server/utils/mcp-runtime";
 import {
-  buildMcpAuthChallengeForError, describeMcpAuthTelemetryError, getCloudflareWaitUntil, isMcpMutatingTool, mcpAuthRequiredResult, mcpToolErrorResult, setMcpAuthChallenge, } from "~/server/utils/mcp-route-helpers";
+  buildMcpAuthChallengeForError, describeMcpAuthTelemetryError, getCloudflareWaitUntil, isMcpMutatingTool, mcpAuthChallengeFromError, mcpAuthRequiredResult, mcpToolErrorResult, setMcpAuthChallenge, } from "~/server/utils/mcp-route-helpers";
 import { logMcpToolCallEvent, mcpTelemetryMethod } from "~/server/utils/mcp-telemetry";
 import { describeErrorForTelemetry } from "~/server/utils/error-telemetry";
 import { getRequestDataMetrics, recordRequestPhase } from "~/server/utils/request-metrics";
@@ -55,8 +55,8 @@ function logMcpEventDetached(
 const TENANT_AUTH_DESCRIPTION = "Connect KrabiClaw to continue.";
 const TENANT_AUTH_REQUIRED_TEXT = "Authentication required: connect KrabiClaw to continue.";
 
-function resourceMetadataUrl(baseUrl: string) {
-  return `${baseUrl}/.well-known/oauth-protected-resource`;
+function resourceUrl(baseUrl: string) {
+  return `${baseUrl}/api/mcp`;
 }
 
 function resolveTenantToolMeta(toolName: string | null): McpToolMeta {
@@ -64,15 +64,7 @@ function resolveTenantToolMeta(toolName: string | null): McpToolMeta {
   return { domain: tool?.domain ?? null, isMutating: isMcpMutatingTool(tool) };
 }
 
-const MCP_INSTRUCTIONS = `Manage the business the user selects. Resolve IDs through workspace reads and ask about ambiguous targets before a write.
-
-Finish the requested human task. Ask for missing business facts before calling a tool; never invent prices, times, capacity or policies. Menu updates preserve sections and order. Experiences are bookable offerings. Follow returned readiness and public URLs rather than assuming a catalog write finished the website.
-
-Read current state before replacing content. Preserve unrelated records and IDs, use concurrency tokens, and reuse an operation’s idempotency key on retry. Follow pagination before claiming complete results. Use only host-supplied attachment references.
-
-Publish and send messages only to the destinations the user requested. Report drafts, partial results, delivery failures and unresolved actions accurately. A guest change proposal leaves the existing booking in place until accepted.
-
-Financial tools are read-only. A financial_action_required result is an incomplete action with a dashboard handoff; never describe it as a completed booking, cancellation or refund. Authorization and entitlements are enforced by the server.`;
+const MCP_INSTRUCTIONS = `Manage the selected business. Read current state and preserve unrelated values. Ask for missing business facts; never invent prices or booking details. Finish website changes and verify returned public URLs. Keep menu sections and order; experiences need bookings. Use revision and retry keys, and follow pagination. Publish or message only requested destinations. Payment reports are read-only; financial_action_required means the action remains incomplete. Report tool errors and partial outcomes plainly.`;
 
 // Per-request domain context, threaded through
 // `AuthInfo.extra` since `McpServerFactory` only receives an `McpRequestContext`.
@@ -120,6 +112,7 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
   for (const toolDef of MCP_PUBLIC_TOOLS) {
     const { event, mcpUser } = factoryContextFrom(ctx);
     mcpServer.registerTool(toolDef.name, {
+      title: toolDef.title,
       description: toolDef.description,
       inputSchema: mcpToolInputSchema(event, toolDef, mcpUser),
       outputSchema: fromJsonSchema<Record<string, unknown>>(toolDef.outputSchema as JsonSchemaType),
@@ -175,7 +168,7 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
     const isRender = isMcpRenderResponse(result);
     const failed = isRender && result.isError === true;
     const structuredContent = isRender ? result.structuredContent : result;
-    const modelText = isRender && result.modelText ? result.modelText : JSON.stringify(structuredContent, null, 2);
+    const modelText = isRender && result.modelText ? result.modelText : JSON.stringify(structuredContent);
 
     const executionContext = event.context.mcpExecutionContext as { organizationId: string } | undefined;
     const resolvedOrganizationId = executionContext?.organizationId ?? null;
@@ -259,7 +252,7 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
       return true;
     }).map((tool) => {
       const baseTool = {
-        name: tool.name, description: tool.description, inputSchema: tool.inputSchema, _meta: {
+        name: tool.name, title: tool.title, description: tool.description, inputSchema: tool.inputSchema, _meta: {
           securitySchemes: tool.securitySchemes, "krabiclaw/toolInfo": {
             domain: tool.domain, minimumRole: tool.minimumRole, }, ...(tool.fileParams?.length ? { "openai/fileParams": tool.fileParams } : {}), }, };
       return { ...baseTool, outputSchema: tool.outputSchema, annotations: tool.annotations, securitySchemes: tool.securitySchemes };
@@ -267,7 +260,12 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
 
     const domains = [...new Set(tools.map((tool) => tool._meta["krabiclaw/toolInfo"].domain))];
     logMcpEventDetached(event, cfEnv.DB, {
-      organizationId: organizationCtx?.organizationId ?? null,  userId: mcpUser.userId, requestId, method: "tools/list", arguments: { organization_id: organizationIdHeader }, result: { count: tools.length, domains, tools, _meta: catalogMeta(MCP_PUBLIC_TOOLS) }, status: "success", httpStatus: 200, oauthClientId: mcpUser.oauthClientId ?? null, });
+      organizationId: organizationCtx?.organizationId ?? null, userId: mcpUser.userId, requestId, method: "tools/list", arguments: { organization_id: organizationIdHeader },
+      result: { count: tools.length, domains, instructions: MCP_INSTRUCTIONS, tools: tools.map(tool => ({
+        name: tool.name, title: tool.title, description: tool.description,
+        annotations: tool.annotations, securitySchemes: tool.securitySchemes,
+        contract_fingerprint: catalogFingerprint([tool]),
+      })) }, status: "success", httpStatus: 200, oauthClientId: mcpUser.oauthClientId ?? null, });
 
     // Our own McpToolDefinition types inputSchema/outputSchema as a loose
     // Record<string, unknown>; every entry in mcp-tools/*.ts is a real JSON
@@ -325,7 +323,7 @@ export default defineHandler(async (event) => {
 
   const tenantAuthOptions = { audiences: [`${baseUrl}/api/mcp`], requiredScopes: ["tenant"] };
   const runtimeDeps = {
-    authOptions: tenantAuthOptions, resourceMetadataUrl, authDescription: TENANT_AUTH_DESCRIPTION, authRequiredText: TENANT_AUTH_REQUIRED_TEXT, logEvent: (evt: typeof event, fields: Record<string, unknown>) =>
+    authOptions: tenantAuthOptions, resourceUrl, authDescription: TENANT_AUTH_DESCRIPTION, authRequiredText: TENANT_AUTH_REQUIRED_TEXT, logEvent: (evt: typeof event, fields: Record<string, unknown>) =>
       logMcpEventDetached(evt, cfEnv.DB, fields as unknown as Parameters<typeof logMcpToolCallEvent>[1]), resolveToolMeta: resolveTenantToolMeta, };
 
   let requestId: JsonRpcId | undefined;
@@ -365,13 +363,14 @@ export default defineHandler(async (event) => {
       } catch (error) {
         const mcpError = asMcpError(error);
         const isToolCall = requestMethod === "tools/call";
-        if (mcpError.kind === "auth") {
+        if (mcpError.kind === "auth" || mcpAuthChallengeFromError(error)) {
+          const authStatus = mcpError.kind === "forbidden" ? 403 : 401;
           const authChallenge = buildMcpAuthChallengeForError(error, {
-            resourceMetadataUrl: resourceMetadataUrl(baseUrl), defaultDescription: TENANT_AUTH_DESCRIPTION, });
+            resourceUrl: resourceUrl(baseUrl), defaultDescription: TENANT_AUTH_DESCRIPTION, });
           logMcpEventDetached(event, cfEnv.DB, {
-            requestId: null, method: requestMethod ?? "unknown", status: "auth_required", errorCode: mcpError.code, errorMessage: describeMcpAuthTelemetryError(error), httpStatus: isToolCall ? 200 : 401, });
+            requestId: null, method: requestMethod ?? "unknown", status: "auth_required", errorCode: mcpError.code, errorMessage: describeMcpAuthTelemetryError(error), httpStatus: isToolCall ? 200 : authStatus, });
           if (isToolCall) return mcpSuccess(requestId, mcpAuthRequiredResult({ challenge: authChallenge, message: TENANT_AUTH_REQUIRED_TEXT }));
-          event.res.status = 401;
+          event.res.status = authStatus;
           setMcpAuthChallenge(event, authChallenge);
           return mcpFailure(requestId, mcpError);
         }

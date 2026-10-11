@@ -1,5 +1,5 @@
 import { defineHandler } from 'nitro'
-import { getRouterParam } from 'nitro/h3'
+import { getRouterParam, readBody } from 'nitro/h3'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { activateOnboardingDraft } from '~/server/utils/onboarding-apply'
@@ -12,9 +12,12 @@ export default defineHandler(async (event) => {
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
   const draftId = getRouterParam(event, 'draftId')
   if (!draftId) return jsonResponse({ error: 'Draft id is required' }, { status: 400 })
+  const body = await readBody(event) as { expectedUpdatedAt?: unknown }
+  if (typeof body?.expectedUpdatedAt !== 'string' || !body.expectedUpdatedAt) return jsonResponse({ error: 'Saved draft revision is required' }, { status: 400 })
   const result = await activateOnboardingDraft(env, env.DB, {
     userId: session.user.id,
     draftId,
+    expectedUpdatedAt: body.expectedUpdatedAt,
     origin: event.req,
     activateSession: organizationId => activateSessionOrganization(event, env, organizationId),
   })

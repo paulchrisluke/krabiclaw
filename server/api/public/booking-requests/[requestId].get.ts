@@ -98,7 +98,7 @@ export default defineHandler(async (event) => {
       location_id: record.location_id,
       location_name: location?.title ?? null,
       location_slug: location?.slug ?? null,
-      policy_summary: policy ? renderBookingPolicySummary(policy, locale) : null,
+      policy_summary: policy ? renderBookingPolicySummary(policy, locale, productKind) : null,
     },
   }, { headers: { 'cache-control': 'private, no-store' } })
 })

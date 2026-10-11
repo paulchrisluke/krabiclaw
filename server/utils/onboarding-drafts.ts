@@ -6,7 +6,7 @@ import { creationRequestHash } from '~/server/utils/organization-events'
 import { isCurrencyCode } from '~/shared/currencies'
 import { isValidTimezone } from '~/utils/timezone'
 import { ALL_VERTICALS } from '~/utils/vertical-copy'
-import { getPhoneCountry } from '~/utils/phone'
+import { getPhoneCountry, parsePhone } from '~/utils/phone'
 import type { PlaceDetails, PlaceReview } from '~/server/utils/google-places'
 import type { CurrencyCode } from '~/shared/currencies'
 import type { PriceInput } from '~/shared/prices'
@@ -57,69 +57,6 @@ export function onboardingDraftWriteGuard(draft: Pick<SavedOnboardingDraft, 'id'
     ) THEN NULL ELSE json('Onboarding draft revision changed') END`,
     params: [draft.id, draft.user_id, draft.updated_at, ...(organizationId ? [organizationId] : [])],
   }
-}
-
-export async function createManualOnboardingDraft(db: D1Database, userId: string, input: {
-  idempotency_key: string
-  name: string
-  vertical: OrganizationVertical
-  subdomain: string
-  source_locale: string
-  currency: CurrencyCode
-  timezone: string
-  description?: string
-  location?: { street_address?: string; city?: string; region?: string; postal_code?: string; country?: string; phone?: string; website_url?: string }
-}) {
-  const name = input.name.trim()
-  const subdomain = input.subdomain.trim().toLowerCase()
-  const key = input.idempotency_key.trim()
-  if (!name || !key || !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(subdomain)
-    || !ALL_VERTICALS.includes(input.vertical) || !platformLocale(input.source_locale)
-    || !isCurrencyCode(input.currency) || !isValidTimezone(input.timezone)) {
-    throw new HTTPError({ statusCode: 400, statusMessage: 'Valid business name, address, language, currency, timezone and idempotency key are required' })
-  }
-  const location = input.location
-  const country = location?.country?.trim().toUpperCase() ?? null
-  if (country && !getPhoneCountry(country)) throw new HTTPError({ statusCode: 400, statusMessage: 'Location country must be an ISO 3166-1 alpha-2 code' })
-  const request = { ...input, name, subdomain, idempotency_key: key }
-  const id = `mcp-website-${await creationRequestHash({ userId, key })}`
-  const fingerprint = await creationRequestHash(request)
-  const payload = buildOnboardingDraftPayload({ name, vertical: input.vertical, place: null, details: {
-    name, sourceLocale: input.source_locale, currency: input.currency, timezone: input.timezone,
-    country, streetAddress: location?.street_address?.trim() || null, addressLine2: null, city: location?.city?.trim() || null,
-    region: location?.region?.trim() || null, postalCode: location?.postal_code?.trim() || null,
-    phone: location?.phone?.trim() || null, websiteUrl: location?.website_url?.trim() || null, openingHours: null, specialHours: null,
-  } })
-  payload.request = { key, fingerprint }
-  payload.preview.subdomainCandidate = subdomain
-  if (input.description?.trim()) {
-    payload.preview.locations[0]!.description = input.description.trim()
-    payload.preview.content = buildDraftContent(name, input.vertical, name, input.description.trim())
-  }
-  const now = new Date().toISOString()
-  let stored = await queryFirst<{ payload_json: string; status: string }>(db, 'SELECT payload_json, status FROM onboarding_drafts WHERE id = ? AND user_id = ?', [id, userId])
-  if (!stored || ['active', 'committing', 'abandoned'].includes(stored.status)) {
-    const active = await readActiveOnboardingDraft(db, userId)
-    if (active && active.id !== id) throw new HTTPError({ statusCode: 409, statusMessage: 'Finish or discard your existing website draft before creating another website', data: { code: 'ONBOARDING_DRAFT_EXISTS', draft_id: active.id } })
-  }
-  if (!stored) {
-    try {
-      await execute(db, `INSERT INTO onboarding_drafts (id, user_id, name, vertical, subdomain_candidate, source_type, status, payload_json, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, 'manual', 'active', ?, ?, ?) ON CONFLICT(id) DO NOTHING`,
-      [id, userId, name, input.vertical, subdomain, JSON.stringify(payload), now, now])
-    } catch (error) {
-      if (error instanceof Error && /UNIQUE constraint failed: onboarding_drafts.user_id/.test(error.message)) {
-        const retry = await queryFirst<{ id: string }>(db, 'SELECT id FROM onboarding_drafts WHERE id = ? AND user_id = ?', [id, userId])
-        if (!retry) throw new HTTPError({ statusCode: 409, statusMessage: 'Finish or discard your existing website draft before creating another website', data: { code: 'ONBOARDING_DRAFT_EXISTS' } })
-      } else throw error
-    }
-    stored = await queryFirst<{ payload_json: string; status: string }>(db, 'SELECT payload_json, status FROM onboarding_drafts WHERE id = ? AND user_id = ?', [id, userId])
-  }
-  if (!stored) throw new Error(`Website draft ${id} could not be read back`)
-  const saved = parseOnboardingDraftPayload(stored.payload_json)
-  if (saved.request?.key !== key || saved.request.fingerprint !== fingerprint) throw new HTTPError({ statusCode: 409, statusMessage: 'This idempotency key was already used for a different website request', data: { code: 'IDEMPOTENCY_KEY_CONFLICT' } })
-  if (stored.status === 'abandoned') throw new HTTPError({ statusCode: 409, statusMessage: 'This website draft was discarded. Use a new idempotency key.', data: { code: 'ONBOARDING_DRAFT_ABANDONED' } })
-  return { id }
 }
 
 export interface DraftBrandInput {
@@ -541,6 +478,121 @@ export function parseOnboardingDraftPayload(raw: string): OnboardingDraftPayload
   return payload
 }
 
+export interface OnboardingDraftInput {
+  draftId?: string
+  expectedUpdatedAt?: string | null
+  idempotencyKey?: string
+  sourceType?: unknown
+  placeId?: unknown
+  vertical?: unknown
+  name?: unknown
+  subdomain?: unknown
+  details?: Record<string, unknown> | null
+  brandDraft?: Record<string, unknown> | null
+  products?: unknown
+}
+
+function answer(raw: Record<string, unknown> | null | undefined, field: string, existing: string | null = null): string | null {
+  const value = raw?.[field]
+  if (value === undefined) return existing
+  if (value === null) return null
+  if (typeof value !== 'string') throw new HTTPError({ statusCode: 400, statusMessage: `${field} must be text` })
+  return value.trim() || null
+}
+
+function draftImage(raw: unknown, existing: DraftUploadedImage | null): DraftUploadedImage | null {
+  if (raw === undefined) return existing
+  if (raw === null) return null
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new HTTPError({ statusCode: 400, statusMessage: 'Invalid draft image' })
+  const image = raw as Record<string, unknown>
+  const draftAssetId = answer(image, 'draftAssetId')
+  const cloudflareImageId = answer(image, 'cloudflareImageId')
+  const publicUrl = answer(image, 'publicUrl')
+  if (!draftAssetId || !cloudflareImageId || !publicUrl) throw new HTTPError({ statusCode: 400, statusMessage: 'Draft image identity and URL are required' })
+  return { draftAssetId, cloudflareImageId, publicUrl, thumbnailUrl: answer(image, 'thumbnailUrl'), mimeType: answer(image, 'mimeType'), fileName: answer(image, 'fileName'), fileSize: typeof image.fileSize === 'number' ? image.fileSize : null }
+}
+
+export function normalizeOnboardingDraftInput(input: OnboardingDraftInput, existing: OnboardingDraftPayload | null, place: DraftPlaceSource | null) {
+  if (input.details !== undefined && input.details !== null && (typeof input.details !== 'object' || Array.isArray(input.details))) throw new HTTPError({ statusCode: 400, statusMessage: 'Business details must be an object' })
+  if (input.brandDraft !== undefined && input.brandDraft !== null && (typeof input.brandDraft !== 'object' || Array.isArray(input.brandDraft))) throw new HTTPError({ statusCode: 400, statusMessage: 'Brand details must be an object' })
+  const raw = input.details
+  const previous = existing?.source.details
+  const name = answer(raw, 'name') ?? answer(input as unknown as Record<string, unknown>, 'name') ?? place?.name ?? previous?.name ?? ''
+  const vertical = input.vertical ?? existing?.preview.vertical
+  if (!name || typeof vertical !== 'string' || !ALL_VERTICALS.includes(vertical as OrganizationVertical)) throw new HTTPError({ statusCode: 400, statusMessage: 'Business name and type are required', data: { missing_fields: [...(!name ? ['name'] : []), ...(!vertical ? ['vertical'] : [])] } })
+  const sourceLocale = answer(raw, 'sourceLocale', previous?.sourceLocale)
+  if (!sourceLocale || !platformLocale(sourceLocale)) throw new HTTPError({ statusCode: 400, statusMessage: 'Choose a supported website language', data: { missing_fields: ['source_locale'] } })
+  if (previous && previous.sourceLocale !== sourceLocale) throw new HTTPError({ statusCode: 409, statusMessage: 'Existing draft content cannot be relabelled into another language' })
+  const country = answer(raw, 'country', previous?.country)?.toUpperCase() ?? null
+  if (country && !getPhoneCountry(country)) throw new HTTPError({ statusCode: 400, statusMessage: 'country must be an ISO 3166-1 alpha-2 code' })
+  const currency = answer(raw, 'currency', previous?.currency)?.toUpperCase() ?? null
+  if (currency && !isCurrencyCode(currency)) throw new HTTPError({ statusCode: 400, statusMessage: 'Choose a supported currency' })
+  const timezone = answer(raw, 'timezone', previous?.timezone ?? place?.timezone)
+  if (timezone && !isValidTimezone(timezone)) throw new HTTPError({ statusCode: 400, statusMessage: 'Choose a valid IANA timezone' })
+  const phone = answer(raw, 'phone', previous?.phone ?? place?.phone ?? null)
+  const parsedPhone = phone ? parsePhone(phone, { defaultCountry: getPhoneCountry(country)?.code }) : null
+  if (phone && !parsedPhone?.valid) throw new HTTPError({ statusCode: 400, statusMessage: 'Enter a valid phone number' })
+  const details: DraftDetailsInput = {
+    name, sourceLocale, country, currency: currency as CurrencyCode | null, timezone, phone: parsedPhone?.e164 ?? null,
+    streetAddress: answer(raw, 'streetAddress', previous?.streetAddress), addressLine2: answer(raw, 'addressLine2', previous?.addressLine2),
+    city: answer(raw, 'city', previous?.city), region: answer(raw, 'region', previous?.region), postalCode: answer(raw, 'postalCode', previous?.postalCode),
+    websiteUrl: answer(raw, 'websiteUrl', previous?.websiteUrl ?? place?.websiteUrl ?? null),
+    openingHours: parseOpeningHours(raw?.openingHours === undefined ? previous?.openingHours ?? place?.openingHours ?? null : raw.openingHours),
+    specialHours: parseSpecialHours(raw?.specialHours === undefined ? previous?.specialHours ?? null : raw.specialHours),
+  }
+  const products: DraftProductInput[] = input.products === undefined
+    ? (existing?.preview.products ?? []).map(product => ({ name: product.name, category: product.collection, amountMinor: product.price?.unit_amount ?? null }))
+    : (() => {
+        if (!Array.isArray(input.products)) throw new HTTPError({ statusCode: 400, statusMessage: 'products must be an array' })
+        return input.products.map((value, index) => {
+          if (!value || typeof value !== 'object' || Array.isArray(value)) throw new HTTPError({ statusCode: 400, statusMessage: `Product ${index + 1} is invalid` })
+          const product = value as Record<string, unknown>
+          const productName = answer(product, 'name')
+          const amount = product.amountMinor
+          if (!productName || (amount !== undefined && amount !== null && (typeof amount !== 'number' || !Number.isInteger(amount) || amount < 0))) throw new HTTPError({ statusCode: 400, statusMessage: `Product ${index + 1} requires a name and a valid price when supplied` })
+          return { name: productName, category: answer(product, 'category') ?? '', amountMinor: typeof amount === 'number' ? amount : null }
+        })
+      })()
+  const brand = input.brandDraft
+  const config = existing?.preview.config
+  const previousHeadline = config?.draft_hero_headline ?? existing?.preview.content.find(content => content.page === 'home' && content.field === 'hero')?.hero_title
+  const brandDraft: DraftBrandInput = {
+    paletteStarter: answer(brand, 'paletteStarter', config?.palette_starter), fontPreset: answer(brand, 'fontPreset', config?.font_preset),
+    logoShape: answer(brand, 'logoShape', config?.logo_shape), logoNote: answer(brand, 'logoNote', config?.draft_logo_note),
+    logoPreviewUrl: answer(brand, 'logoPreviewUrl'), heroPhotoNote: answer(brand, 'heroPhotoNote', config?.draft_hero_photo_note), heroPreviewUrl: answer(brand, 'heroPreviewUrl'),
+    heroHeadline: answer(brand, 'heroHeadline', previousHeadline && previousHeadline !== existing?.preview.brandName ? previousHeadline : name) ?? name, heroSubtitle: answer(brand, 'heroSubtitle', config?.draft_hero_subtitle),
+    logoImage: draftImage(brand?.logoImage, existing ? getDraftMedia(existing, 'logo') : null),
+    heroImage: draftImage(brand?.heroImage, existing ? getDraftMedia(existing, 'hero') : null),
+  }
+  const payload = buildOnboardingDraftPayload({ name, vertical: vertical as OrganizationVertical, place, details, brandDraft, products })
+  const subdomain = answer(input as unknown as Record<string, unknown>, 'subdomain')?.toLowerCase() ?? existing?.preview.subdomainCandidate ?? payload.preview.subdomainCandidate
+  if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(subdomain)) throw new HTTPError({ statusCode: 400, statusMessage: 'Choose a website address using Latin letters, digits or hyphens', data: { missing_fields: ['subdomain'] } })
+  if (existing && subdomain !== existing.preview.subdomainCandidate) throw new HTTPError({ statusCode: 409, statusMessage: 'A saved draft already owns its website address' })
+  payload.preview.subdomainCandidate = subdomain
+  return payload
+}
+
+export function onboardingPublicationMissingFields(draft: Pick<SavedOnboardingDraft, 'subdomain_candidate'>, payload: OnboardingDraftPayload) {
+  const details = payload.source.details
+  return [
+    ...(!details.sourceLocale || !platformLocale(details.sourceLocale) ? ['source_locale'] : []),
+    ...(!details.currency ? ['currency'] : []),
+    ...(!isValidTimezone(details.timezone) ? ['timezone'] : []),
+    ...(!draft.subdomain_candidate ? ['subdomain'] : []),
+  ]
+}
+
+export async function readOnboardingDraft(db: D1Database, userId: string, draftId?: string) {
+  const draft = draftId
+    ? await queryFirst<SavedOnboardingDraft>(db, 'SELECT * FROM onboarding_drafts WHERE id = ? AND user_id = ?', [draftId, userId])
+    : await readActiveOnboardingDraft(db, userId)
+  if (!draft) throw new HTTPError({ statusCode: 404, statusMessage: 'Website draft not found' })
+  if (draft.status === 'abandoned') throw new HTTPError({ statusCode: 409, statusMessage: 'This website draft was discarded', data: { code: 'ONBOARDING_DRAFT_ABANDONED', draft_id: draft.id } })
+  const current = draft.status === 'committing' ? await readActiveOnboardingDraft(db, userId) : draft
+  if (!current || current.id !== draft.id) throw new HTTPError({ statusCode: 409, statusMessage: 'Website draft changed; read it again', data: { code: 'ONBOARDING_DRAFT_CHANGED', draft_id: draft.id } })
+  return { row: current, payload: parseOnboardingDraftPayload(current.payload_json) }
+}
+
 export async function upsertActiveOnboardingDraft(db: D1Database, input: {
   userId: string
   organizationId?: string | null
@@ -549,49 +601,40 @@ export async function upsertActiveOnboardingDraft(db: D1Database, input: {
   sourceType: DraftSourceType
   payload: OnboardingDraftPayload
   expectedUpdatedAt: string | null
+  draftId?: string
+  idempotencyKey?: string
 }): Promise<OnboardingDraftUpsertResult> {
-  const payloadJson = JSON.stringify(input.payload)
   const existing = await readActiveOnboardingDraft(db, input.userId)
+  const key = input.idempotencyKey?.trim()
+  if (input.idempotencyKey !== undefined && (!key || key.length > 200)) throw new HTTPError({ statusCode: 400, statusMessage: 'idempotency_key must contain 1 to 200 characters' })
+  const id = input.draftId ?? (key ? `mcp-website-${await creationRequestHash({ userId: input.userId, key })}` : crypto.randomUUID())
+  const keyed = key ? await queryFirst<SavedOnboardingDraft>(db, 'SELECT * FROM onboarding_drafts WHERE id = ? AND user_id = ?', [id, input.userId]) : null
+  const fingerprint = await creationRequestHash({ ...input.payload, request: undefined, preview: { ...input.payload.preview, content: input.payload.preview.content.map(content => ({ ...content, updated_at: undefined })) } })
+  if (keyed && input.expectedUpdatedAt === null) {
+    const saved = parseOnboardingDraftPayload(keyed.payload_json)
+    if (saved.request?.key !== key || saved.request.fingerprint !== fingerprint) throw new HTTPError({ statusCode: 409, statusMessage: 'This idempotency key was already used for different website answers', data: { code: 'IDEMPOTENCY_KEY_CONFLICT', draft_id: keyed.id } })
+    if (keyed.status === 'abandoned') throw new HTTPError({ statusCode: 409, statusMessage: 'This website draft was discarded', data: { code: 'ONBOARDING_DRAFT_ABANDONED', draft_id: keyed.id } })
+    return { id: keyed.id, subdomainCandidate: keyed.subdomain_candidate, updatedAt: keyed.updated_at, organizationId: keyed.organization_id, payload: saved }
+  }
+  if (existing && input.draftId !== existing.id) throw new HTTPError({ statusCode: 409, statusMessage: 'Resume your saved website draft before creating another', data: { code: 'ONBOARDING_DRAFT_EXISTS', draft_id: existing.id } })
+  if (input.draftId && !existing) throw new HTTPError({ statusCode: 404, statusMessage: 'Active website draft not found' })
   if ((existing?.updated_at ?? null) !== input.expectedUpdatedAt) throw new HTTPError({ statusCode: 409, statusMessage: 'Website draft changed; reload before saving', data: { code: 'ONBOARDING_DRAFT_CHANGED', draft_id: existing?.id } })
+  if (existing && key && parseOnboardingDraftPayload(existing.payload_json).request?.key && parseOnboardingDraftPayload(existing.payload_json).request?.key !== key) throw new HTTPError({ statusCode: 409, statusMessage: 'This draft belongs to a different idempotency key', data: { code: 'IDEMPOTENCY_KEY_CONFLICT', draft_id: existing.id } })
+  const payload = input.payload
+  const savedRequest = existing ? parseOnboardingDraftPayload(existing.payload_json).request : null
+  if (key || savedRequest) payload.request = { key: key ?? savedRequest!.key, fingerprint }
+  const payloadJson = JSON.stringify(payload)
   const now = new Date(Math.max(Date.now(), existing ? Date.parse(existing.updated_at) + 1 : 0)).toISOString()
-
-  const id = crypto.randomUUID()
-  // The address is claimed at the first save, when the pending site is created,
-  // so a later change of brand name renames the brand and not the site's host —
-  // and every following save keeps writing to the same site. organization_id is
-  // set once for the same reason.
   const draft = await queryFirst<{ id: string; subdomain_candidate: string; organization_id: string | null; updated_at: string }>(db, existing ? `
-    UPDATE onboarding_drafts SET
-      organization_id = COALESCE(organization_id, ?), name = ?, vertical = ?, source_type = ?, payload_json = ?, updated_at = ?
+    UPDATE onboarding_drafts SET name = ?, vertical = ?, source_type = ?, payload_json = ?, updated_at = ?
     WHERE id = ? AND user_id = ? AND status = 'active' AND updated_at = ?
     RETURNING id, subdomain_candidate, organization_id, updated_at
   ` : `INSERT INTO onboarding_drafts
-      (id, user_id, organization_id, name, vertical, subdomain_candidate, source_type, status, payload_json, created_at, updated_at)
+    (id, user_id, organization_id, name, vertical, subdomain_candidate, source_type, status, payload_json, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
-    ON CONFLICT(user_id) WHERE status = 'active'
-    DO NOTHING
+    ON CONFLICT DO NOTHING
     RETURNING id, subdomain_candidate, organization_id, updated_at
-  `, existing ? [input.organizationId ?? null, input.name, input.vertical, input.sourceType, payloadJson, now, existing.id, input.userId, existing.updated_at] : [
-    id,
-    input.userId,
-    input.organizationId ?? null,
-    input.name,
-    input.vertical,
-    input.payload.preview.subdomainCandidate,
-    input.sourceType,
-    payloadJson,
-    now,
-    now,
-  ])
-  if (!draft?.id) {
-    throw new HTTPError({ statusCode: 409, statusMessage: 'Website draft changed; retry the same request', data: { code: 'ONBOARDING_DRAFT_CHANGED', draft_id: existing?.id } })
-  }
-
-  return {
-    id: draft.id,
-    subdomainCandidate: draft.subdomain_candidate,
-    updatedAt: draft.updated_at,
-    organizationId: draft.organization_id,
-    payload: input.payload,
-  }
+  `, existing ? [input.name, input.vertical, input.sourceType, payloadJson, now, existing.id, input.userId, input.expectedUpdatedAt] : [id, input.userId, input.organizationId ?? null, input.name, input.vertical, payload.preview.subdomainCandidate, input.sourceType, payloadJson, now, now])
+  if (!draft) throw new HTTPError({ statusCode: 409, statusMessage: 'Website draft changed; read it before retrying', data: { code: 'ONBOARDING_DRAFT_CHANGED' } })
+  return { id: draft.id, subdomainCandidate: draft.subdomain_candidate, updatedAt: draft.updated_at, organizationId: draft.organization_id, payload }
 }

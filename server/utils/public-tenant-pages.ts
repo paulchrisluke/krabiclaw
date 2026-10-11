@@ -239,6 +239,18 @@ async function hydrateBlocks(
     db, "SELECT theme_id, vertical, default_currency, json_extract(settings_json, '$.compliance.address_visibility') AS address_visibility FROM organization WHERE id = ? LIMIT 1", [organizationId])
   if (!organizationRow) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page site is unavailable' })
   const template = resolvePublicTemplate({ themeId: organizationRow.theme_id, vertical: organizationRow.vertical })
+  const defaultServices = pagePath === '/services' && template.slug === 'blawby' && blocks.length === 1 && blocks[0]?.type === 'hero'
+  if (defaultServices) {
+    const services = await listOrganizationProducts(db, { organizationId, kind: 'service', publishedOnly: true, env })
+    for (const service of services) {
+      if (!service.page) throw new HTTPError({ statusCode: 500, statusMessage: 'Published service page is unavailable', data: { code: 'SERVICE_PAGE_MISSING', product_id: service.id } })
+      productIds.add(service.id)
+    }
+    if (productIds.size) blocks = [...blocks, {
+      id: 'services-list', type: 'product_grid', position: blocks.length,
+      data: { product_ids: [...productIds] }, media: [],
+    }]
+  }
   const defaultContact = pagePath === '/contact' && template.slug === 'blawby' && blocks.length === 1 && blocks[0]?.type === 'hero'
   const defaultLocationGrid = (pagePath === '/' && template.slug !== 'platform' || defaultContact) && !blocks.some(block => block.type === 'location_grid')
   const addressVisible = template.slug !== 'blawby' || organizationRow.address_visibility === 'visible'
@@ -318,11 +330,14 @@ async function hydrateBlocks(
       })
     : parsedLocations
   const locationCopy = getVerticalCopy(organizationRow.vertical, locale)
-  if (defaultLocationGrid && locations.length) {
+  const defaultLocations = template.slug === 'blawby'
+    ? locations.filter(location => location.address || location.asset_id || location.description?.trim() || location.short_description?.trim())
+    : locations
+  if (defaultLocationGrid && defaultLocations.length) {
     blocks = [...blocks, {
       id: defaultContact ? 'contact-locations' : 'homepage-locations', type: 'location_grid',
       position: Math.max(-1, ...blocks.map(block => block.position)) + 1,
-      data: { title: locationCopy.locationGroupLine(locations.length), description: locationCopy.findUsKicker, location_ids: sourceLocations.map(location => location.id) },
+      data: { title: locationCopy.locationGroupLine(defaultLocations.length), description: locationCopy.findUsKicker, location_ids: defaultLocations.map(location => location.id) },
       media: [],
     }]
   }

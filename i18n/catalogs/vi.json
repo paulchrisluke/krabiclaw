@@ -61,6 +61,7 @@
   "booking_policy.deposit_party": "Nhóm từ {count} khách trở lên cần đặt cọc.",
   "booking_policy.experience_cancellation": "Hủy miễn phí trước khi trải nghiệm bắt đầu tối đa {duration}.",
   "booking_policy.experience_heading": "Chính sách trải nghiệm",
+  "booking_policy.consultation_heading": "Chính sách đặt lịch tư vấn",
   "booking_policy.minimum_guest_age": "Độ tuổi tối thiểu của khách là {age}.",
   "booking_policy.reschedule": "Bạn có thể đổi lịch trước giờ bắt đầu tối đa {duration}.",
   "booking_policy.reservation_cancellation": "Hủy miễn phí trước giờ đặt tối đa {duration}.",

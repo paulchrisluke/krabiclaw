@@ -17,6 +17,7 @@ import { LOGO_SLOTS, ORIGINAL_LOGO_PRESENTATION, parseLogoPresentation } from '~
 import { refreshSocialCard } from '~/server/utils/social-card'
 import { organizationAdapter } from '~/server/utils/member-access'
 import type { CloudflareEnv } from '~/server/utils/auth'
+import { tenantOrganizationOrigin } from '~/utils/tenant-organization-origin'
 
 type SetupEnv = Parameters<typeof createSystemSubdomain>[0]
 
@@ -74,6 +75,7 @@ function buildSlug(value: string): string {
 
 export async function loadSettingsPayload(
   db: DbClient,
+  env: CloudflareEnv,
   organizationId: string,
 ) {
   const updatedOrganization = await queryFirst<FullOrganizationRow & { vertical: string; theme_id: string; locations_json: string }>(db, `
@@ -134,7 +136,12 @@ export async function loadSettingsPayload(
     theme: template,
     status: updatedOrganization.status,
 
-    public_url: updatedOrganization.public_url,
+    public_url: updatedOrganization.public_url ? tenantOrganizationOrigin({
+      platformDomain: env.NUXT_PUBLIC_PLATFORM_DOMAIN ?? '',
+      freeOrganizationDomain: env.NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN ?? '',
+      subdomain: updatedOrganization.subdomain ?? '',
+      canonicalDomain: updatedOrganization.public_url,
+    }) : null,
     custom_domain_status: updatedOrganization.custom_domain_status,
     name: updatedOrganization.name,
     brand_description: updatedOrganization.brand_description,
@@ -365,7 +372,7 @@ async function attemptOrganizationUpdate(
     params.push(updates.canonical_url ?? null)
   }
   if (setParts.length === 0 && organizationMedia === undefined) {
-    const settings = await loadSettingsPayload(db, organizationId)
+    const settings = await loadSettingsPayload(db, env, organizationId)
     return {
       status: 200,
       data: {
@@ -447,7 +454,7 @@ async function attemptOrganizationUpdate(
     await refreshSocialCard({ db, env, owner: { owner_type: 'organization', owner_id: organizationId }, actorId: userId })
   }
 
-  const settings = await loadSettingsPayload(db, organizationId)
+  const settings = await loadSettingsPayload(db, env, organizationId)
   return {
     status: 200,
     data: {

@@ -4,7 +4,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { queryFirst } from '~/server/db'
-import { parseOnboardingDraftPayload, readActiveOnboardingDraft } from '~/server/utils/onboarding-drafts'
+import { getDraftMedia, parseOnboardingDraftPayload, readActiveOnboardingDraft } from '~/server/utils/onboarding-drafts'
 import { createPreviewToken, PREVIEW_TOKEN_TTL_MS, previewSecretOf } from '~/server/utils/preview-token'
 import { defineHandler, HTTPError } from 'nitro'
 import { deleteAbandonedDraftTenant } from '~/server/utils/tenant-deletion'
@@ -23,7 +23,8 @@ export default defineHandler(async (event) => {
   if (row.status === 'abandoned') {
     if (!row.organization_id) throw new HTTPError({ statusCode: 409, statusMessage: 'Website draft cleanup has no recorded organization. Its native ownership must be verified.', data: { code: 'ONBOARDING_DRAFT_DISCARD_INCOMPLETE', draft_id: row.id } })
     const outcome = await deleteAbandonedDraftTenant(env, {
-      draftId: row.id, updatedAt: row.updated_at, organizationId: row.organization_id,
+      draftId: row.id,
+      updatedAt: row.updated_at, organizationId: row.organization_id,
       subdomain: row.subdomain_candidate, userId: session.user.id,
     })
     if ('refused' in outcome) throw new HTTPError({
@@ -35,7 +36,6 @@ export default defineHandler(async (event) => {
   }
 
   const payload = parseOnboardingDraftPayload(row.payload_json)
-  if (!payload) return jsonResponse({ success: true, draft: null })
 
   const organization = row.organization_id && row.subdomain_candidate
     ? await queryFirst<{ id: string; subdomain: string | null }>(db, `
@@ -56,12 +56,15 @@ export default defineHandler(async (event) => {
     success: true,
     draft: {
       draftId: row.id,
+      updatedAt: row.updated_at,
       draftName: payload.preview.brandName,
       sourceType: row.source_type,
       placeId: payload.source.placeId,
       vertical: payload.preview.vertical,
       details: payload.source.details,
       config: payload.preview.config,
+      logoImage: getDraftMedia(payload, 'logo'),
+      heroImage: getDraftMedia(payload, 'hero'),
       products: payload.preview.products.map(product => ({
         name: product.name,
         category: product.collection,

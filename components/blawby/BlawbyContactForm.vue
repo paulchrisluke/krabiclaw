@@ -19,19 +19,28 @@
 <script setup lang="ts">
 import type { SubmissionMeasurement } from '~/composables/useOrganizationConversionTracking'
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
+import type { PublicConsultationSettings } from '~/types/blawby'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
+import type { BlawbyDocumentPayload } from '~/utils/blawby-document-contract'
 
 // The Blawby contact form. It is a block so the page says where it sits: it
 // used to be markup between two fixed sections, so a firm could not put its
 // questions above it or its practice areas below.
-defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
+const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
 
 const { organizationId } = useTenantOrganization()
 const { locale, localePath } = useI18n()
-// The same keyed request the page already made; the shell carries the firm's
-// consultation settings for the tracking.
-const { shell } = await useBlawbyRoute('contact')
-const consultation = computed(() => shell.value.consultation)
+const document = inject<Ref<BlawbyDocumentPayload> | null>('blawby-document', null)
+const schemaContext = inject<{ consultation: ComputedRef<PublicConsultationSettings> } | null>('blawby-schema-context', null)
+const activeLocale = useState<string>('public-locale', () => 'en')
+const requestedPath = resolveTenantLocalePath(props.page.path, [activeLocale.value]).sourcePath
+const providedPage = document?.value.route.page
+if (!providedPage || providedPage.id !== props.page.id || providedPage.locale !== activeLocale.value
+  || resolveTenantLocalePath(providedPage.path, [activeLocale.value]).sourcePath !== requestedPath
+  || document?.value.route.recipe !== resolveBlawbyRouteTarget(requestedPath).recipe || !schemaContext?.consultation) {
+  throw createError({ statusCode: 500, statusMessage: 'Blawby layout did not provide the requested contact form context' })
+}
+const consultation = schemaContext.consultation
 const submitting = ref(false)
 const submitMessage = ref('')
 const form = reactive({ name: '', email: '', subject: 'general', message: '', consent: false })

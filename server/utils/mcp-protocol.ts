@@ -7,6 +7,8 @@
 // handful of responses the route still builds by hand (credential-missing,
 // pre-dispatch auth failures) before handing off to the SDK.
 
+import { isAPIError } from 'better-auth/api'
+
 export type JsonRpcId = string | number | null
 
 export interface McpErrorShape {
@@ -53,6 +55,37 @@ export function mcpProtocolError(code: number, message: string, data?: unknown, 
   return error
 }
 
+export function mcpErrorRecoveryIds(value: unknown): Record<string, string> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  const details = value as Record<string, unknown>
+  return Object.fromEntries(['organization_id', 'draft_id', 'invitation_id', 'location_id', 'product_id', 'request_id'].flatMap(key =>
+    typeof details[key] === 'string' && /^[A-Za-z0-9_:-]{1,200}$/.test(details[key]) ? [[key, details[key]]] : [],
+  ))
+}
+
+export function mcpErrorRecoveryDetails(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  const details = value as Record<string, unknown>
+  const recovery: Record<string, unknown> = mcpErrorRecoveryIds(details)
+  if (typeof details.code === 'string' && /^[A-Za-z_][A-Za-z0-9_.-]*$/.test(details.code)) recovery.code = details.code
+  for (const key of ['missing', 'missing_fields', 'invalid_fields', 'fields', 'missing_product_ids', 'draft_ids', 'removed_block_ids', 'resource_ids']) {
+    const values = details[key]
+    const pattern = ['missing', 'missing_fields', 'invalid_fields', 'fields'].includes(key) ? /^[A-Za-z_][A-Za-z0-9_.\[\]]*$/ : /^[A-Za-z0-9_:-]{1,200}$/
+    if (Array.isArray(values) && values.every(value => typeof value === 'string' && pattern.test(value))) recovery[key] = values
+  }
+  if (typeof details.resource_type === 'string' && /^[a-z_]+$/.test(details.resource_type)) recovery.resource_type = details.resource_type
+  if (Number.isInteger(details.index) && Number(details.index) >= 0) recovery.index = details.index
+  if (Array.isArray(details.missing_prices) && details.missing_prices.every(value => value && typeof value === 'object' && typeof value.product_id === 'string' && typeof value.name === 'string')) {
+    recovery.missing_prices = details.missing_prices.map(({ product_id, name }) => ({ product_id, name }))
+  }
+  if (Array.isArray(details.skipped) && details.skipped.every(value => value && typeof value === 'object'
+    && ['rule_id', 'local_date', 'local_start_time'].every(key => typeof value[key] === 'string')
+    && ['nonexistent_local_time', 'ambiguous_local_time', 'location_closed'].includes(value.reason))) {
+    recovery.skipped = details.skipped.map(({ rule_id, local_date, local_start_time, reason }) => ({ rule_id, local_date, local_start_time, reason }))
+  }
+  return recovery
+}
+
 export function asMcpError(error: unknown): McpErrorShape {
   if (error && typeof error === 'object' && 'mcp' in error) {
     const shape = (error as { mcp: McpErrorShape }).mcp
@@ -65,14 +98,11 @@ export function asMcpError(error: unknown): McpErrorShape {
     const message = typeof (error as { statusMessage?: unknown }).statusMessage === 'string'
       ? (error as { statusMessage: string }).statusMessage
       : error instanceof Error ? error.message : 'Invalid request.'
-    const details = 'data' in error && error.data && typeof error.data === 'object' ? error.data : {}
+    const details = isAPIError(error) ? error.body ?? {} : 'data' in error && error.data && typeof error.data === 'object' ? error.data : {}
     const data = {
       status,
-      ...('code' in details && typeof details.code === 'string' ? { code: details.code } : {}),
-      ...('missing' in details && Array.isArray(details.missing) && details.missing.every(field => typeof field === 'string' && /^[a-zA-Z_][a-zA-Z0-9_.]*$/u.test(field)) ? { missing: details.missing } : {}),
+      ...mcpErrorRecoveryDetails(details),
       ...('dashboard_url' in details && typeof details.dashboard_url === 'string' ? { dashboard_url: details.dashboard_url } : {}),
-      ...('draft_id' in details && typeof details.draft_id === 'string' ? { draft_id: details.draft_id } : {}),
-      ...('organization_id' in details && typeof details.organization_id === 'string' ? { organization_id: details.organization_id } : {}),
     }
     return { code: [400, 404].includes(status) ? MCP_ERROR.invalidParams : MCP_ERROR.internal, message,
       kind: status === 401 ? 'auth' : status === 403 ? 'forbidden' : status >= 500 ? 'transport' : 'tool_execution',

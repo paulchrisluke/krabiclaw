@@ -5,6 +5,7 @@ import { execute, executeBatch, queryAll, queryFirst, type BatchQuery } from '~/
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { canonicalDomainForPair, domainPair, normalizeDomain } from '~/server/utils/domain-shared'
 import { organizationEventQuery } from '~/server/utils/organization-events'
+import { tenantOrganizationOrigin } from '~/utils/tenant-organization-origin'
 
 export interface DomainEnv {
   CF_ZONE_ID?: string
@@ -1091,11 +1092,20 @@ export async function reconcileDueDomains(env: DomainEnv, db: D1Database, limit 
  * Null when the organization has no active canonical domain yet, which is a organization that
  * cannot be verified — the caller says so rather than guessing a host.
  */
-export async function organizationPublicUrl(db: D1Database, organizationId: string): Promise<string | null> {
-  const row = await queryFirst<{ domain: string }>(db, `
-    SELECT domain FROM organization_domains
-    WHERE organization_id = ? AND role = 'canonical' AND status = 'active'
+export async function organizationPublicUrl(env: DomainEnv, db: D1Database, organizationId: string): Promise<string | null> {
+  const row = await queryFirst<{ domain: string; subdomain: string | null }>(db, `
+    SELECT d.domain, o.subdomain FROM organization_domains d
+    JOIN organization o ON o.id = d.organization_id
+    WHERE d.organization_id = ? AND d.role = 'canonical' AND d.status = 'active'
     LIMIT 1
   `, [organizationId])
-  return row ? `https://${row.domain}/` : null
+  if (!row) return null
+  const origin = tenantOrganizationOrigin({
+    platformDomain: env.NUXT_PUBLIC_PLATFORM_DOMAIN ?? '',
+    freeOrganizationDomain: env.NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN ?? '',
+    subdomain: row.subdomain ?? '',
+    canonicalDomain: row.domain,
+  })
+  if (!origin) throw new Error('Active organization domain has no configured public origin')
+  return `${origin}/`
 }

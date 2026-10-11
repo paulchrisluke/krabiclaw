@@ -29,10 +29,6 @@ export const CONTEXT_TOOLS: McpToolDefinition[] = [
           organization_id: { type: 'string' },
           location_id: { type: 'string', description: 'Internal location ID from list_locations or get_workspace_context.' },
         },
-        anyOf: [
-          { required: ['organization_id'] },
-          { required: ['location_id'] },
-        ],
         additionalProperties: true,
       },
       outputSchema: {

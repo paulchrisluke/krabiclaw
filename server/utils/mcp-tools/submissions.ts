@@ -2,7 +2,7 @@ import { HTTPError } from 'nitro'
 import { getGuestThreadDetail } from '~/server/domain/guest-threads/detail'
 import { listOrganizationGuestThreads } from '~/server/domain/guest-threads/repository'
 import { executeGuestThreadOperation } from '~/server/domain/guest-threads/operations'
-import { getGuestRequest, getThreadOperationalRecord } from '~/server/domain/requests'
+import { getGuestRequest } from '~/server/domain/requests'
 import { assertMemberScope, assertAssignedBookingAccess, roleAllows, assertRoleAllows, memberAccessPrincipal } from '~/server/utils/member-access'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
@@ -18,7 +18,7 @@ const nullableString = { type: ['string', 'null'] }
 const conversationResult = { type: 'object', properties: { conversation: { type: 'object', properties: {
   request_id: { type: 'string' }, type: { type: 'string', enum: ['contact', 'reservation', 'booking'] }, state: nullableString, archived: { type: 'boolean' }, updated_at: { type: 'string' },
   guest: { type: 'object', properties: { name: { type: 'string' }, email: nullableString, phone: nullableString }, required: ['name', 'email', 'phone'] },
-  operational_record: { type: ['object', 'null'], properties: { id: { type: 'string' }, kind: { type: 'string' }, status: { type: 'string' }, starts_at: { type: 'string' }, ends_at: { type: 'string' }, timezone: { type: 'string' }, party_size: { type: 'integer' } } },
+  operational_record: { type: ['object', 'null'], properties: { id: { type: 'string' }, kind: { type: 'string', enum: ['booking', 'reservation'] }, status: { type: 'string' }, starts_at: { type: 'string' }, ends_at: { type: 'string' }, timezone: { type: 'string' }, party_size: { type: 'integer' } }, required: ['id', 'kind', 'status', 'starts_at', 'ends_at', 'timezone', 'party_size'] },
   entries: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, kind: { type: 'string' }, actor: nullableString, channel: nullableString, body: nullableString, event: nullableString, occurred_at: { type: 'string' }, payload: { type: ['object', 'null'] },
     deliveries: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, channel: { type: 'string' }, purpose: { type: 'string' }, status: { type: 'string' } }, required: ['id', 'channel', 'purpose', 'status'] } },
     attachments: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, url: { type: 'string' }, alt: nullableString, width: { type: ['integer', 'null'] }, height: { type: ['integer', 'null'] } }, required: ['id', 'url', 'alt', 'width', 'height'] } },
@@ -30,7 +30,7 @@ async function readConversation(ctx: McpExecutorContext, requestId: string) {
   const detail = await getGuestThreadDetail(db, requestId, organizationId)
   if (!detail) throw new HTTPError({ statusCode: 404, message: 'Guest conversation not found' })
   return { request_id: detail.id, type: detail.submissionType, state: detail.conversationState, archived: detail.manuallyArchived, updated_at: detail.updatedAt,
-    guest: { name: detail.guestName, email: detail.guestEmail, phone: detail.guestPhone }, operational_record: await getThreadOperationalRecord(db, requestId),
+    guest: { name: detail.guestName, email: detail.guestEmail, phone: detail.guestPhone }, operational_record: detail.operationalRecord,
     entries: detail.entries.map(entry => ({ id: entry.id, kind: entry.kind, actor: entry.actorLabel, channel: entry.channel, body: entry.body, event: entry.eventName, payload: entry.payload, occurred_at: entry.occurredAt, deliveries: entry.deliveries, attachments: entry.attachments })),
   }
 }
@@ -44,7 +44,7 @@ export const SUBMISSIONS_TOOLS: McpToolDefinition[] = [
     inputSchema: { request_id: { type: 'string' } }, required: ['request_id'], outputSchema: conversationResult,
   }),
   organizationTool({ name: 'reply_to_guest', domain: 'submissions', minimumRole: 'member', description: 'Email this guest a message, an attached photo, or both, and save the reply in the conversation. Reuse the same key for an identical retry; delivered replies are not sent twice.',
-    inputSchema: { request_id: { type: 'string' }, message: { type: 'string', minLength: 1 }, file: chatgptFileInput, idempotency_key: { type: 'string', minLength: 1, maxLength: 200 }, anyOf: [{ required: ['message'] }, { required: ['file'] }] }, required: ['request_id', 'idempotency_key'], fileParams: ['file'], outputSchema: conversationResult,
+    inputSchema: { request_id: { type: 'string' }, message: { type: 'string', minLength: 1, description: 'Reply text; required when no photo is attached.' }, file: { ...chatgptFileInput, description: 'Photo attachment; required when no reply text is supplied.' }, idempotency_key: { type: 'string', minLength: 1, maxLength: 200 } }, required: ['request_id', 'idempotency_key'], fileParams: ['file'], outputSchema: conversationResult,
   }),
   organizationTool({ name: 'set_guest_conversation_archived', domain: 'submissions', minimumRole: 'admin', description: 'Archive or restore this inbox conversation. Does not cancel a booking or reservation and does not send the guest a message.',
     inputSchema: { request_id: { type: 'string' }, archived: { type: 'boolean' }, idempotency_key: { type: 'string', minLength: 1, maxLength: 200 } }, required: ['request_id', 'archived', 'idempotency_key'], outputSchema: conversationResult,
@@ -55,6 +55,7 @@ export const SUBMISSIONS_TOOLS: McpToolDefinition[] = [
       domain: 'submissions',
       minimumRole: 'admin',
       inputSchema: {
+        ...paginationInputSchema,
         location_id: { type: 'string', description: 'Optional location id to list only that location\'s reservations.' },
         days: { type: 'number', description: 'Optional: only include reservations made in the last N days (max 90).' },
       },
@@ -62,6 +63,7 @@ export const SUBMISSIONS_TOOLS: McpToolDefinition[] = [
         type: 'object',
         properties: {
           submissions: { type: 'array', items: reservationSubmissionObject },
+          page_info: pageInfoObject,
           summary: {
             type: 'object',
             properties: {
@@ -71,7 +73,7 @@ export const SUBMISSIONS_TOOLS: McpToolDefinition[] = [
             required: ['total', 'by_status'],
           },
         },
-        required: ['submissions', 'summary'],
+        required: ['submissions', 'summary', 'page_info'],
       },
     }),
 ]
@@ -115,13 +117,17 @@ export async function handleSubmissionsTools(ctx: McpExecutorContext): Promise<u
         locationId: optionalString(args, "location_id") ?? null,
         sinceDays: optionalDaysWindow(args, "days"),
       };
-      const [submissions, total, byStatus] = await Promise.all([
-        listReservationSubmissions(organization.db, organization.organizationId, reservationFilter),
+      const resource = { resource: `reservation-inquiries:${JSON.stringify([organization.organizationId, reservationFilter])}` }
+      const window = mcpPageWindow(args, resource)
+      const [rows, total, byStatus] = await Promise.all([
+        listReservationSubmissions(organization.db, organization.organizationId, reservationFilter, { limit: window.limit + 1, offset: window.offset }),
         countReservationSubmissions(organization.db, organization.organizationId, reservationFilter),
         getReservationSubmissionsByStatus(organization.db, organization.organizationId, reservationFilter),
       ]);
+      const submissions = rows.slice(0, window.limit)
       return {
         submissions,
+        page_info: mcpPageInfo(window, submissions.length, rows.length > window.limit, resource),
         summary: { total, by_status: byStatus },
       };
     }

@@ -10,13 +10,19 @@
 </template>
 
 <script setup lang="ts">
-const { data, error, shell } = await useBlawbyRoute('contact')
-if (error.value) throw error.value
-const routeData = computed(() => data.value)
+import type { BlawbyDocumentPayload } from '~/utils/blawby-document-contract'
+
+const document = inject<Ref<BlawbyDocumentPayload> | null>('blawby-document', null)
+if (!document) throw createError({ statusCode: 500, statusMessage: 'Blawby layout did not provide the requested page' })
+const activeLocale = useState<string>('public-locale', () => 'en')
+const routeData = computed(() => document.value.route)
 const page = computed(() => routeData.value.page)
-if (!page.value) throw createError({ statusCode: 404, statusMessage: 'Contact content not found' })
-const identity = computed(() => shell.value.identity)
-const compliance = computed(() => shell.value.compliance)
+if (routeData.value.recipe !== 'contact' || !page.value || page.value.locale !== activeLocale.value
+  || resolveTenantLocalePath(page.value.path, [activeLocale.value]).sourcePath !== '/contact') {
+  throw createError({ statusCode: 500, statusMessage: 'Blawby layout did not provide the requested page' })
+}
+const identity = computed(() => document.value.shell.identity)
+const compliance = computed(() => document.value.shell.compliance)
 const org = useBlawbyOrgIdentity(identity, compliance)
 
 // A page about the business: its image is the organization's.

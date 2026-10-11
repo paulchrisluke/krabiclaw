@@ -61,6 +61,7 @@
   "booking_policy.deposit_party": "{count}名様以上のグループはデポジットが必要です。",
   "booking_policy.experience_cancellation": "体験開始の{duration}前まで無料でキャンセルできます。",
   "booking_policy.experience_heading": "体験ポリシー",
+  "booking_policy.consultation_heading": "相談予約ポリシー",
   "booking_policy.minimum_guest_age": "ご参加は{age}歳以上の方に限ります。",
   "booking_policy.reschedule": "開始時刻の{duration}前まで日時を変更できます。",
   "booking_policy.reservation_cancellation": "ご予約の{duration}前まで無料でキャンセルできます。",

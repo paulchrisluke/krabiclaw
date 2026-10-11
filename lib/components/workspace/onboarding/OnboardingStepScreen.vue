@@ -19,33 +19,31 @@
       @update:model-value="choose(() => { state.details.sourceLocale = $event })"
     />
 
-    <GooglePlacePicker v-else-if="step.id === 'business'" v-model="businessSearch" @select="choosePlace">
-      <template #actions>
-        <UButton
-          v-if="businessSearch.trim()"
-          block
-          color="neutral"
-          variant="ghost"
-          icon="i-lucide-pencil"
-          class="justify-start border-t border-default"
-          label="Enter details manually"
-          @click="enterManually"
-        />
+    <div v-else-if="step.id === 'business'" class="flex flex-col gap-3">
+      <template v-if="!googleImport">
+        <UFormField label="Name" required>
+          <UInput :model-value="state.details.name" class="w-full" autofocus @update:model-value="setManualName" />
+        </UFormField>
+        <UButton label="Import from Google Maps" variant="link" class="self-start" @click="googleImport = true" />
       </template>
-    </GooglePlacePicker>
+      <template v-else>
+        <GooglePlacePicker v-model="businessSearch" @select="choosePlace" />
+        <UButton label="Enter details manually" color="neutral" variant="ghost" class="self-start" @click="enterManually" />
+      </template>
+    </div>
 
     <IntakeDetailsCard
       v-else-if="step.id === 'location'"
       v-model:form="detailsForm"
       section="location"
-      :require-location-basics="true"
+      :require-location-basics="false"
     />
 
     <IntakeDetailsCard
       v-else-if="step.id === 'contact'"
       v-model:form="detailsForm"
       section="contact"
-      :require-location-basics="true"
+      :require-location-basics="false"
     />
 
     <!-- One control and nothing else to confirm, so the selection is the answer
@@ -63,7 +61,7 @@
 
     <OnboardingProductsCard v-else-if="step.id === 'products'" />
 
-    <DraftBrandCard v-else-if="step.id === 'look'" v-model:form="state.brand" section="look" :draft-id="state.draftId" />
+    <DraftBrandCard v-else-if="step.id === 'look'" v-model:form="state.brand" v-model:revision="state.draftRevision" section="look" :draft-id="state.draftId" />
 
     <OnboardingReviewCard v-else-if="step.id === 'review'" />
   </div>
@@ -115,20 +113,32 @@ function choose(answer: () => void) {
 // shows what the owner picked rather than an empty box. Both shells keep this
 // screen mounted across steps, so it is read each time the step is entered.
 const businessSearch = ref('')
+const googleImport = ref(false)
 watch(() => props.step.id, (id) => {
-  if (id === 'business') businessSearch.value = state.value.details.name
+  if (id === 'business') {
+    businessSearch.value = state.value.details.name
+    state.value.source ??= 'manual'
+  }
 }, { immediate: true })
 const { seedFromPlace } = useOnboardingDraft()
 
 function choosePlace(place: OnboardingPlacePreview) {
+  googleImport.value = false
   choose(() => seedFromPlace(place))
+}
+
+function setManualName(value: string | number | undefined) {
+  const previousName = state.value.details.name
+  state.value.details.name = String(value ?? '')
+  state.value.source = 'manual'
+  state.value.placeId = null
+  if (!state.value.brand.heroHeadline || state.value.brand.heroHeadline === previousName) state.value.brand.heroHeadline = state.value.details.name
 }
 
 function enterManually() {
   choose(() => {
-    state.value.source = 'manual'
-    state.value.placeId = null
-    state.value.details.name = businessSearch.value.trim()
+    googleImport.value = false
+    setManualName(businessSearch.value.trim())
   })
 }
 

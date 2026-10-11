@@ -241,9 +241,6 @@ export const usePublicPageData = async (options: {
     return val && val.trim() !== "" ? val : defaultValue;
   };
 
-  const getFieldStr = (field: string, defaultValue = ""): string =>
-    getField(field, defaultValue) ?? defaultValue;
-
   const getHero = (
     defaults = { title: "", subtitle: "", image: "", video: "" },
   ) => {
@@ -301,7 +298,6 @@ export const usePublicPageData = async (options: {
     tenantPage,
     reservationPolicyByLocation,
     getField,
-    getFieldStr,
     getHero,
     contentMap,
     products,

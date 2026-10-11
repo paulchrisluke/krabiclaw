@@ -1,12 +1,14 @@
-import { contentBlockDataSchema, contentBlockSchemaDefinitions, CONTENT_BLOCK_TYPES  } from '~/shared/content-registries'
+import { contentBlockDataSchema, contentBlockSchemaDefinitions, CONTENT_BLOCK_TYPES, type ContentBlockType } from '~/shared/content-registries'
 import { timezoneSchema } from '~/utils/timezone'
 import { openingHoursSchema, specialHoursSchema } from '~/shared/reservation-hours'
 import type { McpToolRole } from '~/server/utils/mcp-auth'
 import { SUPPORTED_CURRENCIES } from '~/shared/currencies'
 import { RESERVATION_STATUSES } from '~/shared/bookings'
+import { INDEXED_MEDIA_PLACEMENT_SLOTS, MEDIA_PLACEMENT_SLOTS, isEditableMediaPlacement, isSingleMediaPlacement, type EditableMediaPlacementOwnerType } from '~/shared/media-placement-contract'
 
 export interface McpToolDefinition {
   name: string
+  title: string
   description: string
   domain: string
   minimumRole: McpToolRole
@@ -49,6 +51,21 @@ export const pageInfoObject = {
   required: ['has_more', 'next_cursor'],
 }
 
+export const workspaceContextObject = {
+  type: 'object',
+  properties: {
+    organization_id: { type: ['string', 'null'] },
+    organization_name: { type: ['string', 'null'] },
+    organization_slug: { type: ['string', 'null'] },
+    organization_subdomain: { type: ['string', 'null'] },
+    organization_public_url: { type: ['string', 'null'] },
+    location_id: { type: ['string', 'null'] },
+    location_slug: { type: ['string', 'null'] },
+    location_title: { type: ['string', 'null'] },
+  },
+  required: ['organization_id', 'organization_name', 'organization_slug', 'organization_subdomain', 'organization_public_url', 'location_id', 'location_slug', 'location_title'],
+}
+
 // --- reusable schema fragments ---
 
 
@@ -86,8 +103,8 @@ export const postalAddressSchema = {
 export const locationObject = {
   type: 'object',
   properties: {
-    id: { type: 'string' },
-    slug: { type: 'string' },
+    id: { type: 'string', minLength: 1 },
+    slug: { type: 'string', minLength: 1 },
     title: { type: 'string' },
     phone: { type: ['string', 'null'] },
     email: { type: ['string', 'null'] },
@@ -124,6 +141,7 @@ export const locationObject = {
     created_at: { type: 'string' },
     updated_at: { type: 'string' },
   },
+  required: ['id', 'slug', 'title', 'status', 'created_at', 'updated_at', 'media'],
 }
 
 export const locationMutationResultObject = {
@@ -138,32 +156,64 @@ export const locationMutationResultObject = {
 export const locationMutationSummaryObject = {
   type: 'object',
   properties: {
-    ok: { type: 'boolean' },
+    ok: { const: true },
     entity: { type: 'string', enum: ['location'] },
     id: { type: 'string' },
     slug: { type: 'string' },
     changed_fields: { type: 'array', items: { type: 'string' } },
     updated_at: { type: 'string' },
-    context: { type: 'object' },
+    context: workspaceContextObject,
   },
-  required: ['ok', 'entity', 'id'],
+  required: ['ok', 'entity', 'id', 'slug', 'changed_fields', 'updated_at', 'context'],
+}
+
+/** Each branch repeats the complete object contract so connector projections retain common fields. */
+export function contentBlockTypeBranches(schema: {
+  properties: Record<string, unknown>
+  required: readonly string[]
+  additionalProperties?: boolean
+}, types: readonly ContentBlockType[] = CONTENT_BLOCK_TYPES) {
+  return types.map(type => ({
+    type: 'object',
+    ...schema,
+    title: type,
+    properties: {
+      ...schema.properties,
+      type: { type: 'string', const: type },
+      data: contentBlockDataSchema(type),
+    },
+    required: [...schema.required],
+  }))
+}
+
+const blogComponentProperties = {
+  type: { type: 'string', enum: ['faq', 'how_to', 'ai_assistance'] },
+  label: { type: ['string', 'null'] },
+  status: { type: ['string', 'null'], enum: ['active', 'inactive', null] },
+  render_enabled: { type: ['boolean', 'null'] },
+  schema_enabled: { type: ['boolean', 'null'] },
+  position: { type: ['number', 'null'] },
+  data: { anyOf: (['faq', 'how_to', 'ai_assistance'] as const).map(type => ({ ...contentBlockDataSchema(type), title: type })) },
 }
 
 export const blogComponentInputSchema = {
   type: 'object',
-  properties: {
-    type: { type: 'string', enum: ['faq', 'how_to', 'ai_assistance'] },
-    label: { type: ['string', 'null'] },
-    status: { type: ['string', 'null'], enum: ['active', 'inactive', null] },
-    render_enabled: { type: ['boolean', 'null'] },
-    schema_enabled: { type: ['boolean', 'null'] },
-    position: { type: ['number', 'null'] },
-    data: { type: 'object' },
-  },
+  properties: blogComponentProperties,
   required: ['type', 'data'],
-  anyOf: ['faq', 'how_to', 'ai_assistance'].map(type => ({
-    properties: { type: { const: type }, data: contentBlockDataSchema(type as 'faq' | 'how_to' | 'ai_assistance') },
-  })),
+  anyOf: contentBlockTypeBranches({ properties: blogComponentProperties, required: ['type', 'data'] }, ['faq', 'how_to', 'ai_assistance']),
+}
+
+/** Fixed names, indexed patterns and cardinality come from the placement writer's registry. */
+export function mediaPlacementSlotInputSchema(ownerType: EditableMediaPlacementOwnerType, options: { single?: boolean; excludedFixedSlots?: readonly string[] } = {}) {
+  const slots = MEDIA_PLACEMENT_SLOTS[ownerType].filter(slot => isEditableMediaPlacement({ owner_type: ownerType, slot })
+    && (options.single === undefined || isSingleMediaPlacement({ owner_type: ownerType, slot }) === options.single)
+    && !options.excludedFixedSlots?.includes(slot))
+  const indexedSlots = INDEXED_MEDIA_PLACEMENT_SLOTS.filter(entry => entry.ownerType === ownerType)
+    .map(entry => ({ type: 'string', pattern: entry.runtime.source, examples: [entry.sqlGlob.replace('[0-9]*', '0')] }))
+    .filter(entry => options.single === undefined || isSingleMediaPlacement({ owner_type: ownerType, slot: entry.examples[0]! }) === options.single)
+  if (!slots.length && !indexedSlots.length) return null
+  const fixedSlots = { type: 'string', enum: slots }
+  return indexedSlots.length ? { anyOf: [...(slots.length ? [fixedSlots] : []), ...indexedSlots] } : fixedSlots
 }
 
 /**
@@ -177,7 +227,7 @@ export const contentBlockMediaInputObject = {
   type: 'object',
   properties: {
     asset_id: { type: 'string' },
-    slot: { type: 'string' },
+    slot: mediaPlacementSlotInputSchema('content_block')!,
     sort_order: { type: ['number', 'null'] },
     public_url: { type: ['string', 'null'] },
     thumbnail_url: { type: ['string', 'null'] },
@@ -191,8 +241,15 @@ export const contentBlockMediaInputObject = {
   additionalProperties: false,
 }
 
+export const contentBlockMediaInputRef = { $ref: '#/$defs/content_block_media' }
+const contentBlockKnownDefinitions = { content_block_media: contentBlockMediaInputObject }
+
 /** A block's own timestamp as a read returns it. Accepted on a whole-document write so a read can be sent back verbatim; the document's expected_updated_at is the concurrency token there. */
 export const contentBlockUpdatedAtInput = { type: ['string', 'null'], description: 'As read. Ignored on a whole-document write.' }
+
+export const contentBlockDataInputSchema = {
+  anyOf: CONTENT_BLOCK_TYPES.map(type => ({ ...contentBlockDataSchema(type), title: type })),
+}
 
 /** The article's leading image block, or null when it opens with text. */
 const blogCoverObject = {
@@ -210,22 +267,25 @@ const blogCoverObject = {
   additionalProperties: false,
 }
 
+const contentBlockProperties = {
+  id: { type: 'string' },
+  parent_block_id: { type: ['string', 'null'] },
+  type: { type: 'string', enum: [...CONTENT_BLOCK_TYPES] },
+  source_block_id: { type: ['string', 'null'] },
+  position: { type: 'integer' },
+  level: { type: ['number', 'null'] },
+  data: { type: 'object' },
+  media: { type: 'array', items: contentBlockMediaInputRef },
+  updated_at: { type: 'string', description: 'The block\'s own concurrency token, for replace_content_block and delete_content_block.' },
+}
+const contentBlockRequired = ['id', 'parent_block_id', 'type', 'level', 'data', 'media', 'updated_at']
+
 export const contentBlockObject = {
   type: 'object',
-  properties: {
-    id: { type: 'string' },
-    parent_block_id: { type: ['string', 'null'] },
-    type: { type: 'string', enum: [...CONTENT_BLOCK_TYPES] },
-    source_block_id: { type: ['string', 'null'] },
-    position: { type: 'integer' },
-    level: { type: ['number', 'null'] },
-    data: { type: 'object' },
-    media: { type: 'array', items: contentBlockMediaInputObject },
-    updated_at: { type: 'string', description: 'The block\'s own concurrency token, for replace_content_block and delete_content_block.' },
-  },
-  required: ['id', 'parent_block_id', 'type', 'level', 'data', 'media', 'updated_at'],
+  properties: contentBlockProperties,
+  required: contentBlockRequired,
   additionalProperties: false,
-  anyOf: CONTENT_BLOCK_TYPES.map(type => ({ properties: { type: { const: type }, data: contentBlockDataSchema(type) } })),
+  anyOf: contentBlockTypeBranches({ properties: contentBlockProperties, required: contentBlockRequired, additionalProperties: false }),
 }
 
 /** An article's category as posts carry it. */
@@ -577,7 +637,12 @@ export const qaItemObject = {
     answer: { type: ['string', 'null'] },
     sort_order: { type: 'number' },
     location_id: { type: ['string', 'null'] },
+    source: { type: 'string' },
+    status: { type: 'string', enum: ['published', 'hidden'] },
+    created_at: { type: 'string' },
+    updated_at: { type: 'string' },
   },
+  required: ['id', 'question', 'answer', 'sort_order', 'location_id', 'source', 'status', 'created_at', 'updated_at'],
 }
 
 export const reviewObject = {
@@ -592,6 +657,7 @@ export const reviewObject = {
     source: { type: 'string' },
     status: { type: 'string' },
     created_at: { type: ['string', 'null'] },
+    updated_at: { type: 'string' },
     location_id: { type: ['string', 'null'] },
     collection_method: { type: ['string', 'null'] },
     original_review_date: { type: ['string', 'null'] },
@@ -599,6 +665,7 @@ export const reviewObject = {
     publication_authorized: { type: 'boolean' },
     verified: { type: 'boolean' },
   },
+  required: ['id', 'rating', 'source', 'status', 'created_at', 'updated_at', 'publication_authorized', 'verified'],
 }
 
 export const submissionObject = {
@@ -632,6 +699,7 @@ export const reservationSubmissionObject = {
     location_id: { type: ['string', 'null'] },
     location_title: { type: ['string', 'null'] },
   },
+  required: ['id', 'request_id', 'operational_reservation_id', 'updated_at', 'status', 'created_at', 'guests', 'date', 'time', 'location_id'],
 }
 
 export const organizationSummaryItem = {
@@ -659,21 +727,6 @@ export const locationListItemObject = {
     active: { type: 'boolean', description: 'True when this is the currently active MCP location context.' },
   },
   required: ['id', 'slug', 'title', 'status', 'active'],
-}
-
-export const workspaceContextObject = {
-  type: 'object',
-  properties: {
-    organization_id: { type: ['string', 'null'] },
-    organization_name: { type: ['string', 'null'] },
-    organization_slug: { type: ['string', 'null'] },
-    
-    organization_subdomain: { type: ['string', 'null'] },
-    organization_public_url: { type: ['string', 'null'] },
-    location_id: { type: ['string', 'null'] },
-    location_slug: { type: ['string', 'null'] },
-    location_title: { type: ['string', 'null'] },
-  },
 }
 
 export const organizationListItemObject = {
@@ -708,9 +761,10 @@ export function organizationTool(definition: Omit<RawMcpToolDefinition, 'inputSc
   if (oneOf !== undefined) combinators.oneOf = oneOf
   if (anyOf !== undefined) combinators.anyOf = anyOf
   if (allOf !== undefined) combinators.allOf = allOf
-  const definitions = { ...contentBlockSchemaDefinitions(definition.inputSchema), ...($defs as Record<string, unknown> | undefined) }
+  const definitions = { ...contentBlockSchemaDefinitions(definition.inputSchema, contentBlockKnownDefinitions), ...($defs as Record<string, unknown> | undefined) }
   return withToolAnnotations({
     name: definition.name,
+    title: definition.title,
     description: definition.description,
     domain: definition.domain,
     minimumRole: definition.minimumRole,
@@ -723,7 +777,7 @@ export function organizationTool(definition: Omit<RawMcpToolDefinition, 'inputSc
       ...combinators,
       ...(Object.keys(definitions).length ? { $defs: definitions } : {}),
     },
-    outputSchema: { ...definition.outputSchema, $defs: { ...contentBlockSchemaDefinitions(definition.outputSchema), ...(definition.outputSchema.$defs as Record<string, unknown> | undefined) } },
+    outputSchema: { ...definition.outputSchema, $defs: { ...contentBlockSchemaDefinitions(definition.outputSchema, contentBlockKnownDefinitions), ...(definition.outputSchema.$defs as Record<string, unknown> | undefined) } },
     fileParams: definition.fileParams,
     uiResourceUri: definition.uiResourceUri,
   })
@@ -745,14 +799,14 @@ export function globalTool(definition: RawMcpToolDefinition | McpToolDefinition)
   return withToolAnnotations(definition)
 }
 
-export type RawMcpToolDefinition = Omit<McpToolDefinition, 'annotations' | 'securitySchemes'>
+export type RawMcpToolDefinition = Omit<McpToolDefinition, 'annotations' | 'securitySchemes' | 'title'> & { title?: string }
 
 // Classify the complete supported contract, including optional branches.
 // MCP calls an update destructive when it can overwrite or remove existing
 // state. W is reserved for additive writes; D includes ordinary property edits.
-// A provider's hosting alone is not open-world: the selected workspace's own
-// Stripe account, stored media, and linked accounts remain bounded targets.
-// Guest email, public social audiences and host file downloads cross that scope.
+// Hosting alone is not open-world. Private account and draft operations stay
+// bounded; publishing or changing public website content, guest messages,
+// public social audiences and host file downloads cross that scope.
 const R: McpToolAnnotations = Object.freeze({
   readOnlyHint: true,
   idempotentHint: true,
@@ -764,13 +818,15 @@ const D: McpToolAnnotations = Object.freeze({ readOnlyHint: false, openWorldHint
 
 /** Submission-review contract. Every real public tool is listed explicitly. */
 export const EXPECTED_TOOL_ANNOTATIONS = {
-  create_website: { ...W, openWorldHint: true },
-  create_qa: W,
-  update_qa: D,
-  delete_qa: D,
-  reorder_qa: D,
+  get_website_draft: R,
+  save_website_draft: { ...D, idempotentHint: true },
+  publish_website: { ...D, openWorldHint: true, idempotentHint: true },
+  create_qa: { ...W, openWorldHint: true },
+  update_qa: { ...D, openWorldHint: true },
+  delete_qa: { ...D, openWorldHint: true },
+  reorder_qa: { ...D, openWorldHint: true },
   get_member_scheduling: R,
-  set_member_scheduling: D,
+  set_member_scheduling: { ...D, openWorldHint: true },
   set_member_busy_calendars: D,
   reassign_product_booking: { ...D, openWorldHint: true, idempotentHint: true },
   get_payment_summary: R,
@@ -779,12 +835,12 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   get_payment_payouts: R,
   get_payments_usage: R,
   get_payments_dashboard_link: R,
-  set_product_booking_config: D,
-  delete_product_booking_config: D,
-  replace_product_weekly_schedule: D,
-  create_product_session: { ...D, idempotentHint: true },
+  set_product_booking_config: { ...D, openWorldHint: true },
+  delete_product_booking_config: { ...D, openWorldHint: true },
+  replace_product_weekly_schedule: { ...D, openWorldHint: true },
+  create_product_session: { ...D, openWorldHint: true, idempotentHint: true },
   create_table_reservation: { ...D, openWorldHint: true, idempotentHint: true },
-  update_product_session: D,
+  update_product_session: { ...D, openWorldHint: true },
   create_product_booking: { ...D, openWorldHint: true, idempotentHint: true },
   get_product_booking: R,
   list_product_bookings: R,
@@ -795,21 +851,21 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   request_product_booking_change: { ...D, openWorldHint: true, idempotentHint: true },
   cancel_table_reservation: { ...D, openWorldHint: true, idempotentHint: true },
   request_table_reservation_change: { ...D, openWorldHint: true, idempotentHint: true },
-  append_content_block: W,
-  attach_media: { ...W, idempotentHint: true },
-  update_menu: { ...D, idempotentHint: true },
+  append_content_block: { ...W, openWorldHint: true },
+  attach_media: { ...W, openWorldHint: true, idempotentHint: true },
+  update_menu: { ...D, openWorldHint: true, idempotentHint: true },
   batch_create_products: { ...W, idempotentHint: true },
   create_blog_post: W,
-  create_location: { ...W, idempotentHint: true },
+  create_location: { ...W, openWorldHint: true, idempotentHint: true },
   create_post: W,
-  create_product: { ...W, idempotentHint: true },
-  create_site_page: W,
-  delete_blog_post: D,
-  delete_content_block: D,
-  delete_media_asset: D,
-  delete_post: D,
-  delete_product: D,
-  delete_resource_localization: D,
+  create_product: { ...W, openWorldHint: true, idempotentHint: true },
+  create_site_page: { ...W, openWorldHint: true },
+  delete_blog_post: { ...D, openWorldHint: true },
+  delete_content_block: { ...D, openWorldHint: true },
+  delete_media_asset: { ...D, openWorldHint: true },
+  delete_post: { ...D, openWorldHint: true },
+  delete_product: { ...D, openWorldHint: true },
+  delete_resource_localization: { ...D, openWorldHint: true },
   get_blog_post: R,
   list_guest_conversations: R,
   get_guest_conversation: R,
@@ -851,56 +907,56 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   update_organization_member_role: D,
   remove_organization_member: D,
   cancel_organization_invitation: D,
-  set_organization_language: { ...D, idempotentHint: true },
+  set_organization_language: { ...D, openWorldHint: true, idempotentHint: true },
   delete_organization_language: { ...D, idempotentHint: true },
   list_organization_qa: R,
   list_organization_reviews: R,
   list_organizations: R,
   list_site_pages: R,
-  publish_blog_post: D,
+  publish_blog_post: { ...D, openWorldHint: true },
   publish_post: { ...D, openWorldHint: true },
-  put_resource_localization: D,
-  remove_media: D,
-  reorder_media: D,
-  replace_content_block: D,
-  set_consultation_mode: D,
-  set_media: D,
+  put_resource_localization: { ...D, openWorldHint: true },
+  remove_media: { ...D, openWorldHint: true },
+  reorder_media: { ...D, openWorldHint: true },
+  replace_content_block: { ...D, openWorldHint: true },
+  set_consultation_mode: { ...D, openWorldHint: true },
+  set_media: { ...D, openWorldHint: true },
   set_workspace_context: D,
-  reconcile_products: { ...D, idempotentHint: true },
-  update_blog_post: D,
-  update_location: D,
+  reconcile_products: { ...D, openWorldHint: true, idempotentHint: true },
+  update_blog_post: { ...D, openWorldHint: true },
+  update_location: { ...D, openWorldHint: true },
   get_calendar: R,
-  block_dates: D,
-  open_dates: D,
-  update_media_asset: D,
-  update_post: D,
-  update_product: D,
-  update_organization_settings: D,
-  update_site_page: D,
-  delete_site_page: D,
+  block_dates: { ...D, openWorldHint: true },
+  open_dates: { ...D, openWorldHint: true },
+  update_media_asset: { ...D, openWorldHint: true },
+  update_post: { ...D, openWorldHint: true },
+  update_product: { ...D, openWorldHint: true },
+  update_organization_settings: { ...D, openWorldHint: true },
+  update_site_page: { ...D, openWorldHint: true },
+  delete_site_page: { ...D, openWorldHint: true },
   save_media_attachment: { ...D, openWorldHint: true, idempotentHint: true },
   list_products: R,
-  set_product_publication: D,
-  set_product_location: D,
-  remove_product_location: D,
+  set_product_publication: { ...D, openWorldHint: true },
+  set_product_location: { ...D, openWorldHint: true },
+  remove_product_location: { ...D, openWorldHint: true },
   list_collections: R,
-  create_collection: W,
-  update_collection: D,
-  delete_collection: D,
+  create_collection: { ...W, openWorldHint: true },
+  update_collection: { ...D, openWorldHint: true },
+  delete_collection: { ...D, openWorldHint: true },
   // Replaces the whole membership list: products left out lose their place in
   // the collection, which is a removal the caller must mean.
-  set_collection_products: D,
-  reorder_collections: D,
-  reorder_blog_posts: D,
+  set_collection_products: { ...D, openWorldHint: true },
+  reorder_collections: { ...D, openWorldHint: true },
+  reorder_blog_posts: { ...D, openWorldHint: true },
   list_article_categories: R,
   create_article_category: W,
-  update_article_category: D,
+  update_article_category: { ...D, openWorldHint: true },
   delete_article_category: D,
-  reorder_article_categories: D,
+  reorder_article_categories: { ...D, openWorldHint: true },
   get_product_catalog_localization: R,
-  replace_resource_localizations: D,
+  replace_resource_localizations: { ...D, openWorldHint: true },
   get_reservation_policy: R,
-  update_reservation_policy: D,
+  update_reservation_policy: { ...D, openWorldHint: true },
 } as const satisfies Record<string, McpToolAnnotations>
 
 export function buildToolAnnotationsByName() {
@@ -935,9 +991,11 @@ export function withToolAnnotations(definition: RawMcpToolDefinition): McpToolDe
   }
 
   validateToolAnnotations(definition.name, annotations)
+  const action = definition.name.replaceAll('_', ' ')
 
   return {
     ...definition,
+    title: definition.title?.trim() || action.charAt(0).toUpperCase() + action.slice(1),
     inputSchema: { ...definition.inputSchema, additionalProperties: false },
     securitySchemes: MCP_TOOL_SECURITY_SCHEMES,
     annotations,

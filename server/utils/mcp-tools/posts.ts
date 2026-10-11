@@ -153,7 +153,7 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
   }),
   organizationTool({
     name: 'update_post',
-    description: 'Change a post\'s title, body, call_to_action, location, visibility or (while a draft) slug. Only the fields sent change. expected_updated_at is the updated_at you last read; a stale one conflicts. Media changes go through set_media, attach_media, remove_media and reorder_media on the post. Words and media cannot change while a Facebook, Instagram or Discord publication of this post is in progress or unresolved. Editing a published post changes the website only; nothing already sent to Facebook, Instagram or Discord is edited.',
+    description: 'Change only supplied website post fields using its current revision. Published social posts are unchanged; unresolved publication prevents content edits.',
     domain: 'posts',
     minimumRole: 'admin',
     inputSchema: { post_id: { type: 'string' }, expected_updated_at: { type: 'string' }, ...postUpdateProperties },
@@ -162,7 +162,7 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
   }),
   organizationTool({
     name: 'publish_post',
-    description: 'Publish a post to exactly the targets listed, and nowhere else: {"channel":"organization"} for the website, and {"channel":"facebook"|"instagram"|"discord","target_id","connection_revision"} from get_social_connections. Returns one outcome per target; ok is true only when every target is published. Repeating the call returns the existing receipts and never posts twice. processing means Meta is still preparing the media, or Discord rate limited the send: call publish_post again to finish the same post. unknown means the final step was not confirmed: resolve it with reconcile_post_publication, never by publishing again. A post is published once per channel; publish a new post for another Page, account or channel. Facebook takes text, a link, photos or one video; Instagram takes one JPEG image, a carousel of up to ten items, or one video as a Reel, and shows the call to action as text. Discord takes up to 2000 characters of text and call to action, never truncated, with up to ten JPEG, PNG, GIF, WebP, MP4, MOV or WebM attachments of at most 20 MiB each and 25 MiB together, posted by the KrabiClaw bot; mentions are not pinged.',
+    description: 'Publish the post to the selected website or social destinations, returning one result per target. Retry processing with the same post; reconcile an unknown result before publishing again.',
     domain: 'posts',
     minimumRole: 'admin',
     inputSchema: {
@@ -175,7 +175,7 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
   }),
   organizationTool({
     name: 'reconcile_post_publication',
-    description: "Check an unknown or existing Facebook, Instagram or Discord publication when the user wants to resolve or refresh its outcome. Reads the connected provider and updates the stored publication receipt; it does not publish. Supply provider_post_id only when the exact post is known and belongs to that connected Page, account or channel. Without one, a Discord publication is matched against the bot's messages in the channel by this post's exact text and media. An unproven outcome remains unknown.",
+    description: 'Read an existing social publication and refresh its receipt without publishing. Supply provider_post_id only for the exact post on the connected destination; unproven outcomes remain unknown.',
     domain: 'posts',
     minimumRole: 'admin',
     inputSchema: {

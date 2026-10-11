@@ -10,7 +10,7 @@
       :cancelled="confirmation.status === 'cancelled'"
       :receipt-kicker="t('booking.receipt')"
       :receipt-rows="receiptRows"
-      :next-steps-kicker="resolvedPolicySummary?.heading ?? t('booking_policy.experience_heading')"
+      :next-steps-kicker="resolvedPolicySummary?.heading ?? t(confirmation.productKind === 'service' ? 'booking_policy.consultation_heading' : 'booking_policy.experience_heading')"
       :next-steps="policyLines"
       :next-steps-notes-html="resolvedPolicySummary?.additional_notes_html ?? ''"
       :cta-label="browseLabel"

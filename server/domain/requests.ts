@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { HTTPError } from 'nitro'
 import { guestReservationRefundQueries } from '~/server/domain/payments/visit-refund'
 import { recordBookingCancelled } from '~/server/domain/booking-analytics'
 import { executeBatch, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
@@ -105,25 +106,30 @@ export async function getGuestRequest(db: DbClient, id: string, organizationId?:
 /**
  * Load the booking or reservation a thread refers to.
  *
- * Returns null for a contact thread, and for a booking thread whose
- * operational record was never created — which is a broken state the caller
- * must surface, never paper over with placeholder times.
+ * A contact thread has no operational record. A booking or reservation thread
+ * must have its own tenant's matching record before it can be read or changed.
  */
 export async function getThreadOperationalRecord(db: DbClient, requestId: string): Promise<ThreadOperationalRecord | null> {
-  return (await queryFirst<ThreadOperationalRecord>(db, `
+  const record = await queryFirst<ThreadOperationalRecord>(db, `
     SELECT 'booking' AS kind, b.id, b.status, b.party_size, s.starts_at, s.ends_at, s.timezone,
            s.location_id, b.product_id, p.name AS product_name, b.assigned_member_id, b.organization_id, b.user_id
       FROM bookings b
-      JOIN product_sessions s ON s.id = b.product_session_id
-      JOIN products p ON p.id = b.product_id
+      JOIN requests owner ON owner.id = b.request_id AND owner.kind = 'booking' AND owner.organization_id = b.organization_id
+      JOIN product_sessions s ON s.id = b.product_session_id AND s.product_id = b.product_id AND s.organization_id = b.organization_id
+      JOIN products p ON p.id = b.product_id AND p.organization_id = b.organization_id
      WHERE b.request_id = ?
     UNION ALL
     SELECT 'reservation', r.id, r.status, r.party_size, r.starts_at, r.ends_at, r.timezone,
            r.location_id, NULL, NULL, NULL, r.organization_id, r.user_id
       FROM reservations r
+      JOIN requests owner ON owner.id = r.request_id AND owner.kind = 'reservation' AND owner.organization_id = r.organization_id
      WHERE r.request_id = ?
      LIMIT 1
-  `, [requestId, requestId])) ?? null
+  `, [requestId, requestId])
+  if (record) return record
+  const request = await queryFirst<{ kind: GuestRequestKind }>(db, 'SELECT kind FROM requests WHERE id = ?', [requestId])
+  if (request && request.kind !== 'contact') throw new HTTPError({ statusCode: 404, message: 'The conversation has no matching booking or reservation', data: { code: 'REQUEST_OPERATIONAL_RECORD_NOT_FOUND', request_id: requestId } })
+  return null
 }
 
 /**
@@ -191,8 +197,8 @@ export function requestPreview(request: GuestRequest, record: ThreadOperationalR
   return `${local} · ${record.party_size}${request.payload.party_size_is_minimum ? '+' : ''} guests`.slice(0, 160)
 }
 
-export async function requestSummary(db: DbClient, request: GuestRequest) {
-  const record = await getThreadOperationalRecord(db, request.id)
+export async function requestSummary(db: DbClient, request: GuestRequest, knownRecord?: ThreadOperationalRecord | null) {
+  const record = knownRecord === undefined ? await getThreadOperationalRecord(db, request.id) : knownRecord
   const labels = await queryFirst<{ location_title: string | null }>(db, 'SELECT title AS location_title FROM business_locations WHERE id = ?', [request.location_id])
   return {
     guestName: request.payload.guest.name, guestEmail: request.payload.guest.email, guestPhone: request.payload.guest.phone,

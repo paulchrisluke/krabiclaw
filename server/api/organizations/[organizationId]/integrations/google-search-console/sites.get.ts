@@ -23,7 +23,7 @@ export default defineHandler(async (event) => {
 
   const { env, db, session, organization } = await requireOrganizationAccess(event, organizationId)
   const searchConsole = integrationSummary(await readIntegration(env.DB, organization.id, 'google_search_console'))
-  const siteUrl = await organizationPublicUrl(db, organization.id)
+  const siteUrl = await organizationPublicUrl(env, db, organization.id)
   const accountId = event.url.searchParams.get('account_id') || searchConsole?.account_id || null
   if (!accountId) {
     return jsonResponse({ success: true, account_id: null, searchConsole, siteUrl, properties: [], error: null })

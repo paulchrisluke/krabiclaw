@@ -83,7 +83,11 @@ export async function useBlawbyDocument(
   if (!asyncData.data.value && (asyncData.status.value === 'idle' || asyncData.status.value === 'pending')) {
     await asyncData.execute({ dedupe: 'defer' })
   }
-  if (asyncData.error.value) throw asyncData.error.value
+  if (asyncData.error.value) {
+    const error = asyncData.error.value
+    if (import.meta.server) throw error
+    throw nuxtApp.runWithContext(() => showError(error))
+  }
   if (!asyncData.data.value && options.server !== false) {
     throw createError({ statusCode: 500, statusMessage: 'Blawby document data was not returned' })
   }

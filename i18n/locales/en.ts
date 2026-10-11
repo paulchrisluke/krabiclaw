@@ -19,6 +19,7 @@ export default {
     "reschedule_disallowed": "Time changes are not allowed.",
     "reservation_heading": "Reservation policies",
     "experience_heading": "Experience policies",
+    "consultation_heading": "Consultation policies",
     "reservation_cancellation": "Cancel free up to {duration} before your booking.",
     "experience_cancellation": "Free cancellation is available up to {duration} before the experience starts.",
     "reschedule": "You can reschedule up to {duration} before the start time.",

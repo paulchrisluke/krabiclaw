@@ -3,6 +3,7 @@ import { d1JsonStringSet } from '~/server/db/d1-limits'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { listUserOrganizations, resolveOrganizationMembership } from '~/server/utils/member-access'
 import { publicTenantVisibilitySql } from '~/server/utils/public-base'
+import { tenantOrganizationOrigin } from '~/utils/tenant-organization-origin'
 
 export interface McpWorkspacePreferenceRow {
   user_id: string
@@ -96,7 +97,12 @@ export async function listAccessibleOrganizationsForMcp(
   `, [d1JsonStringSet(organizations.map(organization => organization.id))])
   return rows.flatMap((row) => {
     const role = roleByOrganizationId.get(row.id)
-    return role ? [{ ...row, role }] : []
+    return role ? [{ ...row, role, public_url: row.public_url ? tenantOrganizationOrigin({
+      platformDomain: env.NUXT_PUBLIC_PLATFORM_DOMAIN ?? '',
+      freeOrganizationDomain: env.NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN ?? '',
+      subdomain: row.subdomain ?? '',
+      canonicalDomain: row.public_url,
+    }) : null }] : []
   })
 }
 

@@ -3,11 +3,9 @@ import { platformLocale } from '~/shared/platform-locales'
 import { loadPublicProductCollection } from '~/server/utils/public-products'
 import { listOrganizationProducts } from '~/server/utils/product-management'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
-import { parseGoogleReviewMetadata } from '~/shared/google-review'
 import { executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { HTTPError } from 'nitro';
 import type { CloudflareEnv } from '~/server/utils/auth'
-import { listOrganizationReviews } from '~/server/utils/organization-reviews'
 import {
   loadExactPublicLocalizations,
   type ExactPublicLocalization,
@@ -33,7 +31,6 @@ import type {
   PublicComplianceContactPoint,
   PublicConsultationSettings,
   PublicOrganizationQa,
-  PublicOrganizationReview,
   PublicTenantPage,
 } from '~/types/blawby'
 
@@ -337,12 +334,12 @@ export async function getPublicBlawbyDocumentData(
   if (recipe === 'article' || recipe === 'posts' || recipe === 'experiences') return { shell, route }
   // Every route on this template is a page now, so locale representations
   // come from the document — there is no second resource kind to branch on.
-  route.localeRepresentations = await listPublicLocaleRepresentations(env, db, {
-    organizationId: organizationId,
-    
-    sourcePath: pagePath ?? '/',
-    documentId: route.page?.page_id,
-  })
+  route.localeRepresentations = route.page
+    ? route.page.localeRepresentations
+    : await listPublicLocaleRepresentations(env, db, {
+        organizationId,
+        sourcePath: pagePath ?? '/',
+      })
   return { shell, route }
 }
 
@@ -382,24 +379,6 @@ function faqBlockQa(page: { blocks: Array<{ type: string; data: Record<string, u
   })
 }
 
-type OrganizationReviewRow = Awaited<ReturnType<typeof listOrganizationReviews>>[number]
-
-function mapPublicReviews(rows: OrganizationReviewRow[]): PublicOrganizationReview[] {
-  return rows.map(row => ({
-    id: String(row.id),
-    author_name: requiredText(row.author_name, `review ${row.id}.author_name`),
-    media: row.media,
-    rating: Number(row.rating),
-    title: typeof row.title === 'string' ? row.title : null,
-    content: requiredText(row.content, `review ${row.id}.content`),
-    original_review_date: typeof row.original_review_date === 'string' ? row.original_review_date : null,
-    verified: row.verified === true,
-    source: typeof row.source === 'string' ? row.source : null,
-    original_reference: typeof row.original_reference === 'string' ? row.original_reference : null,
-    google_review_metadata: parseGoogleReviewMetadata(row.google_review_metadata),
-  }))
-}
-
 export async function getPublicBlawbyRouteData(
   db: DbClient,
   organizationId: string,
@@ -407,22 +386,18 @@ export async function getPublicBlawbyRouteData(
   options: { previewAuthorized?: boolean; slug?: string | null; locale?: string | null; localizations?: readonly ExactPublicLocalization[]; hydrationResources?: PublicTenantPageHydrationResources } = {},
   env: CloudflareEnv,
 ): Promise<PublicBlawbyRouteData> {
-  const needsReviews = ['home', 'about', 'contact', 'schedule'].includes(recipe)
   // Declared once, per template, in utils/template-registry.ts.
   const pagePath = recipe === 'page' ? options.slug ?? null : BLAWBY_TEMPLATE.pageDocuments.recipes[recipe] ?? null
   const sourceLocale = await getSourceLocale(db, organizationId)
   const localized = options.locale != null && options.locale !== sourceLocale
 
-  const [page, reviewRows] = await Promise.all([
-    pagePath
-      ? getPublicTenantPageForPath(env, db, organizationId, pagePath, {
-          locale: options.locale,
-          localizations: localized ? options.localizations ?? [] : null,
-          hydrationResources: options.hydrationResources,
-        })
-      : Promise.resolve(null),
-    needsReviews ? listOrganizationReviews(db, organizationId, { publishedOnly: true }) : Promise.resolve([]),
-  ])
+  const page = pagePath
+    ? await getPublicTenantPageForPath(env, db, organizationId, pagePath, {
+        locale: options.locale,
+        localizations: localized ? options.localizations ?? [] : null,
+        hydrationResources: options.hydrationResources,
+      })
+    : null
   // The Blawby layouts render one FAQ section, from the page's FAQ block; the
   // route data carries that block's items, as its declared source resolved them.
   const qa = faqBlockQa(page)
@@ -431,7 +406,6 @@ export async function getPublicBlawbyRouteData(
     localeRepresentations: [],
     page,
     qa,
-    reviews: mapPublicReviews(reviewRows),
   }
 }
 

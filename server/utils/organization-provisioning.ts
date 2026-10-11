@@ -255,7 +255,7 @@ async function emailOperatorOnboardingComplete(env: SetupEnv, db: D1Database, or
     queryFirst<{ name: string }>(db, 'SELECT name FROM organization WHERE id = ?', [organizationId]),
     queryFirst<{ name: string; email: string }>(db, 'SELECT name, email FROM user WHERE id = ?', [ownerId]),
     queryFirst<{ slug: string }>(db, 'SELECT slug FROM organization WHERE id = ?', [platformOrganizationId]),
-    organizationPublicUrl(db, organizationId),
+    organizationPublicUrl(env, db, organizationId),
   ])
   if (!business || !owner || !platform) throw new Error(`Onboarding email for ${organizationId} is missing its business, owner or platform organization`)
   if (!siteUrl) throw new Error(`Organization ${organizationId} has no active site address`)

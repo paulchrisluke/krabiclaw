@@ -69,7 +69,7 @@ export async function getGuestThreadDetail(
     attachments: photos.get(entry.id) ?? [],
   }))
 
-  const summary = await requestSummary(db, thread)
+  const summary = await requestSummary(db, thread, record)
   const now = new Date().toISOString()
   const mailbox = resolveGuestThreadMailbox(thread, record, now, audience?'buyer':'member')
 
@@ -86,9 +86,7 @@ export async function getGuestThreadDetail(
     contextLabel: summary.contextLabel,
     locationLabel: summary.locationTitle,
     conversationState: audience ? null : thread.conversation_state,
-    // The occurrence comes from the booking or reservation, rendered in that
-    // record's own timezone. A thread with no record reports no occurrence
-    // rather than a fabricated one.
+    operationalRecord: record ? { id: record.id, kind: record.kind, status: record.status, starts_at: record.starts_at, ends_at: record.ends_at, timezone: record.timezone, party_size: record.party_size } : null,
     source: {
       submissionType: thread.kind,
       submissionId: thread.id,

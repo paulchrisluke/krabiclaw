@@ -1,23 +1,17 @@
 import type { H3Event } from 'nitro';
 import { setResponseHeader } from 'nitro/h3';
-
-export function quoteChallengeValue(value: string) {
-  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
-}
+import { mcpErrorRecoveryDetails } from '~/server/utils/mcp-protocol'
+import { APIError, isAPIError } from 'better-auth/api'
+import { createResourceServerChallenge } from '@better-auth/oauth-provider'
 
 export function buildMcpOAuthChallenge(options: {
-  resourceMetadataUrl: string
-  error?: 'invalid_token' | 'insufficient_scope'
+  resourceUrl: string
   description: string
-  scope?: string
 }) {
-  const { resourceMetadataUrl, error = 'invalid_token', description, scope } = options
-  return [
-    `Bearer resource_metadata="${quoteChallengeValue(resourceMetadataUrl)}"`,
-    `error="${quoteChallengeValue(error)}"`,
-    `error_description="${quoteChallengeValue(description)}"`,
-    ...(scope ? [`scope="${quoteChallengeValue(scope)}"`] : []),
-  ].join(', ')
+  const error = createResourceServerChallenge(new APIError('UNAUTHORIZED', { message: options.description }), options.resourceUrl)
+  const challenge = mcpAuthChallengeFromError(error)
+  if (!challenge) throw new Error('Better Auth did not provide an authentication challenge')
+  return challenge
 }
 
 export function setMcpAuthChallenge(event: H3Event, challenge: string) {
@@ -43,16 +37,18 @@ export function mcpToolErrorResult(message: string, data?: unknown, platformOrig
   const details = data && typeof data === 'object' ? data : {}
   const code = 'code' in details && typeof details.code === 'string' ? details.code : undefined
   const status = 'status' in details && Number.isInteger(details.status) && Number(details.status) >= 400 && Number(details.status) < 600 ? Number(details.status) : undefined
-  const missing = 'missing' in details && Array.isArray(details.missing) && details.missing.every(field => typeof field === 'string' && /^[a-zA-Z_][a-zA-Z0-9_.]*$/u.test(field)) ? details.missing : undefined
   let dashboardUrl: string | undefined
-  if (platformOrigin && 'dashboard_url' in details && typeof details.dashboard_url === 'string' && /^\/dashboard\/(?!\/)/u.test(details.dashboard_url)) {
+  let dashboardUrlError: string | undefined
+  if (platformOrigin && 'dashboard_url' in details && typeof details.dashboard_url === 'string') {
     try {
       const origin = new URL(platformOrigin)
       const url = new URL(details.dashboard_url, origin.origin)
-      if (['https:', 'http:'].includes(origin.protocol) && url.origin === origin.origin && url.pathname.startsWith('/dashboard/')) dashboardUrl = url.toString()
-    } catch { /* An invalid destination does not turn a rejected tool into another failure. */ }
+      if (['https:', 'http:'].includes(origin.protocol) && url.origin === origin.origin && !url.username && !url.password && url.pathname.startsWith('/dashboard/')) dashboardUrl = url.toString()
+      else dashboardUrlError = 'invalid_destination'
+    } catch { dashboardUrlError = 'invalid_destination' }
   }
-  const action = status || code ? { ...(status ? { status } : {}), ...(code ? { code } : {}), message, ...(missing ? { missing } : {}), ...(dashboardUrl ? { dashboard_url: dashboardUrl } : {}) } : undefined
+  const recovery = mcpErrorRecoveryDetails(details)
+  const action = status || code || Object.keys(recovery).length ? { ...(status ? { status } : {}), message, ...recovery, ...(dashboardUrl ? { dashboard_url: dashboardUrl } : {}), ...(dashboardUrlError ? { dashboard_url_error: dashboardUrlError } : {}) } : undefined
   // Structured content must match the tool's success schema; errors use content.
   return {
     isError: true,
@@ -65,44 +61,17 @@ export function mcpToolErrorResult(message: string, data?: unknown, platformOrig
   }
 }
 
-const TOKEN_MISSING_DESCRIPTION = 'Token missing, expired, invalid, or not issued for this MCP resource'
-
-export function mcpAuthChallengeDetailsFromError(error: unknown): {
-  error: 'invalid_token' | 'insufficient_scope'
-  description: string
-  scope?: string
-} | null {
-  const data = error && typeof error === 'object' && 'data' in error
-    ? (error as { data?: unknown }).data
-    : null
-  const auth = data && typeof data === 'object' && 'mcpAuth' in data
-    ? (data as { mcpAuth?: unknown }).mcpAuth
-    : null
-  if (!auth || typeof auth !== 'object') return null
-  const details = auth as { error?: unknown; description?: unknown; scope?: unknown }
-  return {
-    error: details.error === 'insufficient_scope' ? 'insufficient_scope' : 'invalid_token',
-    description: typeof details.description === 'string' ? details.description : TOKEN_MISSING_DESCRIPTION,
-    scope: typeof details.scope === 'string' ? details.scope : undefined,
-  }
+export function mcpAuthChallengeFromError(error: unknown): string | null {
+  return isAPIError(error) ? new Headers(error.headers).get('WWW-Authenticate') : null
 }
 
 export function buildMcpAuthChallengeForError(
   error: unknown,
-  options: { resourceMetadataUrl: string; defaultDescription: string },
+  options: { resourceUrl: string; defaultDescription: string },
 ) {
-  const details = mcpAuthChallengeDetailsFromError(error)
-  if (!details) {
-    return buildMcpOAuthChallenge({
-      resourceMetadataUrl: options.resourceMetadataUrl,
-      description: options.defaultDescription,
-    })
-  }
-  return buildMcpOAuthChallenge({
-    resourceMetadataUrl: options.resourceMetadataUrl,
-    error: details.error,
-    description: details.description,
-    scope: details.scope,
+  return mcpAuthChallengeFromError(error) ?? buildMcpOAuthChallenge({
+    resourceUrl: options.resourceUrl,
+    description: options.defaultDescription,
   })
 }
 
@@ -110,11 +79,7 @@ export function describeMcpAuthTelemetryError(
   error: unknown,
   options?: { fallback?: string; prefix?: string },
 ) {
-  const details = mcpAuthChallengeDetailsFromError(error)
   const prefix = options?.prefix ?? 'credential_rejected'
-  if (details) {
-    return `${prefix}: ${details.error}: ${details.description}${details.scope ? ` (scope=${details.scope})` : ''}`
-  }
   const fallback = options?.fallback ?? (error instanceof Error ? error.message : String(error))
   return `${prefix}: ${fallback}`
 }

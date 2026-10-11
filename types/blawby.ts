@@ -150,7 +150,6 @@ export interface PublicBlawbyRouteData {
   localeRepresentations: PublicLocaleRepresentation[]
   page: PublicTenantPage | null
   qa: PublicOrganizationQa[]
-  reviews: PublicOrganizationReview[]
 }
 
 export type PublicTenantPage = import('~/server/utils/public-tenant-pages').PublicTenantPage

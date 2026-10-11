@@ -258,8 +258,8 @@ async function changePresentation(db: DbClient, thread: GuestThreadRow, proposal
   const copy = getVerticalCopy(organization.vertical, guest.locale)
   return {
     ...guest, fromName: organization.name, vertical: organization.vertical, labels, copy,
-    before: { whenLabel: formatTimestamp(proposal.before.startsAt, guest.locale, proposal.before.timezone), partySize: proposal.before.partySize },
-    after: { whenLabel: formatTimestamp(startsAt, guest.locale, timezone), partySize: proposal.after.partySize },
+    before: { whenLabel: formatTimestamp(proposal.before.startsAt, guest.locale, proposal.before.timezone, { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }), partySize: proposal.before.partySize },
+    after: { whenLabel: formatTimestamp(startsAt, guest.locale, timezone, { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }), partySize: proposal.after.partySize },
     locationTitle: guest.locationName?.trim() || labels['booking.online']!, originalLocationTitle: original.locationName?.trim() || labels['booking.online']!,
   }
 }

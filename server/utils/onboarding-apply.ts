@@ -12,12 +12,12 @@ import { getSourceLocale } from '~/server/utils/organization-locales'
 
 import { prepareContentDocumentDeletion, prepareContentDocumentWithBlocks } from '~/server/utils/content/documents'
 import { parseOpeningHours, parseSpecialHours } from '~/shared/reservation-hours'
-import { googleReviewUpserts } from '~/server/utils/google-places'
+import { getPlaceDetails, googleReviewUpserts } from '~/server/utils/google-places'
 import { execute, executeBatch, queryAll, queryFirst, type BatchQuery } from '~/server/db'
 import { resourceLocalizationDeletionQueries } from '~/server/utils/localization'
 import { planProductCreateWrites, slugCandidate } from '~/server/utils/product-management'
 import { updateLocation } from '~/server/utils/location-management'
-import { getDraftMedia, onboardingDraftWriteGuard, onboardingPageBlocks, onboardingPagePath, onboardingPageType, parseOnboardingDraftPayload, readActiveOnboardingDraft, type OnboardingDraftPayload, type SavedOnboardingDraft } from '~/server/utils/onboarding-drafts'
+import { getDraftMedia, normalizeOnboardingDraftInput, onboardingPublicationMissingFields, readOnboardingDraft, upsertActiveOnboardingDraft, type OnboardingDraftInput, onboardingDraftWriteGuard, onboardingPageBlocks, onboardingPagePath, onboardingPageType, parseOnboardingDraftPayload, readActiveOnboardingDraft, type OnboardingDraftPayload, type SavedOnboardingDraft } from '~/server/utils/onboarding-drafts'
 import { createMediaAsset, insertInitialMediaPlacements, type CreateInput } from '~/server/utils/media-asset-manager'
 import { applyOnboardingTenantPages, getPublishedTenantPage, prepareTenantPageDelete, refreshTenantPageCard } from '~/server/utils/content/pages'
 import { activateOrganization, completeOnboarding, createOrganization, provisionOrganization, type OrganizationProvisioningResult } from '~/server/utils/organization-provisioning'
@@ -25,13 +25,13 @@ import { isOrganizationWideRole, resolveUserOrganization } from '~/server/utils/
 import { organizationPublicUrl } from '~/server/utils/domains'
 import { refreshSocialCard } from '~/server/utils/social-card'
 import { purgePublicResourceCacheNow } from '~/server/utils/public-resource-cache'
-import { isValidTimezone } from '~/utils/timezone'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import type { OrganizationVertical } from '~/utils/vertical-copy'
 import type { CurrencyCode } from '~/shared/currencies'
 import { starterPalette } from '~/shared/site-palette'
 import { resolveOrganizationFontPreset } from '~/shared/organization-fonts'
 import { parseLogoPresentation } from '~/shared/media-placement-contract'
+import { creationRequestHash } from '~/server/utils/organization-events'
 
 type ProvisioningEnv = Parameters<typeof provisionOrganization>[0]
 
@@ -55,9 +55,58 @@ export interface OnboardingDraftRow {
   default_currency?: CurrencyCode | null
 }
 
+export async function saveOnboardingDraft(env: CloudflareEnv, db: D1Database, userId: string, input: OnboardingDraftInput) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw new HTTPError({ statusCode: 400, statusMessage: 'Website answers must be an object' })
+  if (input.idempotencyKey !== undefined && typeof input.idempotencyKey !== 'string' || input.draftId !== undefined && typeof input.draftId !== 'string' || input.expectedUpdatedAt !== undefined && input.expectedUpdatedAt !== null && typeof input.expectedUpdatedAt !== 'string') throw new HTTPError({ statusCode: 400, statusMessage: 'Draft identity, revision and creation key must be text' })
+  const key = input.idempotencyKey?.trim()
+  const keyedId = key ? `mcp-website-${await creationRequestHash({ userId, key })}` : undefined
+  const existingRow = input.draftId || keyedId
+    ? await queryFirst<SavedOnboardingDraft>(db, 'SELECT * FROM onboarding_drafts WHERE id = ? AND user_id = ?', [input.draftId ?? keyedId!, userId])
+    : await readActiveOnboardingDraft(db, userId)
+  if (input.draftId && !existingRow) throw new HTTPError({ statusCode: 404, statusMessage: 'Website draft not found' })
+  if (existingRow && input.expectedUpdatedAt !== undefined && input.expectedUpdatedAt !== null && existingRow.updated_at !== input.expectedUpdatedAt) throw new HTTPError({ statusCode: 409, statusMessage: 'Website draft changed; read it before saving', data: { code: 'ONBOARDING_DRAFT_CHANGED', draft_id: existingRow.id } })
+  if (existingRow?.status === 'abandoned') throw new HTTPError({ statusCode: 409, statusMessage: 'This website draft was discarded', data: { code: 'ONBOARDING_DRAFT_ABANDONED', draft_id: existingRow.id } })
+  const existing = existingRow ? parseOnboardingDraftPayload(existingRow.payload_json) : null
+  if (existing && existingRow) existing.preview.subdomainCandidate = existingRow.subdomain_candidate
+  const sourceType = input.sourceType ?? existing?.source.type ?? 'manual'
+  if (sourceType !== 'manual' && sourceType !== 'google_places') throw new HTTPError({ statusCode: 400, statusMessage: 'sourceType must be manual or google_places' })
+  let place: Parameters<typeof normalizeOnboardingDraftInput>[2] = null
+  if (sourceType === 'google_places') {
+    const placeId = typeof input.placeId === 'string' ? input.placeId.trim() : existing?.source.placeId
+    if (!placeId) throw new HTTPError({ statusCode: 400, statusMessage: 'Choose a Google place before importing it' })
+    if (existing?.source.place?.placeId === placeId) place = existing.source.place
+    else {
+      if (!env.GOOGLE_PLACES_API_KEY) throw new HTTPError({ statusCode: 503, statusMessage: 'Google Places API key not configured' })
+      place = await getPlaceDetails(env.GOOGLE_PLACES_API_KEY, placeId)
+    }
+  }
+  const payload = normalizeOnboardingDraftInput(input, existing, place)
+  const draft = await upsertActiveOnboardingDraft(db, {
+    userId, name: payload.preview.brandName, vertical: payload.preview.vertical, sourceType, payload,
+    expectedUpdatedAt: input.expectedUpdatedAt ?? null, draftId: input.draftId, idempotencyKey: key,
+  })
+  const saved = await readOnboardingDraft(db, userId, draft.id)
+  if (saved.row.status === 'committed') return saved
+  const target = await ensureOnboardingTarget(env, db, userId, {
+    id: draft.id, updated_at: draft.updatedAt, organization_id: draft.organizationId,
+    name: draft.payload.preview.brandName, vertical: draft.payload.preview.vertical,
+    subdomain_candidate: draft.subdomainCandidate, source_locale: draft.payload.source.details.sourceLocale,
+    default_currency: draft.payload.source.details.currency,
+  })
+  if ('error' in target) throw new HTTPError({ statusCode: target.status, statusMessage: target.error, data: { draft_id: draft.id } })
+  const applied = await applyOnboardingDraft(env, db, {
+    userId, target: target.target, payload: draft.payload,
+    defaultCurrency: draft.payload.source.details.currency, timezone: draft.payload.source.details.timezone,
+    draft: { id: draft.id, user_id: userId, updated_at: draft.updatedAt },
+  })
+  if ('error' in applied) throw new HTTPError({ statusCode: applied.status, statusMessage: applied.error, data: { draft_id: draft.id } })
+  return readOnboardingDraft(db, userId, draft.id)
+}
+
 export async function activateOnboardingDraft(env: CloudflareEnv, db: D1Database, input: {
   userId: string
   draftId: string
+  expectedUpdatedAt: string
   origin: { headers: Headers } | null
   activateSession?: (_organizationId: string) => Promise<void>
 }) {
@@ -68,9 +117,9 @@ export async function activateOnboardingDraft(env: CloudflareEnv, db: D1Database
   if (!draft || draft.id !== input.draftId || !['active', 'committed'].includes(draft.status)) throw new HTTPError({ statusCode: 409, statusMessage: 'Website draft is no longer available', data: { code: 'ONBOARDING_DRAFT_UNAVAILABLE', draft_id: input.draftId } })
   const payload = parseOnboardingDraftPayload(draft.payload_json)
   const { currency, timezone, sourceLocale } = payload.source.details
-  if (!currency || !isValidTimezone(timezone) || !sourceLocale || !draft.subdomain_candidate) {
-    throw new HTTPError({ statusCode: 400, statusMessage: 'Website language, currency, timezone and address are required' })
-  }
+  const missingFields = onboardingPublicationMissingFields(draft, payload)
+  if (missingFields.length) throw new HTTPError({ statusCode: 400, statusMessage: `Missing website fields: ${missingFields.join(', ')}`, data: { code: 'ONBOARDING_INCOMPLETE', draft_id: draft.id, missing_fields: missingFields } })
+  if (!currency || !sourceLocale || !timezone) throw new Error('Validated website setup has missing values')
   let organizationId = draft.organization_id
   if (organizationId) {
     const membership = await resolveUserOrganization(env, { userId: input.userId, organizationId })
@@ -80,6 +129,7 @@ export async function activateOnboardingDraft(env: CloudflareEnv, db: D1Database
     'SELECT onboarding_status FROM organization WHERE id = ?', [organizationId]) : null
   const live = existing?.onboarding_status === 'active'
   if (!live) {
+    if (draft.updated_at !== input.expectedUpdatedAt) throw new HTTPError({ statusCode: 409, statusMessage: 'Website draft changed; read it before publishing', data: { code: 'ONBOARDING_DRAFT_CHANGED', draft_id: draft.id } })
     const revision = new Date(Math.max(Date.now(), Date.parse(draft.updated_at) + 1)).toISOString()
     const claim = await execute(db, "UPDATE onboarding_drafts SET updated_at = ? WHERE id = ? AND user_id = ? AND status = 'active' AND updated_at = ?", [revision, draft.id, input.userId, draft.updated_at])
     if (!claim.meta.changes) throw new HTTPError({ statusCode: 409, statusMessage: 'Website draft changed; retry the same request', data: { code: 'ONBOARDING_DRAFT_CHANGED', draft_id: draft.id, organization_id: organizationId } })
@@ -105,7 +155,7 @@ export async function activateOnboardingDraft(env: CloudflareEnv, db: D1Database
     }
     const organization = await resolveUserOrganization(env, { userId: input.userId, organizationId })
     const locations = await queryAll<{ id: string; slug: string | null }>(db, "SELECT id, slug FROM business_locations WHERE organization_id = ? AND status = 'active' ORDER BY created_at, id LIMIT 1", [organizationId])
-    const publicUrl = await organizationPublicUrl(db, organizationId)
+    const publicUrl = await organizationPublicUrl(env, db, organizationId)
     const site = await queryFirst<{ onboarding_status: string }>(db, 'SELECT onboarding_status FROM organization WHERE id = ?', [organizationId])
     const homepage = await getPublishedTenantPage(db, organizationId, '/', sourceLocale)
     if (!organization || site?.onboarding_status !== 'active' || !homepage?.blocks.length || !locations.length || !publicUrl) throw new Error('Activated website could not be read back')

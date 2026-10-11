@@ -19,6 +19,7 @@ import { creationRequestHash } from '~/server/utils/organization-events'
 import { guestPresentation } from '~/server/utils/notifications'
 import { platformLocale } from '~/shared/platform-locales'
 import { formatTimestamp } from '~/utils/timezone'
+import { describeErrorForTelemetry } from '~/server/utils/error-telemetry'
 import type {
   GuestThreadDeliveryProvider,
   GuestThreadDeliveryRow,
@@ -43,7 +44,7 @@ export type OperationOutcome =
   | { ok: false; status: 400; reason: 'no_guest_email' | 'empty_body' }
   | { ok: false; status: 400; reason: 'missing_idempotency_key' }
   | { ok: false; status: 400; reason: 'invalid_photo'; message: string }
-  | { ok: false; status: 502; reason: 'delivery_failed'; message: string }
+  | { ok: false; status: 502; reason: 'delivery_failed'; message: string; mutation_applied?: true; operation_completed?: false; request_id?: string; record?: ThreadOperationalRecord; retry_with_same_idempotency_key?: true }
 
 export type ExecuteOperationInput = {
   threadId: string
@@ -347,46 +348,58 @@ async function sendStatusUpdate(
   entry: GuestThreadEntryRow,
   delivery: GuestThreadDeliveryRow,
 ): Promise<OperationOutcome> {
+  if (!context.record) return { ok: false, status: 404, reason: 'source_not_found' }
   let outcome = delivery
-  if (!isDeliverySent(delivery)) {
-    const subject = recordedEmailSubject(entry)
-    if (!entry.body || !subject) return conflict('Status update has no recorded email content')
-    const payload = JSON.parse(entry.payload_json!) as { action?: string; afterStatus?: string }
-    if (payload.action && (
-      payload.afterStatus !== context.record?.status
-      || entry.body !== operationBody(payload.action, context.thread, context.record)
-    )) return conflict('Status update was superseded by a booking change')
-    const summary = await requestSummary(db, context.thread)
-    if (!summary.guestEmail) return { ok: false, status: 400, reason: 'no_guest_email' }
-    if (!context.record) return { ok: false, status: 404, reason: 'source_not_found' }
-    if (!['confirm', 'reject', 'cancel'].includes(payload.action ?? '')) return conflict('Status update has no recorded action')
-    const fromName = await getOrganizationBrandName(db, context.thread.organization_id)
-    const guest = await guestPresentation(db, {
-      organizationId: context.thread.organization_id, organizationName: fromName,
-      locale: context.thread.payload.guest.locale,
-      productId: context.record.product_id, productTitle: context.record.product_name,
-      locationId: context.record.location_id, locationName: summary.locationTitle,
-    })
-    const labels = platformLocale(guest.locale)!.messages
-    const titleKey = payload.action === 'reject' ? 'booking.request_declined'
-      : payload.action === 'confirm' ? context.thread.kind === 'reservation' ? 'reservations.confirmed' : 'booking.confirmed'
-        : context.thread.kind === 'reservation' ? 'saya.reservation_cancel.cancelled_title' : 'saya.experience_cancel.cancelled_title'
-    const guestSubject = `${labels[titleKey]} — ${guest.productTitle ?? guest.organizationName}`
-    const guests = labels['saya.experience_detail.guest_count']!.replace('{count}', `${context.record.party_size}${context.thread.kind !== 'contact' && context.thread.payload.party_size_is_minimum ? '+' : ''}`)
-    const guestBody = [guest.locationName, formatTimestamp(context.record.starts_at, guest.locale, context.record.timezone), guests].filter(Boolean).join(' · ')
-    outcome = await deliverGuestThreadEmail(db, {
-      delivery,
-      env: input.env,
-      to: summary.guestEmail,
-      fromName,
-      subject: guestSubject,
-      email: await renderStatusUpdate(input.env, db, context.thread.organization_id, guest.organizationName, guestSubject, guestBody, guest.locale),
-      submissionType: context.thread.kind,
-      submissionId: context.thread.id,
-    })
+  let deliveryError: string | undefined
+  try {
+    if (!isDeliverySent(delivery)) {
+      const subject = recordedEmailSubject(entry)
+      if (!entry.body || !subject) return conflict('Status update has no recorded email content')
+      const payload = JSON.parse(entry.payload_json!) as { action?: string; afterStatus?: string }
+      if (payload.action && (
+        payload.afterStatus !== context.record.status
+        || entry.body !== operationBody(payload.action, context.thread, context.record)
+      )) return conflict('Status update was superseded by a booking change')
+      const summary = await requestSummary(db, context.thread)
+      if (!summary.guestEmail) return { ok: false, status: 400, reason: 'no_guest_email' }
+      if (!['confirm', 'reject', 'cancel'].includes(payload.action ?? '')) return conflict('Status update has no recorded action')
+      const fromName = await getOrganizationBrandName(db, context.thread.organization_id)
+      const guest = await guestPresentation(db, {
+        organizationId: context.thread.organization_id, organizationName: fromName,
+        locale: context.thread.payload.guest.locale,
+        productId: context.record.product_id, productTitle: context.record.product_name,
+        locationId: context.record.location_id, locationName: summary.locationTitle,
+      })
+      const labels = platformLocale(guest.locale)!.messages
+      const titleKey = payload.action === 'reject' ? 'booking.request_declined'
+        : payload.action === 'confirm' ? context.thread.kind === 'reservation' ? 'reservations.confirmed' : 'booking.confirmed'
+          : context.thread.kind === 'reservation' ? 'saya.reservation_cancel.cancelled_title' : 'saya.experience_cancel.cancelled_title'
+      const guestSubject = `${labels[titleKey]} — ${guest.productTitle ?? guest.organizationName}`
+      const guests = labels['saya.experience_detail.guest_count']!.replace('{count}', `${context.record.party_size}${context.thread.kind !== 'contact' && context.thread.payload.party_size_is_minimum ? '+' : ''}`)
+      const guestBody = [guest.locationName, formatTimestamp(context.record.starts_at, guest.locale, context.record.timezone, { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }), guests].filter(Boolean).join(' · ')
+      outcome = await deliverGuestThreadEmail(db, {
+        delivery,
+        env: input.env,
+        to: summary.guestEmail,
+        fromName,
+        subject: guestSubject,
+        email: await renderStatusUpdate(input.env, db, context.thread.organization_id, guest.organizationName, guestSubject, guestBody, guest.locale),
+        submissionType: context.thread.kind,
+        submissionId: context.thread.id,
+      })
+    }
+  } catch (error) {
+    deliveryError = describeErrorForTelemetry(error)
   }
-  if (isDeliverySent(outcome)) return await successfulOutcome(db, context)
-  return { ok: false, status: 502, reason: 'delivery_failed', message: outcome.error ?? 'Email provider rejected the status update' }
+  if (deliveryError === undefined && isDeliverySent(outcome)) return await successfulOutcome(db, context)
+  if (deliveryError !== undefined) console.error({ event: 'guest_status_email_failed', organization_id: context.thread.organization_id, request_id: context.thread.id, error: deliveryError })
+  const currentRecord = await getThreadOperationalRecord(db, context.thread.id)
+  if (!currentRecord) return { ok: false, status: 404, reason: 'source_not_found' }
+  return {
+    ok: false, status: 502, reason: 'delivery_failed',
+    message: `Booking is ${currentRecord.status}, but the guest email failed. Retry with the same idempotency key.`,
+    mutation_applied: true, operation_completed: false, request_id: context.thread.id, record: currentRecord, retry_with_same_idempotency_key: true,
+  }
 }
 
 /** A business's decision on a booking, for its analytics: recorded once per booking, on the first run and on any retry. */

@@ -53,7 +53,7 @@ function formatMinutes(minutes: number, locale: string) {
 export function formatBookingPolicySummary(
   policy: BookingPolicySummarySource,
   locale: string,
-  _vertical?: string | null,
+  productKind?: string | null,
 ): FormattedBookingPolicySummary {
   const t = policyMessages(locale)
   const experience = policy.policy_type === 'experience'
@@ -86,7 +86,7 @@ export function formatBookingPolicySummary(
   }
 
   return {
-    heading: t(experience ? 'experience_heading' : 'reservation_heading', {}),
+    heading: t(experience ? productKind === 'service' ? 'consultation_heading' : 'experience_heading' : 'reservation_heading', {}),
     items,
     additional_notes_html: policy.additional_notes_html,
   }

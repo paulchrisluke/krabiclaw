@@ -1,5 +1,5 @@
 import type { McpToolDefinition } from './shared'
-import { articleCategoryObject, blogPostMutationResultObject, blogPostObject, blogPostSummaryObject, contentBlockMediaInputObject, contentBlockUpdatedAtInput, pageInfoObject, paginationInputSchema, organizationTool } from './shared'
+import { articleCategoryObject, blogPostMutationResultObject, blogPostObject, blogPostSummaryObject, contentBlockMediaInputRef, contentBlockTypeBranches, contentBlockUpdatedAtInput, pageInfoObject, paginationInputSchema, organizationTool } from './shared'
 import { PUBLICATION_CONTENT_BLOCK_TYPES, contentBlockDataSchema } from '~/shared/content-registries'
 import type { McpExecutorContext } from './execution'
 import { BLOG_UPDATE_MUTATION_FIELDS, createBlogPost, deleteBlogPost, getBlogPost, listBlogPosts, reorderArticles, updateBlogLifecycle, updateBlogPost } from '~/server/utils/content/publishing'
@@ -13,20 +13,23 @@ import { createArticleCategory, deleteArticleCategory, listArticleCategories, re
 
 // A block's place is its index in the array; there is no position to state.
 // An image block carries exactly one media item, or it is refused.
+const blogContentBlockProperties = {
+  id: { type: 'string' },
+  type: { type: 'string', enum: [...PUBLICATION_CONTENT_BLOCK_TYPES] },
+  source_block_id: { type: ['string', 'null'] },
+  parent_block_id: { type: ['string', 'null'] },
+  level: { type: ['number', 'null'] },
+  data: { anyOf: PUBLICATION_CONTENT_BLOCK_TYPES.map(type => ({ ...contentBlockDataSchema(type), title: type })) },
+  media: { type: 'array', items: contentBlockMediaInputRef, description: 'Required on image blocks: one item, the picture. A block read back keeps its media by sending it as read.' },
+  updated_at: contentBlockUpdatedAtInput,
+}
+
 const blogContentBlockSchema = {
   type: 'object',
-  properties: {
-    id: { type: 'string' },
-    type: { type: 'string', enum: [...PUBLICATION_CONTENT_BLOCK_TYPES] },
-    parent_block_id: { type: ['string', 'null'] },
-    level: { type: ['number', 'null'] },
-    data: { type: 'object' },
-    media: { type: 'array', items: contentBlockMediaInputObject, description: 'Required on image blocks: one item, the picture. A block read back keeps its media by sending it as read.' },
-    updated_at: contentBlockUpdatedAtInput,
-  },
+  properties: blogContentBlockProperties,
   required: ['type', 'data'],
   additionalProperties: false,
-  anyOf: PUBLICATION_CONTENT_BLOCK_TYPES.map(type => ({ properties: { type: { const: type }, data: contentBlockDataSchema(type) } })),
+  anyOf: contentBlockTypeBranches({ properties: blogContentBlockProperties, required: ['type', 'data'], additionalProperties: false }, PUBLICATION_CONTENT_BLOCK_TYPES),
 } as const
 
 const articleCategoryResult = {

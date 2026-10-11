@@ -76,11 +76,11 @@ const COPY = {
     enough: 'Six or seven dishes is plenty to launch with. The rest can come later.',
   },
   experience: {
-    prompt: 'Your first experience — the name is all it takes. Add a price now or later.',
+    prompt: 'Add an experience to finish configuring before guests can book.',
     nameLabel: 'Experience', namePlaceholder: 'Sunset kayak tour',
     categoryLabel: 'Category', categoryPlaceholder: 'Half day, Full day, Evening…',
     addLabel: 'Add experience',
-    enough: 'Two or three is plenty to launch with. Times and capacity come later, in your dashboard.',
+    enough: 'Booking details are required before an experience can be published.',
   },
 } as const
 

@@ -355,8 +355,7 @@ const displayPhone = computed(() => {
 const dialablePhone = computed(() => displayPhone.value?.replace(/[^\d+]/g, '') ?? '')
 const displayEmail = computed(() => {
   const e = location.value?.email
-  if (e && !e.includes('example.com') && !e.includes('krabiclaw.com')) return e
-  return null
+  return e || null
 })
 
 // Other locations for the "Sister rooms" rail

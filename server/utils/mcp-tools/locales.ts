@@ -25,7 +25,11 @@ const localizedDocumentValues = { type: 'object', properties: {
 const resourceValueBranches = LOCALIZED_RESOURCE_TYPES.map(resourceType => ({
   properties: { resource_type: { const: resourceType }, values: localizedResourceValuesSchema(resourceType) },
 }))
-const resourceWriteBranches = resourceValueBranches.map(branch => ({ properties: { ...branch.properties, route_path: { type: 'null' } } }))
+const resourceValuesInput = {
+  type: 'object',
+  properties: Object.assign({}, ...LOCALIZED_RESOURCE_TYPES.map(resourceType => localizedResourceValuesSchema(resourceType).properties)),
+  additionalProperties: false,
+} as const
 const organizationLocaleObject = { type: 'object', properties: {
   id: { type: 'string' }, organization_id: { type: 'string' }, locale: { type: 'string' }, label: { type: ['string', 'null'] },
   is_source: { type: 'boolean' }, status: { type: 'string', enum: ['published', 'disabled'] }, created_at: { type: 'string' }, updated_at: { type: 'string' },
@@ -97,11 +101,10 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
       resource_type: { type: 'string', enum: [...LOCALIZED_RESOURCE_TYPES, 'content_document'] },
       resource_id: { type: 'string' },
       locale: { type: 'string' },
-      values: { type: 'object' },
+      values: { ...resourceValuesInput, properties: { ...resourceValuesInput.properties, ...localizedDocumentValues.properties } },
       route_path: { type: ['string', 'null'], description: 'Document path including the language prefix. Resource routes are automatic.' },
       content_blocks: TENANT_PAGE_BLOCKS_SCHEMA,
       expected_updated_at: { type: ['string', 'null'] },
-      anyOf: [...resourceWriteBranches, { properties: { resource_type: { const: 'content_document' }, values: localizedDocumentValues } }],
     },
     required: ['resource_type', 'resource_id', 'locale', 'values'],
     outputSchema: { type: 'object', properties: { localization: localizationObject, context: { type: 'object' } }, required: ['localization'], additionalProperties: false },
@@ -149,14 +152,13 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
           type: 'object',
           properties: {
             resource_id: { type: 'string' },
-            values: { type: 'object' },
+            values: resourceValuesInput,
             route_path: { type: 'null' },
           },
           required: ['resource_id', 'values'],
           additionalProperties: false,
         },
       },
-      anyOf: LOCALIZED_RESOURCE_TYPES.map(resourceType => ({ properties: { resource_type: { const: resourceType }, items: { type: 'array', items: { type: 'object', properties: { values: localizedResourceValuesSchema(resourceType) } } } } })),
     },
     required: ['resource_type', 'locale', 'items'],
     outputSchema: { type: 'object', properties: { locale: { type: 'string' }, resource_type: { type: 'string', enum: [...LOCALIZED_RESOURCE_TYPES] }, updated_resource_ids: { type: 'array', items: { type: 'string' } }, context: { type: 'object' } }, required: ['locale', 'resource_type', 'updated_resource_ids'], additionalProperties: false },

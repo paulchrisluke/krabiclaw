@@ -66,26 +66,57 @@ const teamObject = { type: 'object', properties: {
 }, required: ['id', 'name', 'organization_id', 'created_at', 'updated_at', 'member_user_ids'] } as const
 const teamOutput = { type: 'object', properties: { team: teamObject }, required: ['team'] }
 
+const websiteDraftLocationSchema = {
+  type: 'object', properties: {
+    street_address: { type: 'string' }, address_line_2: { type: 'string' }, city: { type: 'string' }, region: { type: 'string' }, postal_code: { type: 'string' },
+    country: { type: 'string', pattern: '^[A-Z]{2}$' }, phone: { type: 'string' }, website_url: { type: 'string', format: 'uri' },
+  }, additionalProperties: false,
+} as const
+const websiteDraftProductSchema = {
+  type: 'object', properties: { name: { type: 'string', minLength: 1, pattern: '\\S' }, category: { type: 'string' }, amount_minor: { type: 'integer', minimum: 0 } },
+  required: ['name'], additionalProperties: false,
+} as const
+const websiteDraftOutputSchema = {
+  type: 'object', properties: {
+    draft_id: { type: 'string' }, revision: { type: 'string', format: 'date-time' }, organization_id: { type: 'string' }, idempotency_key: { type: 'string' },
+    status: { type: 'string', enum: ['active', 'committed'] }, subdomain: { type: 'string' },
+    name: { type: 'string' }, vertical: { type: 'string', enum: ALL_VERTICALS }, source_locale: { type: 'string' },
+    currency: { type: 'string' }, timezone: { type: 'string' }, location: websiteDraftLocationSchema,
+    hero_headline: { type: 'string' }, hero_subtitle: { type: 'string' }, products: { type: 'array', items: websiteDraftProductSchema },
+    missing_fields: { type: 'array', items: { type: 'string', enum: ['source_locale', 'currency', 'timezone', 'subdomain'] } },
+  }, required: ['draft_id', 'revision', 'status', 'subdomain', 'name', 'vertical', 'source_locale', 'location', 'products', 'missing_fields'], additionalProperties: false,
+} as const
+
 export const ORGANIZATIONS_TOOLS: McpToolDefinition[] = [
   globalTool(withToolAnnotations({
-    name: 'create_website', description: 'Create and publish a new business website owned by the signed-in user, then select it as the workspace. Repeat the same idempotency key and answers when retrying.',
+    name: 'get_website_draft', description: 'Read your saved website setup. Omit draft_id to resume your unfinished website.',
+    domain: 'organizations', minimumRole: 'admin',
+    inputSchema: { type: 'object', properties: { draft_id: { type: 'string', minLength: 1 } }, additionalProperties: false },
+    outputSchema: websiteDraftOutputSchema,
+  })),
+  globalTool(withToolAnnotations({
+    name: 'save_website_draft', description: 'Save website answers without publishing. Use the returned draft_id and revision for changes; reuse the creation key on retry.',
     domain: 'organizations', minimumRole: 'admin',
     inputSchema: { type: 'object', properties: {
-      name: { type: 'string', minLength: 1, maxLength: 200, pattern: '\\S' },
-      vertical: { type: 'string', enum: ALL_VERTICALS },
-      source_locale: { type: 'string', enum: PLATFORM_LOCALES.map(locale => locale.locale) },
-      currency: { type: 'string', enum: SUPPORTED_CURRENCIES }, timezone: timezoneSchema,
-      subdomain: { type: 'string', minLength: 1, maxLength: 63, pattern: '^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$', description: 'Chosen website address before .krabiclaw.com.' },
+      draft_id: { type: 'string', minLength: 1, description: 'Existing draft to edit; omit when creating.' }, revision: { type: 'string', format: 'date-time', description: 'Required when editing: the revision returned by get_website_draft.' },
       idempotency_key: { type: 'string', minLength: 1, maxLength: 200, pattern: '\\S' },
-      description: { type: 'string', maxLength: 2000 },
-      location: { type: 'object', properties: {
-        street_address: { type: 'string' }, city: { type: 'string' }, region: { type: 'string' }, postal_code: { type: 'string' },
-        country: { type: 'string', pattern: '^[A-Z]{2}$' }, phone: { type: 'string' }, website_url: { type: 'string', format: 'uri' },
-      }, additionalProperties: false },
-    }, required: ['name', 'vertical', 'source_locale', 'currency', 'timezone', 'subdomain', 'idempotency_key'], additionalProperties: false },
+      name: { type: 'string', minLength: 1, maxLength: 200, pattern: '\\S', description: 'Required when creating; omitted on an edit to retain it.' },
+      vertical: { type: 'string', enum: ALL_VERTICALS, description: 'Required when creating; omitted on an edit to retain it.' }, source_locale: { type: 'string', enum: PLATFORM_LOCALES.map(locale => locale.locale), description: 'Required when creating; a saved draft cannot be relabelled into another language.' },
+      currency: { type: 'string', enum: SUPPORTED_CURRENCIES }, timezone: timezoneSchema,
+      subdomain: { type: 'string', minLength: 1, maxLength: 63, pattern: '^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$' },
+      location: websiteDraftLocationSchema,
+      hero_headline: { type: 'string', maxLength: 500 }, hero_subtitle: { type: 'string', maxLength: 2000 },
+      products: { type: 'array', items: websiteDraftProductSchema },
+    }, required: ['idempotency_key'], additionalProperties: false },
+    outputSchema: websiteDraftOutputSchema,
+  })),
+  globalTool(withToolAnnotations({
+    name: 'publish_website', description: 'Publish a saved website draft, select it as your workspace and notify KrabiClaw operators by email. Finish any returned missing fields before retrying.',
+    domain: 'organizations', minimumRole: 'admin',
+    inputSchema: { type: 'object', properties: { draft_id: { type: 'string', minLength: 1 }, revision: { type: 'string', format: 'date-time' } }, required: ['draft_id', 'revision'], additionalProperties: false },
     outputSchema: { type: 'object', properties: {
       organization_id: { type: 'string' }, location_id: { type: 'string' }, draft_id: { type: 'string' },
-      public_url: { type: 'string' }, ready: { const: true }, context: workspaceContextObject,
+      public_url: { type: 'string', format: 'uri' }, ready: { const: true }, context: workspaceContextObject,
     }, required: ['organization_id', 'location_id', 'draft_id', 'public_url', 'ready', 'context'], additionalProperties: false },
   })),
   organizationTool({
@@ -340,7 +371,7 @@ export async function handleOrganizationsTools(ctx: McpExecutorContext): Promise
       const invitation = await api.createInvitation({ headers, body: { organizationId: organization.organizationId, email: requiredString(args, 'email'), role: requiredString(args, 'role') as keyof typeof organizationRoles, resend: args.resend === true } })
       const fact = { ...invitation, createdAt: invitation.createdAt.toISOString(), expiresAt: invitation.expiresAt.toISOString() }
       const delivery = (await getInvitationDeliveries(organization.db, organization.organizationId, [fact])).get(invitation.id) ?? null
-      if (!delivery || ['failed','pending'].includes(delivery.status)) throw new HTTPError({statusCode:502,statusMessage:delivery?.error ?? 'Invitation was saved, but its email delivery is unconfirmed',data:{invitation:{...fact,delivery}}})
+      if (!delivery || ['failed','pending'].includes(delivery.status)) throw new HTTPError({statusCode:502,statusMessage:delivery?.error ?? 'Invitation was saved, but its email delivery is unconfirmed',data:{invitation_id: typeof invitation.id === 'string' && invitation.id.trim() ? invitation.id : undefined}})
       return { invitation: {...fact,delivery} }
     }
     case 'update_organization_member_role': {
@@ -386,6 +417,7 @@ export async function handleOrganizationsTools(ctx: McpExecutorContext): Promise
       return {
         settings: await loadSettingsPayload(
           organization.db,
+          organization.env,
           organization.organizationId,
 
         ),

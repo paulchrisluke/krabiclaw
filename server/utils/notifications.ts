@@ -1073,7 +1073,7 @@ export async function notifyBookingCreated(
 ) {
   const studio = organizationName(opts)
   const prettyDate = new Intl.DateTimeFormat('en-US', { timeZone: opts.timezone, dateStyle: 'medium' }).format(new Date(opts.startsAt))
-  const prettyTime = new Intl.DateTimeFormat('en-US', { timeZone: opts.timezone, timeStyle: 'short' }).format(new Date(opts.startsAt))
+  const prettyTime = formatTimestamp(opts.startsAt, 'en', opts.timezone, { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
   const platformDomain = getPlatformDomain(env)
   const [replyTo, inboxUrl] = await Promise.all([
     buildReplyToAddress(env, 'booking', opts.bookingId),
@@ -1118,7 +1118,7 @@ export async function notifyBookingCreated(
     guestName: opts.guestName, organizationLogoUrl: logoUrl, status: opts.status,
     productTitle: guest.productTitle!,
     date: formatTimestamp(opts.startsAt, guest.locale, opts.timezone, { dateStyle: 'medium' }),
-    time: formatTimestamp(opts.startsAt, guest.locale, opts.timezone, { timeStyle: 'short' }), partySize: String(opts.partySize),
+    time: formatTimestamp(opts.startsAt, guest.locale, opts.timezone, { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }), partySize: String(opts.partySize),
     notes: opts.notes, contactPhone: opts.contactPhone ?? null, contactEmail: opts.contactEmail ?? null,
     cancelUrl: opts.cancelUrl ?? null, heroImageUrl: hero?.imageUrl ?? null,
   })
@@ -1162,7 +1162,7 @@ export async function notifyBookingCancelled(
   const confirmed = Boolean(opts.wasConfirmed)
   const studio = organizationName(opts)
   const prettyDate = new Intl.DateTimeFormat('en-US', { timeZone: opts.timezone, dateStyle: 'medium' }).format(new Date(opts.startsAt))
-  const prettyTime = new Intl.DateTimeFormat('en-US', { timeZone: opts.timezone, timeStyle: 'short' }).format(new Date(opts.startsAt))
+  const prettyTime = formatTimestamp(opts.startsAt, 'en', opts.timezone, { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
   const platformDomain = getPlatformDomain(env)
   const [inboxUrl, logoUrl] = await Promise.all([
     buildOwnerInboxUrl(env, db, {
@@ -1199,7 +1199,7 @@ export async function notifyBookingCancelled(
     ...guest,
     guestName: opts.guestName, productTitle: guest.productTitle!,
     date: formatTimestamp(opts.startsAt, guest.locale, opts.timezone, { dateStyle: 'medium' }),
-    time: formatTimestamp(opts.startsAt, guest.locale, opts.timezone, { timeStyle: 'short' }), partySize: String(opts.partySize), notes: opts.notes, wasConfirmed: confirmed,
+    time: formatTimestamp(opts.startsAt, guest.locale, opts.timezone, { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }), partySize: String(opts.partySize), notes: opts.notes, wasConfirmed: confirmed,
     organizationLogoUrl: logoUrl,
   })
   const guestEmail = await renderNotificationEmail(guestMessage, { platformDomain })

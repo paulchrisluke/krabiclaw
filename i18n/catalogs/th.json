@@ -61,6 +61,7 @@
   "booking_policy.deposit_party": "กลุ่มตั้งแต่ {count} ท่านขึ้นไปต้องวางมัดจำ",
   "booking_policy.experience_cancellation": "ยกเลิกได้ฟรีล่วงหน้าสูงสุด {duration} ก่อนเริ่มกิจกรรม",
   "booking_policy.experience_heading": "นโยบายประสบการณ์",
+  "booking_policy.consultation_heading": "นโยบายการนัดปรึกษา",
   "booking_policy.minimum_guest_age": "อายุขั้นต่ำสำหรับผู้เข้าร่วมคือ {age} ปี",
   "booking_policy.reschedule": "สามารถเปลี่ยนเวลาได้ล่วงหน้าสูงสุด {duration} ก่อนเวลาเริ่ม",
   "booking_policy.reservation_cancellation": "ยกเลิกได้ฟรีล่วงหน้าสูงสุด {duration} ก่อนเวลาจอง",
