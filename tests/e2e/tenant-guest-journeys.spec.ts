@@ -109,13 +109,13 @@ test.describe('tenant guest journeys (disposable local/preview data only)', () =
     const email = `kikuzuki-reservation-${Date.now()}@playwright.example`
     const unlock = await acquireTenantMutationLock(testInfo, E2E_KIKUZUKI_ORGANIZATION_ID)
     const policyUrl = `${testBaseUrl()}/api/editor/organizations/${E2E_KIKUZUKI_ORGANIZATION_ID}/locations/loc-kikuzuki/reservation-config`
-    let original: { duration_minutes: number | null; updated_at: string | null } | undefined
+    let original: { duration_minutes: number | null; updated_at: string | null } | null | undefined
     try {
       await loginAs(request, testBaseUrl(), 'user-e2e-kikuzuki-owner')
       const read = await request.get(policyUrl)
       expect(read.status(), await read.text()).toBe(200)
       original = (await read.json()).config
-      const configured = await request.put(policyUrl, { data: { duration_minutes: 60, expected_updated_at: original!.updated_at } })
+      const configured = await request.put(policyUrl, { data: { duration_minutes: 60, expected_updated_at: original?.updated_at ?? null } })
       expect(configured.status(), await configured.text()).toBe(200)
       await openTenantPage(page, `${baseURL}/reservations`, kikuzukiTestExtraHeaders())
       await waitForNuxtHydration(page)
@@ -155,10 +155,14 @@ test.describe('tenant guest journeys (disposable local/preview data only)', () =
       expectOwnerDispatch(state)
     } finally {
       try {
-        if (original) {
+        if (original !== undefined) {
           const current = await request.get(policyUrl)
           expect(current.status(), await current.text()).toBe(200)
-          const restored = await request.put(policyUrl, { data: { duration_minutes: original.duration_minutes, expected_updated_at: (await current.json()).config.updated_at } })
+          // A location that had no usable reservation policy is returned to
+          // disabled reservations, rather than writing an incomplete policy.
+          const restored = !original || original.duration_minutes === null
+            ? await request.delete(policyUrl)
+            : await request.put(policyUrl, { data: { duration_minutes: original.duration_minutes, expected_updated_at: (await current.json()).config.updated_at } })
           expect(restored.status(), await restored.text()).toBe(200)
         }
       } finally {
@@ -210,6 +214,10 @@ test.describe('tenant guest journeys (disposable local/preview data only)', () =
     expect(JSON.stringify(body)).not.toContain('cancel-once@playwright.example')
     const cancelURL = `${baseURL}/api/public/booking-requests/${body.booking_id}/cancel`
     const authHeaders = { ...headers, Authorization: `Bearer ${body.cancellation_token}` }
+    const receiptURL = cancelURL.replace(/\/cancel$/, '')
+    const before = await request.get(receiptURL, { headers: authHeaders })
+    expect(before.status()).toBe(200)
+    const receipt = await before.json() as { success: true; booking: Record<string, unknown> }
     const cancelled = await request.post(cancelURL, { headers: authHeaders })
     expect(cancelled.status()).toBe(200)
     expect(await cancelled.json()).toEqual({ success: true, kind: 'booking' })
@@ -221,8 +229,18 @@ test.describe('tenant guest journeys (disposable local/preview data only)', () =
     expect((await request.post(cancelURL, {
       headers: { ...headers, Authorization: 'Bearer invalid-cancellation-token' },
     })).status()).toBe(404)
-    // A spent token no longer grants the pre-cancellation guest read.
-    expect((await request.get(cancelURL.replace(/\/cancel$/, ''), { headers: authHeaders })).status()).toBe(404)
+    // The guest can still read the receipt after cancellation.
+    const after = await request.get(receiptURL, { headers: authHeaders })
+    expect(after.status()).toBe(200)
+    expect(await after.json()).toEqual({ ...receipt, booking: { ...receipt.booking, status: 'cancelled' } })
+    for (const deniedHeaders of [
+      { ...headers, Authorization: 'Bearer invalid-cancellation-token' },
+      { ...authHeaders, 'x-preview-tenant': 'demo' },
+    ]) {
+      const denied = await request.get(receiptURL, { headers: deniedHeaders })
+      expect(denied.status()).toBe(404)
+      expect(await denied.json()).toEqual({ error: 'Booking not found' })
+    }
   })
 })
 
@@ -239,8 +257,6 @@ for (const target of [
     expect(created.status(), await created.text()).toBe(201)
     const product = (await created.json()).product
     try {
-      const locations = await page.request.put(`${editor}/${product.id}/locations/${target.location}`, { data: { active: true, published: true } })
-      expect(locations.status()).toBe(200)
       const externalUrl = `https://example.com/?checkout=${target.slug}`
       await page.goto(`/dashboard/${target.slug}/products/${product.id}/order-url`)
       await page.getByLabel('Website address', { exact: true }).fill(externalUrl)
@@ -253,6 +269,8 @@ for (const target of [
       await page.getByRole('textbox', { name: label, exact: true }).fill(detail)
       await page.getByRole('button', { name: 'Save', exact: true }).click()
       await expect(page).toHaveURL(new RegExp(`/products/${product.id}/attributes$`))
+      const locations = await page.request.put(`${editor}/${product.id}/locations/${target.location}`, { data: { active: true, published: true } })
+      expect(locations.status(), await locations.text()).toBe(200)
       const publication = await page.request.put(`${editor}/${product.id}/publication`, { data: { published: true } })
       expect(publication.status(), await publication.text()).toBe(200)
       const viaMcp = mcpData<{ product: { kind: string; details: Record<string, string> } }>(await (await mcpRequest(page.request, baseURL!, { method: 'tools/call', toolName: 'get_product', args: { organization_id: target.org, product_id: product.id } })).json()).product

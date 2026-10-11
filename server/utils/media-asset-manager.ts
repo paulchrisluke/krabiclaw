@@ -459,9 +459,9 @@ export function buildMediaAssetInsertQuery(data: CreateInput, now = new Date().t
   }
 }
 
-export async function createMediaAsset(db: DbClient, data: CreateInput, creation?: { dedupeKey: string; requestHash: string }): Promise<void> {
+export async function createMediaAsset(db: DbClient, data: CreateInput, creation?: { dedupeKey: string; requestHash: string }, writeGuard?: BatchQuery): Promise<void> {
   const query = buildMediaAssetInsertQuery(data)
-  await executeBatch(db, [query, organizationEventQuery({
+  await executeBatch(db, [...(writeGuard ? [writeGuard] : []), query, organizationEventQuery({
     organizationId: data.organization_id,
     locationId: null,
     actorId: data.created_by_user_id ?? null,

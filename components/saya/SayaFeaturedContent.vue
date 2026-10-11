@@ -46,6 +46,7 @@
         <!-- Card body -->
         <div class="flex flex-1 flex-col p-7">
           <div>
+            <span v-if="item.featured" class="mb-3 inline-flex rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">{{ t('saya.posts.featured') }}</span>
             <p v-if="item.category" class="saya-kicker mb-3 text-xs">{{ item.category }}</p>
             <p class="saya-display saya-italic text-2xl text-default leading-snug">{{ item.name }}</p>
             <p v-if="item.description" class="mt-3 text-sm leading-relaxed text-muted line-clamp-3">{{ item.description }}</p>
@@ -115,6 +116,7 @@ interface Props {
       /** Null when this item has no single page to link to; the card renders unlinked. */
       href?: string | null
       unavailable?: boolean
+      featured?: boolean
       category?: string | null
       description?: string | null
       ctaText?: string

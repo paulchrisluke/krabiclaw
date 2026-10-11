@@ -32,7 +32,7 @@ export type {
 export interface LocationReservationConfig {
   location_id: string
   organization_id: string
-  duration_minutes: number | null
+  duration_minutes: number
   slot_capacity: number | null
   advance_notice_minutes: number | null
   minimum_guest_age: number | null
@@ -51,7 +51,10 @@ export interface LocationReservationConfig {
 }
 
 export type LocationReservationConfigPatch = Partial<Omit<LocationReservationConfig,
-  'location_id' | 'organization_id' | 'created_at' | 'updated_at'>>
+  'location_id' | 'organization_id' | 'created_at' | 'updated_at' | 'duration_minutes'>> & { duration_minutes?: number | null }
+
+// Ordinary table reservations used two hours before duration became configurable.
+export const DEFAULT_RESERVATION_DURATION_MINUTES = 120
 
 const NUMERIC_FIELDS = [
   'duration_minutes', 'slot_capacity', 'advance_notice_minutes', 'minimum_guest_age',
@@ -64,7 +67,7 @@ function mapRow(row: Record<string, unknown>): LocationReservationConfig {
   return {
     location_id: String(row.location_id),
     organization_id: String(row.organization_id),
-    duration_minutes: row.duration_minutes === null ? null : Number(row.duration_minutes),
+    duration_minutes: row.duration_minutes === null ? DEFAULT_RESERVATION_DURATION_MINUTES : Number(row.duration_minutes),
     slot_capacity: row.slot_capacity === null ? null : Number(row.slot_capacity),
     advance_notice_minutes: row.advance_notice_minutes === null ? null : Number(row.advance_notice_minutes),
     minimum_guest_age: row.minimum_guest_age === null ? null : Number(row.minimum_guest_age),
@@ -86,9 +89,8 @@ function mapRow(row: Record<string, unknown>): LocationReservationConfig {
 /**
  * Read a location's reservation policy.
  *
- * `null` means this location does not take reservations. That is the absence
- * of the capability, not a location whose policy happens to be empty, and
- * callers must say so rather than showing a default policy nobody wrote.
+ * Editors use a missing row to offer setup. Operations that need the policy
+ * use requireLocationReservationConfig so its absence is an explicit error.
  */
 export async function getLocationReservationConfig(
   db: DbClient,
@@ -105,7 +107,7 @@ export async function requireLocationReservationConfig(
   input: { organizationId: string; locationId: string },
 ): Promise<LocationReservationConfig> {
   const config = await getLocationReservationConfig(db, input)
-  if (!config) throw new HTTPError({ statusCode: 409, statusMessage: 'This location does not take reservations' })
+  if (!config) throw new HTTPError({ statusCode: 404, statusMessage: 'Reservation policy not found', data: { code: 'RESERVATION_POLICY_NOT_FOUND' } })
   return config
 }
 
@@ -199,8 +201,8 @@ export async function validateLocationReservationConfigPatch(input: Record<strin
  * Create or amend a location's reservation policy.
  *
  * Creating the row is what enables reservations at that location. Fields the
- * caller omits keep their stored value; fields set to null are cleared to
- * "not stated", which is different from a default.
+ * caller omits keep their stored value. A missing or cleared duration uses
+ * the ordinary two-hour reservation; null clears other optional rules.
  */
 export async function upsertLocationReservationConfig(db: DbClient, input: {
   organizationId: string
@@ -213,8 +215,14 @@ export async function upsertLocationReservationConfig(db: DbClient, input: {
   const now = new Date().toISOString()
   const existing = await getLocationReservationConfig(db, input)
   if (existing && existing.updated_at !== input.expectedUpdatedAt) throw new HTTPError({ statusCode: 409, message: 'The reservation policy changed. Read its current updated_at before saving.' })
-  const merged: LocationReservationConfigPatch = { ...(existing ?? {}), ...input.patch }
-  if (merged.deposit_required && (!merged.deposit_amount || !merged.deposit_currency || !merged.deposit_tax_behavior)) throw new HTTPError({ statusCode: 409, message: 'Set the deposit amount, currency and whether it includes tax before requiring a deposit', data: { missing: [...(!merged.deposit_amount ? ['deposit_amount'] : []), ...(!merged.deposit_currency ? ['deposit_currency'] : []), ...(!merged.deposit_tax_behavior ? ['deposit_tax_behavior'] : [])] } })
+  const merged: LocationReservationConfigPatch = { advance_notice_minutes: 0, ...(existing ?? {}), ...input.patch }
+  merged.duration_minutes ??= DEFAULT_RESERVATION_DURATION_MINUTES
+  const missing = [
+    ...(merged.deposit_required && !merged.deposit_amount ? ['deposit_amount'] : []),
+    ...(merged.deposit_required && !merged.deposit_currency ? ['deposit_currency'] : []),
+    ...(merged.deposit_required && !merged.deposit_tax_behavior ? ['deposit_tax_behavior'] : []),
+  ]
+  if (missing.length) throw new HTTPError({ statusCode: 409, message: 'Reservation setup is incomplete', data: { code: 'RESERVATION_SETUP_INCOMPLETE', missing } })
   if (merged.deposit_required) {
     if (!input.env.STRIPE_SECRET_KEY) throw new HTTPError({ statusCode: 503, message: 'Payments provider configuration is incomplete' })
     await requireStripeCheckoutAcceptance(db, createStripeClient(input.env.STRIPE_SECRET_KEY, 'payments'), input.env, input.organizationId)
@@ -240,7 +248,7 @@ export async function upsertLocationReservationConfig(db: DbClient, input: {
       WHERE location_reservation_configs.organization_id = excluded.organization_id AND location_reservation_configs.updated_at = ?
     `,
     params: [
-      input.locationId, input.organizationId, merged.duration_minutes ?? null,
+      input.locationId, input.organizationId, merged.duration_minutes,
       merged.slot_capacity ?? null, merged.advance_notice_minutes ?? null, merged.minimum_guest_age ?? null,
       (merged.deposit_required ?? false) ? 1 : 0, merged.deposit_amount ?? null, merged.deposit_currency ?? null, merged.deposit_tax_behavior ?? null, merged.deposit_trigger_party_size ?? null,
       merged.free_cancellation_until_minutes ?? null, (merged.reschedule_allowed ?? true) ? 1 : 0,
@@ -347,11 +355,11 @@ export async function listReservationSlots(db: DbClient, input: {
   `, [input.organizationId, input.locationId])
   if (!location) throw new HTTPError({ statusCode: 404, statusMessage: 'Location not found' })
   if (!isValidTimezone(location.timezone)) {
-    throw new HTTPError({ statusCode: 409, statusMessage: 'Set the location timezone before taking reservations' })
+    throw new HTTPError({ statusCode: 409, statusMessage: 'Reservation setup is incomplete', data: { code: 'RESERVATION_SETUP_INCOMPLETE', missing: ['location.timezone'] } })
   }
   const timezone = location.timezone
   const config = await requireLocationReservationConfig(db, input)
-  if (!config.duration_minutes) throw new HTTPError({ statusCode: 409, message: 'Set the reservation duration before offering times', data: { missing: ['duration_minutes'] } })
+  const durationMinutes = config.duration_minutes
 
   const hours = parseOpeningHours(location.opening_hours ? JSON.parse(location.opening_hours) : null)
   const special = parseSpecialHours(location.special_hours ? JSON.parse(location.special_hours) : null)
@@ -382,7 +390,7 @@ export async function listReservationSlots(db: DbClient, input: {
     // notice is not offered, and the booking endpoint reads the same list.
     if (!input.includePast && Date.parse(startsAt) <= Date.now() + (config.advance_notice_minutes ?? 0) * 60_000) continue
 
-    if (!locationAllowsBooking({ starts_at: startsAt, ends_at: new Date(Date.parse(startsAt) + config.duration_minutes * 60_000).toISOString() }, location)) continue
+    if (!locationAllowsBooking({ starts_at: startsAt, ends_at: new Date(Date.parse(startsAt) + durationMinutes * 60_000).toISOString() }, location)) continue
     const capacity = config.slot_capacity
     const claimed = claimedByInstant.get(startsAt) ?? 0
     const remaining = capacity === null ? null : capacity - claimed
@@ -433,8 +441,8 @@ export async function reservationAllocationPredicate(db: DbClient, input: {
   )` : input.replacingReservationId ? `EXISTS (SELECT 1 FROM reservations original
     WHERE original.id = ? AND original.organization_id = c.organization_id AND original.status = 'confirmed'
       AND unixepoch(original.ends_at) - unixepoch(original.starts_at) = unixepoch(?) - unixepoch(?))`
-    : `c.duration_minutes > 0
-      AND strftime('%Y-%m-%dT%H:%M:%fZ', ?, '+' || c.duration_minutes || ' minutes') = ?
+    : `COALESCE(c.duration_minutes, ${DEFAULT_RESERVATION_DURATION_MINUTES}) > 0
+      AND strftime('%Y-%m-%dT%H:%M:%fZ', ?, '+' || COALESCE(c.duration_minutes, ${DEFAULT_RESERVATION_DURATION_MINUTES}) || ' minutes') = ?
       AND julianday(?) > julianday('now') + COALESCE(c.advance_notice_minutes, 0) / 1440.0`
   return {
     query: `EXISTS (SELECT 1 FROM location_reservation_configs c

@@ -1,5 +1,7 @@
 <template>
-  <ProductCollectionPage :products="experiences" :collections="collections" :locations="productLocations" :location-id="locationId" :currency="currency" :presentation="presentation" :vertical="vertical" :title="collectionTitle" :brand-name="brandName" />
+  <NuxtLayout :name="isBlawby ? 'blawby' : 'saya'">
+    <ProductCollectionPage :products="experiences" :collections="collections" :locations="productLocations" :location-id="locationId" :currency="currency" :presentation="presentation" :vertical="vertical" :title="collectionTitle" :brand-name="brandName" />
+  </NuxtLayout>
 </template>
 
 <script setup lang="ts">
@@ -7,9 +9,8 @@ import ProductCollectionPage from '~/components/products/ProductCollectionPage.v
 import { isCurrencyCode } from '~/shared/currencies'
 import { EXPERIENCE_PRESENTATION, isExperience, resolveProductPresentation } from '~/utils/product-presentation'
 
-definePageMeta({ layout: 'saya' })
+definePageMeta({ layout: false })
 const { isBlawby } = usePublicTemplate()
-if (isBlawby.value) throw createError({ statusCode: 404 })
 const { products, collections, locations, location, config, organization, data: pagePayload } = await usePublicPageData({ lazy: false })
 const currentLocation = location.value
 if (!currentLocation) throw createError({ statusCode: 404, statusMessage: 'Location not found' })

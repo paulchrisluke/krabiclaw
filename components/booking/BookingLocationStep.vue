@@ -94,6 +94,8 @@
 </template>
 
 <script setup lang="ts">
+import { formatPostalAddress, parsePostalAddress } from '~/utils/postal-address'
+
 const { t } = useI18n()
 
 export interface BookingLocation {
@@ -120,13 +122,7 @@ defineEmits<{
 const locationMedia = (location: BookingLocation) => location.media?.find(item => item.slot === 'hero') ?? null
 
 function formatAddress(address: unknown): string {
-  if (!address) return ''
-  if (typeof address === 'string') return address
-  type Addr = { addressLines?: string[]; locality?: string; administrativeArea?: string }
-  const addr = address as Addr
-  return [...(addr.addressLines ?? []), addr.locality, addr.administrativeArea]
-    .filter(Boolean)
-    .join(', ')
+  return formatPostalAddress(parsePostalAddress(address))
 }
 
 </script>

@@ -5,7 +5,7 @@ import { platformLocale } from '~/shared/platform-locales'
 // All records use source='template' so ChowBot can identify and reference them.
 
 import { getVerticalCopy, type OrganizationVertical } from "~/utils/vertical-copy";
-import { executeBatch, queryFirst, type BatchQuery, type DbClient } from "~/server/db";
+import { executeBatch, queryAll, type BatchQuery, type DbClient } from "~/server/db";
 import { createTenantPagesBatch } from "~/server/utils/content/pages";
 
 function uid(prefix: string) {
@@ -19,11 +19,12 @@ export async function seedNewOrganization(
     organizationId: string;
     name: string;
     vertical: OrganizationVertical;
+    writeGuard?: BatchQuery;
   },
 ): Promise<string> {
   if (!db) throw new Error("Database not configured");
 
-  const { env, organizationId, name, vertical } = params;
+  const { env, organizationId, name, vertical, writeGuard } = params;
   const source = await getPersistedSourceLocale(db, organizationId)
   const catalog = platformLocale(source.locale)
   if (!catalog) throw new Error('Website language catalog is unavailable')
@@ -34,16 +35,17 @@ export async function seedNewOrganization(
   }
 
   // Reuse existing location on resume (provisioning may have failed mid-seed)
-  const existing = await queryFirst<{ id: string }>(
+  const locations = await queryAll<{ id: string }>(
     db,
-    "SELECT id FROM business_locations WHERE organization_id = ? AND slug = ? LIMIT 1",
-    [organizationId, "main"],
+    "SELECT id FROM business_locations WHERE organization_id = ? LIMIT 2",
+    [organizationId],
   );
-  const locationId = existing?.id ?? uid("loc");
+  if (locations.length > 1) throw new Error('Onboarding requires exactly one location')
+  const locationId = locations[0]?.id ?? uid("loc");
 
   const statements: BatchQuery[] = [];
 
-  statements.push({
+  if (!locations.length) statements.push({
     query: `
     INSERT OR IGNORE INTO business_locations
       (id, organization_id, slug, title, rating, review_count, status)
@@ -54,7 +56,7 @@ export async function seedNewOrganization(
 
 
   // ── Canonical tenant pages (structural records only) ──────────────────────
-  await executeBatch(db, statements);
+  if (statements.length) await executeBatch(db, [...(writeGuard ? [writeGuard] : []), ...statements]);
 
   // `title` is the page's name as a person reads it — its document title and,
   // for every page but the home page, its heading. The key beside it is an
@@ -73,8 +75,6 @@ export async function seedNewOrganization(
   if (vertical === 'service') {
     for (const [page, path, title, pageType] of [
       ['services', '/services', pageTitle('services'), 'system'],
-      ['pricing', '/pricing', pageTitle('pricing'), 'system'],
-      ['donate', '/donate', pageTitle('donate'), 'system'],
       ['schedule', '/schedule', pageTitle('schedule'), 'system'],
       ['privacy', '/policies/privacy', pageTitle('privacy'), 'legal'],
       ['terms', '/policies/terms', pageTitle('terms'), 'legal'],
@@ -92,18 +92,17 @@ export async function seedNewOrganization(
     }
     trustedSystemPage: boolean
   }> = []
+  const existingPages = await queryAll<{ path: string }>(db, "SELECT path FROM content_documents WHERE organization_id = ? AND kind = 'page' AND row_role = 'root'", [organizationId])
+  const existingPaths = new Set(existingPages.map(page => page.path))
   for (const definition of templatePages.values()) {
+    if (existingPaths.has(definition.path)) continue
     const blocks: Array<{ id: string; type: string; position: number; data: Record<string, unknown> }> = [
       {
         id: uid('block'),
         type: 'hero',
         position: 0,
-        // The home page's heading is the owner's headline, which onboarding
-        // collects, so it starts empty. Every other page's heading is the page's
-        // own name and is known here — leaving it null made those pages depend
-        // on a reader falling through to the document title.
         data: {
-          title: definition.path === '/' ? null : definition.title,
+          title: definition.path === '/' ? name : definition.title,
           subtitle: null,
         },
       },
@@ -116,30 +115,22 @@ export async function seedNewOrganization(
       },
     })
   }
-  await createTenantPagesBatch(db, { env, organizationId, pages: pagesToCreate })
+  if (pagesToCreate.length) await createTenantPagesBatch(db, { env, organizationId, pages: pagesToCreate, writeGuard })
 
   // ── Consultation settings (professional services only) ────────────────────
-  // The Blawby shell reads canonical consultation settings on every route and
-  // refuses to render without it (getPublicConsultationSettings throws
-  // CONSULTATION_SETTINGS_MISSING), so a professional-service tenant is not
-  // renderable until this exists. Nothing here is customer-facing copy the
-  // owner has to write: the mode is the honest "no external scheduler has been
-  // connected", the two paths are the template's own routes (/schedule is
-  // seeded above; /contact/confirmed is the Blawby confirmation route in
-  // utils/template-registry.ts), and the label is the product's own word for
-  // this button in the professional-service copy registry. The owner changes
-  // any of it from the dashboard or ChatGPT, through the same writer used here.
+  // Service sites start with native booking. Initialization preserves any
+  // consultation settings the organization already chose.
   if (vertical === "service") {
     const { initializePublicConsultationSettings } = await import('~/server/utils/professional-services')
     await initializePublicConsultationSettings(db, organizationId, {
-      mode: 'native_disabled',
+      mode: 'native',
       cta_label: getVerticalCopy(vertical, source.locale).reservationRequestButton,
       external_url: null,
       schedule_path: '/schedule',
       confirmation_path: '/contact/confirmed',
       tracking_enabled: false,
       metadata_json: { contact_form_enabled: true },
-    })
+    }, writeGuard)
   }
 
   return locationId

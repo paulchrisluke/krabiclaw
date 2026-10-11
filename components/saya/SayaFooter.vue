@@ -57,7 +57,7 @@
           <ul class="space-y-3 text-sm">
             <li v-if="showProducts"><NuxtLink :to="localePath(productPresentation!.collectionPath)" class="text-muted no-underline transition hover:text-highlighted">{{ productCollectionLabel }}</NuxtLink></li>
             <li v-if="showExperiences"><NuxtLink :to="localePath(EXPERIENCE_PRESENTATION.collectionPath)" class="text-muted no-underline transition hover:text-highlighted">{{ t('saya.footer.experiences') }}</NuxtLink></li>
-            <li v-if="!isExperienceOrganization"><NuxtLink :to="localePath('/reservations')" class="text-muted no-underline transition hover:text-highlighted">{{ copy.reservationPageKicker }}</NuxtLink></li>
+            <li v-if="hasReservations"><NuxtLink :to="localePath('/reservations')" class="text-muted no-underline transition hover:text-highlighted">{{ t('saya.header.reservations') }}</NuxtLink></li>
             <li v-if="!isExperienceOrganization"><NuxtLink :to="localePath('/photos')" class="text-muted no-underline transition hover:text-highlighted">{{ t('saya.footer.gallery') }}</NuxtLink></li>
             <li><NuxtLink :to="localePath('/about')" class="text-muted no-underline transition hover:text-highlighted">{{ t('saya.footer.our_story') }}</NuxtLink></li>
           </ul>
@@ -133,6 +133,7 @@ const props = defineProps<{
   error: unknown
   hasProducts: boolean
   hasBookableProducts: boolean
+  hasReservations: boolean
 }>()
 
 const { t, locale, localePath } = useI18n()

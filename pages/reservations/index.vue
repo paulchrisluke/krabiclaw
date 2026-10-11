@@ -162,7 +162,6 @@ import BookingTimeStep, { type RawDateAvailability, type TimeSlotSelection } fro
 import { getTodayHoursLabel, isOpenNow, schemaOpeningHours } from '~/shared/reservation-hours'
 import { formatTime, localDateAt, isValidInstant, isValidTimezone } from '~/utils/timezone'
 import { setBookingConfirmation } from '~/composables/useBookingHandoff'
-import { requireProductPresentation } from '~/utils/product-presentation'
 import { addressPlaceName, formatPostalAddress, schemaPostalAddress, type PostalAddress } from '~/utils/postal-address'
 import { mediaStillUrl, type MediaPresentation } from '~/shared/media-placement-contract'
 
@@ -176,8 +175,7 @@ definePageMeta({ layout: 'saya' })
 // The tenant is the organization; `site` is only the shape this composable
 // still returns it under.
 const { organization: organization, organizationId } = useTenantOrganization()
-const route = useRoute()
-const { locale, t } = useI18n()
+const { locale, localePath, t } = useI18n()
 const resCopy = computed(() => getVerticalCopy((organization as ApiValue)?.vertical, locale.value))
 const { locations, config, getField, reservationPolicyByLocation } = await usePublicPageData()
 
@@ -186,19 +184,6 @@ useHeroLcpPreload(computed(() => {
   const first = locations.value[0]
   return first ? getLocationPoster(first) : null
 }))
-
-const isExperienceOrganization = computed(() => (organization as { vertical?: string | null } | null)?.vertical === 'experience')
-
-// Experience-vertical sites book each Product on its own page. The
-// /reservations page has no meaning for them. Redirect as soon as the site
-// vertical is known — do NOT gate on having products, because a freshly seeded
-// site with vertical='experience' and no products yet should still not show
-// this page.
-watch(isExperienceOrganization, (isExp) => {
-  if (isExp) {
-    navigateTo({ path: requireProductPresentation(String((organization as { vertical?: string | null } | null)?.vertical)).collectionPath, query: route.query }, { replace: true, redirectCode: 302 })
-  }
-}, { immediate: true })
 
 const activeReservationPolicySummary = computed(() => {
   const locationId = selectedLocation.value?.id ? String(selectedLocation.value.id) : null
@@ -421,6 +406,7 @@ async function handleReservation() {
     }
     setBookingConfirmation({
       type: 'reservation',
+      locale: locale.value,
       organizationId,
       organizationName: brandName.value,
       guestName: reservationForm.value.name,
@@ -431,17 +417,17 @@ async function handleReservation() {
       timezone: res.timezone,
       guests: reservationForm.value.guests,
       requests: reservationForm.value.requests || null,
-      cancelUrl: res?.id && res?.cancellationToken ? `/reservations/cancel?id=${res.id}#${res.cancellationToken}` : null,
+      cancelUrl: res?.id && res?.cancellationToken ? `${localePath('/reservations/cancel')}?id=${encodeURIComponent(res.id)}#${res.cancellationToken}` : null,
       contactPhone: contactPhone.value || null,
       contactEmail: contactEmail.value || null,
-      policySummary: res.policy_summary ?? null,
+      policySummary: res.policy_summary ? { ...res.policy_summary, additional_notes_html: activeReservationPolicySummary.value?.additional_notes_html ?? null } : null,
       locationId: selectedLocation.value?.id ? String(selectedLocation.value.id) : null,
       locationName: selectedLocation.value?.title ?? null,
       locationAddress: formatPostalAddress((selectedLocation.value?.address ?? null) as PostalAddress | null) || null,
       locationSlug: typeof selectedLocation.value?.slug === 'string' ? selectedLocation.value.slug : null,
     })
     mirrorSubmission('reservation_submit', res.measurement, selectedLocation.value?.id ? String(selectedLocation.value.id) : null)
-    await navigateTo('/reservations/confirmed')
+    await navigateTo({ path: localePath('/reservations/confirmed'), query: { id: res.request_id }, hash: `#${res.cancellationToken}` })
     reservationRequestKey = null
     reservationFingerprint = null
   } catch (err) {
@@ -478,10 +464,7 @@ useSocialMetadata(() => ({
     { name: 'Home', url: '/' },
     { name: 'Reservations', url: '/reservations' },
   ],
-  // An experience site has no reservations page: the server redirects to
-  // /experiences, but a client-side navigation can render this briefly during
-  // hydration, so the intent says unlisted rather than relying on the redirect.
-  discoverability: isExperienceOrganization.value ? 'unlisted' : 'listed',
+  discoverability: 'listed',
 }))
 
 /**

@@ -25,6 +25,11 @@ const localizedDocumentValues = { type: 'object', properties: {
 const resourceValueBranches = LOCALIZED_RESOURCE_TYPES.map(resourceType => ({
   properties: { resource_type: { const: resourceType }, values: localizedResourceValuesSchema(resourceType) },
 }))
+const resourceValuesInput = {
+  type: 'object',
+  properties: Object.assign({}, ...LOCALIZED_RESOURCE_TYPES.map(resourceType => localizedResourceValuesSchema(resourceType).properties)),
+  additionalProperties: false,
+} as const
 const organizationLocaleObject = { type: 'object', properties: {
   id: { type: 'string' }, organization_id: { type: 'string' }, locale: { type: 'string' }, label: { type: ['string', 'null'] },
   is_source: { type: 'boolean' }, status: { type: 'string', enum: ['published', 'disabled'] }, created_at: { type: 'string' }, updated_at: { type: 'string' },
@@ -89,25 +94,24 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
   }),
   organizationTool({
     name: 'put_resource_localization',
-    description: "Replace the requested resource’s translation in exactly the named language. Resource values replace that translation; document fields and blocks require expected_updated_at. This localization tool does not edit Q&A; authored Q&A uses its dedicated tools.",
+    description: "Replace an exact translation. Existing documents require expected_updated_at. Documents require route_path; authored Q&A uses title and summary without a route or blocks. Imported Q&A remains read-only.",
     domain: 'locales',
     minimumRole: 'admin',
     inputSchema: {
       resource_type: { type: 'string', enum: [...LOCALIZED_RESOURCE_TYPES, 'content_document'] },
       resource_id: { type: 'string' },
       locale: { type: 'string' },
-      values: { type: 'object' },
-      route_path: { type: ['string', 'null'] },
+      values: { ...resourceValuesInput, properties: { ...resourceValuesInput.properties, ...localizedDocumentValues.properties } },
+      route_path: { type: ['string', 'null'], description: 'Document path including the language prefix. Resource routes are automatic.' },
       content_blocks: TENANT_PAGE_BLOCKS_SCHEMA,
       expected_updated_at: { type: ['string', 'null'] },
-      anyOf: [...resourceValueBranches, { properties: { resource_type: { const: 'content_document' }, values: localizedDocumentValues }, required: ['route_path'] }],
     },
     required: ['resource_type', 'resource_id', 'locale', 'values'],
     outputSchema: { type: 'object', properties: { localization: localizationObject, context: { type: 'object' } }, required: ['localization'], additionalProperties: false },
   }),
   organizationTool({
     name: 'delete_resource_localization',
-    description: "Permanently remove one resource translation when the user requests deletion of that language representation. Also deletes its owned document and redirects. Authored Q&A is managed with delete_qa.",
+    description: "Permanently remove one translation and its owned document and redirects. Source content is preserved; imported Q&A remains read-only.",
     domain: 'locales',
     minimumRole: 'admin',
     inputSchema: {
@@ -134,7 +138,7 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
   }),
   organizationTool({
     name: 'replace_resource_localizations',
-    description: 'Atomically replace 1–250 exact localizations of one resource type for one locale. Omitted resources remain untouched; any invalid item rejects the whole submitted batch. Returns the saved representations; supplied document content replaces its complete representation and can remove blocks. This uses supplied translations, without generating them.',
+    description: 'Atomically replace 1–250 exact resource translations for one language. Omitted resources retain their translations; any invalid item rejects the batch. Uses supplied translations without generating them.',
     domain: 'locales',
     minimumRole: 'admin',
     inputSchema: {
@@ -148,14 +152,13 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
           type: 'object',
           properties: {
             resource_id: { type: 'string' },
-            values: { type: 'object' },
-            route_path: { type: ['string', 'null'] },
+            values: resourceValuesInput,
+            route_path: { type: 'null' },
           },
           required: ['resource_id', 'values'],
           additionalProperties: false,
         },
       },
-      anyOf: LOCALIZED_RESOURCE_TYPES.map(resourceType => ({ properties: { resource_type: { const: resourceType }, items: { type: 'array', items: { type: 'object', properties: { values: localizedResourceValuesSchema(resourceType) } } } } })),
     },
     required: ['resource_type', 'locale', 'items'],
     outputSchema: { type: 'object', properties: { locale: { type: 'string' }, resource_type: { type: 'string', enum: [...LOCALIZED_RESOURCE_TYPES] }, updated_resource_ids: { type: 'array', items: { type: 'string' } }, context: { type: 'object' } }, required: ['locale', 'resource_type', 'updated_resource_ids'], additionalProperties: false },

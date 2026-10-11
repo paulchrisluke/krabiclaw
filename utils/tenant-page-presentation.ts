@@ -13,7 +13,7 @@
 // and `proof-card` — component names, written into the document, because the
 // components were built first and the data was shaped to fit them.
 //
-// Absence of an entry means the renderer's own markup, which is Saya's.
+// Absence of an entry means the renderer's generic markup.
 
 import type { Component } from 'vue'
 import type { TenantPageBlock, TenantPageBlockType } from '~/utils/tenant-page-blocks'
@@ -103,9 +103,13 @@ const PRESENTATIONS: Readonly<Record<string, BlockPresentation>> = {
   'blawby:team_grid': BlawbyTeamSection,
   'blawby:stat_grid': BlawbyImpactSection,
   'blawby:page_grid': BlawbyServicesSection,
+  'blawby:product_grid': BlawbyServicesSection,
+  'blawby:location_grid': BlawbyServicesSection,
   'blawby:faq': BlawbyFaqSection,
   'blawby:testimonial_grid': BlawbyReviewsSection,
+  'blawby:cta': BlawbyConsultationCta,
   'blawby:contact_cta': BlawbyConsultationCta,
+  'blawby:booking_cta': BlawbyConsultationCta,
   'blawby:divider': BlawbyShieldDivider,
   'blawby:donation_choices': BlawbyDonationChoices,
   'blawby:video_feature': BlawbyVideoFeature,
@@ -124,6 +128,8 @@ const PRESENTATIONS: Readonly<Record<string, BlockPresentation>> = {
   'saya:media_text': SayaBrandStory,
   'saya:testimonial_grid': SayaReviewsBlock,
   'saya:cta': SayaCTA,
+  'saya:booking_cta': SayaCTA,
+  'saya:contact_cta': SayaCTA,
   'saya:social_posts': feedOrBlock(SocialPosts),
 }
 

@@ -68,6 +68,7 @@ export interface OnboardingFlowState {
   brand: DraftBrandForm
   products: OnboardingProductDraft[]
   draftId: string | null
+  draftRevision: string | null
   preview: OnboardingDraftPreview | null
   created: { orgSlug: string | null; organizationSlug: string | null; locationSlug: string | null } | null
 }
@@ -124,29 +125,22 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
     complete: state => state.details.sourceLocale !== null,
   },
   {
-    // One search. Picking Google's prediction is the confirmation and seeds the
-    // screens after it; "Enter details manually" keeps the typed name instead.
     id: 'business', section: 'business', flows: ['new-site', 'add-location'],
-    title: state => state.flow === 'add-location'
-      ? 'Find this location on Google Maps'
-      : 'Find your business on Google Maps',
-    lede: () => 'Pick your listing and its address, phone and hours come with it. You can change any of them on the next screens.',
+    title: state => state.flow === 'add-location' ? 'What is this location called?' : 'What is your business called?',
     complete: state => state.details.name.trim().length > 0 && (
       state.source === 'google_places' ? state.placeId !== null : state.source === 'manual'),
   },
   {
     id: 'location', section: 'place', flows: ['new-site', 'add-location'],
     title: () => 'Where should guests find you?',
-    // The country is part of the address, and it is what the currency step and
-    // the timezone are both derived from, so this step is not done without it.
-    complete: state => state.details.streetAddress.trim().length > 0
-      && state.details.city.trim().length > 0
-      && state.details.country.trim().length > 0,
+    complete: state => Boolean(state.details.streetAddress.trim() || state.details.city.trim() || state.details.country.trim()),
+    optional: true,
   },
   {
     id: 'contact', section: 'place', flows: ['new-site', 'add-location'],
     title: () => 'What is your business contact number?',
     complete: state => state.details.phone.trim().length > 0,
+    optional: true,
   },
   {
     id: 'hours', section: 'place', flows: ['new-site', 'add-location'],
@@ -179,11 +173,8 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'look', section: 'offer', flows: ['new-site'],
     title: () => 'Last look at the front of house',
-    lede: () => 'Your colour, your logo and a photo are optional. The headline is the first thing a visitor reads, and the only heading on your home page, so it is not.',
-    // The headline becomes the home page's h1. Without one the page renders a
-    // heading with nothing in it — an empty band on a brand-new site — so the
-    // flow asks for it rather than letting the site be born without one.
     complete: state => state.brand.heroHeadline.trim().length > 0,
+    optional: true,
   },
   {
     id: 'review', section: 'review', flows: ['new-site', 'add-location'],
@@ -222,6 +213,7 @@ function emptyState(flow: OnboardingFlowId): OnboardingFlowState {
     },
     products: [],
     draftId: null,
+    draftRevision: null,
     preview: null,
     created: null,
   }

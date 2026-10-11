@@ -1,12 +1,14 @@
 import { parsePostalAddress, type PostalAddress } from '~/utils/postal-address'
 import { parseOpeningHours, parseSpecialHours, type OpeningHours, type SpecialHours } from '~/shared/reservation-hours'
-import { organizationEventQuery } from "~/server/utils/organization-events";
+import { creationDedupeKey, creationRequestHash, isUniqueDedupeConflict, organizationEventQuery, readCreationRecord } from "~/server/utils/organization-events";
+import { HTTPError } from 'nitro'
 import { executeBatch, queryFirst, type BatchQuery } from "~/server/db";
 import { isValidTimezone, normalizeTimezone } from "~/utils/timezone";
 import type { CloudflareEnv } from "~/server/utils/auth";
 import { refreshSocialCard } from '~/server/utils/social-card'
 import { resourceLocalizationDeletionQueries } from '~/server/utils/localization'
 import { prepareContentDocumentDeletion } from '~/server/utils/content/documents'
+import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 
 type SetupEnv = CloudflareEnv;
 
@@ -156,6 +158,7 @@ async function loadLocation(
   db: D1Database,
   organizationId: string,
   locationIdOrSlug: string,
+  byIdOnly = false,
 ) {
   const columns = `id, slug, title, phone, email, website_url, maps_url, google_review_url, google_place_id,
            rating, review_count, description, short_description, status,
@@ -169,7 +172,7 @@ async function loadLocation(
     `SELECT ${columns} FROM business_locations WHERE id = ? AND organization_id = ?  LIMIT 1`,
     [locationIdOrSlug, organizationId],
   );
-  if (byId) return byId;
+  if (byId || byIdOnly) return byId;
   return queryFirst<LocationRecord>(
     db,
     `SELECT ${columns} FROM business_locations WHERE slug = ? AND organization_id = ?  LIMIT 1`,
@@ -183,8 +186,38 @@ export async function createLocation(
   organizationId: string,
   input: CreateLocationInput,
   userId: string,
-  options: { refreshSocialCardAfterCreate?: boolean } = {},
+  options: { refreshSocialCardAfterCreate?: boolean; idempotencyKey?: string } = {},
 ) {
+  const key = options.idempotencyKey?.trim();
+  if (options.idempotencyKey !== undefined && (!key || key.length > 200)) {
+    return { status: 400, data: { error: 'idempotency_key must be 1 to 200 characters.' } };
+  }
+  const dedupeKey = key ? creationDedupeKey('location', organizationId, key) : null;
+  const requestHash = dedupeKey ? await creationRequestHash(input) : null;
+  const replay = async () => {
+    if (!dedupeKey) return null;
+    const record = await readCreationRecord(db, dedupeKey);
+    if (!record) return null;
+    if (record.requestHash !== requestHash) throw new HTTPError({ statusCode: 409, statusMessage: 'This idempotency_key was already used for a different location' });
+    const location = await loadLocation(db, organizationId, record.entityId, true);
+    if (!location) throw new HTTPError({ statusCode: 410, statusMessage: 'The location this idempotency_key created has been deleted; it is not created again' });
+    return location;
+  };
+  const complete = async (location: LocationRecord) => {
+    if (options.refreshSocialCardAfterCreate !== false) {
+      await refreshSocialCard({ db, env, owner: { owner_type: 'business_location', owner_id: location.id }, actorId: userId });
+    }
+    return { status: 201, data: { success: true, location } };
+  };
+  const earlier = await replay();
+  if (earlier) return complete(earlier);
+
+  const organization = await queryFirst<{ onboarding_status: string }>(db, 'SELECT onboarding_status FROM organization WHERE id = ?', [organizationId]);
+  if (!organization) return { status: 404, data: { error: 'Organization not found.' } };
+  if (organization.onboarding_status !== 'active') {
+    return { status: 409, data: { error: 'Finish website setup before adding another location.', code: 'ONBOARDING_INCOMPLETE' } };
+  }
+
   const title = input.title.trim();
   if (!title) {
     return { status: 400, data: { error: "Location title is required." } };
@@ -253,7 +286,7 @@ export async function createLocation(
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
 
-  let created: { id: string; location: Awaited<ReturnType<typeof loadLocation>> } | null = null;
+  let created: LocationRecord | null = null;
   for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt += 1) {
     const slug = attempt === 0 ? baseSlug : `${baseSlug}-${attempt + 1}`;
 
@@ -307,13 +340,23 @@ export async function createLocation(
         entityId: id,
         metadata: {
           title,
+          ...(dedupeKey ? { request_hash: requestHash } : {}),
         },
+        ...(dedupeKey ? { dedupeKey } : {}),
       }));
+      statements.push(publicResourceCacheInvalidationQuery(organizationId, 'location_created'));
 
       await executeBatch(db, statements);
-      created = { id, location: await loadLocation(db, organizationId, id) };
+      created = await loadLocation(db, organizationId, id, true);
+      if (!created) throw new Error('Created location could not be read back');
       break;
     } catch (error) {
+      // The location insert can collide on its slug before the audit key is
+      // reached. Either collision may mean this same request just committed.
+      if (isSlugConflict(error) || isUniqueDedupeConflict(error)) {
+        const concurrent = await replay();
+        if (concurrent) return complete(concurrent);
+      }
       if (isSlugConflict(error)) continue;
       if (isCheckConstraintError(error)) {
         return { status: 400, data: { error: (error as Error).message } };
@@ -322,12 +365,7 @@ export async function createLocation(
     }
   }
 
-  if (created) {
-    if (options.refreshSocialCardAfterCreate !== false) {
-      await refreshSocialCard({ db, env, owner: { owner_type: 'business_location', owner_id: created.id }, actorId: userId })
-    }
-    return { status: 201, data: { success: true, location: created.location } };
-  }
+  if (created) return complete(created);
 
   return {
     status: 409,
@@ -344,6 +382,7 @@ export async function updateLocation(
   input: UpdateLocationInput,
   userId: string,
   env?: CloudflareEnv,
+  writeGuard?: BatchQuery,
 ) {
   const existing = await loadLocation(db, organizationId, locationIdOrSlug);
   if (!existing) {
@@ -526,8 +565,8 @@ export async function updateLocation(
       onlyIfPreviousChangedOneRow: true,
     }));
 
-    const results = await executeBatch(db, statements);
-    return (results[0]?.meta?.changes ?? 0) === 1;
+    const results = await executeBatch(db, [...(writeGuard ? [writeGuard] : []), ...statements]);
+    return (results[writeGuard ? 1 : 0]?.meta?.changes ?? 0) === 1;
   };
   const stale = {
     status: 409,
@@ -590,8 +629,12 @@ export async function deleteLocation(
     return { status: 404, data: { error: "Location not found." } };
   }
   const locationId = existing.id;
+  const checkoutConflict = { status: 409, data: { error: "This location has an active checkout. Leave it in place until checkout finishes." } };
+  if (await queryFirst(db, "SELECT 1 FROM payment_checkout_holds WHERE organization_id=? AND location_id=? AND status='active' AND expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now') LIMIT 1", [organizationId, locationId])) return checkoutConflict;
   const now = new Date().toISOString();
   const statements = [
+    { query: `UPDATE business_locations SET updated_at=NULL WHERE id=? AND organization_id=?
+      AND EXISTS (SELECT 1 FROM payment_checkout_holds WHERE organization_id=? AND location_id=? AND status='active' AND expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now'))`, params: [locationId, organizationId, organizationId, locationId] },
     ...prepareContentDocumentDeletion({ locationId, organizationId}),
     ...resourceLocalizationDeletionQueries('business_location', { query: 'SELECT id FROM business_locations WHERE id = ? AND organization_id = ?', params: [locationId, organizationId] }),
     // Deleting a location does NOT delete the products it offered: the
@@ -637,7 +680,12 @@ export async function deleteLocation(
     },
   ];
 
-  const batchResults = await executeBatch(db, statements);
+  let batchResults;
+  try { batchResults = await executeBatch(db, statements); }
+  catch (error) {
+    if (/NOT NULL constraint failed: business_locations\.updated_at/.test(error instanceof Error ? error.message : String(error))) return checkoutConflict;
+    throw error;
+  }
   const deleteResult = batchResults.at(-1);
 
   if (!deleteResult?.meta.changes) {

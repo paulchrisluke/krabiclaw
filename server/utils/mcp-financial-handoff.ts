@@ -1,3 +1,5 @@
+import { mcpErrorRecoveryDetails } from '~/server/utils/mcp-protocol'
+
 /** Preserve only known authenticated dashboard destinations and explicit incomplete financial state. */
 export function mcpFinancialApprovalErrorResult(error: unknown, platformOrigin: string | undefined, message: string) {
   if (!error || typeof error !== 'object' || !('statusCode' in error) || ![403, 409, 503].includes(Number(error.statusCode))
@@ -11,10 +13,12 @@ export function mcpFinancialApprovalErrorResult(error: unknown, platformOrigin: 
   let url: URL
   try { url = new URL(path, platformOrigin) } catch { return null }
   if (!['https:', 'http:'].includes(url.protocol)) return null
-  const structuredContent = {
+  const action = {
+    ...mcpErrorRecoveryDetails(error.data),
+    status: Number(error.statusCode), message,
     success: false, operation_completed: false, action_required: true,
     code: dashboard ? 'financial_action_required' : 'financial_approval_required', dashboard_url: url.toString(),
     ...(approval ? { confirmation_required: true, financial_approval_url: url.toString() } : {}),
   }
-  return { isError: true, structuredContent, content: [{ type: 'text' as const, text: `${message}\nContinue in the authenticated dashboard: ${url}` }] }
+  return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(action) }] }
 }

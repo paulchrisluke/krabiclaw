@@ -130,7 +130,7 @@ export interface ProductEditor {
   addOption: () => void
   removeOption: (index: number) => void
   setOptionValues: (index: number, values: string[]) => void
-  setDetail: (definition: ProductDetailField, value: string | string[]) => void
+  setDetail: (definition: ProductDetailField, value: ProductDetailValue) => void
   listValue: (definition: ProductDetailField) => string[]
   textValue: (definition: ProductDetailField) => string
   weekdays: ReadonlyArray<{ value: number; label: string }>
@@ -408,7 +408,7 @@ function combinationKey(selections: Record<string, string>): string {
     .join(' / ')
 }
 
-function setDetail(definition: ProductDetailField, value: string | string[]) {
+function setDetail(definition: ProductDetailField, value: ProductDetailValue) {
   const key = productDetailKey(definition)
   if ((typeof value === 'string' && !value.trim()) || (Array.isArray(value) && !value.length)) Reflect.deleteProperty(form.details, key)
   else form.details[key] = value

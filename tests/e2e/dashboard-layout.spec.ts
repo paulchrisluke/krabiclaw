@@ -188,8 +188,57 @@ test.describe('dashboard pane hierarchy', () => {
     await expect(mobileNav.getByRole('link', { name: 'Catalog', exact: true })).toHaveAttribute('aria-current', 'page')
     await expect(page.locator('#dashboard-panel-catalog [data-testid="dashboard-navbar-back"]')).toHaveCount(0)
 
-    await open(page, `${ORG}/payments`)
-    await expect(page.getByRole('heading', { name: 'Payment methods', exact: true })).toBeVisible()
+    // Cedar is an existing fictional Basic business with no billing customer.
+    // The copied Ember subscription belongs to LIVE Stripe, not this TEST key.
+    expect(['localhost', '127.0.0.1'].includes(new URL(baseURL!).hostname), 'Cedar owner impersonation is confined to isolated local D1').toBe(true)
+    const principalResponse = await page.request.get('/api/auth/get-session')
+    expect(principalResponse.status(), await principalResponse.text()).toBe(200)
+    const principal = await principalResponse.json() as { user: { id: string; role: string } }
+    expect(principal.user.role).toBe('admin')
+    const cedarId = '5WebMejsoVLyZLHC29wHH5GbQx1jlvCd'
+    const cedarOwnerId = 'ivUlJc9BoyZeFszowpbUEjh1pugcDHiT'
+    const cedar = '/dashboard/cedar-legal-demo'
+    let impersonated = false
+    try {
+      const impersonation = await page.request.post('/api/auth/admin/impersonate-user', { headers: authRequestHeaders(baseURL!), data: { userId: cedarOwnerId } })
+      expect(impersonation.status(), await impersonation.text()).toBe(200)
+      impersonated = true
+      expect(await impersonation.json()).toMatchObject({ user: { id: cedarOwnerId }, session: { impersonatedBy: principal.user.id } })
+      const activated = await page.request.post('/api/auth/organization/set-active', { headers: authRequestHeaders(baseURL!), data: { organizationId: cedarId } })
+      expect(activated.status(), await activated.text()).toBe(200)
+      const billingResponse = await page.request.get(`/api/billing/status?organizationId=${cedarId}`)
+      expect(billingResponse.status(), await billingResponse.text()).toBe(200)
+      const billing = await billingResponse.json()
+      expect(billing).toMatchObject({ billing: { plan: 'free', organizationId: cedarId }, userRole: 'owner' })
+      expect(billing.billing.stripeCustomerId).toBeUndefined()
+      const methods = await page.request.get(`/api/billing/payment-methods?organizationId=${cedarId}`)
+      expect(methods.status(), await methods.text()).toBe(200)
+      expect(await methods.json()).toEqual({ payment_methods: [] })
+      await open(page, `${cedar}/payments`)
+      const payments = page.locator('#dashboard-panel-organization-payments')
+      await expect(payments.getByRole('heading', { name: 'Payment methods', exact: true })).toBeVisible()
+      await expect(payments.getByText('No payment methods saved yet.', { exact: true })).toBeVisible()
+      // UAlert renders its message in this slot, including native provider errors.
+      await expect(payments.locator('section [data-slot="description"]')).toHaveCount(0)
+      await expect(payments.getByTestId('dashboard-navbar-back')).toHaveAttribute('href', `${cedar}/earnings`)
+      await expect(mobileNav.getByRole('link')).toHaveText(['Today', 'Calendar', 'Catalog', 'Messages', 'Menu'])
+    } finally {
+      try {
+        if (impersonated) {
+          const stopped = await page.request.post('/api/auth/admin/stop-impersonating', { headers: authRequestHeaders(baseURL!), data: {} })
+          expect(stopped.status(), await stopped.text()).toBe(200)
+        }
+      } finally {
+        const restored = await page.request.post('/api/auth/organization/set-active', { headers: authRequestHeaders(baseURL!), data: { organizationId: 'org-demo' } })
+        expect(restored.status(), await restored.text()).toBe(200)
+        const sessionResponse = await page.request.get('/api/auth/get-session')
+        expect(sessionResponse.status(), await sessionResponse.text()).toBe(200)
+        const session = await sessionResponse.json()
+        expect(session.user.id).toBe(principal.user.id)
+        expect(session.session.activeOrganizationId).toBe('org-demo')
+        expect(session.session.impersonatedBy ?? null).toBeNull()
+      }
+    }
     await open(page, `${ORG}/payments?tab=plan`)
     await expect(page.getByText(/^(Manage|Choose a plan)$/)).toBeVisible()
     // Personal is a switch in Better Auth, not a URL: with no active organization

@@ -38,6 +38,8 @@ export interface NotificationAction {
 }
 
 export interface NotificationMessage {
+  /** The guest's selected website language; owner alerts keep their existing locale. */
+  locale?: string
   /** The email subject and the H1. One sentence; the body never restates it. */
   title: string
   /** The line a client shows beside the subject. */

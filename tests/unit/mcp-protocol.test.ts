@@ -33,6 +33,7 @@ test('asMcpError maps an h3 createError with statusCode 404 to invalidParams so 
   assert.equal(mapped.code, MCP_ERROR.invalidParams)
   assert.equal(mapped.message, 'Experience not found')
   assert.equal(mapped.kind, 'tool_execution')
+  assert.deepEqual(mapped.data, { status: 404 })
 })
 
 test('asMcpError falls back to internal for a plain Error', () => {
@@ -48,7 +49,19 @@ test('a business guard preserves its action and excludes unrelated error details
   } })
   const mapped = asMcpError(error)
   assert.equal(mapped.kind, 'tool_execution')
-  assert.deepEqual(mapped.data, { code: 'LANGUAGE_ENTITLEMENT_REQUIRED', dashboard_url: '/dashboard/kanpai/payments?tab=plan' })
+  assert.deepEqual(mapped.data, { status: 402, code: 'LANGUAGE_ENTITLEMENT_REQUIRED', dashboard_url: '/dashboard/kanpai/payments?tab=plan' })
+})
+
+test('incomplete setup retains the status and missing field paths without private data', () => {
+  const error = Object.assign(new Error('Reservation setup is incomplete'), { statusCode: 409, data: {
+    code: 'RESERVATION_SETUP_INCOMPLETE', missing: ['duration_minutes', 'location.timezone'],
+    customer_email: 'private@example.com',
+  } })
+  assert.deepEqual(asMcpError(error).data, {
+    status: 409, code: 'RESERVATION_SETUP_INCOMPLETE', missing: ['duration_minutes', 'location.timezone'],
+  })
+  error.data.missing = ['private@example.com']
+  assert.deepEqual(asMcpError(error).data, { status: 409, code: 'RESERVATION_SETUP_INCOMPLETE' })
 })
 
 test('asMcpError maps statusCode 403 to forbidden rather than auth', () => {

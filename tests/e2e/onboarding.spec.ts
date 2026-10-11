@@ -91,17 +91,14 @@ test('a new owner builds a draft and creates a site through the routed flow', as
   await expect(step('language')).toBeVisible()
   await page.getByRole('button', { name: 'English', exact: true }).click()
 
-  // The business step is one Google Maps search. A name Google does not know
-  // is entered manually from under the predictions, and that path never asks
-  // Google for a place.
-  const placeDetailsRequests: string[] = []
+  // Manual business entry completes without any Google Places request.
+  const placesRequests: string[] = []
   page.on('request', (sent) => {
-    if (sent.url().includes('/api/dashboard/google-places/details')) placeDetailsRequests.push(sent.url())
+    if (sent.url().includes('/api/dashboard/google-places/')) placesRequests.push(sent.url())
   })
   await expect(step('business')).toBeVisible()
-  await page.getByPlaceholder('Search for your business on Google Maps').fill(name)
-  await page.getByRole('button', { name: 'Enter details manually' }).click()
-  await expect(step('location')).toBeVisible()
+  await page.getByLabel('Name', { exact: true }).fill(name)
+  await advance('Next', 'location')
 
   // Location: the country is asked once, and nothing proposes one — it is what
   // the timezone and the currency are both derived from, so the owner names it.
@@ -174,18 +171,18 @@ test('a new owner builds a draft and creates a site through the routed flow', as
   await page.getByPlaceholder('Small plates, Skewers, Drinks…').fill('Small plates')
   await page.getByRole('button', { name: 'Add dish' }).click()
   await expect(step('products')).toContainText(formatMinorAmount(18000, 'THB'))
-  // The front of house is not optional: colour, logo and photo are, but the
-  // headline becomes the home page's only h1, so Next stays disabled until it
-  // is answered.
+  // The business name supplies the headline; the owner can customize it.
   await advance('Next', 'look')
   const next = page.getByRole('button', { name: 'Next', exact: true })
-  await expect(next).toBeDisabled()
+  const headline = page.getByPlaceholder('A clear promise guests remember')
+  await expect(headline).toHaveValue(name)
+  await expect(next).toBeEnabled()
   // The look: a starter palette and a font, both written to the site.
   await page.getByRole('button', { name: 'Use the Forest colors' }).click()
   await expect(page.getByRole('button', { name: 'Use the Forest colors' })).toHaveAttribute('aria-pressed', 'true')
   await step('look').getByRole('combobox').click({ timeout: 30_000 })
   await page.getByRole('option', { name: 'Lora', exact: true }).click({ timeout: 30_000 })
-  await page.getByPlaceholder('A clear promise guests remember').fill('Fresh from the Andaman, every morning')
+  await headline.fill('Fresh from the Andaman, every morning')
   await expect(next).toBeEnabled()
   await advance('Next', 'review')
 
@@ -249,7 +246,7 @@ test('a new owner builds a draft and creates a site through the routed flow', as
   await expect(section).toContainText('Grilled squid')
   await expect(section).toContainText(formatMinorAmount(18000, 'THB'))
   await visitor.close()
-  expect(placeDetailsRequests).toEqual([])
+  expect(placesRequests).toEqual([])
 })
 
 // Kikuzuki's own listing, answered by the real Places API (New) through the
@@ -258,6 +255,7 @@ test('a new owner builds a draft and creates a site through the routed flow', as
 const KIKUZUKI = { placeId: 'ChIJi-IgEJ2VUTAR1R3W1qDnhQ8', name: 'Kikuzuki Japanese Robatayaki & Izakaya' }
 
 test('a new owner picks their Google listing and it seeds location, contact and hours', async ({ page, baseURL }) => {
+  test.skip(process.env.E2E_GOOGLE_PLACES !== 'true', 'Live Google Places qualification requires E2E_GOOGLE_PLACES=true')
   await dismissPreviewToolbar(page)
   await loginAs(page.request, baseURL!, 'user-e2e-onboarding-wizard')
   const discarded = await page.request.delete('/api/dashboard/onboarding/drafts/active')
@@ -277,6 +275,7 @@ test('a new owner picks their Google listing and it seeds location, contact and 
   await expect(step('language')).toBeVisible()
   await page.getByRole('button', { name: 'English', exact: true }).click()
   await expect(step('business')).toBeVisible()
+  await page.getByRole('button', { name: 'Import from Google Maps', exact: true }).click()
 
   // Predictions appear as the owner types; each names the place and its area.
   const autocomplete = page.waitForRequest(sent => sent.url().includes('/api/dashboard/google-places/autocomplete'))
@@ -369,6 +368,7 @@ test('the business search API refuses what the picker would never send', async (
 // → Google Maps connects a location by the same selection. Both run against the
 // demo tenant's local copy; the location this adds is deactivated at the end.
 test('add-location and Settings connect a location through the same business picker', async ({ page, baseURL }) => {
+  test.skip(process.env.E2E_GOOGLE_PLACES !== 'true', 'Live Google Places qualification requires E2E_GOOGLE_PLACES=true')
   await dismissPreviewToolbar(page)
   await loginAs(page.request, baseURL!, 'user-e2e-demo-owner')
   const org = 'ember-slice-demo'
@@ -382,6 +382,7 @@ test('add-location and Settings connect a location through the same business pic
 
   await page.goto(`/dashboard/${org}/locations/new`)
   await expect(step('business')).toBeVisible()
+  await page.getByRole('button', { name: 'Import from Google Maps', exact: true }).click()
   await page.getByPlaceholder('Search for your business on Google Maps').pressSequentially("Joe's Pizza Carmine Street")
   const picked = page.waitForRequest(sent => sent.url().includes('/api/dashboard/google-places/details'))
   await page.getByRole('option', { name: /Carmine St/ }).first().click()

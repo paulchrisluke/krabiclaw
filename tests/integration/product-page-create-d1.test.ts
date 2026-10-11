@@ -77,7 +77,7 @@ test('a service, its default variant, its page and their binding commit together
       JOIN content_documents d ON d.organization_id = p.organization_id AND d.product_id = p.id
      WHERE p.id = ?`).bind(created.id).first<Record<string, unknown>>()
     assert.deepEqual(row, {
-      id: created.id, kind: 'service', slug: 'family-law', active: 0, published: 0,
+      id: created.id, kind: 'service', slug: 'family-law', active: 1, published: 0,
       page_id: created.page?.id, path: '/services/family-law-2', title: 'Family Law', product_id: created.id, row_role: 'root',
       variants: 1, prices: 0, booking: 0,
     })

@@ -62,7 +62,7 @@ function linksFor(paths: string[]) {
 // Practice areas are pages now, so the services column is the site's own
 // /services/* pages in their published order — not a second list to keep in
 // step with them.
-const serviceLinks = computed(() => props.pageLinks.filter(item => item.path.startsWith('/services/')))
+const serviceLinks = computed(() => props.pageLinks.filter(item => item.path.startsWith('/services/') || item.path === '/experiences'))
 const footerGroups = computed(() => [
   { label: t('blawby.footer.services'), items: serviceLinks.value },
   { label: t('blawby.footer.support'), items: linksFor(['/schedule', '/contact', '/pricing']) },

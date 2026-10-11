@@ -28,7 +28,9 @@ import { listCollections, listOrganizationProducts } from '~/server/utils/produc
 import { PRICING_NOTE_HANDLE } from '~/shared/product-details'
 import { summarizeProductPrices } from '~/utils/product-money'
 import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
-import { addressPlaceName, parsePostalAddress } from '~/utils/postal-address'
+import { addressPlaceName, formatPostalAddress, parsePostalAddress } from '~/utils/postal-address'
+import { getVerticalCopy } from '~/utils/vertical-copy'
+import type { PublicBlawbyShellData } from '~/types/blawby'
 
 export interface PublicTenantPage {
   id: string
@@ -66,6 +68,7 @@ export interface PublicTenantPageProductRow {
   slug: string
   description: string
   kind: ProductKind
+  featured: boolean
   /**
    * The one location publishing this product, or null when several do. A
    * product offered in two places has no single route, so its card links
@@ -84,6 +87,7 @@ export interface PublicTenantPageProductRow {
 
 export interface PublicTenantPageHydrationResources {
   pages?: Promise<PublicTenantPageReferenceRow[]>
+  blawbyShell?: Promise<PublicBlawbyShellData>
 }
 
 /**
@@ -124,10 +128,10 @@ export async function listPublicTenantPageReferenceRows(
  * The grid stores references only, so names and descriptions come from the
  * product every time it renders and cannot go stale.
  */
-async function loadTenantPageProductCatalog(db: DbClient, organizationId: string, locale?: string, localizations: readonly ExactPublicLocalization[] | null = null) {
+async function loadTenantPageProductCatalog(db: DbClient, organizationId: string, locale?: string, localizations: readonly ExactPublicLocalization[] | null = null, env?: CloudflareEnv) {
   locale ??= await getSourceLocale(db, organizationId)
   const [products, collections, locations, pageRepresentations] = await Promise.all([
-    listOrganizationProducts(db, { organizationId, publishedOnly: true }),
+    listOrganizationProducts(db, { organizationId, publishedOnly: true, env }),
     listCollections(db, { organizationId }),
     queryAll<{ id: string; slug: string }>(db, "SELECT id,slug FROM business_locations WHERE organization_id=? AND status='active'", [organizationId]),
     localizations ? queryAll<{ product_id: string; path: string }>(db, `SELECT root.product_id, rep.path
@@ -147,11 +151,12 @@ export async function listPublicTenantPageProductRows(
   selection: { collectionId?: string | null; productIds?: readonly string[] },
   currency: string,
   catalog?: Awaited<ReturnType<typeof loadTenantPageProductCatalog>>,
+  env?: CloudflareEnv,
 ): Promise<PublicTenantPageProductRow[]> {
   const productIds = new Set(selection.productIds ?? [])
   if (!selection.collectionId && !productIds.size) return []
   if (!isCurrencyCode(currency)) throw new Error('The public catalog requires a supported currency')
-  const source = catalog ?? await loadTenantPageProductCatalog(db, organizationId)
+  const source = catalog ?? await loadTenantPageProductCatalog(db, organizationId, undefined, null, env)
   const collection = selection.collectionId ? source.collections.find(item => item.id === selection.collectionId) : null
   if (selection.collectionId && !collection) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page collection reference is unavailable' })
   const locations = new Map(source.locations.map(location => [location.id, location]))
@@ -179,7 +184,7 @@ export async function listPublicTenantPageProductRows(
       else publicPath = sourcePath ? `/${source.locale}${sourcePath}` : null
     }
     const note = product.details[PRICING_NOTE_HANDLE]
-    return [{ id: product.id, name: product.name, slug: product.slug, description: product.description, kind: product.kind,
+    return [{ id: product.id, name: product.name, slug: product.slug, description: product.description, kind: product.kind, featured: product.details.featured === true,
       location_slug: locationSlug, public_path: publicPath,
       available: product.active && (locationId ? offered.some(location => location.location_id === locationId && location.active) : online || offered.some(location => location.active)),
       pricing_note: typeof note === 'string' ? note : null,
@@ -230,10 +235,25 @@ async function hydrateBlocks(
   // The site this page belongs to. Its template decides where an article
   // lives, its vertical decides where a product lives, and its currency
   // decides which offers apply.
-  const organizationRow = await queryFirst<{ theme_id: string | null; vertical: string | null; default_currency: string | null }>(
-    db, 'SELECT theme_id, vertical, default_currency FROM organization WHERE id = ? LIMIT 1', [organizationId])
+  const organizationRow = await queryFirst<{ theme_id: string | null; vertical: string | null; default_currency: string | null; address_visibility: string | null }>(
+    db, "SELECT theme_id, vertical, default_currency, json_extract(settings_json, '$.compliance.address_visibility') AS address_visibility FROM organization WHERE id = ? LIMIT 1", [organizationId])
   if (!organizationRow) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page site is unavailable' })
   const template = resolvePublicTemplate({ themeId: organizationRow.theme_id, vertical: organizationRow.vertical })
+  const defaultServices = pagePath === '/services' && template.slug === 'blawby' && blocks.length === 1 && blocks[0]?.type === 'hero'
+  if (defaultServices) {
+    const services = await listOrganizationProducts(db, { organizationId, kind: 'service', publishedOnly: true, env })
+    for (const service of services) {
+      if (!service.page) throw new HTTPError({ statusCode: 500, statusMessage: 'Published service page is unavailable', data: { code: 'SERVICE_PAGE_MISSING', product_id: service.id } })
+      productIds.add(service.id)
+    }
+    if (productIds.size) blocks = [...blocks, {
+      id: 'services-list', type: 'product_grid', position: blocks.length,
+      data: { product_ids: [...productIds] }, media: [],
+    }]
+  }
+  const defaultContact = pagePath === '/contact' && template.slug === 'blawby' && blocks.length === 1 && blocks[0]?.type === 'hero'
+  const defaultLocationGrid = (pagePath === '/' && template.slug !== 'platform' || defaultContact) && !blocks.some(block => block.type === 'location_grid')
+  const addressVisible = template.slug !== 'blawby' || organizationRow.address_visibility === 'visible'
   const articlePrefix = template.serviceRoutes.articleDetailPrefix
   const sourcePages = pageIds.size
     ? resources.pages
@@ -244,24 +264,55 @@ async function hydrateBlocks(
   // rather than flattened into one list: two grids on a page name two different
   // collections, and a flat union rendered both collections in both grids.
   const currency = organizationRow.default_currency
+  const homepage = pagePath === '/' && template.slug !== 'platform'
+  const homepageMenu = homepage && template.slug === 'saya'
+  const productCatalog = collectionIds.size || productIds.size || homepage ? await loadTenantPageProductCatalog(db, organizationId, locale, localizations, env) : undefined
+  const homepageDishes = homepageMenu ? productCatalog!.products.filter(product => product.kind === 'dish') : []
+  const defaultMenuGrid = homepageMenu && blocks.some(block => block.type === 'product_grid'
+    && !(Array.isArray(block.data.product_ids) && block.data.product_ids.length) && !block.data.collection_id)
+  for (const product of homepageDishes) if (defaultMenuGrid || product.details.featured === true) productIds.add(product.id)
+  if (homepage) for (const product of productCatalog!.products) if (product.kind === 'experience' || product.details.featured === true) productIds.add(product.id)
   // Null on a template that sells nothing; its pages carry no product grid.
   if ((collectionIds.size || productIds.size) && !currency) {
     throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page site has no currency' })
   }
-  const productCatalog = collectionIds.size || productIds.size ? await loadTenantPageProductCatalog(db, organizationId, locale, localizations) : undefined
   const productsByCollection = new Map(await Promise.all([...collectionIds].map(async collectionId =>
     [collectionId, await listPublicTenantPageProductRows(db, organizationId, { collectionId }, currency!, productCatalog)] as const)))
   const productById = new Map((productIds.size
     ? await listPublicTenantPageProductRows(db, organizationId, { productIds: [...productIds] }, currency!, productCatalog)
     : []).map(product => [product.id, product]))
-  const sourceLocations = locationIds.size
+  const menuProducts = [...productById.values()].filter(product => product.kind === 'dish')
+  const featuredMenuProducts = menuProducts.filter(product => product.featured)
+  const defaultMenuProducts = featuredMenuProducts.length ? featuredMenuProducts : menuProducts
+  const displayed = new Set(blocks.filter(block => block.type === 'product_grid').flatMap(block =>
+    Array.isArray(block.data.product_ids) && block.data.product_ids.length
+      ? block.data.product_ids.filter((id): id is string => typeof id === 'string' && productById.has(id))
+      : block.data.collection_id
+        ? (productsByCollection.get(String(block.data.collection_id)) ?? []).map(product => product.id)
+        : homepageMenu ? defaultMenuProducts.map(product => product.id) : []))
+  if (homepage) {
+    const missing = [...productById.values()].filter(product => product.featured && product.kind !== 'experience' && !displayed.has(product.id))
+    if (missing.length) blocks = [...blocks, {
+      id: 'homepage-featured-products', type: 'product_grid',
+      position: Math.max(-1, ...blocks.map(block => block.position)) + 1,
+      data: { product_ids: missing.map(product => product.id) }, media: [],
+    }]
+  }
+  const missingExperiences = homepage ? [...productById.values()].filter(product => product.kind === 'experience' && !displayed.has(product.id)) : []
+  if (missingExperiences.length) blocks = [...blocks, {
+    id: 'homepage-experiences', type: 'product_grid',
+    position: Math.max(-1, ...blocks.map(block => block.position)) + 1,
+    data: { title: getVerticalCopy(organizationRow.vertical, locale).experiencesPageTitle, product_ids: missingExperiences.map(product => product.id) }, media: [],
+  }]
+  const sourceLocations = locationIds.size || defaultLocationGrid
     ? await queryAll<{ id: string; title: string; slug: string; address: string | null; description: string | null; short_description: string | null; asset_id: string | null; public_url: string | null; thumbnail_url: string | null; kind: string | null; alt_text: string | null }>(db, `
         SELECT bl.id, bl.title, bl.slug, bl.address, bl.description, bl.short_description, ma.id AS asset_id, ma.public_url, ma.thumbnail_url, ma.kind, ma.alt_text
           FROM business_locations bl
-          LEFT JOIN media_placements mp ON mp.owner_type = 'business_location' AND mp.owner_id = bl.id AND mp.slot = 'hero' AND mp.sort_order = 0 AND mp.status = 'active'
-          LEFT JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
-         WHERE bl.organization_id = ? AND bl.status = 'active' AND bl.id IN (SELECT value FROM json_each(?))
-      `, [organizationId, d1JsonStringSet([...locationIds])])
+          LEFT JOIN media_placements mp ON mp.organization_id = bl.organization_id AND mp.owner_type = 'business_location' AND mp.owner_id = bl.id AND mp.slot = 'hero' AND mp.sort_order = 0 AND mp.status = 'active'
+          LEFT JOIN media_assets ma ON ma.id = mp.asset_id AND ma.organization_id = bl.organization_id AND ma.status = 'active'
+         WHERE bl.organization_id = ? AND bl.status = 'active' AND (? = 1 OR bl.id IN (SELECT value FROM json_each(?)))
+         ORDER BY bl.title, bl.id
+      `, [organizationId, defaultLocationGrid ? 1 : 0, d1JsonStringSet([...locationIds])])
     : []
   // The row stores the address as text and a translation carries only the parts
   // that are words, so the canonical one is read first: the overlay then merges
@@ -278,6 +329,32 @@ async function hydrateBlocks(
         return { ...location, slug, public_path: representation.routePath }
       })
     : parsedLocations
+  const locationCopy = getVerticalCopy(organizationRow.vertical, locale)
+  const defaultLocations = template.slug === 'blawby'
+    ? locations.filter(location => location.address || location.asset_id || location.description?.trim() || location.short_description?.trim())
+    : locations
+  if (defaultLocationGrid && defaultLocations.length) {
+    blocks = [...blocks, {
+      id: defaultContact ? 'contact-locations' : 'homepage-locations', type: 'location_grid',
+      position: Math.max(-1, ...blocks.map(block => block.position)) + 1,
+      data: { title: locationCopy.locationGroupLine(defaultLocations.length), description: locationCopy.findUsKicker, location_ids: defaultLocations.map(location => location.id) },
+      media: [],
+    }]
+  }
+  if (defaultContact) {
+    const consultation = resources.blawbyShell
+      ? (await resources.blawbyShell).consultation
+      : await (await import('~/server/utils/professional-services')).getPublicConsultationSettings(db, organizationId)
+    if (consultation.contact_form_enabled) blocks = [...blocks, {
+      id: 'contact-form', type: 'contact_form',
+      position: Math.max(-1, ...blocks.map(block => block.position)) + 1,
+      data: {}, media: [],
+    }]
+  }
+  if (homepageMenu) {
+    const ctaTypes = ['cta', 'booking_cta', 'contact_cta']
+    blocks = [...blocks].sort((left, right) => Number(ctaTypes.includes(left.type)) - Number(ctaTypes.includes(right.type)))
+  }
   // A social_posts block reads the organization's feed through the one public
   // post reader, with its own scope and limit; nothing about a post is stored
   // on the block.
@@ -357,8 +434,8 @@ async function hydrateBlocks(
       })
     }
     if (block.type === 'product_grid') {
-      // Either the block names products, or it names a collection. A block that
-      // names neither lists nothing — the same rule a page_grid follows.
+      // Explicit selections stay as authored; an unscoped homepage menu uses
+      // the merchant's featured dishes, or its ordinary menu when none are featured.
       const collectionId = typeof data.collection_id === 'string' && data.collection_id.trim() ? data.collection_id : null
       const selected = Array.isArray(data.product_ids) && data.product_ids.length > 0
         ? data.product_ids.flatMap((id) => {
@@ -367,7 +444,7 @@ async function hydrateBlocks(
           })
         : collectionId
           ? productsByCollection.get(collectionId)
-          : []
+          : homepageMenu ? defaultMenuProducts : []
       if (!selected) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page collection reference is unavailable' })
       data.items = selected.map(product => ({
         id: product.id,
@@ -378,6 +455,7 @@ async function hydrateBlocks(
         // publishes it, and a product published in several places has no
         // single route, so its card carries none.
         kind: product.kind,
+        featured: product.featured,
         url: product.public_path ?? '',
         unavailable: !product.available,
         value: product.unit_amount === null || !product.currency
@@ -412,10 +490,10 @@ async function hydrateBlocks(
           title: location.title,
           // The town the visitor is being sent to. A location card names it
           // above the title, and the item carried everything except that.
-          city: addressPlaceName(location.address) || undefined,
+          ...(addressVisible ? { city: addressPlaceName(location.address) || undefined, address: formatPostalAddress(location.address) || undefined } : {}),
           description: location.short_description || location.description || undefined,
-          url: 'public_path' in location && typeof location.public_path === 'string' ? location.public_path : `/locations/${location.slug}`,
-          labelKey: 'saya.home.visit_location',
+          url: template.slug === 'blawby' ? pagePath === '/contact' ? undefined : '/contact' : 'public_path' in location && typeof location.public_path === 'string' ? location.public_path : `/locations/${location.slug}`,
+          label: locationCopy.visitLocationCta,
           media: location.asset_id
             ? projectLocalizedMediaAlt([{ asset_id: location.asset_id, slot: 'hero', public_url: location.public_url, thumbnail_url: location.thumbnail_url, kind: location.kind, alt_text: location.alt_text }], localizations ?? [])
             : [],

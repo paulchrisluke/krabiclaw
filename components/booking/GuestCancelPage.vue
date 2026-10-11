@@ -30,7 +30,7 @@
             <SayaButton color="error" size="lg" block :loading="loading" @click="handleCancel">
               {{ copy('confirm') }}
             </SayaButton>
-            <SayaButton to="/" variant="ghost" size="lg" block>{{ copy('keep') }}</SayaButton>
+            <SayaButton :to="localePath('/')" variant="ghost" size="lg" block>{{ copy('keep') }}</SayaButton>
           </div>
         </div>
 
@@ -43,7 +43,7 @@
           <h2 class="saya-display saya-italic text-3xl">{{ copy('cancelled_title') }}</h2>
           <p class="mt-4 text-muted">{{ t(`saya.${keyPrefix}.cancelled_desc`, { date: readableDate }) }}</p>
           <div class="mt-10">
-            <SayaButton to="/" variant="soft">{{ copy('back_home') }}</SayaButton>
+            <SayaButton :to="localePath('/')" variant="soft">{{ copy('back_home') }}</SayaButton>
           </div>
         </div>
       </template>
@@ -61,7 +61,8 @@
 <script setup lang="ts">
 import { $fetch } from 'ofetch'
 import { formatTimestamp } from '~/utils/timezone'
-import { resolveProductPresentation } from '~/utils/product-presentation'
+import { presentationForProduct } from '~/utils/product-presentation'
+import type { ProductKind } from '~/shared/product-details'
 
 /**
  * The page a guest's cancellation link opens.
@@ -72,10 +73,9 @@ import { resolveProductPresentation } from '~/utils/product-presentation'
  */
 const props = defineProps<{ kind: 'reservation' | 'booking' }>()
 
-const { locale, t } = useI18n()
+const { locale, localePath, t } = useI18n()
 const route = useRoute()
 const { organization } = useTenantOrganization()
-const presentation = computed(() => resolveProductPresentation((organization as { vertical?: string | null } | null)?.vertical))
 
 const keyPrefix = computed(() => props.kind === 'booking' ? 'experience_cancel' : 'reservation_cancel')
 const copy = (key: string) => t(`saya.${keyPrefix.value}.${key}`)
@@ -98,17 +98,20 @@ interface GuestBookingView {
   guests: string
   status: string
   product_name: string | null
+  product_kind: ProductKind | null
 }
 
 const { data, pending } = await useAsyncData<{ success: true; booking: GuestBookingView }>(
-  `guest-cancel-${requestId.value}`,
+  computed(() => `guest-cancel-${requestId.value}-${locale.value}`),
   () => $fetch(`/api/public/booking-requests/${requestId.value}`, {
+    query: { locale: locale.value },
     headers: { Authorization: `Bearer ${token.value}` },
   }),
   { immediate: Boolean(requestId.value) && Boolean(token.value) },
 )
 
 const booking = computed(() => data.value?.booking ?? null)
+const presentation = computed(() => booking.value?.product_kind ? presentationForProduct(organization?.vertical, { kind: booking.value.product_kind }) : null)
 // One instant plus its zone: the guest reads the local time of the place they
 // booked, not of the browser they happen to open the link in.
 const readableDate = computed(() => booking.value
@@ -120,11 +123,12 @@ const readableTime = computed(() => booking.value
 // Where a guest goes to start over: the catalogue they booked from, or the
 // reservations page. A site whose vertical presents no catalogue sends them
 // home rather than to a route that does not exist.
-const startOverHref = computed(() => props.kind === 'booking'
+const startOverHref = computed(() => localePath(props.kind === 'booking'
   ? (presentation.value?.collectionPath ?? '/')
-  : '/reservations')
+  : '/reservations'))
 
-const cancelled = ref(false)
+const cancellationSubmitted = ref(false)
+const cancelled = computed(() => cancellationSubmitted.value || booking.value?.status === 'cancelled')
 const loading = ref(false)
 const cancelError = ref('')
 
@@ -138,7 +142,7 @@ async function handleCancel() {
       headers: { Authorization: `Bearer ${token.value}` },
       validate: (value): value is { success: true } => isRecord(value) && value.success === true,
     })
-    cancelled.value = true
+    cancellationSubmitted.value = true
   } catch (err) {
     const message = (err as { data?: { error?: string } })?.data?.error
     cancelError.value = message || copy('toast_cancel_failed')

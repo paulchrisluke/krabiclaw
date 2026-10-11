@@ -1376,7 +1376,7 @@ CREATE TABLE `product_booking_configs` (
 	CONSTRAINT "product_booking_configs_capacity_check" CHECK(default_capacity IS NULL OR default_capacity >= 0),
 	CONSTRAINT "product_booking_configs_confirmation_check" CHECK(confirmation_mode IN ('instant', 'review')),
 	CONSTRAINT "product_booking_configs_payment_check" CHECK(online_payment_required IN (0, 1)),
-	CONSTRAINT "product_booking_configs_calendar_check" CHECK(calendar_group IS NULL OR (length(trim(calendar_group)) > 0 AND online_timezone IS NOT NULL))
+	CONSTRAINT "product_booking_configs_calendar_check" CHECK(calendar_group IS NULL OR length(trim(calendar_group)) > 0)
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `product_booking_configs_org_product_unique` ON `product_booking_configs` (`organization_id`,`product_id`);--> statement-breakpoint

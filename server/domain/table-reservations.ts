@@ -16,6 +16,8 @@ import {
   ReservationUnavailableError,
 } from '~/server/utils/reservations'
 import { getSourceLocale } from '~/server/utils/organization-locales'
+import { assertExactCanonicalLocale, assertPublicOrganizationLanguageEntitlement } from '~/server/utils/localization'
+import { formatTenantLocalePath } from '~/utils/tenant-locale-path'
 import { createPaymentCheckout } from '~/server/domain/payments/checkout'
 import { createStripeClient } from '~/server/utils/stripe-client'
 import { isRecord } from '~/server/utils/type-guards'
@@ -40,9 +42,11 @@ export async function notifyTableReservationCreated(env: CloudflareEnv, db: DbCl
   if (!request || request.kind !== 'reservation' || !record || record.kind !== 'reservation' || record.organization_id !== organizationId || !record.location_id || !organization) throw new Error('Reservation delivery requires its saved guest, location and tenant')
   const creation = await queryFirst(db, "SELECT id FROM activity_entries WHERE request_id = ? AND event_name = 'reservation.created' AND dedupe_key = ?", [requestId, `reservation:${record.id}:created`])
   if (!creation) throw new Error('Reservation delivery has no confirmed creation receipt')
+  const sourceLocale = await getSourceLocale(db, organizationId)
+  const locale = request.payload.guest.locale ?? sourceLocale
   const cancellation = await createReplayableReservationCancelToken(env.EMAIL_REPLY_SECRET ?? '', requestId)
   const matches = await hashReservationCancelToken(cancellation.token) === request.payload.cancellation.token_hash
-  const cancelUrl = matches && organization.public_url ? `${organization.public_url.replace(/\/$/, '')}/reservations/cancel?id=${requestId}#${cancellation.token}` : env.NUXT_PUBLIC_PLATFORM_DOMAIN ? new URL('/account', env.NUXT_PUBLIC_PLATFORM_DOMAIN).toString() : null
+  const cancelUrl = matches && organization.public_url ? `${organization.public_url.replace(/\/$/, '')}${formatTenantLocalePath('/reservations/cancel', locale, sourceLocale)}?id=${requestId}#${cancellation.token}` : env.NUXT_PUBLIC_PLATFORM_DOMAIN ? new URL('/account', env.NUXT_PUBLIC_PLATFORM_DOMAIN).toString() : null
   const [location, { contactPhone, contactEmail }, ownerInboxUrl] = await Promise.all([
     queryFirst<{ title: string }>(db, 'SELECT title FROM business_locations WHERE organization_id = ? AND id = ?', [organizationId, record.location_id]),
     resolveLocationContact(db, organizationId, record.location_id),
@@ -56,7 +60,7 @@ export async function notifyTableReservationCreated(env: CloudflareEnv, db: DbCl
       reservationId: requestId, guestAcknowledgement: request.payload.provenance?.guest_acknowledgement ?? true,
       guestName: request.payload.guest.name, email: request.payload.guest.email, phone: request.payload.guest.phone,
       date: local.date, time: local.time, guests: `${record.party_size}${request.payload.party_size_is_minimum ? '+' : ''}`, requests: request.payload.notes,
-      cancelUrl, contactPhone, contactEmail, ownerInboxUrl }),
+      cancelUrl, contactPhone, contactEmail, ownerInboxUrl, locale }),
   ])
   raiseSettledFailures('Reservation creation delivery', requestId, outcomes)
 }
@@ -101,6 +105,7 @@ export async function createTableReservation(event: H3Event, input: {
   const organization = await queryFirst<{ id: string; slug: string; name?: string | null; public_url?: string | null }>(
     db, `SELECT id, slug, name, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active') AS public_url FROM organization WHERE id = ? AND status = ? LIMIT 1`, [organizationId, 'active'], )
   if (!organization) return creationResult({ error: 'Organization not found' }, { status: 404 })
+  const locale = body.locale === undefined ? await getSourceLocale(db, organizationId) : assertExactCanonicalLocale(body.locale)
   const organizationBaseUrl = organization.public_url?.trim().replace(/\/$/, '')
   if (!organizationBaseUrl) return creationResult({ error: 'Organization public URL is not configured' }, { status: 500 })
 
@@ -123,12 +128,15 @@ export async function createTableReservation(event: H3Event, input: {
       await notifyTableReservationCreated(env, db, organizationId, id)
       await execute(db, `UPDATE requests SET payload_json=json_set(payload_json,'$.provenance.followups_completed',json('true')) WHERE id=? AND organization_id=?`, [id, organizationId])
     }
-    if (!operator && row.status !== 'confirmed') return creationResult({ error: 'This reservation has already been cancelled', code: 'reservation_cancelled', operational_reservation_id: row.id, request_id: id }, { status: 409 })
     const cancellation = await createReplayableReservationCancelToken(env.EMAIL_REPLY_SECRET ?? '', id)
     const request = await getGuestRequest(db, id, organizationId, 'reservation')
-    if (!request || request.kind !== 'reservation' || await hashReservationCancelToken(cancellation.token) !== request.payload.cancellation.token_hash) throw new Error('Reservation receipt is missing its cancellation capability')
-    return creationResult({ success: true, id, request_id: id, operational_reservation_id: row.id, status: row.status, replayed: true,
-      starts_at: row.starts_at, ends_at: row.ends_at, timezone: row.timezone, ...(operator ? {} : { cancellationToken: cancellation.token }),
+    if (!request || request.kind !== 'reservation') throw new HTTPError({ statusCode: 404, message: 'Reservation thread not found' })
+    if (await hashReservationCancelToken(cancellation.token) !== request.payload.cancellation.token_hash) throw new Error('Reservation receipt is missing its cancellation capability')
+    const record = await getThreadOperationalRecord(db, id)
+    if (!record || record.kind !== 'reservation' || record.organization_id !== organizationId || record.id !== row.id) throw new HTTPError({ statusCode: 404, message: 'Reservation operational receipt not found' })
+    if (!operator && record.status !== 'confirmed') return creationResult({ error: 'This reservation has already been cancelled', code: 'reservation_cancelled', operational_reservation_id: record.id, request_id: id }, { status: 409 })
+    return creationResult({ success: true, id, request_id: id, operational_reservation_id: record.id, status: record.status, replayed: true,
+      starts_at: record.starts_at, ends_at: record.ends_at, timezone: record.timezone, ...(operator ? {} : { cancellationToken: cancellation.token }),
     }, { status: 200 })
   }
   const completed = await replay()
@@ -148,6 +156,7 @@ export async function createTableReservation(event: H3Event, input: {
     })
     return creationResult({ success: true, status: 'checkout', replayed: true, ...checkout }, { status: 200 })
   }
+  await assertPublicOrganizationLanguageEntitlement(env, db, organizationId, locale)
   const policy = await requireLocationReservationConfig(db, { organizationId, locationId: resolvedLocationId })
   if (!Number.isSafeInteger(policy.duration_minutes) || !policy.duration_minutes || policy.duration_minutes < 1) return creationResult({ error: 'Set this location’s reservation duration before taking reservations', missing: ['duration_minutes'] }, { status: 409 })
   const requiresDeposit = policy.deposit_required && (policy.deposit_trigger_party_size === null || partySize >= policy.deposit_trigger_party_size)
@@ -196,7 +205,7 @@ export async function createTableReservation(event: H3Event, input: {
   const userId = operator ? null : await ensureInteractionUser(event, env)
 
   const now = new Date().toISOString()
-  const payload = threadPayloadForGuest({ name, email, phone, notes: requests, ipHash, partySizeIsMinimum: guests.endsWith('+') })
+  const payload = threadPayloadForGuest({ name, email, phone, locale, notes: requests, ipHash, partySizeIsMinimum: guests.endsWith('+') })
   payload.provenance = { source: operator?.source ?? 'website', external_reference: operator?.externalReference ?? null, actor_user_id: operator?.userId ?? null,
     idempotency_key: idempotencyKey, fingerprint, guest_acknowledgement: operator?.guestAcknowledgement ?? true, creation_kind: requiresDeposit ? 'checkout' : 'ordinary', creation_status: 'confirmed', followups_completed: false }
   payload.cancellation = { token_hash: cancellationTokenHash, expires_at: cancellation.expiresAt, used_at: null }
@@ -245,26 +254,20 @@ export async function createTableReservation(event: H3Event, input: {
   }
   // Telling the owner and recording the conversion are independent, so both are
   // attempted before either failure is raised.
-  const requestedLocale = cleanString(body.locale, 10)
-  const [locale, ...followUps] = await Promise.all([
-    requestedLocale && /^[a-z]{2}(-[A-Z]{2})?$/.test(requestedLocale)
-      ? requestedLocale
-      : getSourceLocale(db, organization.id),
-    ...await Promise.allSettled([
-      notifyTableReservationCreated(env, db, organizationId, id),
-      operator ? Promise.resolve({ recorded: false, reason: 'operator_creation' }) : recordOrganizationConversionEvent(db, event.req, {
-        organizationId: organization.id,
-        eventName: 'reservation_submit',
-        stage: 'submitted',
-        surface: 'website',
-        locationId: resolvedLocationId,
-        entityType: 'request',
-        entityId: id,
-        pageType: 'reservations',
-        routePath: '/reservations',
-        originEventId: readPageEventId(body.page_event_id),
-      }),
-    ]),
+  const followUps = await Promise.allSettled([
+    notifyTableReservationCreated(env, db, organizationId, id),
+    operator ? Promise.resolve({ recorded: false, reason: 'operator_creation' }) : recordOrganizationConversionEvent(db, event.req, {
+      organizationId: organization.id,
+      eventName: 'reservation_submit',
+      stage: 'submitted',
+      surface: 'website',
+      locationId: resolvedLocationId,
+      entityType: 'request',
+      entityId: id,
+      pageType: 'reservations',
+      routePath: '/reservations',
+      originEventId: readPageEventId(body.page_event_id),
+    }),
   ])
   // Only the owner notification can fail the request. Measurement is reported beside the
   // committed result: a guest told a confirmed submission failed would submit again.
@@ -273,9 +276,9 @@ export async function createTableReservation(event: H3Event, input: {
   await execute(db, `UPDATE requests SET payload_json = json_set(payload_json, '$.provenance.followups_completed', json('true')) WHERE id = ? AND organization_id = ?`, [id, organizationId])
   const measurement = measurementOutcome(followUps[1]!)
   const record = await getThreadOperationalRecord(db, id)
-  if (!record || record.kind !== 'reservation') throw new Error('Committed reservation is missing its operational receipt')
+  if (!record || record.kind !== 'reservation' || record.organization_id !== organizationId || record.id !== reservationId) throw new HTTPError({ statusCode: 404, message: 'Reservation operational receipt not found' })
 
   return creationResult({
     success: true, id, request_id: id, operational_reservation_id: record.id, status: record.status, starts_at: record.starts_at, ends_at: record.ends_at, timezone: record.timezone,
-    replayed: false, ...(operator ? {} : { measurement, cancellationToken: cancellation.token }), message: 'Your reservation is confirmed.', policy_summary: renderBookingPolicySummary(reservationPolicySummarySource(policy), locale), }, { status: 201 })
+    replayed: false, ...(operator ? {} : { measurement, cancellationToken: cancellation.token }), message: record.status === 'cancelled' ? 'This reservation was cancelled.' : 'Your reservation is confirmed.', policy_summary: renderBookingPolicySummary(reservationPolicySummarySource(policy), locale), }, { status: 201 })
 }

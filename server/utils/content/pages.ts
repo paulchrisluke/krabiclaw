@@ -320,6 +320,10 @@ export async function assertTenantPagePathAvailable(
   if (!templateAllowsPageDocumentAt(input.template, CLAIMED_PUBLIC_ROUTES, path)) {
     conflict('This path is reserved by a platform or product route')
   }
+  const locationPath = input.template.slug === 'saya' ? /^\/locations\/([^/]+)$/.exec(path) : null
+  if (locationPath && !await queryFirst(db, 'SELECT id FROM business_locations WHERE organization_id = ? AND slug = ? LIMIT 1', [input.organizationId, locationPath[1]!])) {
+    notFound('The location for this page was not found')
+  }
   const row = await queryFirst<{ id: string } | null>(db, [
     'SELECT id FROM content_documents',
     `WHERE row_role IN ('root','representation') AND kind = 'page' AND organization_id = ? AND locale = ? AND path = ?`,
@@ -539,6 +543,7 @@ export async function createTenantPagesBatch(
     env: CloudflareEnv
     organizationId: string
     userId?: string | null
+    writeGuard?: BatchQuery
     pages: Array<{
       data: TenantPageEditorInput
       trustedSystemPage?: boolean
@@ -611,7 +616,7 @@ export async function createTenantPagesBatch(
 
   if (created > 0) {
     queries.push(publicResourceCacheInvalidationQuery(input.organizationId, 'tenant-page-seed'))
-    await executeBatch(db, queries)
+    await executeBatch(db, [...(input.writeGuard ? [input.writeGuard] : []), ...queries])
   }
   return { created }
 }
@@ -640,6 +645,7 @@ export async function applyOnboardingTenantPages(
     organizationId: string
     userId: string | null
     pages: OnboardingTenantPageInput[]
+    writeGuard?: BatchQuery
   },
 ) {
   if (!input.pages.length) return { updated: 0, created: 0 }
@@ -712,13 +718,14 @@ export async function applyOnboardingTenantPages(
 
   if (replacementQueries.length) {
     replacementQueries.push(publicResourceCacheInvalidationQuery(input.organizationId, 'tenant-page-onboarding-import'))
-    await executeBatch(db, replacementQueries)
+    await executeBatch(db, [...(input.writeGuard ? [input.writeGuard] : []), ...replacementQueries])
   }
 
   let created = 0
   if (missingPages.length) {
     const result = await createTenantPagesBatch(db, {
       env: input.env,
+      writeGuard: input.writeGuard,
       organizationId: input.organizationId,
       userId: input.userId,
       pages: missingPages.map(page => ({
@@ -751,6 +758,7 @@ type TenantPageCreateInput = {
    * the binding's foreign key, not a read here.
    */
   productInSameBatch?: boolean
+  pathOwnerDeletedInSameBatch?: string
 }
 
 /**
@@ -811,6 +819,7 @@ export async function prepareTenantPageCreate(db: DbClient, input: TenantPageCre
     locale,
     path: input.data.path,
     template,
+    excludeVariantId: input.pathOwnerDeletedInSameBatch,
   })
   const metadata = metadataForInput(effectiveData, locale, path)
   const blocks = normalizeTenantPageBlocks(effectiveData.blocks)

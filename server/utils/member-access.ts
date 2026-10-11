@@ -4,19 +4,13 @@ import { queryFirst, type DbClient } from '~/server/db'
 import { getOrgAdapter, hasPermission } from 'better-auth/plugins'
 import { parsePhoneOrThrow } from '~/utils/phone'
 import { oncePerRequest } from '~/server/utils/request-scope'
+import { sessionMemberSql } from '~/server/utils/provider-allocation'
 import type { H3Event } from 'nitro'
 import type { CloudflareEnv, organizationOptions } from '~/server/utils/auth'
 import type { OrganizationPermissions } from '~/utils/organization-access'
 
-// Authorization is the Better Auth organization role. Owner and admin are the
-// roles, both organization-wide, and there is no second way to answer whether
-// someone may reach a location.
-//
-// There used to be one: a `location:<id>` Better Auth team, which scoped an
-// `editor`. That role existed so a phone number configured on a location could
-// be a notification target without being an owner. Notifications now resolve
-// from the member to their own verified phone, so the number needs no role, the
-// role needed no team, and none of it had a single user.
+// Better Auth owns membership, roles and teams. Service and appointment access
+// narrows those permissions using the saved provider assignment below.
 
 /**
  * A membership this request actually resolved: one lookup keyed by
@@ -121,8 +115,7 @@ export function isOrganizationWideRole(role: string): boolean {
  * database only under `dynamicAccessControl`, which is off here, so this costs
  * no round trip.
  *
- * This answers "may this role do X at all". Which tenant is the membership the
- * principal was minted from; there is no narrower scope than the organization.
+ * This answers "may this role do X at all"; resource guards then check its row.
  */
 export type { OrganizationPermissions }
 
@@ -388,6 +381,51 @@ export async function deleteOrganization(env: CloudflareEnv, organizationId: str
 export async function assertOrganizationWideAccess(_db: DbClient, input: MemberAccessPrincipal): Promise<void> {
   if (isOrganizationWideRole(input.role)) return
   throw new HTTPError({ statusCode: 404, message: 'Not found or access denied' })
+}
+
+/** The service assignment belongs to this tenant's Better Auth member or team. */
+export const ASSIGNED_SERVICE_SQL = `p.kind = 'service' AND EXISTS (
+  SELECT 1 FROM product_booking_configs c
+  WHERE c.organization_id = p.organization_id AND c.product_id = p.id AND c.scheduling_mode = 'provider'
+    AND (EXISTS (SELECT 1 FROM member m WHERE m.id = c.assigned_member_id AND m.organizationId = c.organization_id AND m.userId = ?)
+      OR EXISTS (SELECT 1 FROM team t JOIN teamMember tm ON tm.teamId = t.id
+        JOIN member m ON m.userId = tm.userId AND m.organizationId = t.organizationId
+        WHERE t.id = c.assigned_team_id AND t.organizationId = c.organization_id AND m.userId = ?))
+)`
+
+export async function assertProductAccess(db: DbClient, input: MemberAccessPrincipal & { productId: string; patch?: Record<string, unknown> }): Promise<void> {
+  if (await roleAllows({ ...input, permissions: { products: ['update'] } })) return
+  await assertRoleAllows({ ...input, permissions: { products: ['assigned'] } })
+  const assigned = await queryFirst<Record<string, unknown>>(db, `SELECT c.scheduling_mode, c.assigned_member_id, c.assigned_team_id, c.calendar_group
+    FROM products p JOIN product_booking_configs c ON c.product_id = p.id AND c.organization_id = p.organization_id
+    WHERE p.organization_id = ? AND p.id = ? AND (${ASSIGNED_SERVICE_SQL})`, [input.organizationId, input.productId, input.userId, input.userId])
+  if (!assigned) throw new HTTPError({ statusCode: 404, message: 'Service not found or access denied' })
+  if (input.patch?.kind !== undefined && input.patch.kind !== 'service') throw new HTTPError({ statusCode: 403, message: 'Service kind requires admin access' })
+  const booking = input.patch?.booking && typeof input.patch.booking === 'object' ? input.patch.booking as Record<string, unknown> : input.patch
+  for (const field of ['scheduling_mode', 'assigned_member_id', 'assigned_team_id', 'calendar_group']) {
+    if (booking?.[field] !== undefined && booking[field] !== assigned[field]) throw new HTTPError({ statusCode: 403, message: 'Service assignment requires admin access' })
+  }
+  if (input.patch?.booking !== undefined) throw new HTTPError({ statusCode: 403, message: 'Offering creation requires admin access; edit saved booking settings and schedule separately' })
+}
+
+export function assignedBookingSql(alias: string): string {
+  return `EXISTS (SELECT 1 FROM member m JOIN products assigned_product ON assigned_product.organization_id = m.organizationId
+    WHERE m.id = ${alias}.assigned_member_id AND m.organizationId = ${alias}.organization_id AND m.userId = ?
+      AND assigned_product.id = ${alias}.product_id AND assigned_product.kind = 'service')`
+}
+
+/** Appointments retain their own member even after the service is reassigned. */
+export async function assertAssignedBookingAccess(db: DbClient, input: MemberAccessPrincipal & { bookingId?: string; requestId?: string; sessionId?: string }): Promise<void> {
+  if (await roleAllows({ ...input, permissions: { operations: ['update'] } })) return
+  await assertRoleAllows({ ...input, permissions: { operations: ['assigned'] } })
+  const assigned = await queryFirst(db, `SELECT b.id FROM bookings b WHERE b.organization_id = ? AND (${assignedBookingSql('b')})
+    AND ${input.bookingId ? 'b.id' : 'b.request_id'} = ?`, [input.organizationId, input.userId, input.bookingId ?? input.requestId])
+  if (!assigned) throw new HTTPError({ statusCode: 404, message: 'Consultation not found or access denied' })
+  if (input.sessionId) {
+    const destination = await queryFirst(db, `SELECT s.id FROM product_sessions s JOIN bookings b ON b.product_id = s.product_id AND b.organization_id = s.organization_id
+      WHERE b.organization_id = ? AND ${input.bookingId ? 'b.id' : 'b.request_id'} = ? AND s.id = ? AND ${sessionMemberSql('s')} = b.assigned_member_id`, [input.organizationId, input.bookingId ?? input.requestId, input.sessionId])
+    if (!destination) throw new HTTPError({ statusCode: 403, message: 'Changing the assigned provider requires admin access' })
+  }
 }
 
 /** The location must belong to the tenant the caller authorized against; reaching it is the organization role. */

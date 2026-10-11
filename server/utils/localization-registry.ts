@@ -68,7 +68,7 @@ export const RESOURCE_LOCALIZATION_REGISTRY: Readonly<Record<LocalizedResourceTy
 function localizedShapeSchema(shape: ValueShape): Record<string, unknown> {
   if (shape === 'text') return { type: 'string' }
   if (shape === 'string_array') return { type: 'array', items: { type: 'string', pattern: '\\S' } }
-  if (shape === 'details') return productDetailsSchema()
+  if (shape === 'details') return productDetailsSchema(undefined, true)
   return { type: 'object', properties: Object.fromEntries(Object.entries(shape).map(([key, nested]) => [key, localizedShapeSchema(nested)])), additionalProperties: false }
 }
 
@@ -85,7 +85,7 @@ function isNonBlankText(value: unknown): value is string {
 }
 
 function validateDetails(field: string, value: unknown, kind: ProductKind | undefined): void {
-  try { validateProductDetails(assertProductKind(kind), value) }
+  try { validateProductDetails(assertProductKind(kind), value, true) }
   catch (error) {
     if (!(error instanceof ProductDetailError)) throw error
     localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', `${field}: ${error.message}`, { field })
@@ -138,18 +138,14 @@ export function validateLocalizedValues(
   return Object.fromEntries(Object.entries(input).sort(([left], [right]) => left.localeCompare(right)))
 }
 
-const SEGMENT = '[^/?#]+'
-
-export function validateLocalizedRoutePath(resourceType: LocalizedResourceType, locale: string, routePath: unknown): string | null {
+export function validateLocalizedRoutePath(resourceType: LocalizedResourceType, locale: string, routePath: unknown, canonicalSlug?: string): string | null {
   const definition = RESOURCE_LOCALIZATION_REGISTRY[resourceType]
   if (definition.route !== 'stored') {
     if (routePath !== undefined && routePath !== null) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', resourceType + ' does not accept route_path')
     return null
   }
-  if (typeof routePath !== 'string' || !routePath.trim()) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'route_path is required for ' + resourceType)
-  const path = routePath.trim()
-  const prefix = '/' + locale + '/'
-  const suffix = 'locations/' + SEGMENT
-  if (!path.startsWith(prefix) || !new RegExp('^' + suffix + '$').test(path.slice(prefix.length)) || path.includes('//')) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'route_path is invalid for ' + resourceType, { route_path: path })
+  if (!canonicalSlug || /[/?#]/.test(canonicalSlug)) localizationError(500, 'LOCALIZATION_VALIDATION_FAILED', 'The location has no valid canonical slug')
+  const path = `/${locale}/locations/${canonicalSlug}`
+  if (routePath != null && routePath !== path) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'The location route is determined by its saved slug', { route_path: path })
   return path
 }

@@ -1,5 +1,5 @@
 import { jsonResponse, readStrictBody, rethrowHttpError } from '~/server/utils/api-response'
-import { requireOrganizationAccess } from '~/server/utils/location-access'
+import { requireProductAccess } from '~/server/utils/location-access'
 import { requireOrganizationProduct } from '~/server/utils/product-management'
 import { updateSession } from '~/server/utils/availability'
 import { PRODUCT_SESSION_STATUSES, type ProductSessionStatus } from '~/shared/bookings'
@@ -19,7 +19,7 @@ export default defineHandler(async (event) => {
   const sessionId = getRouterParam(event, 'sessionId')
   if (!organizationId || !productId || !sessionId) return jsonResponse({ error: 'Organization, product and session IDs are required' }, { status: 400 })
   try {
-    const { db, session: auth, organization } = await requireOrganizationAccess(event, organizationId)
+    const { db, session: auth, organization } = await requireProductAccess(event, organizationId, productId)
     // A product id in the path is not authorized by the site in the path.
     await requireOrganizationProduct(db, { organizationId: organization.id, productId })
     const body = await readStrictBody<{ starts_at?: unknown; ends_at?: unknown; capacity?: unknown; status?: unknown; expected_updated_at: string }>(event, {

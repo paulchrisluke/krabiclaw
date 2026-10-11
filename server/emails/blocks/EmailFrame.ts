@@ -1,6 +1,7 @@
 import { defineComponent, h, type PropType } from 'vue'
 import { EHtml, EHead, EBody, EPreview, EContainer, ESection, EText, ELink, EImg, EStyle } from '../vue-email'
 import { light, dark, brand, font, layout, type } from '../tokens'
+import { platformLocale } from '~/shared/platform-locales'
 
 /**
  * The frame every message renders into.
@@ -16,6 +17,7 @@ import { light, dark, brand, font, layout, type } from '../tokens'
  */
 export default defineComponent({
   props: {
+    locale: { type: String, default: undefined },
     preheader: { type: String, required: true },
     /** The tenant this is sent for, named in the footer. Null for platform mail. */
     organizationName: { type: String as PropType<string | null>, default: null },
@@ -27,6 +29,8 @@ export default defineComponent({
     platformDomain: { type: String, required: true },
   },
   setup(props, { slots }) {
+    const locale = platformLocale(props.locale ?? 'en')
+    if (!locale) throw new Error('Email language is not supported')
     const year = new Date().getFullYear()
     // A domain given with its own scheme keeps it, so a local origin stays
     // reachable over http; a bare domain is https, which is every deployment.
@@ -39,7 +43,7 @@ export default defineComponent({
       const orgName = props.organizationName
       const orgLogo = props.organizationLogoUrl
 
-      return h(EHtml, { lang: 'en', dir: 'ltr' }, () => [
+      return h(EHtml, { lang: locale.locale, dir: locale.direction }, () => [
         h(EHead, null, () => [
           h('meta', { name: 'color-scheme', content: 'light dark' }),
           h('meta', { name: 'supported-color-schemes', content: 'light dark' }),
@@ -133,7 +137,7 @@ export default defineComponent({
                   `© ${year} Krabiclaw · `,
                   h(ELink, { href: origin, style: `color:${light.textMuted};text-decoration:underline` }, () => 'krabiclaw.com'),
                 ]),
-                props.organizationName
+                props.organizationName && !props.locale
                   ? h(EText, { class: 'email-footer', style: `margin:6px 0 0;${type.footer};color:${light.textDimmed}` }, () => `Sent by ${props.organizationName} via Krabiclaw.`)
                   : null,
                 // Preferences first: someone who only wants less of one thing

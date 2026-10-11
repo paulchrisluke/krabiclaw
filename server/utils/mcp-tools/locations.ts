@@ -1,9 +1,9 @@
 import type { McpToolDefinition } from './shared'
-import { calendarDateSchema, addLocalDays, assertCalendarDate } from '~/utils/timezone'
+import { calendarDateSchema, addLocalDays, assertCalendarDate, timezoneSchema } from '~/utils/timezone'
 import { locationListItemObject, locationMutationSummaryObject, locationObject, openingHoursInputSchema, pageInfoObject, paginationInputSchema, postalAddressSchema, seoOverrideFieldsSchema, organizationTool, specialHoursInputSchema } from './shared'
 import { HTTPError } from 'nitro'
 import type { McpExecutorContext } from './execution'
-import { getLocation, updateLocation, type LocationRecord } from '~/server/utils/location-management'
+import { createLocation, getLocation, updateLocation, type CreateLocationInput, type LocationRecord } from '~/server/utils/location-management'
 import { AGENDA_KINDS, listAgenda, type AgendaKind } from '~/server/utils/dashboard-agenda'
 import { closeDates, closureOnDate, datedHours, getDateIntervals, openDates } from '~/shared/reservation-hours'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
@@ -24,6 +24,30 @@ const agendaItem = { type: 'object', properties: {
 const calendarMutation = { ...locationMutationSummaryObject, properties: { ...locationMutationSummaryObject.properties, affected_commitments: { type: 'array', items: agendaItem } }, required: [...locationMutationSummaryObject.required, 'affected_commitments'] }
 
 export const LOCATIONS_TOOLS: McpToolDefinition[] = [
+  organizationTool({
+      name: 'create_location',
+      description: 'Add a location to the selected business website. Repeat the same idempotency key with the same details on retry.',
+      domain: 'locations',
+      minimumRole: 'admin',
+      inputSchema: {
+        title: { type: 'string', minLength: 1, maxLength: 200, pattern: '\\S' },
+        idempotency_key: { type: 'string', minLength: 1, maxLength: 200, pattern: '\\S' },
+        address: postalAddressSchema,
+        phone: { type: 'string' },
+        email: { type: 'string', format: 'email' },
+        website_url: { type: 'string', format: 'uri' },
+        description: { type: 'string' },
+        timezone: timezoneSchema,
+        opening_hours: openingHoursInputSchema,
+        special_hours: specialHoursInputSchema,
+      },
+      required: ['title', 'idempotency_key'],
+      outputSchema: {
+        type: 'object',
+        properties: { location: locationObject, context: { type: 'object' } },
+        required: ['location', 'context'],
+      },
+    }),
   organizationTool({
       name: 'list_locations',
       description: 'List the selected site’s locations with their IDs, slugs, titles and active state. Location-scoped tools take these IDs.',
@@ -135,6 +159,22 @@ async function requireLocation(organization: McpExecutorContext['organization'],
 export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unknown> {
   const { toolName, args, organization } = ctx
   switch (toolName) {
+    case "create_location": {
+      const result = await createLocation(
+        organization.env,
+        organization.db,
+        organization.organizationId,
+        omit(args, ['idempotency_key']) as unknown as CreateLocationInput,
+        organization.userId,
+        { idempotencyKey: requiredString(args, 'idempotency_key') },
+      );
+      assertDomainSuccess(result);
+      const location = (result.data as { location: LocationRecord }).location;
+      return {
+        location: await requireLocation(organization, location.id),
+        context: await mutationContextPayload(organization, { locationId: location.id }),
+      };
+    }
     case "list_locations": {
       const workspace = await resolveMcpWorkspace(
         organization.db,
@@ -153,11 +193,7 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
       {
         const locationId = requiredString(args, "location_id");
         return {
-          location: await getLocation(
-          organization.db,
-          organization.organizationId,
-            locationId,
-          ),
+          location: await requireLocation(organization, locationId),
           context: await mutationContextPayload(organization, { locationId }),
         };
       }

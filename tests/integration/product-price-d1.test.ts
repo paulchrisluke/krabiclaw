@@ -11,6 +11,7 @@ import {
   listCollectionProducts,
   listLocationProducts,
   listOrganizationProducts,
+  productBookingReadiness,
   reconcileProducts,
   resolveVariantPrice,
   setCollectionProducts,
@@ -20,6 +21,10 @@ import {
   updateMenu,
 } from '../../server/utils/product-management.ts'
 import { AmbiguousPriceError } from '../../shared/prices.ts'
+import { claimSessionCapacity, listSessions } from '../../server/utils/availability.ts'
+import { loadPublicExperienceDetail, loadPublicProductCollection, loadPublicProductDetail, loadPublicProductSessions } from '../../server/utils/public-products.ts'
+import { listPublicBookingSessions } from '../../server/utils/public-session-booking.ts'
+import type { CloudflareEnv } from '../../server/utils/auth.ts'
 
 const ORG = 'org'
 const ACTOR = { actorId: 'actor' }
@@ -35,7 +40,7 @@ async function boot() {
   const statements = await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))
   await db.batch(statements.map(statement => db.prepare(statement)))
   await db.prepare(`INSERT INTO organization (id, name, slug, subdomain, settings_json, theme_id, default_currency, status, onboarding_status, url_structure, vertical, updated_at)
-    VALUES (?, 'Org', 'org', 'org', '{"config":{"default_timezone":"Asia/Bangkok"}}', 'saya-theme-v1', 'THB', 'active', 'complete', 'flat', 'restaurant', ?)`)
+    VALUES (?, 'Org', 'org', 'org', '{"config":{"default_timezone":"Asia/Bangkok"}}', 'saya-theme-v1', 'THB', 'active', 'active', 'flat', 'restaurant', ?)`)
     .bind(ORG, NOW).run()
   await db.prepare("INSERT INTO user (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?, 'Actor', 'actor@example.test', 0, 0, 0)").bind(ACTOR.actorId).run()
   for (const loc of ['loc-a', 'loc-b']) {
@@ -44,6 +49,110 @@ async function boot() {
   }
   return { runtime, db }
 }
+
+test('product kind narrows organization and location catalogues before pagination', { timeout: 120_000 }, async () => {
+  const { runtime, db } = await boot()
+  try {
+    const products = [
+      ...Array.from({ length: 105 }, (_, index) => ({ id: `dish-${index}`, kind: 'dish', name: `A Dish ${String(index).padStart(3, '0')}` })),
+      { id: 'take', kind: 'experience', name: 'Take Set' },
+      { id: 'ume', kind: 'experience', name: 'Ume Set' },
+    ]
+    await db.batch(products.flatMap(product => [
+      db.prepare('INSERT INTO products (id, organization_id, kind, name, slug, created_by, updated_by) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .bind(product.id, ORG, product.kind, product.name, product.id, ACTOR.actorId, ACTOR.actorId),
+      db.prepare('INSERT INTO product_publications (organization_id, product_id, published, created_by, updated_by) VALUES (?, ?, 0, ?, ?)')
+        .bind(ORG, product.id, ACTOR.actorId, ACTOR.actorId),
+      db.prepare("INSERT INTO product_locations (organization_id, product_id, location_id, active, published, created_by, updated_by) VALUES (?, ?, 'loc-a', 1, 1, ?, ?)")
+        .bind(ORG, product.id, ACTOR.actorId, ACTOR.actorId),
+    ]))
+    assert.equal((await listOrganizationProducts(db, { organizationId: ORG, window: { limit: 100, offset: 0 } })).some(product => product.kind === 'experience'), false)
+    for (const read of [
+      (offset: number) => listOrganizationProducts(db, { organizationId: ORG, kind: 'experience', window: { limit: 1, offset } }),
+      (offset: number) => listLocationProducts(db, { organizationId: ORG, locationId: 'loc-a', kind: 'experience', window: { limit: 1, offset } }),
+    ]) {
+      assert.deepEqual((await read(0)).map(product => product.id), ['take', 'ume'], 'filtered first page includes the extra row for has_more')
+      assert.deepEqual((await read(1)).map(product => product.id), ['ume'])
+    }
+    assert.deepEqual(await listLocationProducts(db, { organizationId: ORG, locationId: 'loc-b', kind: 'experience' }), [])
+    assert.deepEqual(await listOrganizationProducts(db, { organizationId: ORG, kind: 'experience', publishedOnly: true }), [], 'withheld experiences remain editable but are not claimed as public')
+  } finally { await runtime.dispose() }
+})
+
+test('public experiences require a configured booking flow and retain full or temporarily closed sessions', { timeout: 120_000 }, async () => {
+  const { runtime, db } = await boot()
+  try {
+    await db.prepare("INSERT INTO organization_locales (id, organization_id, locale, is_source, status) VALUES ('org-en', ?, 'en', 1, 'published')").bind(ORG).run()
+    const legacy = await createProduct(db, { organizationId: ORG, actor: ACTOR, product: {
+      kind: 'experience', name: 'Omakase', active: true, variants: [{ name: 'Seat', prices: [{ unit_amount: 130000, currency: 'THB' }] }],
+    }, publication: { published: false } })
+    await assert.rejects(setProductLocation(db, { organizationId: ORG, productId: legacy.id, locationId: 'loc-a', active: true, published: true, actor: ACTOR }),
+      { statusCode: 409, data: { code: 'EXPERIENCE_BOOKING_INCOMPLETE', product_id: legacy.id, location_id: 'loc-a', missing: ['booking', 'booking.schedule'] } })
+    // Imported legacy state can have a published duration without a schedule.
+    await db.prepare("INSERT INTO product_locations (organization_id, product_id, location_id, active, published, created_by, updated_by) VALUES (?, ?, 'loc-a', 1, 1, ?, ?)")
+      .bind(ORG, legacy.id, ACTOR.actorId, ACTOR.actorId).run()
+    await db.prepare('INSERT INTO product_booking_configs (product_id, organization_id, duration_minutes, default_capacity, created_by, updated_by) VALUES (?, ?, 60, 8, ?, ?)')
+      .bind(legacy.id, ORG, ACTOR.actorId, ACTOR.actorId).run()
+    await db.prepare('UPDATE product_publications SET published = 1 WHERE organization_id = ? AND product_id = ?').bind(ORG, legacy.id).run()
+    const visible = async () => (await loadPublicProductCollection(db, ORG, 'experiences', false))!.products.map(product => product.id)
+    assert.deepEqual(await productBookingReadiness(db, ORG, await getProduct(db, ORG, legacy.id)), { ready: false, missing: ['booking.schedule'] })
+    assert.deepEqual(await visible(), [])
+    assert.deepEqual(await listOrganizationProducts(db, { organizationId: ORG, publishedOnly: true, kind: 'experience', window: { limit: 1, offset: 0 } }), [])
+    await assert.rejects(listPublicBookingSessions(db, ORG, legacy.slug, {} as CloudflareEnv), (error: { statusCode?: number }) => error.statusCode === 404)
+    await assert.rejects(setProductPublication(db, { organizationId: ORG, productId: legacy.id, published: true, actor: ACTOR }),
+      (error: { statusCode?: number; data?: { code?: string; missing?: string[] } }) => error.statusCode === 409 && error.data?.code === 'EXPERIENCE_BOOKING_INCOMPLETE' && error.data.missing?.includes('booking.schedule') === true)
+
+    const external = await createProduct(db, { organizationId: ORG, actor: ACTOR, product: { kind: 'experience', name: 'External Booking', active: true, order_url: 'https://booking.example/omakase' }, publication: { published: true } })
+    assert.deepEqual(await visible(), [external.id])
+    assert.deepEqual(await listPublicBookingSessions(db, ORG, external.slug, {} as CloudflareEnv), { success: true, product: { id: external.id, name: external.name, slug: external.slug }, sessions: [] })
+
+    const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10)
+    const start = `${tomorrow}T12:00:00.000Z`, end = `${tomorrow}T13:00:00.000Z`
+    await db.prepare("INSERT INTO product_sessions (id, organization_id, product_id, location_id, timezone, starts_at, ends_at, capacity, created_by, updated_by) VALUES ('omakase-session', ?, ?, 'loc-a', 'Asia/Bangkok', ?, ?, 8, ?, ?)")
+      .bind(ORG, legacy.id, start, end, ACTOR.actorId, ACTOR.actorId).run()
+    const ids = [external.id, legacy.id].sort()
+    assert.deepEqual((await visible()).sort(), ids)
+    await claimSessionCapacity(db, { organizationId: ORG, productId: legacy.id, sessionId: 'omakase-session', productVariantId: legacy.variants[0]!.id, partySize: 8 })
+    const sessions = await listSessions(db, { organizationId: ORG, productId: legacy.id, fromInstant: `${tomorrow}T00:00:00.000Z`, toInstant: `${tomorrow}T23:59:59.999Z` })
+    assert.deepEqual(sessions.map(session => ({ remaining: session.remaining, full: session.is_full })), [{ remaining: 0, full: true }])
+    assert.deepEqual((await visible()).sort(), ids, 'a full experience stays visible')
+    await db.prepare("UPDATE bookings SET status = 'cancelled' WHERE product_session_id = 'omakase-session'").run()
+    await db.prepare("UPDATE business_locations SET special_hours = ? WHERE id = 'loc-a'")
+      .bind(JSON.stringify([{ kind: 'closure', starts_on: tomorrow, ends_on: tomorrow, note: 'Private event' }])).run()
+    assert.deepEqual(await productBookingReadiness(db, ORG, await getProduct(db, ORG, legacy.id)), { ready: true, missing: [] })
+    assert.deepEqual((await visible()).sort(), ids, 'a temporary closure changes availability, not the published experience')
+    await db.prepare("UPDATE business_locations SET special_hours = NULL WHERE id = 'loc-a'").run()
+    assert.equal((await productBookingReadiness(db, ORG, await getProduct(db, ORG, legacy.id), { requireAllocation: true })).ready, true)
+    await setProductLocation(db, { organizationId: ORG, productId: legacy.id, locationId: 'loc-a', active: false, published: true, actor: ACTOR })
+    const pausedOffering = await getProduct(db, ORG, legacy.id)
+    assert.deepEqual(await productBookingReadiness(db, ORG, pausedOffering), { ready: true, missing: [] })
+    assert.equal((await productBookingReadiness(db, ORG, pausedOffering, { requireAllocation: true })).ready, false)
+    await setProductPublication(db, { organizationId: ORG, productId: legacy.id, published: true, actor: ACTOR })
+    assert.deepEqual((await visible()).sort(), ids, 'pausing a location offering retains its published information')
+    const experienceDetail = await loadPublicExperienceDetail({} as CloudflareEnv, db, ORG, false, legacy.slug)
+    assert.equal(experienceDetail?.product.id, legacy.id)
+    assert.equal(experienceDetail?.location, null)
+    assert.deepEqual(await loadPublicProductSessions(db, experienceDetail!, {} as CloudflareEnv), [], 'an in-person-only paused offering never requests online sessions')
+    const locationDetail = await loadPublicProductDetail({} as CloudflareEnv, db, ORG, 'experiences', false, 'loc-a', legacy.slug)
+    assert.equal(locationDetail?.product.id, legacy.id)
+    assert.equal(locationDetail?.location.id, 'loc-a')
+    assert.deepEqual(await loadPublicProductSessions(db, locationDetail!, {} as CloudflareEnv), [], 'a paused location does not advertise sessions')
+    await assert.rejects(listPublicBookingSessions(db, ORG, legacy.slug, {} as CloudflareEnv, 'loc-a'), (error: { statusCode?: number }) => error.statusCode === 404)
+    for (const product of [legacy, external]) {
+      await updateProduct(db, { organizationId: ORG, productId: product.id, actor: ACTOR, patch: { active: false } })
+      const paused = await getProduct(db, ORG, product.id)
+      await setProductPublication(db, { organizationId: ORG, productId: product.id, published: true, actor: ACTOR })
+      assert.deepEqual(await productBookingReadiness(db, ORG, paused), { ready: true, missing: [] }, 'pausing bookings retains a configured public experience')
+      assert.equal((await productBookingReadiness(db, ORG, paused, { requireAllocation: true })).missing.includes('active'), true)
+      await assert.rejects(listPublicBookingSessions(db, ORG, product.slug, {} as CloudflareEnv), (error: { statusCode?: number }) => error.statusCode === 404)
+      assert.deepEqual((await visible()).sort(), ids, 'Accept bookings controls sale availability rather than deleting the published information')
+    }
+    await setProductPublication(db, { organizationId: ORG, productId: external.id, published: false, actor: ACTOR })
+    await assert.rejects(setProductPublication(db, { organizationId: ORG, productId: external.id, published: true, actor: ACTOR }),
+      (error: { statusCode?: number; data?: { missing?: string[] } }) => error.statusCode === 409 && error.data?.missing?.includes('active') === true)
+    assert.deepEqual(await visible(), [legacy.id], 'publishing a withheld experience still requires accepting bookings')
+  } finally { await runtime.dispose() }
+})
 
 test('one product identity serves two locations', { timeout: 120_000 }, async () => {
   const { runtime, db } = await boot()

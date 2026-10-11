@@ -1,15 +1,16 @@
 <template>
   <div class="relative z-20 grid gap-10 sm:grid-cols-2 lg:grid-cols-3">
-    <NuxtLink
+    <component
+      :is="item.url ? NuxtLink : 'article'"
       v-for="item in items"
       :key="item.id"
-      :to="item.url"
+      :to="item.url || undefined"
       class="relative h-full rounded-2xl bg-muted p-6 no-underline shadow-xl shadow-slate-900/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--blawby-primary)] focus-visible:ring-offset-4"
     >
       <div :data-page-id="item.id" class="aspect-[704/478] w-full overflow-hidden rounded-lg bg-muted">
         <img
-          v-if="coverImage(item)"
-          :src="coverImage(item) || undefined"
+          v-if="imageUrl(item)"
+          :src="imageUrl(item) || undefined"
           :alt="item.title"
           width="704"
           height="478"
@@ -23,55 +24,45 @@
       <h3 v-if="item.description" class="mt-2 blawby-display text-xl font-bold text-[var(--blawby-primary)]">
         {{ item.description }}
       </h3>
+      <p v-if="item.city" class="mt-4 text-sm text-highlighted">{{ item.city }}</p>
+      <p v-if="item.address" class="mt-4 text-sm text-highlighted">{{ item.address }}</p>
+      <p v-if="item.value" class="mt-4 text-sm text-highlighted"><span v-if="item.compareAt" class="mr-2 line-through">{{ item.compareAt }}</span>{{ item.value }}</p>
+      <p v-if="item.featured" class="mt-4 text-sm text-highlighted">{{ t('saya.posts.featured') }}</p>
+      <p v-if="item.unavailable" class="mt-4 text-sm text-highlighted">{{ t('saya.menu_page.unavailable') }}</p>
       <p v-if="item.schedulingSummary" class="mt-4 text-sm text-highlighted">{{ item.schedulingSummary }}</p>
-    </NuxtLink>
+    </component>
   </div>
 </template>
 
 <script setup lang="ts">
+import { NuxtLink } from '#components'
+import { mediaStillUrl } from '~/shared/media-placement-contract'
+
 /**
- * A grid of pages this site publishes — practice areas, services, anything the
- * editor chose. The items come from the page's own `page_grid` block, already
- * resolved to titles, summaries and routes, so this component holds no
- * knowledge of what kind of page it is showing.
- *
- * The card is the practice-area card this site has always had, and each part
- * of it reads exactly one field:
- *
- * - the image reads the `cover` media placement (see `coverImage`);
- * - the small-caps chip reads `item.title`, the referenced page's own title;
- * - the display headline reads `item.description`, which the page_grid block
- *   fills from that page's `summary`.
- *
- * A page with no summary renders the chip alone. There is no second field to
- * promote into the headline, and a card that says only its name is how the
- * missing summary becomes visible instead of being papered over with the title
- * printed twice.
+ * The native practice-area card also draws published products and offices.
+ * Page titles remain chips and summaries remain headlines. The block type
+ * names the image slot; optional product/location facts keep their own fields.
  */
-interface PageGridMedia { slot: string; public_url: string }
+interface PageGridMedia { slot: string; public_url: string; thumbnail_url?: string; kind: string }
 interface PageGridItem {
   id: string
   title: string
   description?: string
   schedulingSummary?: string
-  url: string
+  url?: string
+  city?: string
+  address?: string
+  value?: string
+  compareAt?: string
+  featured?: boolean
+  unavailable?: boolean
   media?: PageGridMedia[]
 }
 
-const props = defineProps<{ items: PageGridItem[] }>()
+const props = defineProps<{ items: PageGridItem[]; imageSlot: 'cover' | 'image' | 'hero' }>()
+const { t } = useI18n()
 
-/**
- * The page's cover, and only that.
- *
- * This used to try thumbnail, then hero, then the first gallery image. Three
- * slots are three different decisions the editor made, and quietly promoting a
- * gallery photo into a card meant nobody could tell which one would show. A
- * page states its card image in one slot: `cover`.
- */
-function coverImage(item: PageGridItem): string | null {
-  return item.media?.find(media => media.slot === 'cover')?.public_url ?? null
+function imageUrl(item: PageGridItem): string | null {
+  return mediaStillUrl(item.media?.find(media => media.slot === props.imageSlot))
 }
-
-// Referenced so the props type is used in the template above.
-void props
 </script>

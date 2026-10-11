@@ -56,6 +56,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     env:
+      BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+      PLATFORM_OWNER_EMAILS: ${{ secrets.PLATFORM_OWNER_EMAILS }}
       STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY_E2E }}
       STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET_STAGING }}
       NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_E2E }}
@@ -63,10 +65,8 @@ jobs:
       # The onboarding draft endpoints sign their preview tokens with it and
       # answer 503 without it, so the wizard never got past its first save.
       PREVIEW_SECRET: ${{ secrets.PREVIEW_SECRET_PREVIEW }}
-      # The onboarding business search is Places API (New) through the server,
-      # which answers 503 without it, and the onboarding, add-location and
-      # Settings specs pick a real Google listing.
-      GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
+      # Default E2E exercises manual onboarding; live Places qualification is opt-in.
+      GOOGLE_PLACES_API_KEY: ""
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       CANARY_LOGIN_EMAIL: ${{ secrets.CANARY_LOGIN_EMAIL }}

@@ -6,11 +6,14 @@ import { HTTPError } from 'nitro'
 import { z } from 'zod'
 import { executeBatch, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { listSessions, sessionMoveQuery, sessionAssignmentQuery } from '~/server/utils/availability'
-import { localDateTimeToInstant } from '~/utils/timezone'
+import { formatTimestamp, localDateTimeToInstant } from '~/utils/timezone'
 import { assertResourceAccess, resolveOrganizationMembership, memberAccessPrincipal } from '~/server/utils/member-access'
 import { resolveBookingPresentation, type BookingKind } from '~/utils/booking-presentation'
 import type { CloudflareEnv } from '~/server/utils/auth'
-import { notifyBookingChangeOwner } from '~/server/utils/notifications'
+import { guestPresentation, notifyBookingChangeOwner } from '~/server/utils/notifications'
+import { platformLocale } from '~/shared/platform-locales'
+import { getVerticalCopy } from '~/utils/vertical-copy'
+import { formatTenantLocalePath } from '~/utils/tenant-locale-path'
 import { appendEntry, findEntryByDedupeKey, getEntryById } from './entries'
 import { createDeliveryReceipt, deliverGuestThreadEmail } from './deliveries'
 import { getEmailDeliveryMode } from '~/server/utils/email-delivery'
@@ -79,6 +82,7 @@ const proposalSchema = z.object({
   // Proposals recorded before that are immutable facts without them, and the
   // send falls back to the template's own placeholders for those.
   afterDate: z.string().optional(), afterTime: z.string().optional(),
+  afterStartsAt: z.string().optional(), afterTimezone: z.string().optional(), afterLocationId: z.string().nullable().optional(),
 })
 type Fields = z.infer<typeof fieldsSchema>
 type Source = z.infer<typeof sourceSchema> & { updatedAt: string }
@@ -131,7 +135,7 @@ async function loadSource(db: DbClient, thread: GuestThreadRow): Promise<Source>
   }
 }
 
-interface Destination { locationId: string | null; title: string; label: string; date: string; time: string; startsAt: string; endsAt?: string; claim?: (bookingId: string, now: string) => BatchQuery | Promise<BatchQuery>; sessionId?: string }
+interface Destination { locationId: string | null; title: string; label: string; date: string; time: string; startsAt: string; timezone: string; endsAt?: string; claim?: (bookingId: string, now: string) => BatchQuery | Promise<BatchQuery>; sessionId?: string }
 
 /**
  * Check that the proposed target can actually take this party, and return the
@@ -163,7 +167,7 @@ async function validateDestination(db: DbClient, thread: GuestThreadRow, before:
       : null
     return {
       locationId: target.location_id, title: location?.title ?? '', sessionId: target.id,
-      startsAt: target.starts_at, endsAt: target.ends_at, ...localParts(target.starts_at, target.timezone),
+      startsAt: target.starts_at, endsAt: target.ends_at, timezone: target.timezone, ...localParts(target.starts_at, target.timezone),
       // The same Booking moves under the shared allocation predicate. Exclude
       // its existing allocation; a full destination leaves the record unchanged.
       claim: (bookingId, now) => sessionMoveQuery(db, {
@@ -199,7 +203,7 @@ async function validateDestination(db: DbClient, thread: GuestThreadRow, before:
   const endsAt = new Date(Date.parse(startsAt) + Date.parse(before.endsAt) - Date.parse(before.startsAt)).toISOString()
   const allocation = await reservationAllocationPredicate(db, { organizationId: thread.organization_id, locationId: location.id, timezone: location.timezone, startsAt, endsAt, partySize: after.partySize, replacingReservationId: before.recordId })
   if (!await queryFirst(db, `SELECT 1 WHERE ${allocation.query}`, allocation.params)) throw new HTTPError({ statusCode: 409, message: 'The requested time is closed or no longer has capacity for this party' })
-  return { locationId: location.id, title: location.title, startsAt, endsAt, ...localParts(startsAt, location.timezone),
+  return { locationId: location.id, title: location.title, startsAt, endsAt, timezone: location.timezone, ...localParts(startsAt, location.timezone),
     claim: async (reservationId, now) => {
       const currentAllocation = await reservationAllocationPredicate(db, { organizationId: thread.organization_id, locationId: location.id, timezone: location.timezone!, startsAt, endsAt, partySize: after.partySize, replacingReservationId: reservationId })
       return { query: `UPDATE reservations SET starts_at = ?, ends_at = ?, timezone = ?, party_size = ?, location_id = ?, updated_at = ?
@@ -221,19 +225,54 @@ function linkToken(env: ChangeEnv, threadId: string, requestId: string) {
   return createHmac('sha256', env.EMAIL_REPLY_SECRET).update(`booking-change:v1:${threadId}:${requestId}`).digest('hex')
 }
 
-interface ChangeEmailContent {
-  subject: string
-  intro: string
-  rows?: Array<[string, string]>
-  actionUrl?: string
-  actionText?: string
+async function changePresentation(db: DbClient, thread: GuestThreadRow, proposal: z.infer<typeof proposalSchema>) {
+  const organization = await queryFirst<{ name: string; vertical: string | null }>(db, 'SELECT name, vertical FROM organization WHERE id = ?', [thread.organization_id])
+  if (!organization?.name) throw new HTTPError({ statusCode: 409, message: 'Organization name is not configured' })
+  // Keep the proposed instant immutable. Older entries are rendered from their
+  // canonical target only while it still agrees with the recorded label.
+  let startsAt = proposal.afterStartsAt
+  let timezone = proposal.afterTimezone
+  let locationId = proposal.afterLocationId !== undefined ? proposal.afterLocationId : proposal.after.kind === 'reservation' ? proposal.after.locationId : proposal.before.locationId
+  if (!startsAt || !timezone) {
+    const target = proposal.after.kind === 'booking'
+      ? await queryFirst<{ starts_at: string; timezone: string; location_id: string | null }>(db,
+          'SELECT starts_at, timezone, location_id FROM product_sessions WHERE id = ? AND organization_id = ? AND product_id = ?',
+          [proposal.after.sessionId, thread.organization_id, proposal.before.productId])
+      : await queryFirst<{ timezone: string | null }>(db, 'SELECT timezone FROM business_locations WHERE id = ? AND organization_id = ?', [locationId, thread.organization_id])
+          .then(location => location?.timezone && proposal.after.kind === 'reservation'
+            ? { timezone: location.timezone, location_id: locationId, starts_at: localDateTimeToInstant(proposal.after.bookingDate, proposal.after.bookingTime, location.timezone, 'reject').toISOString() }
+            : null)
+    if (!target || localLabel(target.starts_at, target.timezone) !== proposal.afterLabel) throw new HTTPError({ statusCode: 409, message: 'The proposed time has changed. Ask the business for a new change request.' })
+    startsAt = target.starts_at
+    timezone = target.timezone
+    locationId = target.location_id
+  }
+  const guest = await guestPresentation(db, {
+    organizationId: thread.organization_id, organizationName: organization.name, locale: thread.payload.guest.locale,
+    productId: proposal.before.productId, locationId, locationName: proposal.locationTitle,
+  })
+  const original = locationId === proposal.before.locationId ? guest
+    : await guestPresentation(db, { organizationId: thread.organization_id, organizationName: organization.name, locale: guest.locale,
+        locationId: proposal.before.locationId, locationName: proposal.originalLocationTitle })
+  const labels = platformLocale(guest.locale)!.messages
+  const copy = getVerticalCopy(organization.vertical, guest.locale)
+  return {
+    ...guest, fromName: organization.name, vertical: organization.vertical, labels, copy,
+    before: { whenLabel: formatTimestamp(proposal.before.startsAt, guest.locale, proposal.before.timezone, { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }), partySize: proposal.before.partySize },
+    after: { whenLabel: formatTimestamp(startsAt, guest.locale, timezone, { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }), partySize: proposal.after.partySize },
+    locationTitle: guest.locationName?.trim() || labels['booking.online']!, originalLocationTitle: original.locationName?.trim() || labels['booking.online']!,
+  }
 }
 
-async function deliverEmail(db: DbClient, env: ChangeEnv, thread: GuestThreadRow, entryId: string, content: ChangeEmailContent, status: 'requested' | 'accepted' | 'declined', proposal: z.infer<typeof proposalSchema>, noun: string) {
+async function deliverEmail(db: DbClient, env: ChangeEnv, thread: GuestThreadRow, entryId: string, status: 'requested' | 'accepted' | 'declined', proposal: z.infer<typeof proposalSchema>, noun: string) {
   const summary = await sourceSummary(db, thread)
   if (!summary.guestEmail) throw new HTTPError({ statusCode: 400, message: 'Guest email is required' })
-  const organization = await queryFirst<{ name: string }>(db, 'SELECT name FROM organization WHERE id = ?', [thread.organization_id])
-  if (!organization?.name) throw new HTTPError({ statusCode: 409, message: 'Organization name is not configured' })
+  const guest = await changePresentation(db, thread, proposal)
+  const subject = guest.labels[`booking.change_${status === 'requested' ? 'review' : status}`]!
+  const actionUrl = status === 'requested'
+    ? new URL(formatTenantLocalePath(`/booking-changes/${thread.id}/${entryId}`, guest.locale, 'en'), env.NUXT_PUBLIC_PLATFORM_DOMAIN)
+    : null
+  if (actionUrl) actionUrl.hash = linkToken(env, thread.id, entryId)
   const delivery = await createDeliveryReceipt(db, {
     entryId,
     channel: 'email',
@@ -245,24 +284,25 @@ async function deliverEmail(db: DbClient, env: ChangeEnv, thread: GuestThreadRow
     delivery,
     env,
     to: summary.guestEmail,
-    fromName: organization.name,
-    subject: content.subject,
+    fromName: guest.fromName,
+    subject,
     email: await renderNotificationEmail(bookingChangeProposalMessage({
       guestName: summary.guestName,
-      organizationName: organization.name,
+      locale: guest.locale,
+      organizationName: guest.organizationName,
       organizationLogoUrl: await organizationLogo(db, thread.organization_id),
-      heading: content.subject,
-      intro: content.intro,
-      rows: content.rows ?? [],
-      actionUrl: content.actionUrl ?? null,
-      actionLabel: content.actionText ?? null,
+      heading: subject,
+      intro: guest.labels[`booking.change_${status === 'requested' ? 'pending' : status === 'declined' ? 'unchanged' : 'updated'}`]!,
+      rows: status === 'declined' ? [] : [[guest.copy.locationLabel, guest.locationTitle], [guest.copy.dateLabel, guest.after.whenLabel], [guest.copy.guestsLabel, String(guest.after.partySize)]],
+      actionUrl: actionUrl?.href ?? null,
+      actionLabel: actionUrl ? guest.labels['booking.change_review']! : null,
     }), { platformDomain: getPlatformDomain(env) }),
     submissionType: thread.kind,
     submissionId: thread.id,
   })
   if (sent.status === 'failed') throw new HTTPError({ statusCode: 502, message: sent.error || 'Guest email could not be sent' })
   await notifyBookingChangeOwner(env, db, {
-    organizationId: thread.organization_id, organizationName: organization.name,
+    organizationId: thread.organization_id, organizationName: guest.fromName,
     locationId: (status === 'accepted' && proposal.after.kind === 'reservation' ? proposal.after.locationId : proposal.before.locationId) ?? '',
     threadId: thread.id, submissionType: thread.kind === 'reservation' ? 'reservation' : 'booking', submissionId: thread.id, sourceEntryId: entryId,
     guestName: summary.guestName, guestEmail: summary.guestEmail, status, noun,
@@ -315,24 +355,12 @@ export async function requestBookingChange(db: DbClient, env: CloudflareEnv, thr
       body: `Requested ${destination.label} for ${after.partySize} guests${destination.title ? ` at ${destination.title}` : ''}.`,
       payloadJson: { before: sourceSchema.parse(before), after, updatedAt: before.updatedAt,
         locationTitle: destination.title, originalLocationTitle: original?.title ?? '', afterLabel: destination.label,
-        afterDate: destination.date, afterTime: destination.time },
+        afterDate: destination.date, afterTime: destination.time, afterStartsAt: destination.startsAt, afterTimezone: destination.timezone, afterLocationId: destination.locationId },
     })
   }
   const noun = await bookingNoun(db, thread)
   const proposal = proposalSchema.parse(JSON.parse(entry.payload_json || '{}'))
-  const url = new URL(`/booking-changes/${thread.id}/${entry.id}`, env.NUXT_PUBLIC_PLATFORM_DOMAIN)
-  url.hash = linkToken(env, thread.id, entry.id)
-  await deliverEmail(db, env, thread, entry.id, {
-    subject: `Please review changes to your ${noun}`,
-    intro: `Hi ${summary.guestName}, your host has requested changes to your ${noun}. It stays exactly as it is until you accept, and the link below expires in 7 days. You can also reply to this email to talk with your host.`,
-    rows: [
-      proposal.locationTitle ? ['Location', proposal.locationTitle] : null,
-      ['When', proposal.afterLabel],
-      ['Guests', String(proposal.after.partySize)],
-    ].filter(Boolean) as Array<[string, string]>,
-    actionUrl: url.href,
-    actionText: 'Review the changes',
-  }, 'requested', proposal, noun)
+  await deliverEmail(db, env, thread, entry.id, 'requested', proposal, noun)
   await updateThreadProjection(db, thread.id, { conversationState: 'waiting_on_guest' })
 }
 
@@ -360,6 +388,7 @@ export async function respondToBookingChange(db: DbClient, env: ChangeEnv, input
     if (!['pending', 'confirmed'].includes(current.status)) throw new HTTPError({ statusCode: 409, message: 'This reservation or booking can no longer be changed' })
     if(input.decision==='accept' && current.productId)await refreshProductBusy(db,env,thread.organization_id,current.productId)
     const destination = input.decision === 'accept' ? await validateDestination(db, thread as GuestThreadRow, current, proposal.after, resultId) : null
+    if (destination && (destination.label !== proposal.afterLabel || (proposal.afterStartsAt && destination.startsAt !== proposal.afterStartsAt) || (proposal.afterTimezone && destination.timezone !== proposal.afterTimezone) || (proposal.afterLocationId !== undefined && destination.locationId !== proposal.afterLocationId))) throw new HTTPError({ statusCode: 409, message: 'The proposed time has changed. Ask the business for a new change request.' })
     const id = crypto.randomUUID()
     const now = new Date().toISOString()
 
@@ -418,19 +447,7 @@ export async function respondToBookingChange(db: DbClient, env: ChangeEnv, input
   const summary = await sourceSummary(db, thread as GuestThreadRow)
   if (result && input.decision) {
     const accepted = result.event_name === 'booking_change.accepted'
-    await deliverEmail(db, env, thread as GuestThreadRow, result.id, {
-      subject: `Your ${noun} change was ${accepted ? 'accepted' : 'declined'}`,
-      intro: accepted
-        ? 'Your changes are confirmed.'
-        : `You declined the requested changes. Your original ${noun} remains unchanged.`,
-      rows: accepted
-        ? ([
-            proposal.locationTitle ? ['Location', proposal.locationTitle] : null,
-            ['When', proposal.afterLabel],
-            ['Guests', String(proposal.after.partySize)],
-          ].filter(Boolean) as Array<[string, string]>)
-        : [],
-    }, accepted ? 'accepted' : 'declined', proposal, noun)
+    await deliverEmail(db, env, thread as GuestThreadRow, result.id, accepted ? 'accepted' : 'declined', proposal, noun)
     await updateThreadProjection(db, thread.id, { conversationState: 'resolved' })
     if (!result.payload_json) throw new Error('A booking change answer has no recorded payload')
     const answered = JSON.parse(result.payload_json) as { operational_booking_id?: unknown }
@@ -438,11 +455,11 @@ export async function respondToBookingChange(db: DbClient, env: ChangeEnv, input
       await recordBookingChangeAnswer(db, { organizationId: thread.organization_id, bookingId: answered.operational_booking_id, changeRequestId: entry.id, accepted })
     }
   }
+  const guest = await changePresentation(db, thread as GuestThreadRow, proposal)
   return {
-    type: thread.kind, noun, guestName: summary.guestName,
-    before: { whenLabel: localLabel(proposal.before.startsAt, proposal.before.timezone), partySize: proposal.before.partySize },
-    after: { whenLabel: proposal.afterLabel, partySize: proposal.after.partySize },
-    locationTitle: proposal.locationTitle, originalLocationTitle: proposal.originalLocationTitle,
+    type: thread.kind, noun, guestName: summary.guestName, locale: guest.locale, vertical: guest.vertical,
+    before: guest.before, after: guest.after,
+    locationTitle: guest.locationTitle, originalLocationTitle: guest.originalLocationTitle,
     status: result ? result.event_name === 'booking_change.accepted' ? 'accepted' : 'declined' : 'pending',
   }
 }

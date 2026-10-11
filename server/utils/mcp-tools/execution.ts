@@ -16,6 +16,8 @@ import { sniffMediaMimeType, VIDEO_MIME_TYPES, MAX_VIDEO_BYTES, MAX_IMAGE_BYTES,
 import { assertMarkdownSize, decodeMarkdownText, resolveMarkdownMimeType } from "~/server/utils/markdown-document";
 import { assertCloudflareImagesConfigured } from "~/server/utils/cloudflare-images";
 import { findOrganizationById } from '~/server/utils/member-access'
+import { publicTenantVisibilitySql } from '~/server/utils/public-base'
+import { tenantOrganizationOrigin } from '~/utils/tenant-organization-origin'
 
 /**
  * Resolves the upload provider for an image based on content type and Cloudflare Images config.
@@ -426,7 +428,7 @@ export async function mutationContextPayload(
            o.name,
            o.subdomain,
            (SELECT domain FROM organization_domains WHERE organization_id = o.id AND role = 'canonical' AND status = 'active' AND type = 'custom') AS custom_domain,
-           (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = o.id AND role = 'canonical' AND status = 'active') AS public_url,
+           (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = o.id AND role = 'canonical' AND status = 'active' AND ${publicTenantVisibilitySql('o', false)}) AS public_url,
            location.id AS location_id,
            location.slug AS location_slug,
            location.title AS location_title
@@ -448,7 +450,12 @@ export async function mutationContextPayload(
     organization_name: organization.name,
     organization_slug: organization.slug,
     organization_subdomain: context.subdomain,
-    organization_public_url: resolveOrganizationPublicOrigin(context),
+    organization_public_url: context.public_url ? tenantOrganizationOrigin({
+      platformDomain: mcpContext.env.NUXT_PUBLIC_PLATFORM_DOMAIN ?? '',
+      freeOrganizationDomain: mcpContext.env.NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN ?? '',
+      subdomain: context.subdomain ?? '',
+      canonicalDomain: context.public_url,
+    }) : null,
     location_id: context.location_id,
     location_slug: context.location_slug,
     location_title: context.location_title,
@@ -463,6 +470,7 @@ export function toolRequiresArgument(
 }
 
 export function rethrowWorkspaceError(error: unknown): never {
+  if (error && typeof error === 'object' && 'statusCode' in error) throw error;
   if (error instanceof Error && error.message) {
     throw mcpProtocolError(MCP_ERROR.invalidParams, error.message);
   }
@@ -478,14 +486,21 @@ export async function normalizeWorkspaceArguments(
 ) {
   const args = { ...rawArguments };
 
-  if (["get_workspace_context", "set_workspace_context", "list_organizations"].includes(toolName)) {
-    return args;
-  }
-
   const properties =
     schema.properties && typeof schema.properties === "object"
       ? (schema.properties as Record<string, unknown>)
       : {};
+  for (const key of ['organization_id', 'location_id']) {
+    if (!(key in properties) || !Object.hasOwn(args, key)) continue
+    const type = (properties[key] as { type?: unknown }).type
+    if (args[key] === null && Array.isArray(type) && type.includes('null')) continue
+    if (typeof args[key] !== 'string' || !args[key].trim()) {
+      throw mcpProtocolError(MCP_ERROR.invalidParams, `Invalid ${key}`, { status: 400, invalid_fields: [key] })
+    }
+    args[key] = args[key].trim()
+  }
+
+  if (["get_workspace_context", "set_workspace_context", "list_organizations"].includes(toolName)) return args;
   const supportsOrganization = "organization_id" in properties;
   const supportsLocation = "location_id" in properties;
   const locationSchema = properties.location_id as { type?: unknown } | undefined;
@@ -582,6 +597,7 @@ export function objectRecord(value: unknown, key: string) {
 }
 
 export function rethrowAsInvalidParams(error: unknown): never {
+  if (error && typeof error === 'object' && 'statusCode' in error) throw error;
   if (!(error instanceof Error)) throw error;
   const message = error.message;
   if (

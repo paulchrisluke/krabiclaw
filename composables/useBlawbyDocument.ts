@@ -23,6 +23,7 @@ export function resolveBlawbyRouteTarget(path: string): BlawbyRouteTarget {
   if (routePath === '/schedule') return { recipe: 'schedule', slug: null }
   if (routePath === '/blog') return { recipe: 'blog', slug: null }
   if (routePath === '/posts' || /^\/posts\/[^/]+$/.test(routePath)) return { recipe: 'posts', slug: null }
+  if (routePath === '/experiences' || /^\/experiences\/[^/]+$/.test(routePath) || /^\/locations\/[^/]+\/experiences$/.test(routePath)) return { recipe: 'experiences', slug: null }
   // Every article-collection route: an article, the docs index and a doc, and a category page.
   if (/^\/article\/[^/]+$/.test(routePath) || /^\/docs(?:\/[^/]+)?$/.test(routePath) || /^\/(?:blog|docs)\/category\/[^/]+$/.test(routePath)) return { recipe: 'article', slug: null }
   if (routePath === '/donate') return { recipe: 'donate', slug: null }
@@ -82,7 +83,11 @@ export async function useBlawbyDocument(
   if (!asyncData.data.value && (asyncData.status.value === 'idle' || asyncData.status.value === 'pending')) {
     await asyncData.execute({ dedupe: 'defer' })
   }
-  if (asyncData.error.value) throw asyncData.error.value
+  if (asyncData.error.value) {
+    const error = asyncData.error.value
+    if (import.meta.server) throw error
+    throw nuxtApp.runWithContext(() => showError(error))
+  }
   if (!asyncData.data.value && options.server !== false) {
     throw createError({ statusCode: 500, statusMessage: 'Blawby document data was not returned' })
   }

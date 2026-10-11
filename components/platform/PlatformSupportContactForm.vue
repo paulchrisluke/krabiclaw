@@ -81,6 +81,7 @@ const emit = defineEmits<{
 const inputClass = FORM_INPUT_CLASS
 // The help form is the Krabiclaw site's contact form: it files into that site's inbox like every tenant's.
 const { organizationId } = useTenantOrganization()
+const { locale } = useI18n()
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const form = ref({
   name: '',
@@ -129,6 +130,7 @@ async function handleSubmit() {
     await $fetch<unknown>(`/api/public/contact`, {
       method: 'POST',
       body: {
+        locale: locale.value,
         name: form.value.name.trim(),
         email: form.value.email.trim(),
         topic: form.value.topic.trim(),

@@ -1,5 +1,6 @@
 import { splitLocalePrefix } from '~/utils/tenant-locale-path'
 import { platformLocale } from '~/shared/platform-locales'
+import { TENANT_NON_INDEXABLE_EXACT_PATHS } from '~/utils/template-registry'
 
 export default defineNuxtRouteMiddleware(async (to) => {
   const state = useState<string>('public-locale', () => 'en')
@@ -14,9 +15,12 @@ export default defineNuxtRouteMiddleware(async (to) => {
   // The URL names the language, whether the route declares a `locale` param or
   // the path simply carries the prefix. One reading of it, so a client
   // navigation and a hard load cannot disagree about what the URL means.
+  const routing = splitLocalePrefix(to.path)
   const requested = typeof to.params.locale === 'string' && to.params.locale
     ? to.params.locale
-    : splitLocalePrefix(to.path).localeSegment
+    : routing.localeSegment
+  const privateGuestRoute = TENANT_NON_INDEXABLE_EXACT_PATHS.has(routing.sourcePath)
+    || to.name === 'booking-changes-threadId-requestId' || to.name === 'localized-booking-changes-threadId-requestId'
 
   if (import.meta.client) {
     const representations = useState<Array<{ locale: string; source: 'source' | 'localized' }>>('public-locale-representations', () => [])
@@ -38,7 +42,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
         }
         return
       }
-      if (catalog.locale === sourceLocale.value) {
+      if (!privateGuestRoute && catalog.locale === sourceLocale.value) {
         throw createError({ statusCode: 404, statusMessage: 'Primary language routes are unprefixed' })
       }
       state.value = catalog.locale
@@ -78,6 +82,14 @@ export default defineNuxtRouteMiddleware(async (to) => {
   state.value = source.locale
   setAppLocale(source.locale, { ...sourceCatalog.messages })
   if (!candidate || !platformLocale(candidate)) return
+  // Guest capabilities use supported UI copy; the host's public language publication does not authorize the token.
+  if (privateGuestRoute) {
+    const messages = { ...platformLocale(candidate)!.messages }
+    state.value = candidate
+    useState<Record<string, string> | null>('platform-locale-messages', () => null).value = messages
+    setAppLocale(candidate, messages)
+    return
+  }
   if (candidate === source.locale) throw createError({ statusCode: 404, statusMessage: 'Primary language routes are unprefixed' })
   const locale = await queryFirst<{ locale: string }>(db, `
     SELECT locale
