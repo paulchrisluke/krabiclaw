@@ -216,6 +216,5 @@ Refund preparation/execution, Checkout creation, transfers and payouts are not
 MCP operations. Financial approval, execution and interrupted-refund recovery
 remain in the authenticated dashboard and canonical Payments service.
 
-All writes carry explicit reviewed real-world annotations and `confirmRequired`.
-The client must obtain approval for the exact operation; no model-supplied
-`confirm: true` field is accepted as authorization.
+Writes declare their MCP annotations. Clients apply their app permission settings;
+a model-supplied `confirm: true` field is not authorization.

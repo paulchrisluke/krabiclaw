@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto'
 import { guestAccountUrl } from '~/shared/guest-account'
-import { formatCalendarDate, formatTime, localPartsAt } from '~/utils/timezone'
+import { formatCalendarDate, formatTime, formatTimestamp, localPartsAt } from '~/utils/timezone'
 import { getGuestRequest, requestSummary, type cancelBookingRequest } from '~/server/domain/requests'
-import { execute, queryFirst, type DbClient } from '~/server/db'
+import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { organizationEventQuery } from '~/server/utils/organization-events'
 import { getEmailDeliveryMode, hashEmail, isReservedTestDomain, sendEmail } from '~/server/utils/email-delivery'
 import { buildWhatsAppTemplatePayload, sendWhatsAppNotification, type WhatsAppTemplate } from '~/server/utils/whatsapp'
@@ -46,6 +46,9 @@ import { createDeliveryReceipt, isDeliverySent, recordDeliveryOutcome } from '~/
 import { appendEntry, findEntryByDedupeKey } from '~/server/domain/guest-threads/entries'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 import type { GuestThreadDeliveryPurpose } from '~/server/domain/guest-threads/types'
+import { getPersistedSourceLocale } from '~/server/utils/localization'
+import { indexStoredPublicLocalizations, type StoredPublicLocalizationRow } from '~/server/utils/public-localization'
+import { platformLocale } from '~/shared/platform-locales'
 
 const SUBJECT_LABELS: Record<string, string> = {
   general: 'General',
@@ -71,6 +74,7 @@ interface NotificationEnv extends CloudflareEnv {
 interface OrganizationContext {
   organizationId: string
   organizationName?: string | null
+  locale?: string
 }
 
 interface ReservationNotificationInput extends OrganizationContext {
@@ -188,6 +192,40 @@ function organizationName(opts: OrganizationContext): string {
   const value = opts.organizationName?.trim()
   if (!value) throw new Error('Tenant site name is required for notifications')
   return value
+}
+
+export async function guestPresentation(db: DbClient, opts: OrganizationContext & {
+  productId?: string | null
+  productTitle?: string | null
+  locationId?: string | null
+  locationName?: string | null
+}) {
+  const source = await getPersistedSourceLocale(db, opts.organizationId)
+  const locale = opts.locale ?? source.locale
+  const [localizations, location] = await Promise.all([
+    locale === source.locale ? [] : queryAll<StoredPublicLocalizationRow>(db, `
+      SELECT rl.resource_type, rl.resource_id, rl.locale, rl.values_json, rl.route_path, p.kind AS product_kind
+        FROM resource_localizations rl
+        LEFT JOIN products p ON rl.resource_type = 'product' AND p.id = rl.resource_id AND p.organization_id = rl.organization_id
+       WHERE rl.organization_id = ? AND rl.locale = ?
+         AND ((rl.resource_type = 'organization' AND rl.resource_id = ?)
+           OR (rl.resource_type = 'business_location' AND rl.resource_id = ?)
+           OR (rl.resource_type = 'product' AND rl.resource_id = ?))
+    `, [opts.organizationId, locale, opts.organizationId, opts.locationId ?? null, opts.productId ?? null]).then(indexStoredPublicLocalizations),
+    opts.locationId && opts.locationName === undefined
+      ? queryFirst<{ title: string }>(db, 'SELECT title FROM business_locations WHERE organization_id = ? AND id = ?', [opts.organizationId, opts.locationId])
+      : null,
+  ])
+  const translated = (type: string, id: string | null | undefined, field: string) => {
+    const value = localizations.find(item => item.resourceType === type && item.resourceId === id)?.values[field]
+    return typeof value === 'string' && value.trim() ? value : undefined
+  }
+  return {
+    locale,
+    organizationName: translated('organization', opts.organizationId, 'name') ?? organizationName(opts),
+    productTitle: translated('product', opts.productId, 'name') ?? opts.productTitle ?? null,
+    locationName: translated('business_location', opts.locationId, 'title') ?? opts.locationName ?? location?.title ?? null,
+  }
 }
 
 // The WhatsApp "Reply in dashboard" button URL is declared in the approved Meta
@@ -744,13 +782,16 @@ export async function notifyReservationCreated(
     locationName: opts.locationName ?? null, organizationName: restaurant,
     notes: opts.requests ?? null, heroImageUrl: hero?.imageUrl ?? null, replyUrl: inboxUrl,
   })
-  const guestEmail = await renderNotificationEmail(guestReservationReceivedMessage({
+  const guest = await guestPresentation(db, opts)
+  const guestMessage = guestReservationReceivedMessage({
+    ...guest,
     accountUrl: guestAccountUrl(env.NUXT_PUBLIC_PLATFORM_DOMAIN!, '/signup', opts.email),
-    guestName: opts.guestName, organizationName: restaurant, organizationLogoUrl: logoUrl,
-    date: prettyDate, time: prettyTime, partySize: opts.guests, notes: opts.requests,
-    locationName: opts.locationName, contactPhone: opts.contactPhone, contactEmail: opts.contactEmail,
+    guestName: opts.guestName, organizationLogoUrl: logoUrl,
+    date: formatCalendarDate(opts.date, guest.locale), time: formatTime(opts.time, guest.locale), partySize: opts.guests, notes: opts.requests,
+    contactPhone: opts.contactPhone, contactEmail: opts.contactEmail,
     cancelUrl: opts.cancelUrl, heroImageUrl: hero?.imageUrl ?? null,
-  }), { platformDomain })
+  })
+  const guestEmail = await renderNotificationEmail(guestMessage, { platformDomain })
 
   const results = await Promise.allSettled([
     notifyOwner(env, db, {
@@ -768,9 +809,9 @@ export async function notifyReservationCreated(
       to: opts.email,
       replyTo,
       template: 'reservation_customer_received',
-      title: 'Your reservation is confirmed',
+      title: guestMessage.title,
       payload,
-      email: { subject: 'Your reservation is confirmed', html: guestEmail.html, text: guestEmail.text },
+      email: { subject: guestMessage.title, html: guestEmail.html, text: guestEmail.text },
       delivery: threadDelivery(threadContext, 'guest_acknowledgement', 'email', 'reservation_customer_received', opts.email),
     })]),
   ])
@@ -797,7 +838,6 @@ export async function notifyReservationCancelled(
     }),
     organizationLogo(db, opts.organizationId),
   ])
-  const guestCancelTitle = confirmed ? 'Your reservation was cancelled' : 'Your reservation request was cancelled'
 
   const payload = {
     reservation_id: opts.reservationId,
@@ -820,16 +860,19 @@ export async function notifyReservationCancelled(
     notes: opts.requests ?? null, heroImageUrl: null, replyUrl: inboxUrl,
     wasConfirmed: confirmed,
   })
-  const guestEmail = await renderNotificationEmail(guestReservationCancelledMessage({
-    guestName: opts.guestName, organizationName: restaurant, date: prettyDate, time: prettyTime,
-    partySize: opts.guests, notes: opts.requests, locationName: opts.locationName, wasConfirmed: confirmed,
+  const guest = await guestPresentation(db, opts)
+  const guestMessage = guestReservationCancelledMessage({
+    ...guest,
+    guestName: opts.guestName, date: formatCalendarDate(opts.date, guest.locale), time: formatTime(opts.time, guest.locale),
+    partySize: opts.guests, notes: opts.requests, wasConfirmed: confirmed,
     organizationLogoUrl: logoUrl,
-  }), { platformDomain })
+  })
+  const guestEmail = await renderNotificationEmail(guestMessage, { platformDomain })
   const threadContext = await recordGuestCancellation(db, {
     submissionType: 'reservation',
     submissionId: opts.reservationId,
     organizationId: opts.organizationId,
-    subject: guestCancelTitle,
+    subject: guestMessage.title,
     body: guestEmail.text,
     wasConfirmed: confirmed,
   })
@@ -853,9 +896,9 @@ export async function notifyReservationCancelled(
       ...opts,
       to: opts.email,
       template: 'reservation_customer_cancelled',
-      title: guestCancelTitle,
+      title: guestMessage.title,
       payload,
-      email: { subject: guestCancelTitle, html: guestEmail.html, text: guestEmail.text },
+      email: { subject: guestMessage.title, html: guestEmail.html, text: guestEmail.text },
       delivery: threadDelivery(threadContext, 'status_update', 'email', 'reservation_customer_cancelled', opts.email),
     }),
   ])
@@ -896,13 +939,17 @@ export async function notifyContactSubmitted(
     message: opts.message, productTitle: opts.productTitle ?? null,
     organizationName: restaurant, consentAcknowledged: Boolean(opts.consentAcknowledged), replyUrl: inboxUrl,
   })
-  const guestEmail = await renderNotificationEmail(guestContactReceivedMessage({
+  const guest = await guestPresentation(db, opts)
+  const subjectLabel = opts.subject ? platformLocale(guest.locale)!.messages[`saya.contact_page.${opts.subject}`] ?? opts.subject : null
+  const guestMessage = guestContactReceivedMessage({
+    ...guest,
     accountUrl: guestAccountUrl(env.NUXT_PUBLIC_PLATFORM_DOMAIN!, '/signup', opts.email),
-    guestName: opts.guestName, organizationName: restaurant, organizationLogoUrl: await organizationLogo(db, opts.organizationId),
-    subject: opts.subject ? (SUBJECT_LABELS[opts.subject] ?? opts.subject) : null,
-    productTitle: opts.productTitle ?? null, message: opts.message,
+    guestName: opts.guestName, organizationLogoUrl: await organizationLogo(db, opts.organizationId),
+    subject: subjectLabel,
+    productTitle: guest.productTitle, message: opts.message,
     consentAcknowledged: Boolean(opts.consentAcknowledged),
-  }), { platformDomain })
+  })
+  const guestEmail = await renderNotificationEmail(guestMessage, { platformDomain })
 
   const results = await Promise.allSettled([
     notifyOwner(env, db, {
@@ -920,9 +967,9 @@ export async function notifyContactSubmitted(
       to: opts.email,
       replyTo,
       template: 'contact_customer_received',
-      title: 'Your message was sent',
+      title: guestMessage.title,
       payload,
-      email: { subject: 'Your message was sent', html: guestEmail.html, text: guestEmail.text },
+      email: { subject: guestMessage.title, html: guestEmail.html, text: guestEmail.text },
       delivery: threadDelivery(threadContext, 'guest_acknowledgement', 'email', 'contact_customer_received', opts.email),
     }),
   ])
@@ -1026,7 +1073,7 @@ export async function notifyBookingCreated(
 ) {
   const studio = organizationName(opts)
   const prettyDate = new Intl.DateTimeFormat('en-US', { timeZone: opts.timezone, dateStyle: 'medium' }).format(new Date(opts.startsAt))
-  const prettyTime = new Intl.DateTimeFormat('en-US', { timeZone: opts.timezone, timeStyle: 'short' }).format(new Date(opts.startsAt))
+  const prettyTime = formatTimestamp(opts.startsAt, 'en', opts.timezone, { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
   const platformDomain = getPlatformDomain(env)
   const [replyTo, inboxUrl] = await Promise.all([
     buildReplyToAddress(env, 'booking', opts.bookingId),
@@ -1064,13 +1111,19 @@ export async function notifyBookingCreated(
     locationName: null, organizationName: studio, productTitle: opts.productTitle,
     notes: opts.notes ?? null, heroImageUrl: hero?.imageUrl ?? null, replyUrl: inboxUrl,
   })
-  const guestEmail = await renderNotificationEmail(guestBookingReceivedMessage({
+  const guest = await guestPresentation(db, opts)
+  const guestMessage = guestBookingReceivedMessage({
+    ...guest,
     accountUrl: guestAccountUrl(env.NUXT_PUBLIC_PLATFORM_DOMAIN!, '/signup', opts.email),
-    guestName: opts.guestName, organizationName: studio, organizationLogoUrl: logoUrl, status: opts.status,
-    productTitle: opts.productTitle, date: prettyDate, time: prettyTime, partySize: String(opts.partySize),
+    guestName: opts.guestName, organizationLogoUrl: logoUrl, status: opts.status,
+    productTitle: guest.productTitle!,
+    date: formatTimestamp(opts.startsAt, guest.locale, opts.timezone, { dateStyle: 'medium' }),
+    time: formatTimestamp(opts.startsAt, guest.locale, opts.timezone, { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }), partySize: String(opts.partySize),
     notes: opts.notes, contactPhone: opts.contactPhone ?? null, contactEmail: opts.contactEmail ?? null,
     cancelUrl: opts.cancelUrl ?? null, heroImageUrl: hero?.imageUrl ?? null,
-  }), { platformDomain })
+  })
+  const guestEmail = await renderNotificationEmail(guestMessage, { platformDomain })
+  const guestTitle = `${guestMessage.title} — ${guest.productTitle}`
 
   const results = await Promise.allSettled([
     notifyOwner(env, db, {
@@ -1091,9 +1144,9 @@ export async function notifyBookingCreated(
       to: opts.email,
       replyTo,
       template: 'booking_customer_received',
-      title: `${opts.status === 'pending' ? 'Your booking request was sent' : 'Your booking is confirmed'} — ${opts.productTitle}`,
+      title: guestTitle,
       payload,
-      email: { subject: `${opts.status === 'pending' ? 'Your booking request was sent' : 'Your booking is confirmed'} — ${opts.productTitle}`, html: guestEmail.html, text: guestEmail.text },
+      email: { subject: guestTitle, html: guestEmail.html, text: guestEmail.text },
       delivery: threadDelivery(threadContext, 'guest_acknowledgement', 'email', 'booking_customer_received', opts.email),
     })]),
   ])
@@ -1109,7 +1162,7 @@ export async function notifyBookingCancelled(
   const confirmed = Boolean(opts.wasConfirmed)
   const studio = organizationName(opts)
   const prettyDate = new Intl.DateTimeFormat('en-US', { timeZone: opts.timezone, dateStyle: 'medium' }).format(new Date(opts.startsAt))
-  const prettyTime = new Intl.DateTimeFormat('en-US', { timeZone: opts.timezone, timeStyle: 'short' }).format(new Date(opts.startsAt))
+  const prettyTime = formatTimestamp(opts.startsAt, 'en', opts.timezone, { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
   const platformDomain = getPlatformDomain(env)
   const [inboxUrl, logoUrl] = await Promise.all([
     buildOwnerInboxUrl(env, db, {
@@ -1120,7 +1173,6 @@ export async function notifyBookingCancelled(
     }),
     organizationLogo(db, opts.organizationId),
   ])
-  const guestCancelTitle = confirmed ? 'Your booking was cancelled' : 'Your booking request was cancelled'
 
   const payload = {
     booking_id: opts.bookingId,
@@ -1142,16 +1194,20 @@ export async function notifyBookingCancelled(
     notes: opts.notes ?? null, heroImageUrl: null, replyUrl: inboxUrl,
     wasConfirmed: confirmed,
   })
-  const guestEmail = await renderNotificationEmail(guestBookingCancelledMessage({
-    guestName: opts.guestName, organizationName: studio, productTitle: opts.productTitle,
-    date: prettyDate, time: prettyTime, partySize: String(opts.partySize), notes: opts.notes, wasConfirmed: confirmed,
+  const guest = await guestPresentation(db, opts)
+  const guestMessage = guestBookingCancelledMessage({
+    ...guest,
+    guestName: opts.guestName, productTitle: guest.productTitle!,
+    date: formatTimestamp(opts.startsAt, guest.locale, opts.timezone, { dateStyle: 'medium' }),
+    time: formatTimestamp(opts.startsAt, guest.locale, opts.timezone, { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }), partySize: String(opts.partySize), notes: opts.notes, wasConfirmed: confirmed,
     organizationLogoUrl: logoUrl,
-  }), { platformDomain })
+  })
+  const guestEmail = await renderNotificationEmail(guestMessage, { platformDomain })
   const threadContext = await recordGuestCancellation(db, {
     submissionType: 'booking',
     submissionId: opts.bookingId,
     organizationId: opts.organizationId,
-    subject: guestCancelTitle,
+    subject: guestMessage.title,
     body: guestEmail.text,
     wasConfirmed: confirmed,
   })
@@ -1175,9 +1231,9 @@ export async function notifyBookingCancelled(
       ...opts,
       to: opts.email,
       template: 'booking_customer_cancelled',
-      title: guestCancelTitle,
+      title: guestMessage.title,
       payload,
-      email: { subject: guestCancelTitle, html: guestEmail.html, text: guestEmail.text },
+      email: { subject: guestMessage.title, html: guestEmail.html, text: guestEmail.text },
       delivery: threadDelivery(threadContext, 'status_update', 'email', 'booking_customer_cancelled', opts.email),
     }),
   ])
@@ -1543,9 +1599,10 @@ export async function notifyGuestCancellation(env: NotificationEnv, db: DbClient
   if (record.kind === 'booking') {
     await notifyBookingCancelled(env, db, {
       organizationId: request.organization_id, organizationName: organization?.name,
+      locale: request.payload.guest.locale,
       locationId: record.location_id, bookingId: request.id, guestName: request.payload.guest.name,
       email: request.payload.guest.email, guestPhone: request.payload.guest.phone,
-      productTitle: record.product_name!,
+      productId: record.product_id, productTitle: record.product_name!,
       startsAt: record.starts_at, timezone: record.timezone, partySize: record.party_size,
       notes: request.payload.notes, wasConfirmed: cancelled.wasConfirmed,
     })
@@ -1559,6 +1616,7 @@ export async function notifyGuestCancellation(env: NotificationEnv, db: DbClient
     const localTime = `${String(parts.hour).padStart(2, '0')}:${String(parts.minute).padStart(2, '0')}`
     await notifyReservationCancelled(env, db, {
       organizationId: request.organization_id, organizationName: organization?.name,
+      locale: request.payload.guest.locale,
       locationId: record.location_id, locationName: summary.locationTitle, reservationId: request.id,
       guestName: request.payload.guest.name, email: request.payload.guest.email, phone: request.payload.guest.phone,
       date: localDate, time: localTime,

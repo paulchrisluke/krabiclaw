@@ -42,6 +42,7 @@ test('a guest-thread email is sent once per event: replays send nothing, a faile
     await db.batch((await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))).map(statement => db.prepare(statement)))
     for (const statement of [
       "INSERT INTO organization (id, name, slug, subdomain) VALUES ('org-proof', 'Proof', 'proof', 'proof')",
+      "INSERT INTO organization_locales (id, organization_id, locale, is_source, status) VALUES ('proof-en', 'org-proof', 'en', 1, 'published')",
       "INSERT INTO user (id, name, email) VALUES ('user-proof', 'Proof Owner', 'owner@proof.example')",
       "INSERT INTO member (id, organizationId, userId, role) VALUES ('member-proof','org-proof','user-proof','owner')",
     ]) await db.prepare(statement).run()
@@ -219,6 +220,7 @@ test('a replayed status email sends its recorded content and refuses a supersede
     await db.batch((await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))).map(statement => db.prepare(statement)))
     for (const statement of [
       "INSERT INTO organization (id, name, slug, subdomain) VALUES ('org-status', 'Proof', 'proof', 'proof')",
+      "INSERT INTO organization_locales (id, organization_id, locale, is_source, status) VALUES ('status-en', 'org-status', 'en', 1, 'published')",
       "INSERT INTO user (id, name, email) VALUES ('user-status', 'Proof Owner', 'owner@proof.example')",
       "INSERT INTO business_locations (id, organization_id, slug, title) VALUES ('location-status', 'org-status', 'proof', 'Proof')",
     ]) await db.prepare(statement).run()
@@ -235,17 +237,29 @@ test('a replayed status email sends its recorded content and refuses a supersede
       env: { EMAIL_DELIVERY_MODE: 'provider', RESEND_API_KEY: 'controlled-provider-only', NUXT_PUBLIC_PLATFORM_DOMAIN: 'proof.example' },
     }
     const cancel = { ...input, action: 'cancel', idempotencyKey: 'cancel-status' }
-    assert.deepEqual(await executeGuestThreadOperation(db, cancel), { ok: false, status: 502, reason: 'delivery_failed', message: '503 application_error: Internal server error. We are unable to process your request right now, please try again later.' })
+    assert.deepEqual(await executeGuestThreadOperation(db, cancel), {
+      ok: false, status: 502, reason: 'delivery_failed',
+      message: 'Booking is cancelled, but the guest email failed. Retry with the same idempotency key.',
+      mutation_applied: true, operation_completed: false, request_id: 'booking-status', retry_with_same_idempotency_key: true,
+      record: {
+        kind: 'reservation', id: 'reservation-status', status: 'cancelled', party_size: 2,
+        starts_at: '2098-10-01T11:00:00.000Z', ends_at: '2098-10-01T13:00:00.000Z', timezone: 'Asia/Bangkok',
+        location_id: 'location-status', product_id: null, product_name: null, assigned_member_id: null,
+        organization_id: 'org-status', user_id: null,
+      },
+    })
     assert.equal(await db.prepare("SELECT status FROM reservations WHERE id='reservation-status'").first('status'), 'cancelled')
     assert.equal(requests.length, 1)
     const deliveryId = 'guest-thread-email:booking-status:cancel-status'
     assert.equal((await getDeliveryById(db, deliveryId))!.status, 'failed')
     const original = requests[0]!
-    // The recorded body is now rendered inside the shared email shell, so the
-    // sent copy contains it rather than being it.
-    assert.ok(original.text.includes('Your reservation for Oct 1, 2098, 6:00 PM for 2 guests has been cancelled.'))
-    assert.ok(original.html.includes('Your reservation for Oct 1, 2098, 6:00 PM for 2 guests has been cancelled.'))
-    // Replaying the cancel sends the recorded email again, unchanged.
+    const guestBody = 'Proof · Oct 1, 2098, 6:00 PM GMT+7 · 2 guests'
+    assert.equal(original.subject, 'Reservation Cancelled — Proof')
+    assert.ok(original.text.includes(guestBody), original.text)
+    assert.ok(original.html.includes(guestBody), original.html)
+    // A later display edit cannot change the copy already recorded for this
+    // cancellation. Retrying sends the exact first email again.
+    await db.prepare("UPDATE organization SET name='Changed after cancellation' WHERE id='org-status'").run()
     assert.equal((await executeGuestThreadOperation(db, cancel)).status, 502)
     assert.deepEqual(requests[1], original)
 
@@ -266,7 +280,7 @@ test('a replayed status email sends its recorded content and refuses a supersede
     assert.equal((await getDeliveryById(db, deliveryId))!.status, 'failed')
     const entry = await db.prepare('SELECT body, payload_json FROM activity_entries WHERE id = ?')
       .bind((await getDeliveryById(db, deliveryId))!.entry_id).first<{ body: string; payload_json: string }>()
-    assert.ok(original.text.includes(entry!.body))
+    assert.equal(entry!.body, guestBody)
     assert.equal(JSON.parse(entry!.payload_json).subject, original.subject)
   } finally {
     await runtime.dispose()
@@ -295,6 +309,7 @@ test('a booking move into a full session leaves the original booking exactly as 
     const laterEnd = at(60, 1)
     for (const statement of [
       "INSERT INTO organization (id, name, slug, subdomain) VALUES ('org-move', 'Move', 'move', 'move')",
+      "INSERT INTO organization_locales (id, organization_id, locale, is_source, status) VALUES ('move-en', 'org-move', 'en', 1, 'published')",
       "INSERT INTO user (id, name, email) VALUES ('user-move', 'Owner', 'owner@move.example')",
       "INSERT INTO member (id, organizationId, userId, role) VALUES ('member-move','org-move','user-move','owner')",
       "INSERT INTO business_locations (id,organization_id,slug,title,timezone) VALUES ('loc-move','org-move','move','Move','Asia/Bangkok')",

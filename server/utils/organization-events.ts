@@ -72,7 +72,7 @@ export function organizationEventQuery(event: OrganizationEvent): BatchQuery {
 }
 
 /** The scoped key a creation's audit row carries for its caller's idempotency key. */
-export function creationDedupeKey(kind: 'social_post' | 'article' | 'product', organizationId: string, idempotencyKey: string): string {
+export function creationDedupeKey(kind: 'social_post' | 'article' | 'product' | 'location', organizationId: string, idempotencyKey: string): string {
   return `create:${kind}:${organizationId}:${idempotencyKey}`
 }
 

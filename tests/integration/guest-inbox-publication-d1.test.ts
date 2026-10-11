@@ -151,12 +151,20 @@ test('inbox publication failures are visible and reservation receipts reflect cu
     assert.equal(removable.status, 201)
     await db.prepare("UPDATE requests SET payload_json=json_set(payload_json,'$.provenance.followups_completed',json('false')) WHERE id=?").bind(removable.body.request_id).run()
     await arm('delete')
-    await assert.rejects(create('delete-during-replay'), { statusCode: 404, message: 'Reservation operational receipt not found' })
+    await assert.rejects(create('delete-during-replay'), { statusCode: 404, message: 'The conversation has no matching booking or reservation', data: { code: 'REQUEST_OPERATIONAL_RECORD_NOT_FOUND', request_id: removable.body.request_id } })
     assert.equal(await db.prepare('SELECT id FROM reservations WHERE request_id=?').bind(removable.body.request_id).first('id'), null)
     await arm('delete-created')
-    await assert.rejects(create('delete-during-creation'), { statusCode: 404, message: 'Reservation operational receipt not found' })
+    let missingCreationRequestId: string | undefined
+    await assert.rejects(create('delete-during-creation'), (error: { statusCode?: number; message?: string; data?: { code?: string; request_id?: string } }) => {
+      assert.equal(error.statusCode, 404)
+      assert.equal(error.message, 'The conversation has no matching booking or reservation')
+      assert.equal(error.data?.code, 'REQUEST_OPERATIONAL_RECORD_NOT_FOUND')
+      missingCreationRequestId = error.data?.request_id
+      return true
+    })
     const missingCreation = await db.prepare("SELECT id FROM requests WHERE json_extract(payload_json,'$.provenance.idempotency_key')='delete-during-creation'").first<string>('id')
     assert.ok(missingCreation)
+    assert.equal(missingCreationRequestId, missingCreation)
     assert.equal(await db.prepare('SELECT id FROM reservations WHERE request_id=?').bind(missingCreation).first('id'), null)
   } finally {
     await runtime.dispose()

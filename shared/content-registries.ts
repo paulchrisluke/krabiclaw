@@ -1,4 +1,5 @@
 import { TENANT_PAGE_BLOCK_REGISTRY, type TenantPageBlockType, type TenantPageField } from '../utils/tenant-page-blocks'
+import { PRICING_CALCULATOR_SCHEMA } from '../utils/blawby-pricing'
 
 export const CONTENT_DOCUMENT_KINDS = [
   'page',
@@ -123,14 +124,14 @@ function fieldSchema(key: string, field: TenantPageField): Record<string, unknow
   if (field.kind === 'list') return { type: 'array', items: field.of ? fieldsSchema(field.of) : { type: 'string' } }
   if (field.kind === 'number') return { type: 'integer', ...(field.min !== undefined ? { minimum: field.min } : {}), ...(field.max !== undefined ? { maximum: field.max } : {}) }
   if (field.kind === 'reference' && key.endsWith('_ids')) return { type: 'array', items: { type: 'string', minLength: 1 }, uniqueItems: true }
-  if (field.kind === 'calculator') return { type: 'object' }
+  if (field.kind === 'calculator') return PRICING_CALCULATOR_SCHEMA
   return { type: field.required ? 'string' : ['string', 'null'], ...(field.options?.length ? { enum: [...field.options.map(option => option.value), ...(!field.required ? [null] : [])] } : {}), ...(field.kind === 'markdown' ? { description: 'Markdown.' } : {}) }
 }
 
 function fieldsSchema(fields: Readonly<Record<string, TenantPageField>>): Record<string, unknown> {
   const dataFields = Object.entries(fields).filter(([, field]) => field.kind !== 'media' && field.store !== 'level')
   return { type: 'object', properties: Object.fromEntries(dataFields.map(([key, field]) => [key, fieldSchema(key, field)])),
-    required: dataFields.filter(([, field]) => field.required && field.default === undefined && !field.availableWhen).map(([key]) => key), additionalProperties: false }
+    required: dataFields.filter(([, field]) => field.required && !field.availableWhen).map(([key]) => key), additionalProperties: false }
 }
 
 const blockDataDefinitions = Object.fromEntries(
@@ -142,16 +143,21 @@ export function contentBlockDataSchema(type: ContentBlockType) {
 }
 
 /** Include each referenced block contract once at the tool schema root. */
-export function contentBlockSchemaDefinitions(schema: unknown): Record<string, unknown> {
+export function contentBlockSchemaDefinitions(schema: unknown, knownDefinitions: Readonly<Record<string, unknown>> = {}): Record<string, unknown> {
   const definitions: Record<string, unknown> = {}
   function visit(value: unknown): void {
     if (Array.isArray(value)) { value.forEach(visit); return }
     if (!isRecord(value)) return
-    if (typeof value.$ref === 'string' && value.$ref.startsWith('#/$defs/content_')) {
+    if (typeof value.$ref === 'string' && value.$ref.startsWith('#/$defs/')) {
       const name = value.$ref.slice('#/$defs/'.length)
-      const definition = blockDataDefinitions[name]
-      if (!definition) throw new Error(`Unknown block schema ${name}`)
-      definitions[name] = definition
+      if (name.startsWith('content_') || Object.hasOwn(knownDefinitions, name)) {
+        const definition = Object.hasOwn(knownDefinitions, name) ? knownDefinitions[name] : blockDataDefinitions[name]
+        if (!definition) throw new Error(`Unknown block schema ${name}`)
+        if (!Object.hasOwn(definitions, name)) {
+          definitions[name] = definition
+          visit(definition)
+        }
+      }
     }
     Object.values(value).forEach(visit)
   }

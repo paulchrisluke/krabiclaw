@@ -20,6 +20,8 @@ import { publicTenantVisibilitySql } from '~/server/utils/public-base'
 import { refreshProductBusy } from '~/server/domain/member-scheduling'
 import { selectProductCollectionSiblings, type ProductCollectionSibling } from '~/utils/product-seo'
 import { getPublicTenantPageForPath } from '~/server/utils/public-tenant-pages'
+import { readStripeCheckoutSetup } from '~/server/utils/stripe-connect'
+import type { CloudflareEnv } from '~/server/utils/auth'
 
 interface PublicProductOrganizationRow {
   id: string
@@ -156,6 +158,7 @@ export async function loadPublicProductCollection(
   routeKind: ProductSurface,
   previewAuthorized: boolean,
   locationSlug?: string | null,
+  env?: CloudflareEnv,
 ): Promise<PublicProductCollection | null> {
   const resolved = await loadProductOrganization(db, organizationId, routeKind, previewAuthorized)
   if (!resolved) return null
@@ -169,11 +172,17 @@ export async function loadPublicProductCollection(
   if (locationSlug && locationRows.length !== 1) return null
   const locations = locationRows
   if (locationSlug && locations.length !== 1) return null
+  const kind = routeKind === 'experiences' ? 'experience' : routeKind === 'menu' ? 'dish' : undefined
+  let setup: ReturnType<typeof readStripeCheckoutSetup> | undefined
+  const paymentSetup = () => {
+    if (!env) throw new Error('The organization environment is required to assess paid booking readiness')
+    return setup ??= readStripeCheckoutSetup(db, organizationId, env)
+  }
   // Location publication is the public gate here: a product carried by the
   // site but withheld at this branch is absent, not shown greyed out.
   const perLocation = await Promise.all(locations.map(location =>
-    listLocationProducts(db, { organizationId: resolved.organization.id, locationId: location.id, publishedOnly: true })))
-  const onlineProducts = locationSlug ? [] : (await listOrganizationProducts(db, { organizationId, publishedOnly: true }))
+    listLocationProducts(db, { organizationId: resolved.organization.id, locationId: location.id, kind, publishedOnly: true, env, paymentSetup })))
+  const onlineProducts = locationSlug ? [] : (await listOrganizationProducts(db, { organizationId, kind, publishedOnly: true, env, paymentSetup }))
     .filter(product => Boolean(product.booking?.online_timezone || product.order_url))
   const seen = new Set<string>()
   // Collections and detail routes use the same explicit product kind.
@@ -202,7 +211,7 @@ export async function loadPublicProductDetail(
   const sourceLocale = await getSourceLocale(db, organizationId)
   locale ??= sourceLocale
   if (locale === sourceLocale) {
-    const collection = await loadPublicProductCollection(db, organizationId, routeKind, previewAuthorized, locationSlug)
+    const collection = await loadPublicProductCollection(db, organizationId, routeKind, previewAuthorized, locationSlug, env)
     const location = collection?.locations[0]
     if (!collection || !location) return null
     const found = collection.products.find(product => product.slug === productSlug)
@@ -241,7 +250,7 @@ export async function loadPublicProductDetail(
      WHERE organization_id = ?  AND id = ? AND status = 'active' LIMIT 1
   `, [resolved.organization.id, locationId])
   if (!sourceLocation) return null
-  const collection = await loadPublicProductCollection(db, organizationId, routeKind, previewAuthorized, sourceLocation.slug)
+  const collection = await loadPublicProductCollection(db, organizationId, routeKind, previewAuthorized, sourceLocation.slug, env)
   const location = collection?.locations[0]
   if (!collection || !location) return null
   // The Product is named by the same slug its English route names: a Product
@@ -295,7 +304,7 @@ export async function loadPublicExperienceDetail(
   requestedScope?: string | null,
 ): Promise<PublicProductDetail | null> {
   locale ??= await getSourceLocale(db, organizationId)
-  const collection = await loadPublicProductCollection(db, organizationId, 'experiences', previewAuthorized)
+  const collection = await loadPublicProductCollection(db, organizationId, 'experiences', previewAuthorized, undefined, env)
   if (!collection) return null
   const found = collection.products.find(product => product.slug === productSlug && isExperience(product))
   if (!found) return null
@@ -316,7 +325,7 @@ export async function loadPublicPageProductDetail(
   const page = await getPublicTenantPageForPath(env, db, organizationId, pagePath, { locale, preview: previewAuthorized })
   if (!page?.product_id) return null
   const product = await getProduct(db, organizationId, page.product_id)
-  const collection = await loadPublicProductCollection(db, organizationId, productSurfaceOf(null, product), previewAuthorized)
+  const collection = await loadPublicProductCollection(db, organizationId, productSurfaceOf(null, product), previewAuthorized, undefined, env)
   const found = collection?.products.find(product => product.id === page.product_id)
   if (!collection || !found) return null
   return projectPublicOffering(env, db, collection, found, locale, requestedScope, product.page?.path ?? pagePath)
@@ -386,15 +395,26 @@ export async function publicProductDetailPayload(db: DbClient, env: CloudflareEn
 }
 
 export async function loadPublicProductApiCollection(
+  env: CloudflareEnv,
   db: DbClient,
   organizationId: string,
   previewAuthorized: boolean,
   locationSlug?: string | null,
+  locale?: string,
 ): Promise<PublicProductCollection | null> {
   const organization = await queryFirst<{ vertical: string }>(db, `SELECT vertical FROM organization WHERE id = ? AND ${publicTenantVisibilitySql('organization', previewAuthorized)} LIMIT 1`, [organizationId])
   const presentation = organization ? resolveProductPresentation(organization.vertical) : null
   if (!presentation) return null
-  return loadPublicProductCollection(db, organizationId, presentation.locationCollectionSegment, previewAuthorized, locationSlug)
+  const collection = await loadPublicProductCollection(db, organizationId, presentation.locationCollectionSegment, previewAuthorized, locationSlug, env)
+  if (!collection) return null
+  if (!locale || locale === await getSourceLocale(db, organizationId)) return collection
+  const localizations = await loadExactPublicLocalizations(env, db, organizationId, locale)
+  return {
+    ...collection,
+    products: projectExactLocalizedCollection('product', collection.products, localizations),
+    locations: projectExactLocalizedCollection('business_location', collection.locations, localizations),
+    collections: projectExactLocalizedCollection('collection', collection.collections, localizations),
+  }
 }
 
 export async function loadPublicProductApiDetail(

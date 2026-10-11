@@ -104,6 +104,8 @@ export function useOnboardingDraft() {
       const res = await applicationFetch<Record<string, unknown>>('/api/dashboard/onboarding/drafts/active', {
         method: 'POST',
         body: {
+          draftId: state.value.draftId ?? undefined,
+          expectedUpdatedAt: state.value.draftRevision,
           sourceType: state.value.source ?? 'manual',
           placeId: state.value.placeId,
           name: state.value.details.name.trim(),
@@ -114,12 +116,13 @@ export function useOnboardingDraft() {
         },
         validate: (value): value is Record<string, unknown> => isRecord(value),
       })
-      if (res.success !== true || typeof res.draftId !== 'string' || typeof res.organizationId !== 'string'
+      if (res.success !== true || typeof res.draftId !== 'string' || typeof res.updatedAt !== 'string' || typeof res.organizationId !== 'string'
         || typeof res.previewToken !== 'string' || typeof res.draftName !== 'string'
         || typeof res.subdomainCandidate !== 'string') {
         throw new Error(typeof res.error === 'string' ? res.error : 'Could not save your answers. Please try again.')
       }
       state.value.draftId = res.draftId
+      state.value.draftRevision = res.updatedAt
       state.value.preview = {
         draftId: res.draftId, organizationId: res.organizationId, previewToken: res.previewToken,
         draftName: res.draftName, subdomainCandidate: res.subdomainCandidate,
@@ -171,7 +174,7 @@ export function useOnboardingDraft() {
     try {
       const res = await applicationFetch<Record<string, unknown>>(
         `/api/dashboard/onboarding/drafts/${draftId}/activate`,
-        { method: 'POST', validate: (value): value is Record<string, unknown> => isRecord(value) },
+        { method: 'POST', body: { expectedUpdatedAt: state.value.draftRevision }, validate: (value): value is Record<string, unknown> => isRecord(value) },
       )
       if (res.success !== true) {
         throw new Error(typeof res.error === 'string' ? res.error : 'Failed to create your organization. Please try again.')
@@ -284,13 +287,20 @@ export function useOnboardingDraft() {
     }
   }
 
+  function restoredImage(value: unknown): typeof state.value.brand.logoImage {
+    if (value === null) return null
+    if (!isRecord(value) || typeof value.draftAssetId !== 'string' || typeof value.cloudflareImageId !== 'string' || typeof value.publicUrl !== 'string') throw new Error('Saved website image is unavailable')
+    return value as NonNullable<typeof state.value.brand.logoImage>
+  }
+
   /** Read the unfinished draft back into the flow. Returns false when there is none. */
   async function restore(): Promise<boolean> {
     const res = await applicationFetch<Record<string, unknown>>('/api/dashboard/onboarding/drafts/active', {
       validate: (value): value is Record<string, unknown> => isRecord(value),
     })
     const draft = isRecord(res.draft) ? res.draft : null
-    if (!draft || typeof draft.draftId !== 'string') return false
+    if (!draft) return false
+    if (typeof draft.draftId !== 'string' || typeof draft.updatedAt !== 'string') throw new Error('Saved website draft identity and revision are unavailable')
     const details = isRecord(draft.details) ? draft.details : {}
     const config = isRecord(draft.config) ? draft.config : {}
     const text = (value: unknown) => typeof value === 'string' ? value : ''
@@ -301,7 +311,11 @@ export function useOnboardingDraft() {
     const openingHours = parseOpeningHours(details.openingHours as OpeningHours)
     const specialHours = parseSpecialHours(details.specialHours)
 
+    const logoImage = restoredImage(draft.logoImage)
+    const heroImage = restoredImage(draft.heroImage)
+
     state.value.draftId = draft.draftId
+    state.value.draftRevision = draft.updatedAt
     state.value.vertical = draft.vertical === 'experience' || draft.vertical === 'service' ? draft.vertical : 'restaurant'
     state.value.source = draft.sourceType === 'google_places' ? 'google_places' : 'manual'
     state.value.placeId = typeof draft.placeId === 'string' && draft.placeId ? draft.placeId : null
@@ -323,6 +337,10 @@ export function useOnboardingDraft() {
     state.value.brand.paletteStarter = text(config.palette_starter) || null
     state.value.brand.fontPreset = isOrganizationFontPreset(config.font_preset) ? config.font_preset : null
     state.value.brand.logoShape = (LOGO_SHAPES as readonly unknown[]).includes(config.logo_shape) ? config.logo_shape as LogoShape : null
+    state.value.brand.logoImage = logoImage
+    state.value.brand.heroImage = heroImage
+    state.value.brand.logoPreviewUrl = logoImage?.publicUrl ?? ''
+    state.value.brand.heroPreviewUrl = heroImage?.publicUrl ?? ''
     state.value.brand.logoNote = text(config.draft_logo_note)
     state.value.brand.heroPhotoNote = text(config.draft_hero_photo_note)
     state.value.brand.heroHeadline = text(config.draft_hero_headline)

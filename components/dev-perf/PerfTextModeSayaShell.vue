@@ -6,7 +6,7 @@
     </p>
     <div class="dev-perf-shell-frame saya-theme">
       <UTheme :ui="{}">
-        <LazySayaHeader :organization="null" :locations="[]" :has-products="false" :has-bookable-products="false" />
+        <LazySayaHeader :organization="null" :locations="[]" :has-products="false" :has-bookable-products="false" :has-reservations="false" />
         <main class="dev-perf-shell-body">
           <h3>Static body</h3>
           <p>No production tenant page content is rendered here.</p>
@@ -20,6 +20,7 @@
           :config="{}"
           :has-products="false"
           :has-bookable-products="false"
+          :has-reservations="false"
         />
       </UTheme>
     </div>

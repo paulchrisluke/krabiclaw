@@ -12,10 +12,10 @@ import type {
   GuestThreadSubmissionType,
 } from '~/server/domain/guest-threads/types'
 import type { GuestThreadMailbox } from '~/server/domain/guest-threads/mailbox'
-import { requireOrganizationAccess } from '~/server/utils/location-access'
-import { assertMemberScope, memberAccessPrincipal, assertRoleAllows } from '~/server/utils/member-access'
+import { requireOrganizationMembership } from '~/server/utils/location-access'
+import { assertAssignedBookingAccess, memberAccessPrincipal, assertRoleAllows, roleAllows, type MemberAccessPrincipal } from '~/server/utils/member-access'
 import { publishNotificationInvalidation } from '~/server/cloudflare/guest-inbox-events'
-import { getDashboardContext } from '~/server/utils/dashboard-context'
+import { getDashboardMemberContext } from '~/server/utils/dashboard-context'
 import { acknowledgeThreadNotifications } from '~/server/utils/notification-acknowledgement'
 import { getNotificationAccess } from '~/server/utils/notification-access'
 
@@ -100,11 +100,9 @@ export async function loadDashboardGuestThreads(
   organizationId: string,
   query: DashboardGuestThreadListQuery,
 ) {
-  const { env, db, session, organization } = await requireOrganizationAccess(event, organizationId)
+  const { env, db, session, organization } = await requireOrganizationMembership(event, organizationId)
   const principal = memberAccessPrincipal(organization.membership, { env, event })
-  if (query.locationId) {
-    await assertMemberScope(db, { ...principal, locationId: query.locationId })
-  }
+  if (!await roleAllows({ ...principal, permissions: { operations: ['read'] } })) await assertRoleAllows({ ...principal, permissions: { operations: ['assigned'] } })
   return listDashboardGuestThreadsForPrincipal(db, organizationId, { principal, userId: session.user.id, query })
 }
 
@@ -113,12 +111,12 @@ export async function loadDashboardGuestThread(
   organizationId: string,
   threadId: string,
 ) {
-  const { db, env, organization } = await requireOrganizationAccess(event, organizationId)
+  const { db, env, organization } = await requireOrganizationMembership(event, organizationId)
   const thread = await getGuestRequest(db, threadId, organizationId)
   if (!thread) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Thread not found' })
   }
-  await assertMemberScope(db, { ...memberAccessPrincipal(organization.membership, { env, event }), locationId: thread.location_id })
+  await assertAssignedBookingAccess(db, { ...memberAccessPrincipal(organization.membership, { env, event }), requestId: thread.id })
 
   const detail = await getGuestThreadDetail(db, threadId, organizationId)
   if (!detail) {
@@ -143,14 +141,14 @@ export async function loadOrganizationGuestThreads(
   query: OrganizationGuestThreadListQuery,
   scope?: { orgSlug?: string | null },
 ) {
-  const { db, env, organization } = await getDashboardContext(event, {
+  const { db, env, organization } = await getDashboardMemberContext(event, {
     requireOrganization: true,
     organizationSlug: scope?.orgSlug,
   })
   const userId = organization.userId
   // The rows are filtered by location scope below, so this only asks whether
   // the role takes part in guest operations at all.
-  await assertRoleAllows({ organizationId: organization.id, role: organization.role, permissions: { operations: ['read'] } })
+  if (!await roleAllows({ organizationId: organization.id, role: organization.role, permissions: { operations: ['read'] } })) await assertRoleAllows({ organizationId: organization.id, role: organization.role, permissions: { operations: ['assigned'] } })
 
   // The one principal. Assembling a second shape here — a role, an id and a
   // team list the caller had gathered — is what let this list scope its rows

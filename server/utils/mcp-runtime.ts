@@ -13,7 +13,7 @@ export interface McpToolMeta {
 
 export interface McpSurfaceRuntimeConfig {
   authOptions: RequireMcpUserOptions
-  resourceMetadataUrl: (_baseUrl: string) => string
+  resourceUrl: (_baseUrl: string) => string
   authDescription: string
   authRequiredText: string
   logEvent: (_event: H3Event, _fields: Record<string, unknown>) => void
@@ -30,11 +30,11 @@ export interface McpSurfaceRuntimeConfig {
  * the caller proceeds to read and dispatch the real request body.
  */
 export async function resolveMissingMcpCredential(
-  event: H3Event, config: Pick<McpSurfaceRuntimeConfig, 'resourceMetadataUrl' | 'authDescription' | 'authRequiredText' | 'logEvent' | 'resolveToolMeta'>, baseUrl: string, ): Promise<
+  event: H3Event, config: Pick<McpSurfaceRuntimeConfig, 'resourceUrl' | 'authDescription' | 'authRequiredText' | 'logEvent' | 'resolveToolMeta'>, baseUrl: string, ): Promise<
   | { handled: false }
   | { handled: true; requestId: JsonRpcId | undefined; requestMethod: string | undefined; requestToolName: string | undefined; response: unknown }
 > {
-  if ((event.req.headers.get('authorization'))?.startsWith('Bearer ') || (event.req.headers.get('cookie'))) {
+  if (event.req.headers.get('authorization') || event.req.headers.get('cookie')) {
     return { handled: false }
   }
 
@@ -48,7 +48,7 @@ export async function resolveMissingMcpCredential(
     : undefined
 
   const authChallenge = buildMcpOAuthChallenge({
-    resourceMetadataUrl: config.resourceMetadataUrl(baseUrl), description: config.authDescription, })
+    resourceUrl: config.resourceUrl(baseUrl), description: config.authDescription, })
 
   if (requestMethod === 'tools/call') {
     const toolMeta = config.resolveToolMeta(requestToolName ?? null)

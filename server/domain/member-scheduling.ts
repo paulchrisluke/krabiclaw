@@ -157,7 +157,10 @@ export async function refreshMemberBusy(db: DbClient, env: CloudflareEnv, member
 }
 export async function refreshProductBusy(db: DbClient,env:CloudflareEnv,organizationId:string,productId:string) {
  const members=await queryAll<{id:string}>(db,`SELECT assigned_member_id id FROM product_booking_configs WHERE organization_id=? AND product_id=? AND scheduling_mode='provider' AND assigned_member_id IS NOT NULL UNION SELECT m.id FROM product_booking_configs c JOIN team t ON t.id=c.assigned_team_id AND t.organizationId=c.organization_id JOIN teamMember tm ON tm.teamId=t.id JOIN member m ON m.userId=tm.userId AND m.organizationId=t.organizationId WHERE c.organization_id=? AND c.product_id=? AND c.scheduling_mode='provider' UNION SELECT assigned_member_id FROM product_sessions WHERE organization_id=? AND product_id=? AND assigned_member_id IS NOT NULL AND ends_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')`,[organizationId,productId,organizationId,productId,organizationId,productId])
- for(const member of members) await refreshMemberBusy(db,env,member.id)
+ for(const member of members) {
+  const refreshed=await refreshMemberBusy(db,env,member.id)
+  if(refreshed?.error)throw new HTTPError({statusCode:502,message:refreshed.error,data:{code:'MEMBER_CALENDAR_REFRESH_FAILED'}})
+ }
 }
 export async function memberSchedulingList(actor: SchedulingActor) {
  const membership=await resolveOrganizationMembership(actor.env,{organizationId:actor.organizationId,userId:actor.userId})

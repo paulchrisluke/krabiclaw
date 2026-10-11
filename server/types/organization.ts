@@ -5,6 +5,7 @@ import type { CurrencyCode } from '~/shared/currencies'
 import type { OrganizationFontPreset } from '~/shared/organization-fonts'
 import type { SitePalette, SitePalettePatch } from '~/shared/site-palette'
 import type { LogoPresentation } from '~/shared/media-placement-contract'
+import type { PublicCompliance } from '~/types/blawby'
 
 export type { CurrencyCode }
 
@@ -35,6 +36,8 @@ export interface OrganizationSettings {
   announcement: OrganizationAnnouncement | null
   media: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string; presentation?: LogoPresentation | null }>
   contact_email: string | null
+  address_visibility?: PublicCompliance['address_visibility']
+  contact_form_enabled?: boolean
   /** What the site renders: its own palette, or its template's. Null on the platform template, whose palette is fixed. */
   palette: SitePalette | null
   palette_source: 'custom' | 'template' | null
@@ -60,6 +63,7 @@ export interface UpdateOrganizationSettingsRequest {
   // patch: the CMS leaf edits every field together, the same way the old banner did.
   announcement?: { headline: string; description?: string | null; cta_label?: string | null; cta_url?: string | null; dismissible?: boolean; enabled?: boolean } | null
   contact_email?: string
+  address_visibility?: PublicCompliance['address_visibility']
   /** A starter and/or colors to change, or null to return to the template's palette. */
   palette?: SitePalettePatch | null
   font_preset?: OrganizationFontPreset

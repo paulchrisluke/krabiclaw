@@ -1,9 +1,11 @@
 <template>
-  <AppSection v-if="title || description || (url && label)" bg="default" padding="lg">
+  <AppSection v-if="title || description || priceLine || notice || (url && label)" bg="default" padding="lg">
     <div class="flex flex-col gap-8 md:flex-row md:items-center md:justify-between">
       <div class="max-w-3xl">
         <h2 v-if="title" class="saya-display saya-italic text-5xl leading-none text-default">{{ title }}</h2>
         <div v-if="description" class="mt-5 max-w-2xl text-sm leading-7 text-muted">{{ description }}</div>
+        <p v-if="priceLine" class="mt-5 text-sm leading-7 text-muted">{{ priceLine }}</p>
+        <p v-if="notice" class="mt-3 max-w-2xl text-sm leading-7 text-muted">{{ notice }}</p>
       </div>
       <div class="flex flex-wrap gap-4">
         <NuxtLink
@@ -35,6 +37,8 @@ const title = computed(() => blockText(props.block.data.title))
 const description = computed(() => blockText(props.block.data.description))
 const label = computed(() => blockText(props.block.data.label))
 const url = computed(() => blockText(props.block.data.url))
+const priceLine = computed(() => props.block.type === 'booking_cta' ? blockText(props.block.data.price_line) : '')
+const notice = computed(() => props.block.type === 'booking_cta' ? blockText(props.block.data.notice) : '')
 
 /** An internal route takes the visitor's locale; an absolute URL is left alone. */
 function route(url: string) {

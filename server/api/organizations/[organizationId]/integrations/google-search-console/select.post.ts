@@ -46,7 +46,7 @@ export default defineHandler(async (event) => {
     }
 
     // Only a URL Krabiclaw actually serves can be verified by serving a tag.
-    const ownUrl = await organizationPublicUrl(db, organization.id)
+    const ownUrl = await organizationPublicUrl(env, db, organization.id)
     if (!ownUrl || requested !== ownUrl) {
       return jsonResponse({
         error: 'Krabiclaw can only verify this website\'s own address. Add the property in Search Console first, then choose it here.',

@@ -1,9 +1,10 @@
 import { DurableObject } from 'cloudflare:workers'
 import { isDashboardInvalidation, type DashboardInvalidation } from '../../../shared/dashboard-invalidations'
+import { queryFirst } from '~/server/db'
+import { assignedBookingSql, resolveOrganizationMembership, roleAllows } from '~/server/utils/member-access'
+import type { CloudflareEnv } from '~/server/utils/auth'
 
-interface GuestInboxHubEnv {
-  GUEST_INBOX_HUBS?: DurableObjectNamespace
-}
+type GuestInboxHubEnv = CloudflareEnv
 
 interface InboxSocketAttachment {
   organizationId: string
@@ -22,13 +23,15 @@ function isSocketAttachment(value: unknown): value is InboxSocketAttachment {
     && typeof value.connectedAt === 'string'
 }
 
-function canReceive(attachment: InboxSocketAttachment, event: DashboardInvalidation): boolean {
+async function canReceive(env: GuestInboxHubEnv, attachment: InboxSocketAttachment, event: DashboardInvalidation): Promise<boolean> {
   if (attachment.organizationId !== event.organizationId) return false
   if ('targetUserId' in event && event.targetUserId && event.targetUserId !== attachment.userId) return false
-  // Every member of a tenant is organization-wide, so reaching the tenant is
-  // the whole of the decision. This used to also carry the location teams a
-  // scoped editor held, which no role has any more.
-  return true
+  const membership = await resolveOrganizationMembership(env, { organizationId: attachment.organizationId, userId: attachment.userId })
+  if (!membership) return false
+  if (await roleAllows({ ...membership, permissions: { operations: ['read'] } })) return true
+  if (!await roleAllows({ ...membership, permissions: { operations: ['assigned'] } })) return false
+  if ('targetUserId' in event) return event.targetUserId === attachment.userId
+  return Boolean(await queryFirst(env.DB, `SELECT b.id FROM bookings b WHERE b.organization_id = ? AND b.request_id = ? AND (${assignedBookingSql('b')})`, [attachment.organizationId, event.threadId, attachment.userId]))
 }
 
 export class GuestInboxHubObject extends DurableObject<GuestInboxHubEnv> {
@@ -38,6 +41,7 @@ export class GuestInboxHubObject extends DurableObject<GuestInboxHubEnv> {
   }
 
   override async fetch(request: Request): Promise<Response> {
+    if (!this.env.DB || !this.env.BETTER_AUTH_SECRET) return new Response('Dashboard realtime configuration is incomplete', { status: 503 })
     const url = new URL(request.url)
     if (url.pathname === '/broadcast' && request.method === 'POST') {
       return await this.handleBroadcast(request)
@@ -105,7 +109,7 @@ export class GuestInboxHubObject extends DurableObject<GuestInboxHubEnv> {
     const failures: string[] = []
     for (const socket of this.ctx.getWebSockets()) {
       const attachment: unknown = socket.deserializeAttachment()
-      if (!isSocketAttachment(attachment) || !canReceive(attachment, event)) continue
+      if (!isSocketAttachment(attachment) || !await canReceive(this.env, attachment, event)) continue
       eligible += 1
       try {
         socket.send(encoded)

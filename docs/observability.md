@@ -187,9 +187,8 @@ The existing argument/result columns then contain `{ "_diagnostic": true,
 "data": ... }`: tool arguments and the returned MCP result, including its model
 text, structured data and failure result. Actual errors replace the fixed label.
 The RPC request ID, Cloudflare ray, user and authorized site identify each call.
-Arguments also carry `_request`: host-supplied request metadata, user agent and
-the Worker request ID, without authentication headers.
-Credentials, private `_meta`, and URL query strings are redacted. Each payload is
+Raw `_request` host metadata and user-agent text are omitted.
+Credentials, private `_meta`, and URL query strings and fragments are redacted. Each payload is
 bounded at 256,000 characters; oversized payloads explicitly record truncation
 and their original length. These diagnostic rows expire after seven days via the
 same daily cleanup, even after the flag is disabled. Normal operational rows

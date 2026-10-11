@@ -1,4 +1,4 @@
-import type { GuestRequest } from '~/server/domain/requests'
+import type { GuestRequest, ThreadOperationalRecord } from '~/server/domain/requests'
 import type { MemberAccessPrincipal } from '~/server/utils/member-access'
 import type { GuestThreadMailbox } from './mailbox'
 
@@ -176,6 +176,7 @@ export interface GuestThreadDetailViewModel {
   locationLabel: string | null
   conversationState: ConversationState | null
   source: ThreadDetailSourceModel
+  operationalRecord: Pick<ThreadOperationalRecord, 'id' | 'kind' | 'status' | 'starts_at' | 'ends_at' | 'timezone' | 'party_size'> | null
   entries: GuestThreadEntryViewModel[]
   /** What can be done to the booking. Where the conversation lives is below, separately. */
   availableActions: string[]

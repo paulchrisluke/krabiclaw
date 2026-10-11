@@ -348,7 +348,7 @@ const handleTenantContact = async () => {
   try {
     submitted = await publicApiMutation<{ success: true; measurement?: SubmissionMeasurement }>(`/api/public/contact`, {
       method: 'POST',
-      body: { ...tenantForm.value, page_event_id: await pageEventId() },
+      body: { ...tenantForm.value, locale: locale.value, page_event_id: await pageEventId() },
       validate: (value): value is { success: true; measurement?: SubmissionMeasurement } => isRecord(value) && value.success === true,
     })
   } catch {

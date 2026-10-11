@@ -59,7 +59,7 @@ export async function cleanupOrganizationBeforeDelete(
  */
 export type AbandonedDraftTenantOutcome =
   | { removed: 'organization' | 'nothing' }
-  | { refused: 'organization_is_live' | 'not_owner' | 'delete_incomplete' }
+  | { refused: 'organization_is_live' | 'not_owner' | 'delete_incomplete' | 'draft_changed' }
 
 /**
  * Abandoning an onboarding draft is an internal token-scoped cleanup rather
@@ -68,21 +68,24 @@ export type AbandonedDraftTenantOutcome =
  */
 export async function deleteAbandonedDraftTenant(
   env: CloudflareEnv,
-  claim: { organizationId: string; subdomain: string; userId: string },
+  claim: { draftId: string; updatedAt: string; organizationId: string; subdomain: string; userId: string },
 ): Promise<AbandonedDraftTenantOutcome> {
   const db = env.DB
   const { organizationId, subdomain, userId } = claim
 
+  const draft = await queryFirst<{ id: string; subdomain: string | null; onboarding_status: string }>(db, 'SELECT id, subdomain, onboarding_status FROM organization WHERE id = ? LIMIT 1', [organizationId])
+  if (!draft) return { removed: 'nothing' }
+  if (draft.subdomain !== null && draft.subdomain !== subdomain) return { refused: 'draft_changed' }
+  if (draft.onboarding_status === 'active') return { refused: 'organization_is_live' }
+  if (!['pending', 'failed'].includes(draft.onboarding_status)) return { refused: 'draft_changed' }
   const membership = await resolveOrganizationMembership(env, { organizationId, userId })
   if (membership?.role !== 'owner') return { refused: 'not_owner' }
-
-  const draft = await queryFirst<{ id: string; onboarding_status: string }>(db, `
-    SELECT id, onboarding_status FROM organization WHERE id = ? AND subdomain = ? LIMIT 1
-  `, [organizationId, subdomain])
-  if (!draft) return { removed: 'nothing' }
-  if (draft.onboarding_status === 'active') return { refused: 'organization_is_live' }
+  const abandoned = await queryFirst<{ id: string }>(db, "SELECT id FROM onboarding_drafts WHERE id = ? AND user_id = ? AND organization_id = ? AND subdomain_candidate = ? AND status = 'abandoned' AND updated_at = ?", [claim.draftId, userId, organizationId, subdomain, claim.updatedAt])
+  if (!abandoned) return { refused: 'draft_changed' }
 
   await cleanupOrganizationBeforeDelete(env, organizationId)
+  const current = await queryFirst<{ id: string }>(db, "SELECT d.id FROM onboarding_drafts d JOIN organization o ON o.id = d.organization_id WHERE d.id = ? AND d.user_id = ? AND d.organization_id = ? AND d.status = 'abandoned' AND d.updated_at = ? AND o.onboarding_status IN ('pending', 'failed')", [claim.draftId, userId, organizationId, claim.updatedAt])
+  if (!current) return { refused: 'draft_changed' }
   const adapter = await organizationAdapter(env)
   await adapter.deleteOrganization(organizationId)
 

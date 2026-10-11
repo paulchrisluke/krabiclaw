@@ -86,8 +86,11 @@ test('public experiences require a configured booking flow and retain full or te
     const legacy = await createProduct(db, { organizationId: ORG, actor: ACTOR, product: {
       kind: 'experience', name: 'Omakase', active: true, variants: [{ name: 'Seat', prices: [{ unit_amount: 130000, currency: 'THB' }] }],
     }, publication: { published: false } })
-    await setProductLocation(db, { organizationId: ORG, productId: legacy.id, locationId: 'loc-a', active: true, published: true, actor: ACTOR })
+    await assert.rejects(setProductLocation(db, { organizationId: ORG, productId: legacy.id, locationId: 'loc-a', active: true, published: true, actor: ACTOR }),
+      { statusCode: 409, data: { code: 'EXPERIENCE_BOOKING_INCOMPLETE', product_id: legacy.id, location_id: 'loc-a', missing: ['booking', 'booking.schedule'] } })
     // Imported legacy state can have a published duration without a schedule.
+    await db.prepare("INSERT INTO product_locations (organization_id, product_id, location_id, active, published, created_by, updated_by) VALUES (?, ?, 'loc-a', 1, 1, ?, ?)")
+      .bind(ORG, legacy.id, ACTOR.actorId, ACTOR.actorId).run()
     await db.prepare('INSERT INTO product_booking_configs (product_id, organization_id, duration_minutes, default_capacity, created_by, updated_by) VALUES (?, ?, 60, 8, ?, ?)')
       .bind(legacy.id, ORG, ACTOR.actorId, ACTOR.actorId).run()
     await db.prepare('UPDATE product_publications SET published = 1 WHERE organization_id = ? AND product_id = ?').bind(ORG, legacy.id).run()

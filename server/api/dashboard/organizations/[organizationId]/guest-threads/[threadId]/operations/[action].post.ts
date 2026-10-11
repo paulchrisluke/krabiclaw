@@ -7,8 +7,8 @@ import { getRouterParam, readBody } from 'nitro/h3'
 // flows through here. The inbox must never call source-specific editor endpoints
 // directly.
 import { jsonResponse } from '~/server/utils/api-response'
-import { requireOrganizationAccess } from '~/server/utils/location-access'
-import { assertMemberScope, memberAccessPrincipal } from '~/server/utils/member-access'
+import { requireOrganizationMembership } from '~/server/utils/location-access'
+import { assertAssignedBookingAccess, memberAccessPrincipal, roleAllows } from '~/server/utils/member-access'
 import { getCloudflareWaitUntil } from '~/server/utils/mcp-route-helpers'
 import { getGuestThreadDetail } from '~/server/domain/guest-threads/detail'
 import { executeGuestThreadOperation, GUEST_THREAD_ACTIONS } from '~/server/domain/guest-threads/operations'
@@ -21,11 +21,11 @@ export default defineHandler(async (event) => {
   if (!organizationId || !threadId || !action) return jsonResponse({ error: 'Missing params' }, { status: 400 })
   if (!GUEST_THREAD_ACTIONS.has(action)) return jsonResponse({ error: `Unknown action "${action}"` }, { status: 400 })
 
-  const { env, db, session, organization } = await requireOrganizationAccess(event, organizationId)
+  const { env, db, session, organization } = await requireOrganizationMembership(event, organizationId)
 
   const thread = await getGuestRequest(db, threadId, organizationId)
   if (!thread) return jsonResponse({ error: 'Thread not found' }, { status: 404 })
-  await assertMemberScope(db, { ...memberAccessPrincipal(organization.membership, { env, event }), locationId: thread.location_id })
+  await assertAssignedBookingAccess(db, { ...memberAccessPrincipal(organization.membership, { env, event }), requestId: thread.id })
 
   // A reply with photos arrives as a form, its photos as `photos` parts in the
   // order they were chosen; every other operation is JSON.
@@ -52,6 +52,7 @@ export default defineHandler(async (event) => {
     organizationId,
     action,
     actorUserId: session.user.id,
+    financialWritesAllowed: await roleAllows({ ...organization.membership, permissions: { payments: ['refund'] } }),
     body: field('body'),
     photos,
     idempotencyKey,

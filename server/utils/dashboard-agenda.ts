@@ -3,7 +3,7 @@ import { HTTPError } from 'nitro'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { resolveOrganizationCmsCapabilities } from '~/server/utils/cms-capabilities'
-import type { ResolvedMembership } from '~/server/utils/member-access'
+import { assignedBookingSql, roleAllows, assertRoleAllows, type ResolvedMembership } from '~/server/utils/member-access'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { loadOwnerPictures } from '~/server/notifications/hero'
 import { REQUEST_CURRENT_BUYER_SQL } from '~/server/domain/requests'
@@ -166,6 +166,10 @@ export async function listAgenda(
   assertCalendarDate(query.to)
   if (query.from > query.to) throw new Error('from must not be after to')
 
+  const staff = query.principal && !await roleAllows({ ...query.principal.membership, permissions: { operations: ['read'] } })
+    ? query.principal.membership : null
+  if (staff) await assertRoleAllows({ ...staff, permissions: { operations: ['assigned'] } })
+
   const capabilityOrganizations = await queryAll<CapabilityOrganizationRow>(db, `
     SELECT s.id, s.name, s.subdomain, s.vertical, s.theme_id
     FROM organization s
@@ -173,11 +177,11 @@ export async function listAgenda(
     ORDER BY s.id
   `, [scope.buyerUserId ?? scope.organizationId])
   // A buyer has visits, not a publishing calendar.
-  const available = new Set<AgendaKind>(scope.buyerUserId ? [] : ['post'])
+  const available = new Set<AgendaKind>(scope.buyerUserId || staff ? [] : ['post'])
   for (const organization of capabilityOrganizations) {
     const { capabilities } = resolveOrganizationCmsCapabilities(organization.vertical, organization.theme_id)
     const features = new Set([...capabilities.pages.map(page => page.feature), ...capabilities.managers.map(manager => manager.id)])
-    if (features.has('reservations')) available.add('reservation')
+    if (!staff && features.has('reservations')) available.add('reservation')
     // A class's schedule is the product's own; the calendar carries who is
     // coming to it, not every session it could run.
     if (features.has('products')) available.add('booking')
@@ -191,7 +195,7 @@ export async function listAgenda(
       queryFirst(db, `SELECT 1 FROM reservations WHERE organization_id IN (SELECT value FROM json_each(?)) LIMIT 1`, [ids]),
     ])
     if (bookable) available.add('booking')
-    if (reserving) available.add('reservation')
+    if (!staff && reserving) available.add('reservation')
   }
   const availableKinds = AGENDA_KINDS.filter(kind => available.has(kind))
   const requestedKinds = new Set((query.kinds?.length ? query.kinds : availableKinds).filter(kind => available.has(kind)))
@@ -235,7 +239,7 @@ export async function listAgenda(
   if (requestedKinds.has('reservation')) sourceQueries.push(queryAll(db, `${commonSelect('r', 'reservation', `agenda_reservation.starts_at, agenda_reservation.ends_at,
     json_extract(r.payload_json, '$.guest.name') AS title, printf('%d%s guests', agenda_reservation.party_size, CASE json_extract(r.payload_json, '$.party_size_is_minimum') WHEN 1 THEN '+' ELSE '' END) AS subtitle, agenda_reservation.party_size, agenda_reservation.status`, {
     joins: 'JOIN reservations agenda_reservation ON agenda_reservation.request_id = r.id',
-  })} AND agenda_reservation.starts_at BETWEEN ? AND ?`, [...params(), broadFrom, broadTo]))
+  })} AND agenda_reservation.status <> 'cancelled' AND agenda_reservation.starts_at BETWEEN ? AND ?`, [...params(), broadFrom, broadTo]))
   if (requestedKinds.has('booking')) sourceQueries.push(queryAll(db, `${commonSelect('b', 'booking', `agenda_session.starts_at, agenda_session.ends_at,
     json_extract(b.payload_json, '$.guest.name') AS title, printf('%d guests', agenda_booking.party_size) AS subtitle, agenda_booking.party_size AS party_size, agenda_booking.status`, {
     joins: `JOIN bookings agenda_booking ON agenda_booking.request_id = b.id
@@ -244,7 +248,7 @@ export async function listAgenda(
     assignedMember:'agenda_booking.assigned_member_id',
     pictureOwner: { type: `'product'`, id: 'agenda_booking.product_id' },
     resourceTitle: 'COALESCE(agenda_product.name, l.title, s.name, s.subdomain, s.id)',
-  })} AND agenda_session.starts_at BETWEEN ? AND ?`, [...params(), broadFrom, broadTo]))
+  })} ${staff ? `AND (${assignedBookingSql('agenda_booking')})` : ''} AND agenda_booking.status <> 'cancelled' AND agenda_session.starts_at BETWEEN ? AND ?`, [...params(), ...(staff ? [staff.userId] : []), broadFrom, broadTo]))
   // A post is on the agenda on the day it was published; nothing is due.
   if (requestedKinds.has('post')) sourceQueries.push(queryAll(db, `${commonSelect('p', 'post', `p.published_at AS starts_at, NULL AS ends_at,
     NULLIF(p.title, '') AS title, NULL AS subtitle, NULL AS party_size, p.status`, {

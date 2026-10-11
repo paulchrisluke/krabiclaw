@@ -38,6 +38,7 @@ export interface PublicTemplateDefinition {
   pageDocuments: {
     recipes: Record<string, string>
     paths: string[]
+    patterns?: string[]
     prefixes: string[]
     catchAll: boolean
   }
@@ -61,12 +62,12 @@ export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDe
     },
     nonIndexableExactPaths: ['/contact/confirmed', '/bookings/cancel', '/bookings/confirmed', '/reservations/cancel', '/reservations/confirmed'],
     // Saya reads a document on the routes that request the 'content' dataset.
-    // /menu, /products, /experiences, /qa, /reviews, /posts, /photos and
-    // /locations/<slug> are absent on purpose: they render their own data, and
-    // a document stored at one of them would never be shown.
+    // Location overview routes render their location data with an optional
+    // authored page overlay. Catalog and other location routes own their data.
     pageDocuments: {
       recipes: { home: '/', about: '/about', contact: '/contact', reservations: '/reservations' },
       paths: [],
+      patterns: ['/locations/:slug()'],
       prefixes: [],
       catchAll: true,
     },
@@ -83,8 +84,8 @@ export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDe
       articleDetailPrefix: '/article',
     },
     sitemap: {
-      exactPaths: ['/', '/about', '/services', '/pricing', '/donate', '/schedule', '/contact', '/blog', '/docs', '/posts', '/third-party-notices'],
-      dynamicPrefixes: ['/services/', '/article/', '/blog/category/', '/docs/', '/posts/'],
+      exactPaths: ['/', '/about', '/services', '/experiences', '/pricing', '/donate', '/schedule', '/contact', '/blog', '/docs', '/posts', '/third-party-notices'],
+      dynamicPrefixes: ['/services/', '/experiences/', '/article/', '/blog/category/', '/docs/', '/posts/'],
     },
     nonIndexableExactPaths: ['/contact/confirmed', '/bookings/cancel', '/bookings/confirmed'],
     // The Blawby route loader looks a recipe up here. 'links', 'confirmation',

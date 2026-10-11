@@ -214,6 +214,10 @@ test.describe('tenant guest journeys (disposable local/preview data only)', () =
     expect(JSON.stringify(body)).not.toContain('cancel-once@playwright.example')
     const cancelURL = `${baseURL}/api/public/booking-requests/${body.booking_id}/cancel`
     const authHeaders = { ...headers, Authorization: `Bearer ${body.cancellation_token}` }
+    const receiptURL = cancelURL.replace(/\/cancel$/, '')
+    const before = await request.get(receiptURL, { headers: authHeaders })
+    expect(before.status()).toBe(200)
+    const receipt = await before.json() as { success: true; booking: Record<string, unknown> }
     const cancelled = await request.post(cancelURL, { headers: authHeaders })
     expect(cancelled.status()).toBe(200)
     expect(await cancelled.json()).toEqual({ success: true, kind: 'booking' })
@@ -225,8 +229,18 @@ test.describe('tenant guest journeys (disposable local/preview data only)', () =
     expect((await request.post(cancelURL, {
       headers: { ...headers, Authorization: 'Bearer invalid-cancellation-token' },
     })).status()).toBe(404)
-    // A spent token no longer grants the pre-cancellation guest read.
-    expect((await request.get(cancelURL.replace(/\/cancel$/, ''), { headers: authHeaders })).status()).toBe(404)
+    // The guest can still read the receipt after cancellation.
+    const after = await request.get(receiptURL, { headers: authHeaders })
+    expect(after.status()).toBe(200)
+    expect(await after.json()).toEqual({ ...receipt, booking: { ...receipt.booking, status: 'cancelled' } })
+    for (const deniedHeaders of [
+      { ...headers, Authorization: 'Bearer invalid-cancellation-token' },
+      { ...authHeaders, 'x-preview-tenant': 'demo' },
+    ]) {
+      const denied = await request.get(receiptURL, { headers: deniedHeaders })
+      expect(denied.status()).toBe(404)
+      expect(await denied.json()).toEqual({ error: 'Booking not found' })
+    }
   })
 })
 
@@ -243,8 +257,6 @@ for (const target of [
     expect(created.status(), await created.text()).toBe(201)
     const product = (await created.json()).product
     try {
-      const locations = await page.request.put(`${editor}/${product.id}/locations/${target.location}`, { data: { active: true, published: true } })
-      expect(locations.status()).toBe(200)
       const externalUrl = `https://example.com/?checkout=${target.slug}`
       await page.goto(`/dashboard/${target.slug}/products/${product.id}/order-url`)
       await page.getByLabel('Website address', { exact: true }).fill(externalUrl)
@@ -257,6 +269,8 @@ for (const target of [
       await page.getByRole('textbox', { name: label, exact: true }).fill(detail)
       await page.getByRole('button', { name: 'Save', exact: true }).click()
       await expect(page).toHaveURL(new RegExp(`/products/${product.id}/attributes$`))
+      const locations = await page.request.put(`${editor}/${product.id}/locations/${target.location}`, { data: { active: true, published: true } })
+      expect(locations.status(), await locations.text()).toBe(200)
       const publication = await page.request.put(`${editor}/${product.id}/publication`, { data: { published: true } })
       expect(publication.status(), await publication.text()).toBe(200)
       const viaMcp = mcpData<{ product: { kind: string; details: Record<string, string> } }>(await (await mcpRequest(page.request, baseURL!, { method: 'tools/call', toolName: 'get_product', args: { organization_id: target.org, product_id: product.id } })).json()).product

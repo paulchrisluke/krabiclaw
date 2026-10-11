@@ -21,6 +21,8 @@ import type { H3Event } from 'nitro'
 import { queryFirst } from '~/server/db'
 import { requireMcpOrganization, requireMcpUser, type McpUserContext } from '~/server/utils/mcp-auth'
 import { resolveMcpWorkspace } from '~/server/utils/mcp-context'
+import { onboardingPublicationMissingFields, readOnboardingDraft } from '~/server/utils/onboarding-drafts'
+import { activateOnboardingDraft, saveOnboardingDraft } from '~/server/utils/onboarding-apply'
 import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { fromJsonSchema, type JsonSchemaType } from '@modelcontextprotocol/server'
@@ -141,6 +143,54 @@ export async function executeMcpToolCall(
   // Called by registered SDK tools after schema validation and workspace resolution.
   const normalizedArguments = rawArguments;
 
+  if (toolName === 'get_website_draft' || toolName === 'save_website_draft') {
+    const user = authenticatedUser ?? await requireMcpUser(event)
+    const location = normalizedArguments.location as Record<string, unknown> | undefined
+    const { row, payload } = toolName === 'get_website_draft'
+      ? await readOnboardingDraft(user.db, user.userId, optionalString(normalizedArguments, 'draft_id') ?? undefined)
+      : await saveOnboardingDraft(user.env, user.db, user.userId, {
+          draftId: optionalString(normalizedArguments, 'draft_id') ?? undefined,
+          expectedUpdatedAt: optionalString(normalizedArguments, 'revision'), idempotencyKey: requiredString(normalizedArguments, 'idempotency_key'),
+          name: normalizedArguments.name, vertical: normalizedArguments.vertical, subdomain: normalizedArguments.subdomain,
+          details: { sourceLocale: normalizedArguments.source_locale, currency: normalizedArguments.currency, timezone: normalizedArguments.timezone,
+            streetAddress: location?.street_address, addressLine2: location?.address_line_2, city: location?.city, region: location?.region,
+            postalCode: location?.postal_code, country: location?.country, phone: location?.phone, websiteUrl: location?.website_url },
+          brandDraft: { heroHeadline: normalizedArguments.hero_headline, heroSubtitle: normalizedArguments.hero_subtitle },
+          products: Array.isArray(normalizedArguments.products) ? normalizedArguments.products.map(product => {
+            const item = product as Record<string, unknown>
+            return { name: item.name, category: item.category, amountMinor: item.amount_minor }
+          }) : normalizedArguments.products,
+        })
+    if (row.organization_id) event.context.mcpExecutionContext = { organizationId: row.organization_id }
+    const details = payload.source.details
+    return {
+      draft_id: row.id, revision: row.updated_at, ...(row.organization_id ? { organization_id: row.organization_id } : {}), status: row.status,
+      ...(payload.request ? { idempotency_key: payload.request.key } : {}),
+      subdomain: row.subdomain_candidate, name: payload.preview.brandName, vertical: payload.preview.vertical, source_locale: details.sourceLocale,
+      ...(details.currency ? { currency: details.currency } : {}), ...(details.timezone ? { timezone: details.timezone } : {}),
+      location: Object.fromEntries(Object.entries({ street_address: details.streetAddress, address_line_2: details.addressLine2, city: details.city,
+        region: details.region, postal_code: details.postalCode, country: details.country, phone: details.phone, website_url: details.websiteUrl }).filter(([, value]) => value !== null)),
+      ...(payload.preview.config.draft_hero_headline ? { hero_headline: payload.preview.config.draft_hero_headline } : {}),
+      ...(payload.preview.config.draft_hero_subtitle ? { hero_subtitle: payload.preview.config.draft_hero_subtitle } : {}),
+      products: payload.preview.products.map(product => ({ name: product.name, category: product.collection, ...(product.price ? { amount_minor: product.price.unit_amount } : {}) })),
+      missing_fields: onboardingPublicationMissingFields(row, payload),
+    }
+  }
+
+  if (toolName === 'publish_website') {
+    const user = authenticatedUser ?? await requireMcpUser(event)
+    const draftId = requiredString(normalizedArguments, 'draft_id')
+    const created = await activateOnboardingDraft(user.env, user.db, { userId: user.userId, draftId, expectedUpdatedAt: requiredString(normalizedArguments, 'revision'), origin: event.req })
+    event.context.mcpExecutionContext = { organizationId: created.organizationId, locationId: created.locationId }
+    try {
+      await upsertMcpWorkspacePreference(user.db, { userId: user.userId, organizationId: created.organizationId, locationId: created.locationId })
+      const workspace = await resolveMcpWorkspace(user.db, user.env, user.userId, { organizationId: created.organizationId, locationId: created.locationId, requireOrganization: true, requireLocation: true })
+      return { organization_id: created.organizationId, location_id: created.locationId, draft_id: draftId, public_url: created.publicUrl, ready: true, context: workspaceContextPayload(workspace.organization, workspace.location) }
+    } catch (error) {
+      throw new HTTPError({ statusCode: 500, statusMessage: 'Website is live, but workspace selection failed', data: { code: 'WEBSITE_WORKSPACE_SELECTION_FAILED', organization_id: created.organizationId, draft_id: draftId }, cause: error })
+    }
+  }
+
   if (toolName === "list_organizations") {
     const user = authenticatedUser ?? await requireMcpUser(event);
     const workspace = await resolveMcpWorkspace(
@@ -165,7 +215,7 @@ export async function executeMcpToolCall(
     return renderStructuredResponse(
       { organizations: page.items, currentUser, page_info: page.page_info },
       organizations.length === 0
-        ? "You have no organizations yet. Create your site and locations in the Krabiclaw CMS, then return here to manage their content."
+        ? "You have no websites yet. Use save_website_draft to start your business website."
         : `You have ${organizations.length} organization${organizations.length > 1 ? "s" : ""}: ${organizations.map((entry) => entry.name).join(", ")}.`,
     );
   }
@@ -185,6 +235,9 @@ export async function executeMcpToolCall(
   }
 
   if (toolName === "set_workspace_context") {
+    if (!Object.hasOwn(normalizedArguments, 'organization_id') && !Object.hasOwn(normalizedArguments, 'location_id')) {
+      throw new HTTPError({ statusCode: 400, statusMessage: 'Select an organization or location' })
+    }
     const user = authenticatedUser ?? await requireMcpUser(event);
     const organizationId = optionalString(normalizedArguments, "organization_id");
     const locationId = optionalString(normalizedArguments, "location_id");

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { HTTPError } from 'nitro'
 import { guestReservationRefundQueries } from '~/server/domain/payments/visit-refund'
 import { recordBookingCancelled } from '~/server/domain/booking-analytics'
 import { executeBatch, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
@@ -18,7 +19,7 @@ import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-reso
  * A contact thread has neither and is not forced into the booking model.
  */
 
-const guest = z.object({ name: z.string(), email: z.string(), phone: z.string().nullable() })
+const guest = z.object({ name: z.string(), email: z.string(), phone: z.string().nullable(), locale: z.string().optional() })
 
 /**
  * What the thread itself owns.
@@ -105,25 +106,48 @@ export async function getGuestRequest(db: DbClient, id: string, organizationId?:
 /**
  * Load the booking or reservation a thread refers to.
  *
- * Returns null for a contact thread, and for a booking thread whose
- * operational record was never created — which is a broken state the caller
- * must surface, never paper over with placeholder times.
+ * A contact thread has no operational record. A booking or reservation thread
+ * must have its own tenant's matching record after allocation. Uncaptured
+ * Checkout has only its native payment and capacity hold until conversion.
  */
 export async function getThreadOperationalRecord(db: DbClient, requestId: string): Promise<ThreadOperationalRecord | null> {
-  return (await queryFirst<ThreadOperationalRecord>(db, `
+  const record = await queryFirst<ThreadOperationalRecord>(db, `
     SELECT 'booking' AS kind, b.id, b.status, b.party_size, s.starts_at, s.ends_at, s.timezone,
            s.location_id, b.product_id, p.name AS product_name, b.assigned_member_id, b.organization_id, b.user_id
       FROM bookings b
-      JOIN product_sessions s ON s.id = b.product_session_id
-      JOIN products p ON p.id = b.product_id
+      JOIN requests owner ON owner.id = b.request_id AND owner.kind = 'booking' AND owner.organization_id = b.organization_id
+      JOIN product_sessions s ON s.id = b.product_session_id AND s.product_id = b.product_id AND s.organization_id = b.organization_id
+      JOIN products p ON p.id = b.product_id AND p.organization_id = b.organization_id
      WHERE b.request_id = ?
     UNION ALL
     SELECT 'reservation', r.id, r.status, r.party_size, r.starts_at, r.ends_at, r.timezone,
            r.location_id, NULL, NULL, NULL, r.organization_id, r.user_id
       FROM reservations r
+      JOIN requests owner ON owner.id = r.request_id AND owner.kind = 'reservation' AND owner.organization_id = r.organization_id
      WHERE r.request_id = ?
      LIMIT 1
-  `, [requestId, requestId])) ?? null
+  `, [requestId, requestId])
+  if (record) return record
+  const request = await queryFirst<{ kind: GuestRequestKind; uncaptured_checkout: number | null }>(db, `
+    SELECT r.kind,
+      (json_extract(r.payload_json, '$.provenance.creation_kind') = 'checkout'
+       AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.request_id = r.id)
+       AND NOT EXISTS (SELECT 1 FROM reservations v WHERE v.request_id = r.id)
+       AND EXISTS (
+         SELECT 1 FROM payment_checkout_holds h
+         JOIN payments p ON p.id = h.payment_id AND p.organization_id = h.organization_id AND p.subject_type = r.kind
+         JOIN payment_attempts a ON a.payment_id = p.id
+           AND a.idempotency_key = 'checkout:' || r.organization_id || ':' || json_extract(r.payload_json, '$.provenance.idempotency_key')
+         WHERE h.request_id = r.id AND h.organization_id = r.organization_id
+           AND h.status IN ('active', 'released') AND h.converted_booking_id IS NULL AND h.converted_reservation_id IS NULL
+           AND p.state IN ('pending', 'failed') AND p.captured_amount = 0 AND p.subject_id IS NULL
+           AND a.status IN ('creating', 'open', 'expired', 'failed')
+       )) AS uncaptured_checkout
+    FROM requests r WHERE r.id = ?
+  `, [requestId])
+  if (request?.uncaptured_checkout === 1) return null
+  if (request && request.kind !== 'contact') throw new HTTPError({ statusCode: 404, message: 'The conversation has no matching booking or reservation', data: { code: 'REQUEST_OPERATIONAL_RECORD_NOT_FOUND', request_id: requestId } })
+  return null
 }
 
 /**
@@ -155,12 +179,12 @@ export function requestInsertQueries(request: Omit<GuestRequest, 'archived_at' |
   }, publicResourceCacheInvalidationQuery(request.organization_id, 'guest-thread-create')]
 }
 
-interface GuestThreadInput { name: string; email: string; phone?: string | null; notes?: string | null; ipHash?: string | null; partySizeIsMinimum?: boolean }
+interface GuestThreadInput { name: string; email: string; phone?: string | null; locale?: string; notes?: string | null; ipHash?: string | null; partySizeIsMinimum?: boolean }
 export function threadPayloadForGuest(input: GuestThreadInput & { phone: string }): ThreadPayload & { guest: { phone: string } }
 export function threadPayloadForGuest(input: GuestThreadInput): ThreadPayload
 export function threadPayloadForGuest(input: GuestThreadInput): ThreadPayload {
   return {
-    guest: { name: input.name, email: input.email, phone: input.phone ?? null },
+    guest: { name: input.name, email: input.email, phone: input.phone ?? null, ...(input.locale === undefined ? {} : { locale: input.locale }) },
     notes: input.notes ?? null, ip_hash: input.ipHash ?? null,
     party_size_is_minimum: input.partySizeIsMinimum ?? false,
     cancellation: { token_hash: null, expires_at: null, used_at: null },
@@ -191,8 +215,8 @@ export function requestPreview(request: GuestRequest, record: ThreadOperationalR
   return `${local} · ${record.party_size}${request.payload.party_size_is_minimum ? '+' : ''} guests`.slice(0, 160)
 }
 
-export async function requestSummary(db: DbClient, request: GuestRequest) {
-  const record = await getThreadOperationalRecord(db, request.id)
+export async function requestSummary(db: DbClient, request: GuestRequest, knownRecord?: ThreadOperationalRecord | null) {
+  const record = knownRecord === undefined ? await getThreadOperationalRecord(db, request.id) : knownRecord
   const labels = await queryFirst<{ location_title: string | null }>(db, 'SELECT title AS location_title FROM business_locations WHERE id = ?', [request.location_id])
   return {
     guestName: request.payload.guest.name, guestEmail: request.payload.guest.email, guestPhone: request.payload.guest.phone,

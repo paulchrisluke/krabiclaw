@@ -152,7 +152,7 @@ export default definePlugin((nitroApp) => {
 
     const template = resolvePublicTemplate({ themeId: organization.theme_id, vertical: organization.vertical })
     const productPresentation = resolveProductPresentation(organization.vertical)
-    const publicProductIds = JSON.stringify((await listOrganizationProducts(db, { organizationId, publishedOnly: true })).map(product => product.id))
+    const publicProductIds = JSON.stringify((await listOrganizationProducts(db, { organizationId, publishedOnly: true, env })).map(product => product.id))
 
     const localizedLocales = await queryAll<{ locale: string; organization_id: string }>(db, `
       SELECT l.locale, l.organization_id
@@ -262,7 +262,7 @@ export default definePlugin((nitroApp) => {
       listPublishedTenantSitemapPages(db, organizationId),
     ])
 
-    entries.push(...template.sitemap.exactPaths.map(loc => ({ loc })))
+    entries.push(...template.sitemap.exactPaths.filter(loc => !['/menu', '/products', '/experiences'].includes(loc)).map(loc => ({ loc })))
 
     if (locations.length > 0) {
       entries.push({ loc: '/locations' })

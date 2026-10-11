@@ -230,16 +230,23 @@ test.describe('stateless MCP server', () => {
       } else {
         policyVersion = mcpData<{policy:{updated_at:string}}>(policyBody).policy.updated_at
       }
-      const incomplete = await mcpRequest(request, baseURL!, {
+      // Clearing the duration selects the standard two-hour table reservation;
+      // the existing policy and cancellation fields are preserved.
+      const standardDuration = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'update_reservation_policy',
         args: { organization_id: organizationId, location_id: locationId, duration_minutes: null, expected_updated_at: policyVersion },
       })
-      const incompleteBody = await incomplete.json()
-      expect(incompleteBody.result?.isError).toBe(true)
-      expect(JSON.parse(incompleteBody.result.content[0].text)).toEqual({ status: 409, code: 'RESERVATION_SETUP_INCOMPLETE', message: 'Reservation setup is incomplete', missing: ['duration_minutes'] })
-      const unchanged = await request.get(`${baseURL}/api/editor/organizations/${organizationId}/locations/${locationId}/reservation-config`)
-      expect(unchanged.status()).toBe(200)
-      expect((await unchanged.json()).config?.updated_at ?? null).toBe(policyVersion)
+      expect(standardDuration.status()).toBe(200)
+      expect(mcpData<{ ok: boolean }>(await standardDuration.json()).ok).toBe(true)
+      const defaultsRead = await request.get(`${baseURL}/api/editor/organizations/${organizationId}/locations/${locationId}/reservation-config`)
+      expect(defaultsRead.status()).toBe(200)
+      const defaultedPolicy = (await defaultsRead.json()).config
+      expect(defaultedPolicy.duration_minutes).toBe(120)
+      expect(defaultedPolicy.updated_at).not.toBe(policyVersion)
+      if (!policyBody.result?.isError) {
+        expect({ ...defaultedPolicy, duration_minutes: policyBody.result.structuredContent.policy.duration_minutes, updated_at: policyVersion }).toEqual(policyBody.result.structuredContent.policy)
+      }
+      policyVersion = defaultedPolicy.updated_at
       const policySetup = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'update_reservation_policy',
         args: { organization_id: organizationId, location_id: locationId, slot_capacity: 20, duration_minutes: 60, expected_updated_at: policyVersion },
@@ -706,11 +713,13 @@ test.describe('stateless MCP server', () => {
         expect((await (await request.get(`${productUrl}/availability?location_id=${locationId}`)).json()).rules).toEqual([])
 
         const policy = { confirmation_mode: 'review', online_payment_required: false, online_timezone: 'America/New_York', calendar_group: `parity-${productId}` }
-        // Commerce permits Payments, but collecting money also requires real billing setup.
+        // Default local/CI does not configure Payments billing providers.
         const paymentRequiredPolicy = { ...policy, online_payment_required: true }
         const httpPaymentPolicy = await request.put(`${productUrl}/booking`, { data: paymentRequiredPolicy })
-        expect(httpPaymentPolicy.status(), await httpPaymentPolicy.text()).toBe(409)
-        expect((await httpPaymentPolicy.json()).data.code).toBe('financial_action_required')
+        expect(httpPaymentPolicy.status(), await httpPaymentPolicy.text()).toBe(503)
+        const paymentPolicyError = (await httpPaymentPolicy.json()).data
+        expect(paymentPolicyError.code).toBe('financial_action_required')
+        expect(paymentPolicyError.missing).toContain('payments.configuration')
         expect(mcpData<{ product: { booking: unknown } }>(await call('get_product', { product_id: productId })).product.booking).toEqual(product.booking)
         expect((await call('set_product_booking_config', { product_id: productId, ...policy })).result.isError).not.toBe(true)
         const policyRead = await request.get(productUrl)
@@ -878,6 +887,24 @@ test.describe('stateless MCP server', () => {
           await expect(page.getByRole('heading', { name: section.name, exact: true })).toBeVisible()
           for (const product of section.items) await expect(page.getByText(product.name, { exact: true }).first()).toBeVisible()
         }
+        // Moving a supplied dish changes its section; omitted dishes remain.
+        const starter = written[0]!
+        const dessert = written[1]!
+        const movedDish = starter.products[0]!
+        await call<Menu>('update_menu', { location_id: locationId, idempotency_key: crypto.randomUUID(), sections: [
+          { collection_id: dessert.collection.id, name: dessert.collection.name, items: [{ product_id: movedDish.id, name: movedDish.name }] },
+        ] })
+        for (const [product, collectionId, sortOrder] of [
+          [starter.products[1]!, starter.collection.id, 1],
+          [dessert.products[0]!, dessert.collection.id, 0],
+          [movedDish, dessert.collection.id, 1],
+        ] as const) {
+          const membership = await request.get(`${baseURL}/api/editor/organizations/${organizationId}/products/${product.id}`)
+          expect(membership.status(), await membership.text()).toBe(200)
+          expect((await membership.json()).product.collections).toEqual([{ collection_id: collectionId, sort_order: sortOrder }])
+        }
+        await page.reload()
+        await expect(page.getByText(movedDish.name, { exact: true })).toHaveCount(1)
         const start = new Date(Date.now() + 28 * 86400000)
         start.setUTCHours(7, 0, 0, 0)
         const name = `Omakase ${stamp}`

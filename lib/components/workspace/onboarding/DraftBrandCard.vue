@@ -162,6 +162,7 @@ export type DraftBrandForm = {
 }
 
 const form = defineModel<DraftBrandForm>('form', { required: true })
+const revision = defineModel<string | null>('revision', { required: true })
 
 const props = defineProps<{
   /** Omitted when the surface around the card owns the commit control. */
@@ -205,15 +206,17 @@ async function uploadDraftImage(event: Event, target: 'logo' | 'hero') {
   else heroUploading.value = true
 
   try {
+    if (!revision.value) throw new Error('Reload your saved website draft before uploading.')
     const body = new FormData()
+    body.set('revision', revision.value)
     body.set('target', target)
     body.set('file', file)
-    const res = await applicationFetch<{ success: boolean; image?: DraftUploadedImage; error?: string; message?: string }>(
+    const res = await applicationFetch<{ success: boolean; image?: DraftUploadedImage; updatedAt?: string; error?: string; message?: string }>(
       `/api/dashboard/onboarding/drafts/${props.draftId}/media/upload`,
       {
         method: 'POST',
         body,
-        validate: (value): value is { success: boolean; image?: DraftUploadedImage; error?: string; message?: string } =>
+        validate: (value): value is { success: boolean; image?: DraftUploadedImage; updatedAt?: string; error?: string; message?: string } =>
           isRecord(value)
           && typeof value.success === 'boolean'
           && (value.image === undefined || (
@@ -224,7 +227,8 @@ async function uploadDraftImage(event: Event, target: 'logo' | 'hero') {
           )),
       },
     )
-    if (!res.success || !res.image) throw new Error(res.error || res.message || 'Upload failed.')
+    if (!res.success || !res.image || typeof res.updatedAt !== 'string') throw new Error(res.error || res.message || 'Upload failed.')
+    revision.value = res.updatedAt
 
     if (target === 'logo') {
       form.value.logoImage = res.image

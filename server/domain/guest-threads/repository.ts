@@ -3,7 +3,7 @@ import { BUYER_UNREAD_THREAD_SQL, buyerUnreadThreadParams } from './entries'
 import { messagePreview } from './attachments'
 import { execute, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
-import type { MemberAccessPrincipal } from '~/server/utils/member-access'
+import { assignedBookingSql, roleAllows, assertRoleAllows, type MemberAccessPrincipal } from '~/server/utils/member-access'
 import type {
   ConversationState,
   GuestThreadListItemViewModel,
@@ -15,6 +15,12 @@ import { resolveGuestThreadMailbox, type GuestThreadMailbox } from './mailbox'
 import { mediaStillUrl } from '~/shared/media-placement-contract'
 
 const SOURCE_GUEST_NAME_SQL = "json_extract(gt.payload_json, '$.guest.name')"
+
+async function assignedThreadScope(principal?: MemberAccessPrincipal | null) {
+  if (!principal || await roleAllows({ ...principal, permissions: { operations: ['read'] } })) return { sql: '', params: [] as string[] }
+  await assertRoleAllows({ ...principal, permissions: { operations: ['assigned'] } })
+  return { sql: ` AND EXISTS (SELECT 1 FROM bookings b WHERE b.request_id = gt.id AND b.organization_id = gt.organization_id AND (${assignedBookingSql('b')}))`, params: [principal.userId] }
+}
 /**
  * The operational record a thread refers to.
  *
@@ -124,6 +130,9 @@ export async function getGuestThreadOperationSummary(
   } else {
     return { openThreads: 0, unreadThreads: 0, reservations: 0, experienceBookings: 0 }
   }
+  const access = await assignedThreadScope(opts.principal)
+  where += access.sql
+  params.push(...access.params)
 
   if (opts.locationId) {
     where += ' AND gt.location_id = ?'
@@ -210,6 +219,11 @@ export async function listGuestThreads(
   if (opts.buyerAudience && !opts.userId) throw new Error('Buyer thread list requires authenticated identity')
   const params: Array<string | number> = opts.buyerAudience ? [opts.userId] : [organizationId!]
   let where = opts.buyerAudience ? 'gt.user_id = ?' : 'gt.organization_id = ?'
+  if (!opts.buyerAudience) {
+    const access = await assignedThreadScope(opts.principal)
+    where += access.sql
+    params.push(...access.params)
+  }
   if (opts.buyerAudience) {
     where += ` AND ${REQUEST_CURRENT_BUYER_SQL.replaceAll('r.','gt.')}`
     if (organizationId) { where += ' AND gt.organization_id = ?'; params.push(organizationId) }
@@ -332,6 +346,10 @@ export async function listOrganizationGuestThreads(
 ): Promise<GuestThreadListItemViewModel[]> {
   const params: Array<string | number> = [opts.organizationId]
   let where = 'gt.organization_id = ?'
+
+  const access = await assignedThreadScope(opts.principal)
+  where += access.sql
+  params.push(...access.params)
 
   if (opts.locationId) {
     where += ' AND gt.location_id = ?'

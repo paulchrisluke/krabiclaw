@@ -205,7 +205,7 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
     // The writer requires this; it was declared nowhere, so nothing could tell
     // an author or an assistant that a text block must name its editor mode.
     editor_mode: {
-      kind: 'enum', label: 'Editor', translatable: false, section: 'content', default: 'rich',
+      kind: 'enum', label: 'Editor', required: true, translatable: false, section: 'content', default: 'rich',
       options: [{ value: 'rich', label: 'Rich text' }, { value: 'source', label: 'Markdown source' }],
     },
   }, { accessibility: 'required', seo: 'inherited' }),

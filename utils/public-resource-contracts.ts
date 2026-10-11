@@ -32,6 +32,7 @@ export interface PublicShellPayload {
   hasProducts: boolean
   /** The site has something a guest books a seat on. */
   hasBookableProducts: boolean
+  hasReservations: boolean
   platformMessages: Record<string, string> | null
 }
 
@@ -63,7 +64,7 @@ export const isPublicShellPayload = (value: unknown): value is PublicShellPayloa
     || !Array.isArray(value.googleMaps.media)) return false
   if (value.platformMessages !== null && (!isRecord(value.platformMessages)
     || !Object.values(value.platformMessages).every(message => typeof message === 'string'))) return false
-  return typeof value.hasProducts === 'boolean' && typeof value.hasBookableProducts === 'boolean'
+  return typeof value.hasProducts === 'boolean' && typeof value.hasBookableProducts === 'boolean' && typeof value.hasReservations === 'boolean'
 }
 
 export interface PublicPagePayload {

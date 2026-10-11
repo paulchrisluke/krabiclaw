@@ -4,8 +4,8 @@ import { resolveLocationContact } from '~/server/utils/contact-resolution'
 import type { H3Event } from 'nitro'
 import { HTTPError } from 'nitro'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
-import { getDashboardContext } from '~/server/utils/dashboard-context'
-import { assertResourceAccess, memberAccessPrincipal, roleAllows } from '~/server/utils/member-access'
+import { getDashboardMemberContext } from '~/server/utils/dashboard-context'
+import { assertResourceAccess, assertAssignedBookingAccess, memberAccessPrincipal, roleAllows } from '~/server/utils/member-access'
 import { renderBookingPolicySummary, type RenderedBookingPolicySummary } from '~/server/utils/reservations'
 import type { BookingPolicySummarySource } from '~/server/utils/booking-policy-summary'
 import { getSourceLocale } from '~/server/utils/organization-locales'
@@ -117,16 +117,16 @@ export interface DashboardBookingDetails {
 }
 
 interface BookingAccessContext {
-  env: Awaited<ReturnType<typeof getDashboardContext>>['env']
+  env: Awaited<ReturnType<typeof getDashboardMemberContext>>['env']
   db: DbClient
   userId: string
-  organization: NonNullable<Awaited<ReturnType<typeof getDashboardContext>>['organization']>
+  organization: NonNullable<Awaited<ReturnType<typeof getDashboardMemberContext>>['organization']>
 }
 
 
 
 async function bookingContext(event: H3Event, organizationSlug?: string | null): Promise<BookingAccessContext> {
-  const context = await getDashboardContext(event, {
+  const context = await getDashboardMemberContext(event, {
         organizationSlug,
   })
   if (!context.organization) throw new HTTPError({ statusCode: 404, message: 'Organization not found' })
@@ -169,6 +169,7 @@ async function loadBookingRow(
 }
 
 async function assertBookingAccess(context: BookingAccessContext, row: BookingRow) {
+  if (row.experience_id) return assertAssignedBookingAccess(context.db, { ...memberAccessPrincipal(context.organization, { env: context.env }), bookingId: row.operational_id })
   await assertResourceAccess(context.db, {
     ...memberAccessPrincipal(context.organization, { env: context.env}),
     resourceLocationId: row.location_id,
@@ -348,6 +349,7 @@ export async function requestDashboardBookingChange(
   const threadId = row.id
   const thread = await getGuestRequest(context.db, row.id, row.organization_id, input.type)
   if (!thread) throw new HTTPError({ statusCode: 404, message: 'Booking not found' })
+  if (input.type === 'booking') await assertAssignedBookingAccess(context.db, { ...memberAccessPrincipal(context.organization, { env: context.env }), bookingId: row.operational_id, sessionId: 'sessionId' in input.body && typeof input.body.sessionId === 'string' ? input.body.sessionId : undefined })
   await requestBookingChange(context.db, context.env, thread, context.userId, input.body, input.body.idempotencyKey)
   await publishGuestInboxThreadEvent(context.env, context.db, { threadId: threadId, type: 'thread.changed' })
   return await loadDashboardBookingDetails(event, { type: input.type, bookingId: row.id })

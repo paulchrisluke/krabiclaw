@@ -39,7 +39,7 @@
         <header v-if="!compact" class="mx-auto mt-10 max-w-3xl text-center">
           <p class="saya-kicker mb-3">{{ collectionName }}</p>
           <h1 class="saya-display-md text-3xl text-default sm:text-4xl lg:text-5xl">{{ displayTitle }}</h1>
-          <p v-if="pageDocument?.summary || tagline" class="mx-auto mt-4 max-w-2xl text-base text-muted sm:text-lg">{{ pageDocument?.summary || tagline }}</p>
+          <p v-if="tagline" class="mx-auto mt-4 max-w-2xl text-base text-muted sm:text-lg">{{ tagline }}</p>
           <ProductVariantPrices v-if="!booking" :product="product" :location-ids="[location?.id ?? null]" :currency="currency" class="mx-auto mt-6 max-w-xl text-base" />
           <div class="mt-4 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm text-muted">
               <template v-if="averageRating">
@@ -68,8 +68,8 @@
         <div class="grid gap-10 lg:grid-cols-[1fr_380px] lg:items-start" :class="compact ? 'mt-8' : 'mt-14'">
         <div class="min-w-0">
           <p v-if="!canBook && !canEnquire && !canOrderExternally" role="status" class="rounded-xl border border-default bg-elevated p-5 text-muted lg:hidden">{{ scopeRequired ? t('booking.choose_location') : vertical === 'service' && !offer ? t('booking.price_unavailable_contact') : t('saya.common.temporarily_unavailable') }}</p>
-          <section v-if="!pageDocument && !compact && product.description" class="border-t border-default pt-10">
-            <h2 class="saya-display text-2xl text-default sm:text-3xl">{{ t('saya.experience_detail.what_youll_do') }}</h2>
+          <section v-if="!compact && product.description" class="border-t border-default pt-10">
+            <h2 v-if="vertical !== 'service'" class="saya-display text-2xl text-default sm:text-3xl">{{ t('saya.experience_detail.what_youll_do') }}</h2>
             <p class="mt-4 whitespace-pre-line text-base leading-relaxed text-muted sm:text-lg">{{ product.description }}</p>
           </section>
 
@@ -363,7 +363,7 @@ const props = defineProps<{
   collectionSiblings: ProductCollectionSibling[]
   currency: CurrencyCode
   presentation: ProductPresentation
-  /** Existing page presentation; the Product remains the operational identity. */
+  /** The page supplies its route, authored blocks and SEO; the Product owns the offer. */
   pageDocument?: PublicTenantPage
   /** The directory supplies its own selected-service introduction. */
   compact?: boolean
@@ -372,7 +372,7 @@ const props = defineProps<{
   onlineAvailable?: boolean
 }>()
 
-const displayTitle = computed(() => props.pageDocument?.title ?? props.product.name)
+const displayTitle = computed(() => props.product.name)
 const bookingLabel = computed(() => props.vertical === 'service'
   ? props.booking?.confirmation_mode === 'review' ? t('booking.request_appointment') : t('booking.book_appointment')
   : t('saya.experience_detail.book_now'))
@@ -461,15 +461,12 @@ const canBook = computed(() => !props.scopeRequired && Boolean(props.booking) &&
  * — two slots, read as the two things they are, not one list with a chosen
  * head.
  */
-const galleryItems = computed(() => props.pageDocument
-  ? props.pageDocument.media.filter(asset => (asset.slot === 'cover' || asset.slot === 'gallery') && asset.public_url).map(asset => ({
-      url: asset.public_url!, kind: asset.kind, poster: asset.kind === 'video' ? asset.thumbnail_url : undefined, alt: asset.alt_text ?? undefined,
-    }))
-  : [
+const galleryItems = computed(() => [
   ...(props.product.image ? [props.product.image] : []),
   ...props.product.gallery,
-].map(asset => ({
-  url: asset.public_url,
+  ...(props.pageDocument?.media.filter(asset => asset.slot === 'cover' || asset.slot === 'gallery') ?? []),
+].filter((asset, index, assets) => asset.public_url && assets.findIndex(item => item.public_url === asset.public_url) === index).map(asset => ({
+  url: asset.public_url!,
   kind: asset.kind,
   poster: asset.kind === 'video' ? asset.thumbnail_url : undefined,
   alt: asset.alt_text ?? undefined,
@@ -514,7 +511,7 @@ const visibleDetails = computed(() => productDetailFields(props.product.kind).fl
   const handle = productDetailKey(definition)
   // The pricing note is shown where the price goes, so it is not repeated in
   // the attribute list underneath it.
-  if (handle === PRICING_NOTE_HANDLE) return []
+  if (handle === PRICING_NOTE_HANDLE || definition.value_type === 'boolean') return []
   const value = props.product.details[handle]
   if (value === undefined || value === null) return []
   const values = Array.isArray(value) ? value : [String(value)]

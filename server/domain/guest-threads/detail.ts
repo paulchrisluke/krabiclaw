@@ -48,28 +48,32 @@ export async function getGuestThreadDetail(
     : [])
 
   const visibleEntries = audience ? entryRows.filter(isBuyerVisibleThreadEntry) : entryRows
-  const entries: GuestThreadEntryViewModel[] = visibleEntries.map(entry => ({
-    id: entry.id,
-    kind: entry.kind,
-    actorKind: entry.actor_kind,
-    actorUserId: audience
-      ? entry.actor_kind === 'guest' && entry.channel === 'web' && entry.actor_user_id === audience.buyerUserId ? entry.actor_user_id : null
-      : entry.actor_user_id,
-    actorLabel: entry.actor_user_id ? actorNames.get(entry.actor_user_id) ?? null : null,
-    channel: entry.channel,
-    body: entry.body,
-    eventName: entry.event_name,
-    payload: audience
-      ? entry.kind === 'message' ? { unshownFiles: parseEntryPayload(entry)?.unshownFiles ?? [] }
-        : entry.kind === 'operation' ? { action: parseEntryPayload(entry)?.action ?? null } : null
-      : parseEntryPayload(entry),
-    sequence: entry.sequence,
-    occurredAt: entry.occurred_at,
-    deliveries: audience ? [] : deliveriesByEntry.get(entry.id) ?? [],
-    attachments: photos.get(entry.id) ?? [],
-  }))
+  const entries: GuestThreadEntryViewModel[] = visibleEntries.map(entry => {
+    const payload = parseEntryPayload(entry)
+    if (payload) delete payload.email
+    return {
+      id: entry.id,
+      kind: entry.kind,
+      actorKind: entry.actor_kind,
+      actorUserId: audience
+        ? entry.actor_kind === 'guest' && entry.channel === 'web' && entry.actor_user_id === audience.buyerUserId ? entry.actor_user_id : null
+        : entry.actor_user_id,
+      actorLabel: entry.actor_user_id ? actorNames.get(entry.actor_user_id) ?? null : null,
+      channel: entry.channel,
+      body: entry.body,
+      eventName: entry.event_name,
+      payload: audience
+        ? entry.kind === 'message' ? { unshownFiles: payload?.unshownFiles ?? [] }
+          : entry.kind === 'operation' ? { action: payload?.action ?? null } : null
+        : payload,
+      sequence: entry.sequence,
+      occurredAt: entry.occurred_at,
+      deliveries: audience ? [] : deliveriesByEntry.get(entry.id) ?? [],
+      attachments: photos.get(entry.id) ?? [],
+    }
+  })
 
-  const summary = await requestSummary(db, thread)
+  const summary = await requestSummary(db, thread, record)
   const now = new Date().toISOString()
   const mailbox = resolveGuestThreadMailbox(thread, record, now, audience?'buyer':'member')
 
@@ -86,9 +90,7 @@ export async function getGuestThreadDetail(
     contextLabel: summary.contextLabel,
     locationLabel: summary.locationTitle,
     conversationState: audience ? null : thread.conversation_state,
-    // The occurrence comes from the booking or reservation, rendered in that
-    // record's own timezone. A thread with no record reports no occurrence
-    // rather than a fabricated one.
+    operationalRecord: record ? { id: record.id, kind: record.kind, status: record.status, starts_at: record.starts_at, ends_at: record.ends_at, timezone: record.timezone, party_size: record.party_size } : null,
     source: {
       submissionType: thread.kind,
       submissionId: thread.id,

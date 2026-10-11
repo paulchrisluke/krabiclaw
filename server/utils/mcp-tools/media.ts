@@ -1,6 +1,6 @@
 import { HTTPError } from 'nitro'
 import type { McpToolDefinition } from './shared'
-import { chatgptFileInput, mediaAssetObject, pageInfoObject, paginationInputSchema, resolvedMediaAssetObject, organizationTool } from './shared'
+import { chatgptFileInput, mediaAssetObject, mediaPlacementSlotInputSchema, pageInfoObject, paginationInputSchema, resolvedMediaAssetObject, organizationTool } from './shared'
 import { EDITABLE_MEDIA_PLACEMENT_OWNERS, WRITABLE_MEDIA_CATEGORIES,
   attachMediaPlacement,
   parseMediaPlacementKey,
@@ -28,16 +28,28 @@ import {
   toolFileReference,
 } from './execution'
 
-const mediaPlacementObject = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    owner_type: { type: 'string', enum: [...EDITABLE_MEDIA_PLACEMENT_OWNERS] },
-    owner_id: { type: 'string' },
-    slot: { type: 'string' },
-  },
-  required: ['owner_type', 'owner_id', 'slot'],
+function mediaPlacementInputSchema(single?: boolean) {
+  return {
+    type: 'object',
+    oneOf: EDITABLE_MEDIA_PLACEMENT_OWNERS.flatMap(ownerType => {
+      const slot = mediaPlacementSlotInputSchema(ownerType, { single, excludedFixedSlots: single === true && ownerType === 'organization' ? ['favicon'] : [] })
+      return slot ? [{
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          owner_type: { type: 'string', enum: [ownerType] },
+          owner_id: { type: 'string' },
+          slot,
+        },
+        required: ['owner_type', 'owner_id', 'slot'],
+      }] : []
+    }),
+  }
 }
+
+const mediaPlacementObject = mediaPlacementInputSchema()
+const singleMediaPlacementObject = mediaPlacementInputSchema(true)
+const orderedMediaPlacementObject = mediaPlacementInputSchema(false)
 
 const mediaMutationOutputSchema = {
   type: 'object',
@@ -57,11 +69,11 @@ const mediaMutationOutputSchema = {
 export const MEDIA_TOOLS: McpToolDefinition[] = [
   organizationTool({
       name: 'set_media',
-      description: 'Assign one media asset to a single-valued CMS placement (a placement that holds at most one asset, such as a post cover, a location hero, or a site logo). Construct placement from the target entity: owner_type is its entity type, owner_id is its id, and slot is the media role. For a post cover use {owner_type:"content_document", owner_id:<post.id>, slot:"cover"}; for a location hero use {owner_type:"business_location", owner_id:<location.id>, slot:"hero"}. Pass asset_id:null to clear it. For an ordered collection (a gallery or a compliance document list, which can hold many assets) use attach_media, remove_media, and reorder_media instead — this tool rejects those. Video cover/hero assets must already have thumbnail_url/poster metadata. For the site logo (slot "logo") or the optional logo for dark backgrounds (slot "logo_dark"), presentation chooses how it is shown: shape "original" (the whole logo, uncropped), "square" or "circle", cropped around focus {x, y} from 0 to 1.',
+      description: 'Assign an asset to one cover, hero or logo; null clears it. Use attach_media for galleries and presentation for logo cropping.',
       domain: 'media',
       minimumRole: 'admin',
       inputSchema: {
-        placement: mediaPlacementObject,
+        placement: singleMediaPlacementObject,
         asset_id: { type: ['string', 'null'], description: 'One asset id, or null to clear this single-valued placement.' },
         presentation: {
           type: 'object',
@@ -83,7 +95,7 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
       domain: 'media',
       minimumRole: 'admin',
       inputSchema: {
-        placement: mediaPlacementObject,
+        placement: orderedMediaPlacementObject,
         asset_id: { type: 'string', description: 'The single media asset id to attach.' },
       },
       required: ['placement', 'asset_id'],
@@ -95,7 +107,7 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
       domain: 'media',
       minimumRole: 'admin',
       inputSchema: {
-        placement: mediaPlacementObject,
+        placement: orderedMediaPlacementObject,
         asset_id: { type: 'string', description: 'The single media asset id to detach.' },
       },
       required: ['placement', 'asset_id'],
@@ -103,11 +115,11 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'reorder_media',
-      description: 'Reorder assets already attached to an ordered collection placement (a gallery or a compliance document list) without changing which assets are attached. Each move names one already-attached asset_id and, optionally, a before_asset_id or after_asset_id (also already attached) to move it next to; omit both to move it to the end. Moves apply in the order given. Rejects the entire call if any named asset or anchor is not currently attached — it never attaches, restores, or detaches anything.',
+      description: 'Move attached gallery or compliance assets before or after an attached neighbor. Omitted anchors move the asset to the end; invalid assets or anchors reject the call.',
       domain: 'media',
       minimumRole: 'admin',
       inputSchema: {
-        placement: mediaPlacementObject,
+        placement: orderedMediaPlacementObject,
         moves: {
           type: 'array',
           items: {
@@ -161,7 +173,7 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
           status: { type: 'string', enum: ['active'] },
           thumbnail_url: { type: ['string', 'null'] },
           kind: { type: 'string', enum: ['image', 'video', 'file'] },
-          placement: { type: ['object', 'null'], properties: mediaPlacementObject.properties, required: mediaPlacementObject.required },
+          placement: { anyOf: [mediaPlacementObject, { type: 'null' }] },
         },
         required: ['asset_id', 'status', 'public_url', 'kind'],
       },
@@ -173,9 +185,8 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
       minimumRole: 'admin',
       inputSchema: {
         asset_id: { type: 'string' },
-        alt_text: { type: 'string' },
+        alt_text: { type: ['string', 'null'], description: 'Omit to retain; null clears the alt text.' },
         category: { type: 'string', enum: [...WRITABLE_MEDIA_CATEGORIES] },
-        anyOf: [{ required: ['alt_text'] }, { required: ['category'] }],
       },
       required: ['asset_id'],
       outputSchema: {
@@ -383,13 +394,16 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
       return place(uploaded)
     }
     case "update_media_asset": {
+      if (!Object.hasOwn(args, 'alt_text') && !Object.hasOwn(args, 'category')) {
+        throw new HTTPError({ statusCode: 400, statusMessage: 'Provide alt_text or category' });
+      }
       const updated = await updateMediaAssetMetadata(
         organization.db,
         requiredString(args, "asset_id"),
         organization.organizationId,
         {
-          alt_text: optionalString(args, "alt_text"),
-          category: (optionalString(args, "category") as never),
+          ...(Object.hasOwn(args, 'alt_text') ? { alt_text: args.alt_text as string | null } : {}),
+          ...(Object.hasOwn(args, 'category') ? { category: args.category as typeof WRITABLE_MEDIA_CATEGORIES[number] } : {}),
         },
       );
       if (!updated) {

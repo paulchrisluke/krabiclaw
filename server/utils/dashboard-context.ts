@@ -6,7 +6,7 @@ import type { H3Event } from 'nitro'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { getAuthSession, type CloudflareEnv } from '~/server/utils/auth'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
-import { assertOrganizationWideAccess, memberAccessPrincipal, resolveUserOrganization, type ResolvedMembership } from '~/server/utils/member-access'
+import { assertOrganizationWideAccess, ASSIGNED_SERVICE_SQL, memberAccessPrincipal, resolveUserOrganization, type ResolvedMembership } from '~/server/utils/member-access'
 import { getOrganizationPlan } from '~/server/utils/billing-access'
 
 import { parsePostalAddress } from '~/utils/postal-address'
@@ -174,7 +174,7 @@ export async function resolveRequestedOrganization(
   return await resolveUserOrganization(env, { userId, organizationId: activeOrganizationId }, event)
 }
 
-export async function getDashboardContext(
+export async function getDashboardMemberContext(
   _event: H3Event,
   _options: DashboardContextOptions & { requireOrganization: false }
 ): Promise<{
@@ -184,7 +184,7 @@ export async function getDashboardContext(
   userId: string
   organization: DashboardOrganizationRow | null
 }>
-export async function getDashboardContext(
+export async function getDashboardMemberContext(
   _event: H3Event,
   _options?: DashboardContextOptions
 ): Promise<{
@@ -194,7 +194,7 @@ export async function getDashboardContext(
   userId: string
   organization: DashboardOrganizationRow
 }>
-export async function getDashboardContext(event: H3Event, options: DashboardContextOptions = {}): Promise<{
+export async function getDashboardMemberContext(event: H3Event, options: DashboardContextOptions = {}): Promise<{
   env: ReturnType<typeof cloudflareEnv>
   db: D1Database
   session: NonNullable<Awaited<ReturnType<typeof getAuthSession>>>
@@ -251,9 +251,33 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
   }
   const organization: DashboardOrganizationRow = Object.assign(membership, config)
 
-  await assertOrganizationWideAccess(db, memberAccessPrincipal(organization, { env, event }))
-
   return { env, db, session, userId: session.user.id, organization }
+}
+
+export async function getDashboardContext(
+  _event: H3Event,
+  _options: DashboardContextOptions & { requireOrganization: false }
+): Promise<{
+  env: ReturnType<typeof cloudflareEnv>
+  db: D1Database
+  session: NonNullable<Awaited<ReturnType<typeof getAuthSession>>>
+  userId: string
+  organization: DashboardOrganizationRow | null
+}>
+export async function getDashboardContext(
+  _event: H3Event,
+  _options?: DashboardContextOptions
+): Promise<{
+  env: ReturnType<typeof cloudflareEnv>
+  db: D1Database
+  session: NonNullable<Awaited<ReturnType<typeof getAuthSession>>>
+  userId: string
+  organization: DashboardOrganizationRow
+}>
+export async function getDashboardContext(event: H3Event, options: DashboardContextOptions = {}) {
+  const context = await getDashboardMemberContext(event, options)
+  if (context.organization) await assertOrganizationWideAccess(context.db, memberAccessPrincipal(context.organization, { env: context.env, event }))
+  return context
 }
 
 export async function getDashboardLocationContext(event: H3Event, locationId: string): Promise<{
@@ -313,14 +337,17 @@ export async function getDashboardLocationContext(event: H3Event, locationId: st
 export async function listDashboardLocations(
   db: DbClient,
   organizationId: string,
+  assignedUserId?: string,
 ) {
 
   const locations = await queryAll<Omit<DashboardLocationRow, 'media' | 'social_image' | 'address'> & { address: string | null }>(db, `
-    SELECT id, slug, title, status, timezone, address
-    FROM business_locations
-    WHERE organization_id = ? AND status = 'active'
-    ORDER BY title ASC
-  `, [organizationId])
+    SELECT l.id, l.slug, l.title, l.status, l.timezone, l.address
+    FROM business_locations l
+    WHERE l.organization_id = ? AND l.status = 'active'
+      ${assignedUserId ? `AND EXISTS (SELECT 1 FROM product_locations pl JOIN products p ON p.id = pl.product_id AND p.organization_id = pl.organization_id
+        WHERE pl.organization_id = l.organization_id AND pl.location_id = l.id AND (${ASSIGNED_SERVICE_SQL}))` : ''}
+    ORDER BY l.title ASC
+  `, assignedUserId ? [organizationId, assignedUserId, assignedUserId] : [organizationId])
   const [media, organizationPlacements] = await Promise.all([
     loadPublicSocialMedia(db, organizationId, 'business_location', locations.map(location => location.id)),
     readMediaPlacements(db, { organizationId, ownerType: 'organization', ownerIds: [organizationId], slot: 'social_share' }),

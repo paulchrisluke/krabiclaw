@@ -1,5 +1,5 @@
 export default {
-  "reservations": { "deposit_label": "Reservation deposit" },
+  "reservations": { "deposit_label": "Reservation deposit", "confirmed": "Reservation confirmed" },
   "site_pages": {
       "home": "Home",
       "about": "About",
@@ -19,6 +19,7 @@ export default {
     "reschedule_disallowed": "Time changes are not allowed.",
     "reservation_heading": "Reservation policies",
     "experience_heading": "Experience policies",
+    "consultation_heading": "Consultation policies",
     "reservation_cancellation": "Cancel free up to {duration} before your booking.",
     "experience_cancellation": "Free cancellation is available up to {duration} before the experience starts.",
     "reschedule": "You can reschedule up to {duration} before the start time.",
@@ -34,6 +35,27 @@ export default {
     "time_unavailable": "Time unavailable"
   },
   "booking": {
+    "confirmed": "Booking confirmed",
+    "request_received": "Request received",
+    "request_declined": "Booking request declined",
+    "change_review": "Review changes",
+    "change_pending": "Your booking stays unchanged until you accept. This link expires in 7 days.",
+    "change_accepted": "Changes accepted",
+    "change_updated": "Your booking has been updated.",
+    "change_declined": "Changes declined",
+    "change_unchanged": "Your original booking is unchanged.",
+    "change_accept": "Accept changes",
+    "change_decline": "Decline changes",
+    "change_unavailable": "Change request unavailable",
+    "change_link_help": "Check your link or contact the business.",
+    "change_failed": "Your response could not be saved. Please try again.",
+    "confirmed_message": "Your booking is confirmed.",
+    "pending_message": "Your request is waiting for confirmation from the business.",
+    "receipt": "Booking details",
+    "receipt_failed": "Booking details could not be loaded",
+    "receipt_missing": "No booking found",
+    "receipt_missing_description": "Open the booking link in your confirmation email to view your details.",
+    "free": "Free",
     "choose_location": "Choose a location",
     "online": "Online",
     "phone_country": "Phone country",
@@ -53,7 +75,11 @@ export default {
     "price_unavailable_contact": "Price unavailable. Please contact us to schedule.",
     "review_notice": "Your request is reviewed before your appointment is confirmed.",
     "instant_notice": "Your appointment is confirmed when you book.",
-    "sessions_failed": "Available times could not be loaded. Please try again."
+    "sessions_failed": "Available times could not be loaded. Please try again.",
+    "provider_title": "Who you’ll meet",
+    "provider_loading": "Loading profile…",
+    "provider_failed": "Profile could not be loaded",
+    "provider_retry": "Try again"
   },
   "guest_account": {
     "title": "Keep track of your bookings",

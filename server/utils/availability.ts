@@ -590,8 +590,8 @@ export interface ProductBookingSetupInput {
   location_id: string | null
   duration_minutes: number
   default_capacity: number | null
-  confirmation_mode: 'instant' | 'review'
-  online_payment_required: boolean
+  confirmation_mode?: 'instant' | 'review'
+  online_payment_required?: boolean
   online_timezone?: string | null
   calendar_group?: string | null
   scheduling_mode?: 'legacy' | 'provider'
@@ -627,7 +627,6 @@ export async function prepareProductBookingSetup(db: DbClient, input: {
   const booking = input.booking
   if (!Number.isSafeInteger(booking.duration_minutes) || booking.duration_minutes <= 0) badRequest('Provide the session duration before creating a bookable offering')
   if (booking.default_capacity !== null && (!Number.isSafeInteger(booking.default_capacity) || booking.default_capacity <= 0)) badRequest('Provide places per session, or explicit null for unlimited places')
-  if (!['instant', 'review'].includes(booking.confirmation_mode) || typeof booking.online_payment_required !== 'boolean') badRequest('Provide the confirmation and payment policy')
   const location = booking.location_id === null ? null : await queryFirst<SessionLocation>(db, 'SELECT id,timezone,status,opening_hours,special_hours FROM business_locations WHERE organization_id=? AND id=?', [input.organizationId, booking.location_id])
   if (booking.location_id !== null && (!location || location.status !== 'active')) badRequest('Choose an active location in this business')
   const { location_id: locationId, weekly_slots: weeklySlots, sessions: oneOffSessions, ...patch } = booking
@@ -727,7 +726,7 @@ export async function listSessions(db: DbClient, input: {
 }): Promise<SessionAvailability[]> {
   const statuses = input.statuses ?? ['scheduled']
   const sessions = await queryAll<SessionAvailability>(db, `
-    SELECT s.id, s.organization_id, s.product_id, s.location_id, s.availability_rule_id, s.assigned_member_id,
+    SELECT s.id, s.organization_id, s.product_id, s.location_id, s.availability_rule_id, ${sessionMemberSql('s')} AS assigned_member_id,
            s.source_occurrence_key, s.timezone, s.starts_at, s.ends_at, s.capacity, s.status, s.created_at, s.updated_at,
            COALESCE((
              SELECT SUM(b.party_size) FROM bookings b

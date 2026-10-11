@@ -2,12 +2,13 @@
   <section class="relative pb-14 pt-14 sm:pb-20 sm:pt-14 lg:pb-14" :data-parity-section="paritySection">
     <div class="blawby-container relative z-20">
       <BlawbySectionHeading
+        v-if="title || description"
         :title="title"
         :accent="accent"
         :description="description"
         centered
       />
-      <BlawbyPageGrid :items="items" class="mt-20" />
+      <BlawbyPageGrid :items="items" :image-slot="imageSlot" class="mt-20" />
     </div>
     <img v-if="decorationUrl" :src="decorationUrl" alt="" width="1920" height="400" loading="lazy" class="absolute bottom-0 w-full object-contain object-center">
   </section>
@@ -22,25 +23,29 @@ const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
 /** A decoration the block carries, which is the page's own art, not content. */
 const decorationUrl = computed(() => blockMedia(props.block, 'decoration')[0]?.public_url ?? null)
 
-/**
- * The pages this section links to, exactly as the block resolved them. No
- * reshaping: the block already carries each page's title, summary, route and
- * media, and re-deriving a slug from the route was how a card came to point at
- * a path nobody published.
- */
+/** The referenced resources, with their canonical routes and media. */
 const items = computed(() => blockRecords(props.block.data.items).map(item => ({
   id: blockText(item.id),
   title: blockText(item.title),
   description: blockText(item.description) || undefined,
-  url: blockText(item.url),
+  url: blockText(item.url) || undefined,
+  city: blockText(item.city) || undefined,
+  address: blockText(item.address) || undefined,
+  value: blockText(item.value) || undefined,
+  compareAt: blockText(item.compare_at) || undefined,
+  featured: item.featured === true,
+  unavailable: item.unavailable === true,
   schedulingSummary: blockText(item.scheduling_summary) || undefined,
-  media: (Array.isArray(item.media) ? item.media : []).map(media => ({
-    slot: blockText((media as Record<string, unknown>).slot),
-    public_url: blockText((media as Record<string, unknown>).public_url),
+  media: blockRecords(item.media).map(media => ({
+    slot: blockText(media.slot),
+    public_url: blockText(media.public_url),
+    thumbnail_url: blockText(media.thumbnail_url) || undefined,
+    kind: blockText(media.kind),
   })).filter(media => media.slot && media.public_url),
-})).filter(item => item.id && item.title && item.url))
+})).filter(item => item.id && item.title))
 const title = computed(() => blockText(props.block.data.title))
 const accent = computed(() => blockText(props.block.data.accent))
 const description = computed(() => blockText(props.block.data.description))
-const paritySection = computed(() => 'services')
+const imageSlot = computed(() => props.block.type === 'product_grid' ? 'image' : props.block.type === 'location_grid' ? 'hero' : 'cover')
+const paritySection = computed(() => props.block.type === 'location_grid' ? 'locations' : props.block.type === 'product_grid' ? 'products' : 'services')
 </script>

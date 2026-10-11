@@ -207,13 +207,33 @@ for (const tenant of tenants) {
   })
 }
 
-test('an English-only tenant does not classify one-segment CMS paths as locales', async ({ page }) => {
-  for (const path of ['/th', '/th/about', '/th/products', '/th/links']) {
-    const response = await openTenantPage(page, `${potteryHouseBaseURL}${path}`, potteryHouseExtraHeaders)
-    expect(response?.status()).toBe(404)
-    await expect(page.locator('html')).toHaveAttribute('lang', 'en')
-    await expect(page.locator('body')).not.toContainText(/เนื้อหาภาษาไทย/)
-  }
+test('Pottery House serves its published Thai language and catalog', async ({ page }) => {
+  const localesResponse = await page.request.get(`${potteryHouseBaseURL}/api/public/locales`, { headers: potteryHouseExtraHeaders })
+  expect(localesResponse.status(), await localesResponse.text()).toBe(200)
+  const { locales } = await localesResponse.json()
+  expect(locales).toContainEqual(expect.objectContaining({ code: 'th', is_source: false, status: 'published' }))
+
+  const catalogResponse = await page.request.get(`${potteryHouseBaseURL}/api/public/products?locale=th`, { headers: potteryHouseExtraHeaders })
+  expect(catalogResponse.status(), await catalogResponse.text()).toBe(200)
+  expect((await catalogResponse.json()).products).toEqual([])
+  const experienceResponse = await page.request.get(`${potteryHouseBaseURL}/api/public/experiences/pottery-wheel-class?locale=th`, { headers: potteryHouseExtraHeaders })
+  expect(experienceResponse.status(), await experienceResponse.text()).toBe(200)
+  const { product: wheel } = await experienceResponse.json() as { product: { id: string; slug: string; kind: string; name: string } }
+  expect(wheel).toMatchObject({ id: 'exp-ph-wheel', slug: 'pottery-wheel-class', kind: 'experience', name: 'คลาสปั้นด้วยแป้นหมุน' })
+
+  const home = await openTenantPage(page, `${potteryHouseBaseURL}/th`, potteryHouseExtraHeaders)
+  expect(home?.status()).toBe(200)
+  await waitForNuxtHydration(page)
+  await expect(page.locator('html')).toHaveAttribute('lang', 'th')
+  await expect(page.getByRole('navigation', { name: 'การนำทางหลัก', exact: true })).toBeVisible()
+  await expect(page.getByRole('combobox', { name: 'ภาษา', exact: true })).toHaveValue('th')
+  await expect(page.getByText(wheel.name, { exact: true }).first()).toBeVisible()
+
+  const detail = await openTenantPage(page, `${potteryHouseBaseURL}/th/experiences/${wheel.slug}`, potteryHouseExtraHeaders)
+  expect(detail?.status()).toBe(200)
+  await waitForNuxtHydration(page)
+  await expect(page.locator('html')).toHaveAttribute('lang', 'th')
+  await expect(page.getByRole('heading', { name: wheel.name, exact: true, level: 1 })).toBeVisible()
 })
 
 test.describe('NCLS representative journeys', () => {

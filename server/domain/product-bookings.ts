@@ -12,6 +12,8 @@ import { productPolicySummarySource, renderBookingPolicySummary } from '~/server
 import { getProduct, resolveVariantPrice } from '~/server/utils/product-management'
 import { isCurrencyCode } from '~/shared/currencies'
 import { getSourceLocale } from '~/server/utils/organization-locales'
+import { assertExactCanonicalLocale, assertPublicOrganizationLanguageEntitlement } from '~/server/utils/localization'
+import { formatTenantLocalePath } from '~/utils/tenant-locale-path'
 import { buildOwnerThreadInboxUrl } from '~/server/utils/dashboard-notification-links'
 import { createReplayableReservationCancelToken, hashReservationCancelToken } from '~/server/utils/reservation-cancel-token'
 import { ensureInteractionUser, type CloudflareEnv } from '~/server/utils/auth'
@@ -44,11 +46,13 @@ export async function notifyProductBookingCreated(env: CloudflareEnv, db: DbClie
   if (!request || request.kind !== 'booking' || !record || record.kind !== 'booking' || record.organization_id !== organizationId || !record.product_id || !record.product_name || !organization) throw new Error('Booking creation delivery requires its canonical tenant, request and offering')
   const creation = await queryFirst<{ status: string }>(db, `SELECT json_extract(payload_json, '$.afterStatus') AS status FROM activity_entries WHERE request_id = ? AND event_name = 'booking.created' AND dedupe_key = ?`, [requestId, `booking:${record.id}:created`])
   if (creation?.status !== 'pending' && creation?.status !== 'confirmed') throw new Error('Booking creation status is missing or invalid')
+  const sourceLocale = await getSourceLocale(db, organizationId)
+  const locale = request.payload.guest.locale ?? sourceLocale
   const token = cancellationToken ?? (await createReplayableReservationCancelToken(env.EMAIL_REPLY_SECRET ?? '', requestId)).token
   const tokenMatches = await hashReservationCancelToken(token) === request.payload.cancellation.token_hash
   if (cancellationToken && !tokenMatches) throw new Error('Booking cancellation capability does not match its request')
   const cancelUrl = tokenMatches && organization.public_url
-    ? `${organization.public_url.replace(/\/$/, '')}/bookings/cancel?id=${requestId}#${token}`
+    ? `${organization.public_url.replace(/\/$/, '')}${formatTenantLocalePath('/bookings/cancel', locale, sourceLocale)}?id=${requestId}#${token}`
     : env.NUXT_PUBLIC_PLATFORM_DOMAIN ? new URL('/account', env.NUXT_PUBLIC_PLATFORM_DOMAIN).toString() : null
   const [{ contactPhone, contactEmail }, ownerInboxUrl] = await Promise.all([
     resolveLocationContact(db, organizationId, record.location_id),
@@ -63,7 +67,7 @@ export async function notifyProductBookingCreated(env: CloudflareEnv, db: DbClie
       email: request.payload.guest.email, guestPhone: request.payload.guest.phone,
       productId: record.product_id, productTitle: record.product_name, startsAt: record.starts_at,
       timezone: record.timezone, partySize: record.party_size, notes: request.payload.notes,
-      cancelUrl, contactPhone, contactEmail, ownerInboxUrl,
+      cancelUrl, contactPhone, contactEmail, ownerInboxUrl, locale,
     }),
   ])
   raiseSettledFailures('booking creation delivery', `bookingId ${requestId}`, results)
@@ -88,6 +92,7 @@ export async function createProductBooking(event: H3Event, context: BookingCreat
 
   const organization = await queryFirst<{ id: string; slug: string; name: string | null; default_currency: string; vertical: string | null; public_url: string | null }>(db, `SELECT id, slug, name, default_currency, vertical, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active') AS public_url FROM organization WHERE id = ? AND status = 'active' LIMIT 1`, [organizationId])
   if (!organization) return creationResult({ error: 'Organization not found' }, { status: 404 })
+  const locale = body.locale === undefined ? await getSourceLocale(db, organizationId) : assertExactCanonicalLocale(body.locale)
 
   const guestName = cleanString(body.guest_name, 100)
   const guestEmail = cleanString(body.guest_email, 254)
@@ -169,6 +174,7 @@ export async function createProductBooking(event: H3Event, context: BookingCreat
     return creationResult({ success: true, status: 'checkout', replayed: true, ...checkout }, { status: 200 })
   }
 
+  await assertPublicOrganizationLanguageEntitlement(env, db, organizationId, locale)
   const product = await queryFirst<{ id: string; name: string; order_url: string | null }>(db, `
     SELECT p.id, p.name, p.order_url FROM products p
       JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
@@ -252,7 +258,7 @@ export async function createProductBooking(event: H3Event, context: BookingCreat
   const userId = operator ? null : await ensureInteractionUser(event, env)
 
   const now = new Date().toISOString()
-  const payload = threadPayloadForGuest({ name: guestName, email: guestEmail, phone: normalizedGuestPhone, notes, ipHash })
+  const payload = threadPayloadForGuest({ name: guestName, email: guestEmail, phone: normalizedGuestPhone, locale, notes, ipHash })
   payload.provenance = { source: operator?.source ?? 'website', external_reference: operator?.externalReference ?? null, actor_user_id: operator?.userId ?? null,
     idempotency_key: idempotencyKey, fingerprint, guest_acknowledgement: operator?.guestAcknowledgement ?? true,
     creation_kind: requiresPayment ? 'checkout' : 'ordinary', creation_status: config.confirmation_mode === 'review' ? 'pending' : 'confirmed', followups_completed: false }
@@ -350,13 +356,9 @@ export async function createProductBooking(event: H3Event, context: BookingCreat
     return { ...recorded, quotedValue }
   }
 
-  const requestedLocale = cleanString(body.locale, 10)
-  const [locale, ...followUps] = await Promise.all([
-    requestedLocale && /^[a-z]{2}(-[A-Z]{2})?$/.test(requestedLocale) ? requestedLocale : getSourceLocale(db, organization.id),
-    ...await Promise.allSettled([
-      notifyProductBookingCreated(env, db, organization.id, threadId, cancellation.token),
-      operator ? Promise.resolve({ recorded: false, reason: 'operator_creation', quotedValue: null }) : recordBookingMeasurement(),
-    ]),
+  const followUps = await Promise.allSettled([
+    notifyProductBookingCreated(env, db, organization.id, threadId, cancellation.token),
+    operator ? Promise.resolve({ recorded: false, reason: 'operator_creation', quotedValue: null }) : recordBookingMeasurement(),
   ])
   // Only the owner notification can fail the request. Measurement is reported beside the
   // committed result: a guest told a confirmed submission failed would submit again.
@@ -373,6 +375,6 @@ export async function createProductBooking(event: H3Event, context: BookingCreat
   return creationResult({
     success: true, booking_id: threadId, request_id: threadId, operational_booking_id: operationalBookingId, status: record.status, replayed: false, starts_at: record.starts_at, ends_at: record.ends_at, timezone: record.timezone, presentation, ...(operator ? {} : { cancellation_token: cancellation.token, quoted_value: quotedValueOf(followUps[1]!), measurement }),
     message: record.status === 'cancelled' ? 'This booking was cancelled.' : record.status === 'pending' ? `Your request for ${record.product_name} on ${whenLabel} is awaiting review.` : `Your ${presentation.noun} for ${record.product_name} on ${whenLabel} is confirmed.`,
-    policy_summary: renderBookingPolicySummary(productPolicySummarySource(full.details), locale),
+    policy_summary: renderBookingPolicySummary(productPolicySummarySource(full.details), locale, full.kind),
   }, { status: 201 })
 }

@@ -543,10 +543,7 @@ registry.en.service = {
   experiencesPageTitle: "Services",
   experiencesPageSubtitle:
     "Professional services and practice areas you can explore before getting in touch.",
-  locationGroupLine: (_count: number) => {
-    const count = _count
-    return `${count} service presence${count === 1 ? "" : "s"}, one team.`
-  },
+  locationGroupLine: (_count: number) => "Our locations",
   bookingNotesPlaceholder:
     "Tell us what kind of help you need, preferred contact times, or accessibility notes.",
   contactLocationsByHeading: "Contact details and service-area information.",

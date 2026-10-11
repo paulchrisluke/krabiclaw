@@ -88,7 +88,7 @@ export async function loadPublicShellSource(
   options.signal?.throwIfAborted()
   const payload = {
     success: true,
-    ...buildPublicShellPayload(organization, shellResults, shellIndexes),
+    ...(await buildPublicShellPayload(db, organization, shellResults, shellIndexes, env)),
     count: shellResults[shellIndexes.locations]?.results?.length ?? 0,
     platformMessages: entitlement.platform_messages,
   }

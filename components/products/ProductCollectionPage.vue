@@ -82,11 +82,12 @@
         <section
           v-for="group in groups"
           :id="`cat-${group.id}`"
-          :key="group.category"
+          :key="group.id"
           class="mb-24"
           :style="{ scrollMarginTop: `${categoryNavHeight}px` }"
         >
           <div class="mb-8 border-b border-default pb-6">
+            <p v-if="showLocations && group.location_id" class="saya-kicker mb-2">{{ locationTitle(group.location_id) }}</p>
             <h2 class="saya-display saya-italic text-5xl text-default">{{ group.category }}</h2>
             <p v-if="group.description" class="mt-4 text-sm leading-relaxed text-muted">{{ group.description }}</p>
           </div>
@@ -121,6 +122,9 @@
                       {{ product.name }}
                     </NuxtLink>
                     <span v-else class="text-default opacity-50">{{ product.name }}</span>
+                    <span v-if="product.details.featured === true" class="inline-flex shrink-0 items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                      {{ t('saya.posts.featured') }}
+                    </span>
                     <SayaBadgeUnavailable
                       v-if="!isAvailable(product, group.location_id)"
                       :text="t('saya.menu_page.unavailable')"
@@ -390,7 +394,7 @@ const groups = computed(() => {
 })
 const categoryTabs = computed(() => groups.value.map(group => ({
   key: group.id,
-  label: group.category,
+  label: showLocations.value && group.location_id ? `${locationTitle(group.location_id)} · ${group.category}` : group.category,
   sectionId: `cat-${group.id}`,
 })))
 const userSelectedCategory = ref('')

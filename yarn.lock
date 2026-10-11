@@ -6133,6 +6133,87 @@ __metadata:
   languageName: node
   linkType: hard
 
+"better-auth@patch:better-auth@npm%3A1.7.5#~/patches/better-auth-npm-1.7.5.patch":
+  version: 1.7.5
+  resolution: "better-auth@patch:better-auth@npm%3A1.7.5#~/patches/better-auth-npm-1.7.5.patch::version=1.7.5&hash=049cef"
+  dependencies:
+    "@better-auth/core": "npm:1.7.5"
+    "@better-auth/drizzle-adapter": "npm:1.7.5"
+    "@better-auth/kysely-adapter": "npm:1.7.5"
+    "@better-auth/memory-adapter": "npm:1.7.5"
+    "@better-auth/mongo-adapter": "npm:1.7.5"
+    "@better-auth/prisma-adapter": "npm:1.7.5"
+    "@better-auth/telemetry": "npm:1.7.5"
+    "@better-auth/utils": "npm:0.4.2"
+    "@better-fetch/fetch": "npm:1.3.2"
+    "@noble/ciphers": "npm:^2.2.0"
+    "@noble/hashes": "npm:^2.2.0"
+    better-call: "npm:1.4.0"
+    defu: "npm:^6.1.4"
+    jose: "npm:^6.2.3"
+    kysely: "npm:^0.28.17 || ^0.29.0"
+    nanostores: "npm:^1.3.0"
+    zod: "npm:^4.5.4"
+  peerDependencies:
+    "@lynx-js/react": "*"
+    "@prisma/client": ^5.0.0 || ^6.0.0 || ^7.0.0
+    "@sveltejs/kit": ^2.0.0
+    "@tanstack/react-start": ^1.0.0
+    "@tanstack/solid-start": ^1.0.0
+    drizzle-kit: ">=0.31.4 || >=1.0.0-beta.1"
+    drizzle-orm: ^0.45.2 || >=1.0.0-rc.1 <2.0.0
+    mongodb: ^6.0.0 || ^7.0.0
+    mysql2: ^3.0.0
+    next: ^14.0.0 || ^15.0.0 || ^16.0.0
+    pg: ^8.0.0
+    prisma: ^5.0.0 || ^6.0.0 || ^7.0.0
+    react: ^18.0.0 || ^19.0.0
+    react-dom: ^18.0.0 || ^19.0.0
+    solid-js: ^1.0.0
+    svelte: ^4.0.0 || ^5.0.0
+    vitest: ^2.0.0 || ^3.0.0 || ^4.0.0 || ^5.0.0
+    vue: ^3.0.0
+  peerDependenciesMeta:
+    "@lynx-js/react":
+      optional: true
+    "@prisma/client":
+      optional: true
+    "@sveltejs/kit":
+      optional: true
+    "@tanstack/react-start":
+      optional: true
+    "@tanstack/solid-start":
+      optional: true
+    drizzle-kit:
+      optional: true
+    drizzle-orm:
+      optional: true
+    mongodb:
+      optional: true
+    mysql2:
+      optional: true
+    next:
+      optional: true
+    pg:
+      optional: true
+    prisma:
+      optional: true
+    react:
+      optional: true
+    react-dom:
+      optional: true
+    solid-js:
+      optional: true
+    svelte:
+      optional: true
+    vitest:
+      optional: true
+    vue:
+      optional: true
+  checksum: 10c0/864e18b24d52820efb986a0e6166efcb2fb841b86521ede54179bf6d6d3688627ea5e3b35130d154e9c3ecc6e9bf245feaf31c91c108b179db60b19710f29381
+  languageName: node
+  linkType: hard
+
 "better-call@npm:1.4.0":
   version: 1.4.0
   resolution: "better-call@npm:1.4.0"
@@ -10327,7 +10408,7 @@ __metadata:
     "@vue-email/style": "npm:0.0.3"
     "@vue-email/text": "npm:0.0.3"
     ajv: "npm:8.20.0"
-    better-auth: "npm:1.7.5"
+    better-auth: "patch:better-auth@npm%3A1.7.5#~/patches/better-auth-npm-1.7.5.patch"
     better-sqlite3: "npm:^12.11.1"
     cookie-es: "npm:^3.1.1"
     cross-env: "npm:^10.1.0"

@@ -36,7 +36,7 @@ export function isEditableMediaPlacementOwnerType(value: string): value is Edita
   return EDITABLE_MEDIA_PLACEMENT_OWNERS.some(ownerType => ownerType === value)
 }
 
-const INDEXED_SLOTS = [
+export const INDEXED_MEDIA_PLACEMENT_SLOTS = [
   { ownerType: 'content_block', runtime: /^items\.\d+\.image$/, sqlGlob: 'items.[0-9]*.image' },
   // A showcase statement's three pictures.
   { ownerType: 'content_block', runtime: /^items\.\d+\.left$/, sqlGlob: 'items.[0-9]*.left' },
@@ -88,7 +88,7 @@ export function isSupportedMediaPlacement(placement: { owner_type: string; slot:
     ? MEDIA_PLACEMENT_SLOTS[placement.owner_type]
     : undefined
   return slots?.some(slot => slot === placement.slot) === true
-    || INDEXED_SLOTS.some(pattern => pattern.ownerType === placement.owner_type && pattern.runtime.test(placement.slot))
+    || INDEXED_MEDIA_PLACEMENT_SLOTS.some(pattern => pattern.ownerType === placement.owner_type && pattern.runtime.test(placement.slot))
 }
 
 export function isEditableMediaPlacement(placement: { owner_type: string; slot: string }) {

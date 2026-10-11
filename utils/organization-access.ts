@@ -12,7 +12,7 @@ const statements = {
   content: ['read', 'create', 'update', 'delete', 'publish'],
   media: ['read', 'create', 'update', 'delete'],
   blog: ['read', 'create', 'update', 'delete', 'publish'],
-  products: ['read', 'create', 'update', 'delete'],
+  products: ['read', 'create', 'update', 'delete', 'assigned'],
   experiences: ['read', 'create', 'update', 'delete'],
   reservations: ['read', 'reply', 'update', 'cancel'],
   orders: ['read', 'reply', 'update', 'cancel'],
@@ -26,7 +26,7 @@ const statements = {
   billing: ['read', 'update'],
   settings: ['read', 'update'],
   integrations: ['read', 'create', 'update', 'delete'],
-  operations: ['read', 'reply', 'update'],
+  operations: ['read', 'reply', 'update', 'assigned'],
 } as const
 
 export const organizationAccessControl = createAccessControl(statements)
@@ -41,7 +41,7 @@ export type OrganizationPermissions = {
   [Resource in keyof typeof statements]?: Array<(typeof statements)[Resource][number]>
 }
 export const organizationRoles = {
-  member: organizationAccessControl.newRole({ scheduling: ['own'] }),
+  member: organizationAccessControl.newRole({ scheduling: ['own'], products: ['assigned'], operations: ['assigned'] }),
   owner: organizationAccessControl.newRole({
     ...ownerAc.statements,
     scheduling: ['own'],

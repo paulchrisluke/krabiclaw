@@ -6,7 +6,7 @@ import type { H3Event } from 'nitro'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { getOrganizationEntitlements } from '~/server/utils/billing-access'
 import { listLocationQa } from '~/server/utils/location-qa'
-import { requireLocationAccess, requireOrganizationAccess } from '~/server/utils/location-access'
+import { requireLocationAccess, requireOrganizationAccess, requireProductAccess } from '~/server/utils/location-access'
 import {
   assertLocationAccess,
   assertResourceAccess,
@@ -246,7 +246,7 @@ export async function loadDashboardProduct(
   locationId: string,
   productId: string,
 ) {
-  const { db, organization } = await requireLocationAccess(event, organizationId, locationId)
+  const { db, organization } = await requireProductAccess(event, organizationId, productId)
   const product = await getProduct(db, organization.id, productId)
   // The catalog is organization-owned, so being offered here is what makes
   // this location's editor the right place to open it.
@@ -259,4 +259,3 @@ export async function loadDashboardProduct(
   const [hydrated] = await hydrateProductMedia(db, organizationId, [product])
   return { success: true as const, product: hydrated! }
 }
-

@@ -126,6 +126,7 @@ export const BLAWBY_ROUTE_RECIPES = [
   'third-party-notices',
   // The short-post feed and a post, which read the posts themselves.
   'posts',
+  'experiences',
   // Any other page this site publishes, addressed by its own path. The named
   // recipes above are pages with branded sections; this one is the page.
   'page',
@@ -136,7 +137,7 @@ export type BlawbyRouteRecipe = typeof BLAWBY_ROUTE_RECIPES[number]
 // 'article' is every article-collection route — an article, the docs index and
 // a doc. The article page reads the article itself, the same way on every
 // template, so the Blawby document carries only the site's chrome for it.
-export const BLAWBY_SHELL_ONLY_ROUTE_RECIPES = ['links', 'article', 'posts'] as const
+export const BLAWBY_SHELL_ONLY_ROUTE_RECIPES = ['links', 'article', 'posts', 'experiences'] as const
 
 export type BlawbyShellOnlyRouteRecipe = typeof BLAWBY_SHELL_ONLY_ROUTE_RECIPES[number]
 
@@ -149,7 +150,6 @@ export interface PublicBlawbyRouteData {
   localeRepresentations: PublicLocaleRepresentation[]
   page: PublicTenantPage | null
   qa: PublicOrganizationQa[]
-  reviews: PublicOrganizationReview[]
 }
 
 export type PublicTenantPage = import('~/server/utils/public-tenant-pages').PublicTenantPage
@@ -213,9 +213,9 @@ export interface PublicBlawbyIdentity {
 export interface PublicBlawbyShellData {
   identity: PublicBlawbyIdentity
   consultation: PublicConsultationSettings
+  canSchedule: boolean
   compliance: PublicCompliance | null
   pageLinks: PublicBlawbyPageLink[]
   /** The Search Console META token, served while Google needs to see it. */
   searchConsoleVerification: string | null
 }
-

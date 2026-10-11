@@ -49,17 +49,19 @@ const items = computed(() => blockRecords(props.block.data.items).map((item) => 
     // A product with no current offer cannot be bought today, whatever the
     // card says next to it.
     unavailable: item.unavailable === true,
+    featured: item.featured === true,
     category: blockText(item.category) || null,
   }
 }).filter(item => item.name))
 
 const allExperiences = computed(() => items.value.length > 0 && items.value.every(item => item.kind === 'experience'))
+const allFeatured = computed(() => items.value.length > 0 && items.value.every(item => item.featured))
 const featured = computed(() => ({
   items: items.value,
   kicker: blockText(props.block.data.description)
     || (allExperiences.value ? homeCopy.value.experiencesPageTitle : presentation.value?.locationCollectionSegment === 'menu' ? t('saya.footer.menu') : t('saya.footer.products')),
   heading: blockText(props.block.data.title)
-    || (allExperiences.value ? t('saya.experiences.collection_title', { organization: brandName.value }) : presentation.value?.locationCollectionSegment === 'menu' ? t('saya.footer.menu') : t('saya.products.collection_title', { organization: brandName.value })),
+    || (allFeatured.value ? t('saya.posts.featured') : allExperiences.value ? t('saya.experiences.collection_title', { organization: brandName.value }) : presentation.value?.locationCollectionSegment === 'menu' ? t('saya.footer.menu') : t('saya.products.collection_title', { organization: brandName.value })),
   linkTarget: allExperiences.value ? '/experiences' : presentation.value?.collectionPath ?? null,
 }))
 </script>

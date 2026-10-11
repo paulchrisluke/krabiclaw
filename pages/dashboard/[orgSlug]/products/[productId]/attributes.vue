@@ -15,6 +15,7 @@ const p = inject(productEditorKey)!
 const level = useRouteLevel()
 
 function valueSummary(definition: ProductDetailField): string {
+  if (definition.value_type === 'boolean') return p.form.details[definition.key] === true ? 'On' : 'Off'
   if (definition.value_type === 'list.single_line_text') return p.listValue(definition).join(', ')
   return p.textValue(definition)
 }

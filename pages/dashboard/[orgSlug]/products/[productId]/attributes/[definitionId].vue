@@ -12,8 +12,14 @@
     @save="p.save(level.to.value ?? undefined)"
   >
     <template v-if="definition">
+      <USwitch
+        v-if="definition.value_type === 'boolean'"
+        :model-value="p.form.details[definition.key] === true"
+        :label="definition.name"
+        @update:model-value="p.setDetail(definition, $event)"
+      />
       <UInputTags
-        v-if="definition.value_type === 'list.single_line_text'"
+        v-else-if="definition.value_type === 'list.single_line_text'"
         :model-value="p.listValue(definition)"
         placeholder="Add a value"
         delimiter=","

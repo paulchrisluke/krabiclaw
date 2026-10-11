@@ -8,6 +8,12 @@ import { devLoginHeaders, E2E_POTTERY_ORGANIZATION_ID as org, potteryHouseTestEx
 
 type Created = { success: boolean; operational_booking_id: string; request_id: string; status: string; replayed: boolean; code?: string }
 
+// The local Worker inherits the runner's real provider bindings; Playwright
+// supplies its localhost platform URL. CI may supply the complete TEST setup.
+const paymentsProviderConfigured = ['STRIPE_SECRET_KEY', 'STRIPE_PAYMENTS_METHOD_CONFIGURATION', 'METRONOME_API_KEY', 'METRONOME_RATE_CARD_ID']
+  .every(name => Boolean(process.env[name]))
+const missingProviderConfiguration = paymentsProviderConfigured ? [] : ['payments.configuration']
+
 test('MCP Product booking uses public capacity, durable replay, guest identity and canonical inbox transitions', async ({ page, request, baseURL }, testInfo) => {
   test.skip(!['localhost', '127.0.0.1'].includes(new URL(baseURL!).hostname), 'Writes and log-only delivery require isolated local D1')
   const release = await acquireTenantMutationLock(testInfo, org)
@@ -151,9 +157,18 @@ test('MCP Product booking uses public capacity, durable replay, guest identity a
       const beforePaymentPolicy = await request.get(editor)
       expect(beforePaymentPolicy.status()).toBe(200)
       const payLaterPolicy = (await beforePaymentPolicy.json()).product.booking as ProductBookingConfig
+      const billing = await request.get(`${baseURL}/api/billing/status?organizationId=${org}`)
+      expect(billing.status(), await billing.text()).toBe(200)
+      expect((await billing.json()).billing).toMatchObject({ plan: 'growth', subscriptionStatus: 'active' })
+      const usage = await request.get(`${baseURL}/api/dashboard/payments/billing?org=${encodeURIComponent(orgSlug)}`)
+      expect(usage.status(), await usage.text()).toBe(200)
+      expect((await usage.json()).configured).toBe(false)
+      expect((await call<{ configured: boolean }>('get_payment_payouts', {})).configured).toBe(false)
       const paymentPolicy = await request.put(`${editor}/booking`, { data: { duration_minutes: 120, default_capacity: 8, confirmation_mode: 'instant', online_payment_required: true } })
-      expect(paymentPolicy.status()).toBe(403)
-      expect((await paymentPolicy.json()).message).toBe('Payments entitlement is required for online collection')
+      expect(paymentPolicy.status(), await paymentPolicy.text()).toBe(paymentsProviderConfigured ? 403 : 503)
+      const paymentError = await paymentPolicy.json()
+      expect(paymentError.message).toBe('Complete the business’s Payments setup before accepting online payments')
+      expect(paymentError.data).toEqual({ code: 'financial_action_required', dashboard_url: `/dashboard/${encodeURIComponent(orgSlug)}/payments`, missing: ['payments.entitlement', ...missingProviderConfiguration, 'payments.billing', 'payments.account'] })
       const rejectedPolicyReadback = await request.get(editor)
       expect(rejectedPolicyReadback.status()).toBe(200)
       expect((await rejectedPolicyReadback.json()).product.booking).toEqual(payLaterPolicy)
@@ -199,6 +214,13 @@ test('MCP online collection returns the real Payments setup handoff without chan
       return mcpData<T>(await response.json())
     }
     const context = await call<{ context: { organization_slug: string } }>('get_organization')
+    const billing = await request.get(`${baseURL}/api/billing/status?organizationId=${organizationId}`)
+    expect(billing.status(), await billing.text()).toBe(200)
+    expect((await billing.json()).billing).toMatchObject({ plan: 'commerce', subscriptionStatus: 'active' })
+    const usage = await request.get(`${baseURL}/api/dashboard/payments/billing?org=${encodeURIComponent(context.context.organization_slug)}`)
+    expect(usage.status(), await usage.text()).toBe(200)
+    expect((await usage.json()).configured).toBe(false)
+    expect((await call<{ configured: boolean }>('get_payment_payouts')).configured).toBe(false)
     const created = await call<{ product: { id: string } }>('create_product', {
       kind: 'service', name: `Paid appointment ${crypto.randomUUID()}`, idempotency_key: crypto.randomUUID(),
       variants: [{ name: 'Appointment', prices: [{ unit_amount: 10000, currency: 'USD' }] }],
@@ -220,15 +242,22 @@ test('MCP online collection returns the real Payments setup handoff without chan
       const result = (await response.json()).result
       expect(result.isError).toBe(true)
       expect(result.structuredContent).toBeUndefined()
-      expect(JSON.parse(result.content[0].text)).toMatchObject({ status: 409, success: false, operation_completed: false, action_required: true, code: 'financial_action_required', dashboard_url: dashboardUrl })
+      expect(JSON.parse(result.content[0].text)).toMatchObject({ status: paymentsProviderConfigured ? 409 : 503, success: false, operation_completed: false, action_required: true, code: 'financial_action_required', dashboard_url: dashboardUrl, missing: [...missingProviderConfiguration, 'payments.billing', 'payments.account'] })
       expect(result.content[0].text).toContain(dashboardUrl)
     }
     const stored = await request.get(editor)
     expect(stored.status()).toBe(200)
     expect((await stored.json()).product).toEqual(before)
     expect(await call('list_payments', period)).toEqual(payments)
-    const sessions = await call<{ sessions: unknown[] }>('list_product_booking_sessions', { product_id: productId, ...period })
-    expect(sessions.sessions).toEqual([])
+    const sessionsResponse = await mcpRequest(request, baseURL!, {
+      method: 'tools/call', toolName: 'list_product_booking_sessions',
+      args: { organization_id: organizationId, product_id: productId, ...period },
+    })
+    expect(sessionsResponse.status(), await sessionsResponse.text()).toBe(200)
+    const sessionsResult = (await sessionsResponse.json()).result
+    expect(sessionsResult.isError).toBe(true)
+    expect(sessionsResult.structuredContent).toBeUndefined()
+    expect(JSON.parse(sessionsResult.content[0].text)).toEqual({ status: 404, message: 'This product does not take bookings' })
     const bookings = await call<{ bookings: Array<{ product_id: string }> }>('list_product_bookings', { product_id: productId })
     expect(bookings.bookings).toEqual([])
   } finally {
