@@ -567,7 +567,6 @@ export function normalizeOnboardingDraftInput(input: OnboardingDraftInput, exist
   const payload = buildOnboardingDraftPayload({ name, vertical: vertical as OrganizationVertical, place, details, brandDraft, products })
   const subdomain = answer(input as unknown as Record<string, unknown>, 'subdomain')?.toLowerCase() ?? existing?.preview.subdomainCandidate ?? payload.preview.subdomainCandidate
   if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(subdomain)) throw new HTTPError({ statusCode: 400, statusMessage: 'Choose a website address using Latin letters, digits or hyphens', data: { missing_fields: ['subdomain'] } })
-  if (existing && subdomain !== existing.preview.subdomainCandidate) throw new HTTPError({ statusCode: 409, statusMessage: 'A saved draft already owns its website address' })
   payload.preview.subdomainCandidate = subdomain
   return payload
 }
@@ -612,13 +611,17 @@ export async function upsertActiveOnboardingDraft(db: D1Database, input: {
   const fingerprint = await creationRequestHash({ ...input.payload, request: undefined, preview: { ...input.payload.preview, content: input.payload.preview.content.map(content => ({ ...content, updated_at: undefined })) } })
   if (keyed && input.expectedUpdatedAt === null) {
     const saved = parseOnboardingDraftPayload(keyed.payload_json)
-    if (saved.request?.key !== key || saved.request.fingerprint !== fingerprint) throw new HTTPError({ statusCode: 409, statusMessage: 'This idempotency key was already used for different website answers', data: { code: 'IDEMPOTENCY_KEY_CONFLICT', draft_id: keyed.id } })
+    if (!saved.request || saved.request.key !== key || saved.request.fingerprint !== fingerprint) throw new HTTPError({ statusCode: 409, statusMessage: 'This idempotency key was already used for different website answers', data: { code: 'IDEMPOTENCY_KEY_CONFLICT', draft_id: keyed.id } })
     if (keyed.status === 'abandoned') throw new HTTPError({ statusCode: 409, statusMessage: 'This website draft was discarded', data: { code: 'ONBOARDING_DRAFT_ABANDONED', draft_id: keyed.id } })
     return { id: keyed.id, subdomainCandidate: keyed.subdomain_candidate, updatedAt: keyed.updated_at, organizationId: keyed.organization_id, payload: saved }
   }
   if (existing && input.draftId !== existing.id) throw new HTTPError({ statusCode: 409, statusMessage: 'Resume your saved website draft before creating another', data: { code: 'ONBOARDING_DRAFT_EXISTS', draft_id: existing.id } })
   if (input.draftId && !existing) throw new HTTPError({ statusCode: 404, statusMessage: 'Active website draft not found' })
   if ((existing?.updated_at ?? null) !== input.expectedUpdatedAt) throw new HTTPError({ statusCode: 409, statusMessage: 'Website draft changed; reload before saving', data: { code: 'ONBOARDING_DRAFT_CHANGED', draft_id: existing?.id } })
+  if (existing?.organization_id && input.payload.preview.subdomainCandidate !== existing.subdomain_candidate) {
+    const organization = await queryFirst<{ subdomain: string | null; onboarding_status: string }>(db, 'SELECT subdomain, onboarding_status FROM organization WHERE id = ?', [existing.organization_id])
+    if (!organization || organization.subdomain !== null || !['pending', 'failed'].includes(organization.onboarding_status)) throw new HTTPError({ statusCode: 409, statusMessage: 'A saved draft already owns its website address' })
+  }
   if (existing && key && parseOnboardingDraftPayload(existing.payload_json).request?.key && parseOnboardingDraftPayload(existing.payload_json).request?.key !== key) throw new HTTPError({ statusCode: 409, statusMessage: 'This draft belongs to a different idempotency key', data: { code: 'IDEMPOTENCY_KEY_CONFLICT', draft_id: existing.id } })
   const payload = input.payload
   const savedRequest = existing ? parseOnboardingDraftPayload(existing.payload_json).request : null
@@ -626,15 +629,19 @@ export async function upsertActiveOnboardingDraft(db: D1Database, input: {
   const payloadJson = JSON.stringify(payload)
   const now = new Date(Math.max(Date.now(), existing ? Date.parse(existing.updated_at) + 1 : 0)).toISOString()
   const draft = await queryFirst<{ id: string; subdomain_candidate: string; organization_id: string | null; updated_at: string }>(db, existing ? `
-    UPDATE onboarding_drafts SET name = ?, vertical = ?, source_type = ?, payload_json = ?, updated_at = ?
+    UPDATE onboarding_drafts SET name = ?, vertical = ?, subdomain_candidate = ?, source_type = ?, payload_json = ?, updated_at = ?
     WHERE id = ? AND user_id = ? AND status = 'active' AND updated_at = ?
+      AND (organization_id IS NULL OR subdomain_candidate = ? OR EXISTS (
+        SELECT 1 FROM organization o WHERE o.id = onboarding_drafts.organization_id
+          AND o.subdomain IS NULL AND o.onboarding_status IN ('pending', 'failed')
+      ))
     RETURNING id, subdomain_candidate, organization_id, updated_at
   ` : `INSERT INTO onboarding_drafts
     (id, user_id, organization_id, name, vertical, subdomain_candidate, source_type, status, payload_json, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
     ON CONFLICT DO NOTHING
     RETURNING id, subdomain_candidate, organization_id, updated_at
-  `, existing ? [input.name, input.vertical, input.sourceType, payloadJson, now, existing.id, input.userId, input.expectedUpdatedAt] : [id, input.userId, input.organizationId ?? null, input.name, input.vertical, payload.preview.subdomainCandidate, input.sourceType, payloadJson, now, now])
+  `, existing ? [input.name, input.vertical, payload.preview.subdomainCandidate, input.sourceType, payloadJson, now, existing.id, input.userId, input.expectedUpdatedAt, payload.preview.subdomainCandidate] : [id, input.userId, input.organizationId ?? null, input.name, input.vertical, payload.preview.subdomainCandidate, input.sourceType, payloadJson, now, now])
   if (!draft) throw new HTTPError({ statusCode: 409, statusMessage: 'Website draft changed; read it before retrying', data: { code: 'ONBOARDING_DRAFT_CHANGED' } })
   return { id: draft.id, subdomainCandidate: draft.subdomain_candidate, updatedAt: draft.updated_at, organizationId: draft.organization_id, payload }
 }

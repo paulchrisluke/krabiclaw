@@ -15,7 +15,7 @@ export async function listOrganizationsForUser(
   const orgIds = (await listUserOrganizations(env, userId)).map(organization => organization.id)
   if (!orgIds.length) return [];
 
-  const organizations = await queryAll<Record<string, unknown> & { subdomain: string | null; public_url: string | null }>(db, `
+  const organizations = await queryAll<Record<string, unknown> & { id: string; subdomain: string | null; public_url: string | null }>(db, `
     SELECT s.id, s.theme_id, s.name, s.slug, s.subdomain,
            (SELECT domain FROM organization_domains WHERE organization_id = s.id AND role = 'canonical' AND status = 'active' AND type = 'custom') AS custom_domain, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = s.id AND role = 'canonical' AND status = 'active' AND ${publicTenantVisibilitySql('s', false)}) AS public_url, s.status, s."createdAt" AS created_at, s.updated_at, s.onboarding_status
     FROM organization s

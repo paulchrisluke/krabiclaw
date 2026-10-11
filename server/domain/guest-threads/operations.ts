@@ -3,9 +3,9 @@ import { recordBookingCancelled, recordBookingDecision } from '~/server/domain/b
 import { executeBatch, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { isReservedTestDomain, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import type { ReplyEmailEnv } from '~/server/utils/submission-messages'
-import { getGuestRequest, getThreadOperationalRecord, requestActions, requestSummary, type GuestRequest, type ThreadOperationalRecord } from '~/server/domain/requests'
+import { getGuestRequest, getThreadOperationalRecord, requestActions, requestSummary, type ThreadOperationalRecord } from '~/server/domain/requests'
 import { deliverGuestThreadEmail, getDeliveryById, isDeliverySent } from './deliveries'
-import { findEntryByDedupeKey } from './entries'
+import { findEntryByDedupeKey, parseEntryPayload } from './entries'
 import { discardMessagePhotos, listMessagePhotos, MessagePhotoRejection, messagePhotoPlacements, uploadMessagePhotos, type MessagePhoto } from './attachments'
 import type { UploadResolvedMediaInput } from '~/server/utils/media-upload'
 import { mailboxTransitionQueries, updateThreadProjectionIfLatestEntry } from './repository'
@@ -159,7 +159,7 @@ function operationEntryQuery(
   entryId: string,
   dedupeKey: string,
   now: string,
-  subject: string | null,
+  email: Awaited<ReturnType<typeof renderStatusUpdate>> | null,
   financialGuard: BatchQuery | null = null,
 ): BatchQuery {
   return {
@@ -183,9 +183,20 @@ function operationEntryQuery(
       entryId,
       input.actorUserId === null ? 'system' : 'member',
       input.actorUserId,
-      plan.requiresNotification ? operationBody(plan.action, context.thread, context.record) : null,
+      email?.body ?? null,
       `${plan.kind}.${plan.action}`,
-      JSON.stringify({ action: plan.action, beforeStatus: plan.beforeStatus, afterStatus: plan.afterStatus, operational_booking_id: context.record!.id, request_id: context.thread.id, subject }),
+      JSON.stringify({
+        action: plan.action, beforeStatus: plan.beforeStatus, afterStatus: plan.afterStatus,
+        operational_booking_id: context.record!.id, request_id: context.thread.id,
+        subject: email?.subject ?? null,
+        email: email ? { to: email.to, fromName: email.fromName, locale: email.locale, ...email.email } : null,
+        booking: {
+          starts_at: context.record!.starts_at, ends_at: context.record!.ends_at,
+          timezone: context.record!.timezone, party_size: context.record!.party_size,
+          party_size_is_minimum: context.thread.kind !== 'contact' && context.thread.payload.party_size_is_minimum,
+          location_id: context.record!.location_id, product_id: context.record!.product_id,
+        },
+      }),
       dedupeKey,
       now,
       now,
@@ -284,28 +295,6 @@ async function getOrganizationBrandName(db: DbClient, organizationId: string): P
   return row.name.trim()
 }
 
-function operationSubject(action: string, fromName: string): string {
-  if (action === 'confirm') return `Your booking at ${fromName} is confirmed`
-  if (action === 'reject') return `Your booking request at ${fromName} was declined`
-  if (action === 'cancel') return `Your booking at ${fromName} was cancelled`
-  return `Update on your booking at ${fromName}`
-}
-
-function operationBody(action: string, request: GuestRequest, record: ThreadOperationalRecord | null): string {
-  if (request.kind === 'contact') throw new Error('Contact threads have no booking operations')
-  if (!record) throw new Error('This thread has no booking or reservation')
-  // Rendered in the record's own timezone, which is the only zone the guest
-  // agreed to. Formatting from a server-local clock is how a 7pm table became
-  // a noon one in the confirmation email.
-  const when = new Intl.DateTimeFormat('en-US', { timeZone: record.timezone, dateStyle: 'medium', timeStyle: 'short' }).format(new Date(record.starts_at))
-  const context = `${when} for ${record.party_size}${request.payload.party_size_is_minimum ? '+' : ''} guests`
-  const noun = request.kind === 'reservation' ? 'reservation' : 'booking'
-  if (action === 'confirm') return `Your ${noun} is confirmed: ${context}.`
-  if (action === 'reject') return `Your ${noun} request for ${context} was declined.`
-  if (action === 'cancel') return `Your ${noun} for ${context} has been cancelled.`
-  return `Thanks for visiting us on ${when}.`
-}
-
 function replySubject(submissionType: GuestThreadSubmissionType, fromName: string): string {
   if (submissionType === 'contact') return `Re: your message to ${fromName}`
   if (submissionType === 'reservation') return `Re: your reservation at ${fromName}`
@@ -328,17 +317,25 @@ async function renderMemberReply(env: ReplyEmailEnv, db: DbClient, organizationI
   }), { platformDomain: getPlatformDomain(env) })
 }
 
-async function renderStatusUpdate(env: ReplyEmailEnv, db: DbClient, organizationId: string, organizationName: string, heading: string, body: string, locale: string) {
-  const organizationLogoUrl = await organizationLogo(db, organizationId)
-  return renderNotificationEmail(guestThreadStatusMessage({ locale, organizationName, organizationLogoUrl, heading, body }), { platformDomain: getPlatformDomain(env) })
-}
-
-function recordedEmailSubject(entry: GuestThreadEntryRow): string | null {
-  if (!entry.payload_json) return null
-  const payload: unknown = JSON.parse(entry.payload_json)
-  if (typeof payload !== 'object' || payload === null) return null
-  const subject = Reflect.get(payload, 'subject')
-  return typeof subject === 'string' && subject.trim() ? subject : null
+async function renderStatusUpdate(env: ReplyEmailEnv, db: DbClient, context: ThreadContext, action: SourceMutationPlan['action'], to: string, locationName: string | null) {
+  if (!context.record) throw new Error('This thread has no booking or reservation')
+  const fromName = await getOrganizationBrandName(db, context.thread.organization_id)
+  const guest = await guestPresentation(db, {
+    organizationId: context.thread.organization_id, organizationName: fromName,
+    locale: context.thread.payload.guest.locale,
+    productId: context.record.product_id, productTitle: context.record.product_name,
+    locationId: context.record.location_id, locationName,
+  })
+  const labels = platformLocale(guest.locale)!.messages
+  const titleKey = action === 'reject' ? 'booking.request_declined'
+    : action === 'confirm' ? context.thread.kind === 'reservation' ? 'reservations.confirmed' : 'booking.confirmed'
+      : context.thread.kind === 'reservation' ? 'saya.reservation_cancel.cancelled_title' : 'saya.experience_cancel.cancelled_title'
+  const subject = `${labels[titleKey]} — ${guest.productTitle ?? guest.organizationName}`
+  const guests = labels['saya.experience_detail.guest_count']!.replace('{count}', `${context.record.party_size}${context.thread.kind !== 'contact' && context.thread.payload.party_size_is_minimum ? '+' : ''}`)
+  const body = [guest.locationName, formatTimestamp(context.record.starts_at, guest.locale, context.record.timezone, { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }), guests].filter(Boolean).join(' · ')
+  const organizationLogoUrl = await organizationLogo(db, context.thread.organization_id)
+  const email = await renderNotificationEmail(guestThreadStatusMessage({ locale: guest.locale, organizationName: guest.organizationName, organizationLogoUrl, heading: subject, body }), { platformDomain: getPlatformDomain(env) })
+  return { to, fromName, locale: guest.locale, subject, body, email }
 }
 
 async function sendStatusUpdate(
@@ -353,37 +350,33 @@ async function sendStatusUpdate(
   let deliveryError: string | undefined
   try {
     if (!isDeliverySent(delivery)) {
-      const subject = recordedEmailSubject(entry)
-      if (!entry.body || !subject) return conflict('Status update has no recorded email content')
-      const payload = JSON.parse(entry.payload_json!) as { action?: string; afterStatus?: string }
-      if (payload.action && (
-        payload.afterStatus !== context.record.status
-        || entry.body !== operationBody(payload.action, context.thread, context.record)
-      )) return conflict('Status update was superseded by a booking change')
-      const summary = await requestSummary(db, context.thread)
-      if (!summary.guestEmail) return { ok: false, status: 400, reason: 'no_guest_email' }
-      if (!['confirm', 'reject', 'cancel'].includes(payload.action ?? '')) return conflict('Status update has no recorded action')
-      const fromName = await getOrganizationBrandName(db, context.thread.organization_id)
-      const guest = await guestPresentation(db, {
-        organizationId: context.thread.organization_id, organizationName: fromName,
-        locale: context.thread.payload.guest.locale,
-        productId: context.record.product_id, productTitle: context.record.product_name,
-        locationId: context.record.location_id, locationName: summary.locationTitle,
-      })
-      const labels = platformLocale(guest.locale)!.messages
-      const titleKey = payload.action === 'reject' ? 'booking.request_declined'
-        : payload.action === 'confirm' ? context.thread.kind === 'reservation' ? 'reservations.confirmed' : 'booking.confirmed'
-          : context.thread.kind === 'reservation' ? 'saya.reservation_cancel.cancelled_title' : 'saya.experience_cancel.cancelled_title'
-      const guestSubject = `${labels[titleKey]} — ${guest.productTitle ?? guest.organizationName}`
-      const guests = labels['saya.experience_detail.guest_count']!.replace('{count}', `${context.record.party_size}${context.thread.kind !== 'contact' && context.thread.payload.party_size_is_minimum ? '+' : ''}`)
-      const guestBody = [guest.locationName, formatTimestamp(context.record.starts_at, guest.locale, context.record.timezone, { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }), guests].filter(Boolean).join(' · ')
+      const payload = parseEntryPayload(entry)
+      const subject = payload?.subject
+      const envelope = payload?.email
+      if (!entry.body || typeof subject !== 'string' || !subject.trim() || typeof envelope !== 'object' || envelope === null) return conflict('Status update has no recorded email content')
+      const to = Reflect.get(envelope, 'to')
+      const fromName = Reflect.get(envelope, 'fromName')
+      const locale = Reflect.get(envelope, 'locale')
+      const html = Reflect.get(envelope, 'html')
+      const text = Reflect.get(envelope, 'text')
+      if (typeof to !== 'string' || !to.trim() || typeof fromName !== 'string' || !fromName.trim()
+        || typeof locale !== 'string' || !platformLocale(locale)
+        || typeof html !== 'string' || !html || typeof text !== 'string' || !text) return conflict('Status update has no recorded email content')
+      if (typeof payload?.action !== 'string' || !['confirm', 'reject', 'cancel'].includes(payload.action)) return conflict('Status update has no recorded action')
+      const booking = payload.booking
+      if (typeof booking !== 'object' || booking === null) return conflict('Status update has no recorded booking facts')
+      if (payload.afterStatus !== context.record.status || payload.operational_booking_id !== context.record.id
+        || Reflect.get(booking, 'starts_at') !== context.record.starts_at || Reflect.get(booking, 'ends_at') !== context.record.ends_at
+        || Reflect.get(booking, 'timezone') !== context.record.timezone || Reflect.get(booking, 'party_size') !== context.record.party_size
+        || Reflect.get(booking, 'party_size_is_minimum') !== (context.thread.kind !== 'contact' && context.thread.payload.party_size_is_minimum)
+        || Reflect.get(booking, 'location_id') !== context.record.location_id || Reflect.get(booking, 'product_id') !== context.record.product_id) return conflict('Status update was superseded by a booking change')
       outcome = await deliverGuestThreadEmail(db, {
         delivery,
         env: input.env,
-        to: summary.guestEmail,
+        to,
         fromName,
-        subject: guestSubject,
-        email: await renderStatusUpdate(input.env, db, context.thread.organization_id, guest.organizationName, guestSubject, guestBody, guest.locale),
+        subject,
+        email: { html, text },
         submissionType: context.thread.kind,
         submissionId: context.thread.id,
       })
@@ -439,14 +432,14 @@ async function executeSourceMutation(
   const entryId = crypto.randomUUID()
   const deliveryId = deliveryDedupeKey(input)
   const now = new Date().toISOString()
-  const subject = plan.requiresNotification
-    ? operationSubject(plan.action, await getOrganizationBrandName(db, context.thread.organization_id))
+  const email = plan.requiresNotification && summary.guestEmail
+    ? await renderStatusUpdate(input.env, db, context, plan.action, summary.guestEmail, summary.locationTitle)
     : null
   // Declining or cancelling a paid booking returns the payment in the same batch, once the operator approved it.
   const refundPlan = (plan.action === 'reject' || plan.action === 'cancel') && context.record
     ? await visitRefundQueries(db,{action:plan.action,organizationId:context.thread.organization_id,actorUserId:input.actorUserId,subjectType:plan.kind,subjectId:context.record.id,authorizationId:input.financialAuthorizationId,financialWritesAllowed:input.financialWritesAllowed,note:input.body,entryId,now}) : {queries:[],guard:null}
   const queries = [
-    operationEntryQuery(context, plan, input, entryId, dedupeKey, now, subject,refundPlan.guard),
+    operationEntryQuery(context, plan, input, entryId, dedupeKey, now, email,refundPlan.guard),
     sourceUpdateQuery(context, plan, input, entryId, now),
     ...(plan.afterStatus === 'cancelled' ? [resolveThreadQuery(context.thread.id, entryId, now)] : []),
     ...refundPlan.queries,

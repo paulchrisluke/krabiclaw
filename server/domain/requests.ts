@@ -107,7 +107,8 @@ export async function getGuestRequest(db: DbClient, id: string, organizationId?:
  * Load the booking or reservation a thread refers to.
  *
  * A contact thread has no operational record. A booking or reservation thread
- * must have its own tenant's matching record before it can be read or changed.
+ * must have its own tenant's matching record after allocation. Uncaptured
+ * Checkout has only its native payment and capacity hold until conversion.
  */
 export async function getThreadOperationalRecord(db: DbClient, requestId: string): Promise<ThreadOperationalRecord | null> {
   const record = await queryFirst<ThreadOperationalRecord>(db, `
@@ -127,7 +128,24 @@ export async function getThreadOperationalRecord(db: DbClient, requestId: string
      LIMIT 1
   `, [requestId, requestId])
   if (record) return record
-  const request = await queryFirst<{ kind: GuestRequestKind }>(db, 'SELECT kind FROM requests WHERE id = ?', [requestId])
+  const request = await queryFirst<{ kind: GuestRequestKind; uncaptured_checkout: number | null }>(db, `
+    SELECT r.kind,
+      (json_extract(r.payload_json, '$.provenance.creation_kind') = 'checkout'
+       AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.request_id = r.id)
+       AND NOT EXISTS (SELECT 1 FROM reservations v WHERE v.request_id = r.id)
+       AND EXISTS (
+         SELECT 1 FROM payment_checkout_holds h
+         JOIN payments p ON p.id = h.payment_id AND p.organization_id = h.organization_id AND p.subject_type = r.kind
+         JOIN payment_attempts a ON a.payment_id = p.id
+           AND a.idempotency_key = 'checkout:' || r.organization_id || ':' || json_extract(r.payload_json, '$.provenance.idempotency_key')
+         WHERE h.request_id = r.id AND h.organization_id = r.organization_id
+           AND h.status IN ('active', 'released') AND h.converted_booking_id IS NULL AND h.converted_reservation_id IS NULL
+           AND p.state IN ('pending', 'failed') AND p.captured_amount = 0 AND p.subject_id IS NULL
+           AND a.status IN ('creating', 'open', 'expired', 'failed')
+       )) AS uncaptured_checkout
+    FROM requests r WHERE r.id = ?
+  `, [requestId])
+  if (request?.uncaptured_checkout === 1) return null
   if (request && request.kind !== 'contact') throw new HTTPError({ statusCode: 404, message: 'The conversation has no matching booking or reservation', data: { code: 'REQUEST_OPERATIONAL_RECORD_NOT_FOUND', request_id: requestId } })
   return null
 }

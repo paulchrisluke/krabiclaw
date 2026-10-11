@@ -93,7 +93,7 @@ export async function saveOnboardingDraft(env: CloudflareEnv, db: D1Database, us
     subdomain_candidate: draft.subdomainCandidate, source_locale: draft.payload.source.details.sourceLocale,
     default_currency: draft.payload.source.details.currency,
   })
-  if ('error' in target) throw new HTTPError({ statusCode: target.status, statusMessage: target.error, data: { draft_id: draft.id } })
+  if ('error' in target) throw new HTTPError({ statusCode: target.status, statusMessage: target.error, data: { ...target.data, draft_id: draft.id } })
   const applied = await applyOnboardingDraft(env, db, {
     userId, target: target.target, payload: draft.payload,
     defaultCurrency: draft.payload.source.details.currency, timezone: draft.payload.source.details.timezone,
@@ -110,7 +110,7 @@ export async function activateOnboardingDraft(env: CloudflareEnv, db: D1Database
   origin: { headers: Headers } | null
   activateSession?: (_organizationId: string) => Promise<void>
 }) {
-  let draft = await queryFirst<SavedOnboardingDraft>(db,
+  let draft = await queryFirst<SavedOnboardingDraft | null>(db,
     'SELECT * FROM onboarding_drafts WHERE id = ? AND user_id = ? LIMIT 1', [input.draftId, input.userId])
   if (!draft) throw new HTTPError({ statusCode: 404, statusMessage: 'Draft not found' })
   if (draft.status === 'committing') draft = await readActiveOnboardingDraft(db, input.userId)
@@ -138,7 +138,7 @@ export async function activateOnboardingDraft(env: CloudflareEnv, db: D1Database
   try {
     if (!live) {
       const target = await ensureOnboardingTarget(env, db, input.userId, { ...draft, source_locale: sourceLocale, default_currency: currency })
-      if ('error' in target) throw new HTTPError({ statusCode: target.status, statusMessage: target.error })
+      if ('error' in target) throw new HTTPError({ statusCode: target.status, statusMessage: target.error, data: target.data })
       organizationId = target.target.organizationId
       const applied = await applyOnboardingDraft(env, db, { userId: input.userId, target: target.target, payload, defaultCurrency: currency, timezone, draft, activate: true })
       if ('error' in applied) throw new HTTPError({ statusCode: applied.status, statusMessage: applied.error })
@@ -191,16 +191,15 @@ async function ensureMediaAsset(db: D1Database, data: CreateInput & { category?:
 }
 
 /**
- * The pending organization this draft writes to, created on the first save. It
- * keeps the address claimed by the first save even if the brand name changes
- * later, so every following save reaches the same tenant.
+ * Reuse the draft's pending native organization across interrupted provisioning.
+ * Once its website address is claimed, later saves keep that address.
  */
 export async function ensureOnboardingTarget(
   env: CloudflareEnv,
   db: D1Database,
   userId: string,
   draft: OnboardingDraftRow,
-): Promise<{ target: OnboardingTarget } | { error: string; status: number }> {
+): Promise<{ target: OnboardingTarget } | { error: string; status: number; data?: Record<string, unknown> }> {
   if (!draft.source_locale) return { status: 400, error: 'Choose a supported website language' }
   const revision = { id: draft.id, user_id: userId, updated_at: draft.updated_at }
   const writeGuard = onboardingDraftWriteGuard(revision)
@@ -245,6 +244,7 @@ export async function ensureOnboardingTarget(
     return {
       status: result.status || 500,
       error: typeof result.data.error === 'string' ? result.data.error : 'Could not provision this organization. Please try again.',
+      data: result.data,
     }
   }
   const subdomain = result.data.subdomain as string

@@ -20,7 +20,6 @@ export function tenantOrganizationOrigin(input: {
 }): string {
   const subdomain = input.subdomain.trim().toLowerCase()
   const freeOrganizationHost = input.freeOrganizationDomain.replace(/^https?:\/\//, '').replace(/\/.*$/, '')
-  if (!freeOrganizationHost) return ''
   const protocol = input.freeOrganizationDomain.startsWith('http://') ? 'http:' : 'https:'
   const canonicalHost = normalizeHost(input.canonicalDomain)
   if (canonicalHost && canonicalHost === normalizeHost(input.freeOrganizationDomain)) {
@@ -34,6 +33,7 @@ export function tenantOrganizationOrigin(input: {
   if (alias) return `${protocol}//${alias}`
 
   if (canonicalHost) return `https://${canonicalHost}`
+  if (!freeOrganizationHost) return ''
   if (!subdomain) return ''
   return `${protocol}//${subdomain}.${freeOrganizationHost}`
 }

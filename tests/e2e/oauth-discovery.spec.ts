@@ -517,10 +517,10 @@ test.describe('OAuth discovery endpoints', () => {
       }
     }
     expect(body.result?.isError).toBe(true)
-    const challenge = (body.result?._meta?.['mcp/www_authenticate'] as string[] | undefined)?.[0]
-    expect(challenge).toContain('resource_metadata=')
-    expect(challenge).toContain('error="invalid_token"')
-    expect(challenge).toContain('error_description=')
+    const resourceMetadata = new URL('/.well-known/oauth-protected-resource/api/mcp', baseURL!).href
+    expect(body.result?._meta?.['mcp/www_authenticate']).toEqual([
+      `Bearer resource_metadata="${resourceMetadata}"`,
+    ])
   })
 
 })

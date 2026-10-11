@@ -20,7 +20,7 @@ test('a tool action carries its dashboard destination without unrelated private 
 test('a rejected tool cannot supply an external or escaped dashboard destination', () => {
   for (const dashboard_url of ['https://example.com/dashboard/kanpai', '//example.com/dashboard/kanpai', '/dashboard/../api/auth', '/dashboard/%2e%2e/api/auth']) {
     const result = mcpToolErrorResult('Blocked', { code: 'PLAN_REQUIRED', dashboard_url }, 'https://krabiclaw.com')
-    assert.deepEqual(JSON.parse(result.content[0]!.text), { code: 'PLAN_REQUIRED', message: 'Blocked' })
+    assert.deepEqual(JSON.parse(result.content[0]!.text), { code: 'PLAN_REQUIRED', message: 'Blocked', dashboard_url_error: 'invalid_destination' })
   }
 })
 

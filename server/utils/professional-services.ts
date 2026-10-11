@@ -334,12 +334,15 @@ export async function getPublicBlawbyDocumentData(
   if (recipe === 'article' || recipe === 'posts' || recipe === 'experiences') return { shell, route }
   // Every route on this template is a page now, so locale representations
   // come from the document — there is no second resource kind to branch on.
-  route.localeRepresentations = route.page
-    ? route.page.localeRepresentations
-    : await listPublicLocaleRepresentations(env, db, {
-        organizationId,
-        sourcePath: pagePath ?? '/',
-      })
+  if (route.page) {
+    if (!route.page.localeRepresentations) throw new HTTPError({ statusCode: 500, statusMessage: 'Public page locale representations are unavailable' })
+    route.localeRepresentations = route.page.localeRepresentations
+  } else {
+    route.localeRepresentations = await listPublicLocaleRepresentations(env, db, {
+      organizationId,
+      sourcePath: pagePath ?? '/',
+    })
+  }
   return { shell, route }
 }
 

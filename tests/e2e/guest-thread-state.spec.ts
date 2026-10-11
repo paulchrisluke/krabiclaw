@@ -688,7 +688,7 @@ test('Today uses the CMS patterns and sends one reservation change request', asy
     await page.goto(`${baseURL}/booking-changes/${before.booking.threadId}/${request.id}#${token}`)
     await expect(page.getByRole('button', { name: 'Accept changes', exact: true })).toBeVisible()
     await page.getByRole('button', { name: 'Accept changes', exact: true }).click()
-    await expect(page.getByText('Your reservation has been updated.', { exact: true })).toBeVisible()
+    await expect(page.getByText('Your booking has been updated.', { exact: true })).toBeVisible()
 
     const afterResponse = await page.request.get(
       `/api/dashboard/bookings/reservation/${upcomingBookingId}`,

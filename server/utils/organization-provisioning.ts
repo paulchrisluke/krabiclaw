@@ -121,7 +121,7 @@ export async function provisionOrganization(
       const isRetryable = existingSubdomain.id === organizationId
         && (existingSubdomain.onboarding_status === 'pending' || existingSubdomain.onboarding_status === 'failed')
       if (!isRetryable) {
-        return { status: 409, data: { error: 'This subdomain is already taken' } }
+        return { status: 409, data: { error: 'This subdomain is already taken', code: 'SUBDOMAIN_TAKEN', missing_fields: ['subdomain'] } }
       }
       // Retry: the same subdomain in the same explicit organization is still
       // pending/failed from a previous attempt. It may have been left under a
@@ -148,7 +148,7 @@ export async function provisionOrganization(
     }
 
     if (await isSystemSubdomainSpent(env, db, normalizedSubdomain)) {
-      return { status: 409, data: { error: 'This subdomain is permanently unavailable' } }
+      return { status: 409, data: { error: 'This subdomain is permanently unavailable', code: 'SUBDOMAIN_TAKEN', missing_fields: ['subdomain'] } }
     }
     try {
       await executeBatch(db, [
@@ -175,8 +175,8 @@ export async function provisionOrganization(
       ], { operation: 'provision organization and source locale' })
     } catch (provisioningError) {
       const msg = provisioningError instanceof Error ? provisioningError.message : ''
-      if (msg.includes('UNIQUE constraint failed')) {
-        return { status: 409, data: { error: 'This subdomain is already taken' } }
+      if (/UNIQUE constraint failed: organization\.subdomain/.test(msg)) {
+        return { status: 409, data: { error: 'This subdomain is already taken', code: 'SUBDOMAIN_TAKEN', missing_fields: ['subdomain'] } }
       }
       throw provisioningError
     }
@@ -307,12 +307,13 @@ export async function createOrganization(env: CloudflareEnv, userId: string, nam
     if (!created || created.organizationId !== organization.id) throw new Error('Created organization identity could not be read back')
     return { organizationId: organization.id }
   } catch (error) {
-    const collision = isAPIError(error) && error.body?.code === 'ORGANIZATION_ALREADY_EXISTS'
+    const nativeCollision = isAPIError(error) && error.body?.code === 'ORGANIZATION_ALREADY_EXISTS'
+    const collision = nativeCollision
       || error instanceof Error && /UNIQUE constraint failed: organization\.slug/.test(error.message)
     if (!collision) throw error
     const raced = await findOnboardingOrganization(env, userId, identity)
     if (raced) return raced
-    throw error
+    throw new HTTPError({ statusCode: 409, statusMessage: 'This website address is already taken. Choose another address.', data: { code: 'SUBDOMAIN_TAKEN', missing_fields: ['subdomain'], draft_id: identity.draftId }, cause: error })
   }
 }
 

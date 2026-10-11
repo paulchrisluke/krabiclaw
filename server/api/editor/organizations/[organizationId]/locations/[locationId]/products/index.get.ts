@@ -1,9 +1,8 @@
 import { jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { requireOrganizationMembership } from '~/server/utils/location-access'
 import { roleAllows, assertRoleAllows, findLocation } from '~/server/utils/member-access'
-import { HTTPError } from 'nitro'
+import { defineHandler, HTTPError } from 'nitro'
 import { hydrateProductMedia, listLocationProducts } from '~/server/utils/product-management'
-import { defineHandler } from 'nitro'
 import { getRouterParam } from 'nitro/h3'
 
 export default defineHandler(async (event) => {

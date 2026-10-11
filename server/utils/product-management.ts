@@ -332,7 +332,10 @@ export async function listProducts(db: DbClient, organizationId: string): Promis
 /** Public experiences use the same readiness check as publication, including sold-out sessions. */
 async function publicProductWindow(db: DbClient, organizationId: string, products: Product[], window?: { limit: number; offset: number }, env?: CloudflareEnv, sharedPaymentSetup?: () => ReturnType<typeof readStripeCheckoutSetup>, bookableOnly = false): Promise<Product[]> {
   let setup: ReturnType<typeof readStripeCheckoutSetup> | undefined
-  const paymentSetup = sharedPaymentSetup ?? (() => setup ??= readStripeCheckoutSetup(db, organizationId, env))
+  const paymentSetup = sharedPaymentSetup ?? (() => {
+    if (!env) throw new Error('The organization environment is required to assess paid booking readiness')
+    return setup ??= readStripeCheckoutSetup(db, organizationId, env)
+  })
   const activeLocationIds = bookableOnly ? new Set((await queryAll<{ id: string }>(db,
     "SELECT id FROM business_locations WHERE organization_id = ? AND status = 'active'", [organizationId])).map(location => location.id)) : undefined
   const visible = await Promise.all(products.map(async product => bookableOnly
@@ -1554,7 +1557,12 @@ export async function productBookingReadiness(db: DbClient, organizationId: stri
   const prices = currency ? scopes.flatMap(locationId => variants.map(variant => selectPrice(variant.prices, { currency, location_id: locationId }))) : []
   if (!currency || !variants.length || !scopes.length || prices.some(price => price?.type !== 'one_time')) missing.push('variants.prices')
   if (product.booking?.online_payment_required && prices.some(price => price && price.unit_amount > 0)) {
-    const setup = await (options.paymentSetup ? options.paymentSetup() : readStripeCheckoutSetup(db, organizationId, options.env))
+    let setup: Awaited<ReturnType<typeof readStripeCheckoutSetup>>
+    if (options.paymentSetup) setup = await options.paymentSetup()
+    else {
+      if (!options.env) throw new Error('The organization environment is required to assess paid booking readiness')
+      setup = await readStripeCheckoutSetup(db, organizationId, options.env)
+    }
     missing.push(...setup.missing)
   }
   if (!options.requireAllocation && !options.prepareAllocation) {
@@ -2009,6 +2017,9 @@ export async function updateMenu(db: DbClient, input: {
     writes.push({ query: `INSERT INTO collections(id, organization_id, location_id, name, slug, description, sort_order, created_at, updated_at, created_by, updated_by)
       VALUES (?, ?, ?, ?, ?, NULL, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM collections WHERE organization_id=? AND location_id IS ?), ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET name=excluded.name,updated_at=excluded.updated_at,updated_by=excluded.updated_by`, params: [section.id, organizationId, locationId, section.name, slug, organizationId, locationId, now, now, actor.actorId, actor.actorId] })
+    writes.push({ query: `DELETE FROM collection_products WHERE organization_id=? AND product_id IN (SELECT value FROM json_each(?))
+      AND collection_id IN (SELECT id FROM collections WHERE organization_id=? AND location_id=? AND id<>?)`,
+    params: [organizationId, d1JsonArray(section.items.map(item => item.product_id)), organizationId, locationId, section.id] })
     section.items.forEach(item => writes.push({ query: `INSERT INTO collection_products(organization_id,collection_id,product_id,sort_order,created_at,updated_at,created_by,updated_by)
       VALUES(?,?,?,(SELECT COALESCE(MAX(sort_order), -1) + 1 FROM collection_products WHERE organization_id=? AND collection_id=?),?,?,?,?)
       ON CONFLICT(collection_id,product_id) DO NOTHING`, params: [organizationId, section.id, item.product_id, organizationId, section.id, now, now, actor.actorId, actor.actorId] }))

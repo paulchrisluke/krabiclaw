@@ -17,6 +17,7 @@
           :error="null"
           :has-products="false"
           :has-bookable-products="false"
+          :has-reservations="false"
         />
       </UTheme>
     </div>

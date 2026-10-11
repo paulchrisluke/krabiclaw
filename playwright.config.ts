@@ -11,6 +11,10 @@ try {
   if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') throw error
 }
 
+const liveGooglePlaces = process.env.E2E_GOOGLE_PLACES === 'true'
+if (!liveGooglePlaces) process.env.GOOGLE_PLACES_API_KEY = ''
+else if (!process.env.GOOGLE_PLACES_API_KEY?.trim()) throw new Error('E2E_GOOGLE_PLACES requires GOOGLE_PLACES_API_KEY')
+
 const previewUrl = process.env.PLAYWRIGHT_PREVIEW_URL
 const port = Number(process.env.PLAYWRIGHT_PORT ?? 3000)
 const baseURL = previewUrl || `http://localhost:${port}`
@@ -57,6 +61,7 @@ const localWorkerCommand = [
   `--host localhost:${port}`,
   '--var E2E_ALLOW_DEV_ROUTES:true',
   `--var E2E_DEV_ROUTE_SECRET:${localDevRouteSecret}`,
+  ...(!liveGooglePlaces ? ['--var GOOGLE_PLACES_API_KEY:'] : []),
 ].join(' ')
 
 export default defineConfig({

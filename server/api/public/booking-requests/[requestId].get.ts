@@ -3,7 +3,7 @@ import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { hashReservationCancelToken, readBearerToken } from '~/server/utils/reservation-cancel-token'
 import { getSourceLocale } from '~/server/utils/organization-locales'
-import { assertExactCanonicalLocale } from '~/server/utils/localization'
+import { assertExactCanonicalLocale, assertPublicOrganizationLanguageEntitlement } from '~/server/utils/localization'
 import { loadExactPublicLocalizations, projectExactLocalizedResource } from '~/server/utils/public-localization'
 import { getProduct } from '~/server/utils/product-management'
 import { productPolicySummarySource, renderBookingPolicySummary } from '~/server/utils/reservations'
@@ -53,6 +53,7 @@ export default defineHandler(async (event) => {
 
   const sourceLocale = await getSourceLocale(db, organizationId)
   const locale = assertExactCanonicalLocale(getQuery(event).locale ?? sourceLocale)
+  await assertPublicOrganizationLanguageEntitlement(env, db, organizationId, locale)
   const [localizations, canonicalLocation] = await Promise.all([
     locale === sourceLocale ? [] : loadExactPublicLocalizations(env, db, organizationId, locale),
     record.location_id ? queryFirst<{ id: string; title: string; slug: string }>(db, 'SELECT id, title, slug FROM business_locations WHERE id = ? AND organization_id = ?', [record.location_id, organizationId]) : null,

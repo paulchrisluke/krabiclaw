@@ -37,10 +37,11 @@ const { localePath } = useI18n()
 const title = computed(() => blockText(props.block.data.title))
 const description = computed(() => blockTextOrNull(props.block.data.description))
 const label = computed(() => blockText(props.block.data.label))
-const consultation = inject<{ canSchedule?: import('vue').ComputedRef<boolean> }>('blawby-schema-context', {})
+const consultation = inject<{ canSchedule: import('vue').ComputedRef<boolean> } | null>('blawby-schema-context', null)
+if (!consultation) throw createError({ statusCode: 500, statusMessage: 'Scheduling context is unavailable' })
 const destination = computed(() => {
   const url = blockText(props.block.data.url)
-  if (url === '/schedule' && consultation.canSchedule?.value === false) return ''
+  if (url === '/schedule' && consultation.canSchedule.value === false) return ''
   return url ? (isInternalRoute(url) ? localePath(url) : url) : ''
 })
 const backgroundUrl = computed(() => blockMedia(props.block, 'background')[0]?.public_url ?? null)

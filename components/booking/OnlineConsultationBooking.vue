@@ -31,7 +31,12 @@ const items = computed(() => products.value.map(product => ({ id: product.id, ti
 // Changing the visible service remounts the shared controller so an option or
 // time from another service cannot persist into the next request.
 const selectedId = computed({
-  get: () => typeof route.query.service_id === 'string' ? route.query.service_id : items.value[0]?.id ?? null,
+  get: () => {
+    const serviceId = route.query.service_id
+    if (serviceId === undefined) return items.value[0]?.id ?? null
+    if (typeof serviceId !== 'string' || !items.value.some(item => item.id === serviceId)) throw createError({ statusCode: 404, statusMessage: 'Consultation service not found' })
+    return serviceId
+  },
   set: (serviceId: string | null) => {
     const query = { ...route.query }
     delete query.location_id

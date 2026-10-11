@@ -159,7 +159,7 @@ export async function getStripeConnectedAccount(
 }
 
 /** Known checkout setup, read once for a catalogue; final checkout still verifies native providers. */
-export async function readStripeCheckoutSetup(db: DbClient, organizationId: string, env?: CloudflareEnv) {
+export async function readStripeCheckoutSetup(db: DbClient, organizationId: string, env: CloudflareEnv) {
   const [connected, organization, entitled] = await Promise.all([
     getStripeConnectedAccount(db, organizationId),
     queryFirst<{ slug: string; billing_status: string | null; billing_customer: string | null; customer: string | null; contract: string | null; currency: string | null; start: string | null; servicing: number }>(db, `
@@ -168,17 +168,17 @@ export async function readStripeCheckoutSetup(db: DbClient, organizationId: stri
              EXISTS(SELECT 1 FROM payment_servicing_tenants WHERE organization_id=o.id) AS servicing
         FROM organization o LEFT JOIN payment_billing_accounts b ON b.organization_id=o.id WHERE o.id=?
     `, [organizationId]),
-    env ? hasOrganizationEntitlement(env, organizationId, 'payments') : false,
+    hasOrganizationEntitlement(env, organizationId, 'payments'),
   ])
   if (!organization) throw new HTTPError({ statusCode: 404, statusMessage: 'Organization not found' })
   const missing: string[] = []
   if (!entitled) missing.push('payments.entitlement')
-  if (!env?.STRIPE_SECRET_KEY || !env.STRIPE_PAYMENTS_METHOD_CONFIGURATION || !env.NUXT_PUBLIC_PLATFORM_DOMAIN || !env.METRONOME_API_KEY || !env.METRONOME_RATE_CARD_ID) missing.push('payments.configuration')
+  if (!env.STRIPE_SECRET_KEY || !env.STRIPE_PAYMENTS_METHOD_CONFIGURATION || !env.NUXT_PUBLIC_PLATFORM_DOMAIN || !env.METRONOME_API_KEY || !env.METRONOME_RATE_CARD_ID) missing.push('payments.configuration')
   if (organization.billing_status !== 'active' || !organization.billing_customer || !organization.customer || !organization.contract || organization.currency !== 'USD' || !organization.start || !Number.isFinite(Date.parse(organization.start)) || Date.parse(organization.start) > Date.now()) missing.push('payments.billing')
   if (organization.servicing) missing.push('payments.servicing')
   if (!connected?.stripeAccountId) missing.push('payments.account')
   else if (connected.status !== 'ready' || connected.cardPaymentsStatus !== 'active' || !connected.stripeRefreshedAt) missing.push('payments.account_ready')
-  if (connected && env?.STRIPE_SECRET_KEY && connected.livemode !== stripeLivemodeFromKey(env.STRIPE_SECRET_KEY)) missing.push('payments.account_mode')
+  if (connected && env.STRIPE_SECRET_KEY && connected.livemode !== stripeLivemodeFromKey(env.STRIPE_SECRET_KEY)) missing.push('payments.account_mode')
   return { connected, slug: organization.slug, missing }
 }
 

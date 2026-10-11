@@ -35,7 +35,7 @@ import type { respondToBookingChange } from '~/server/domain/guest-threads/booki
 definePageMeta({ layout: 'standalone' })
 const route = useRoute()
 const { locale, t } = useI18n()
-const app = useNuxtApp() as { $setAppLocale: (value: string, messages: Record<string, string>) => void }
+const app = useNuxtApp()
 const publicLocale = useState<string>('public-locale')
 const platformMessages = useState<Record<string, string> | null>('platform-locale-messages')
 function setGuestLocale(value: string) {

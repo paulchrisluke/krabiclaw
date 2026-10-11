@@ -174,7 +174,10 @@ export async function loadPublicProductCollection(
   if (locationSlug && locations.length !== 1) return null
   const kind = routeKind === 'experiences' ? 'experience' : routeKind === 'menu' ? 'dish' : undefined
   let setup: ReturnType<typeof readStripeCheckoutSetup> | undefined
-  const paymentSetup = () => setup ??= readStripeCheckoutSetup(db, organizationId, env)
+  const paymentSetup = () => {
+    if (!env) throw new Error('The organization environment is required to assess paid booking readiness')
+    return setup ??= readStripeCheckoutSetup(db, organizationId, env)
+  }
   // Location publication is the public gate here: a product carried by the
   // site but withheld at this branch is absent, not shown greyed out.
   const perLocation = await Promise.all(locations.map(location =>
