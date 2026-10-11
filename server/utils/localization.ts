@@ -373,6 +373,29 @@ export async function resolveLocalizedPublicRoute(
   }
   const { listPublicLocaleRepresentations, listPublicResourceLocaleRepresentations } = await import('~/server/utils/public-locale-representations')
 
+  const experienceSlug = /^\/experiences\/([^/]+)$/.exec(routePath.slice(locale.length + 1))?.[1]
+  if (experienceSlug) {
+    let slug: string
+    try {
+      slug = decodeURIComponent(experienceSlug)
+    } catch (error) {
+      if (error instanceof URIError) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Localized route was not found', { locale, route_path: routePath })
+      throw error
+    }
+    // Site-wide experiences use the same published offer as their public page.
+    const { loadPublicExperienceDetail } = await import('~/server/utils/public-products')
+    const detail = await loadPublicExperienceDetail(env, db, organizationId, false, slug, locale)
+    if (!detail) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Localized route was not found', { locale, route_path: routePath })
+    const localization = await getResourceLocalization(env, db, organizationId, 'product', detail.product.id, locale)
+    return {
+      locale,
+      route_path: routePath,
+      platform_messages: entitlement.platform_messages,
+      locale_representations: detail.localeRepresentations,
+      representation: { kind: 'resource', resource_type: 'product', resource_id: detail.product.id, localization },
+    }
+  }
+
   // A Product is addressed through a location that offers it, so its localized
   // route is read the way its English route is: by its segments. Nothing is
   // stored to match against, which is what lets one Product answer at every
